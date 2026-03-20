@@ -588,7 +588,7 @@ async function sendAppointmentConfirmationEmail(
 
     const { serviceLabel } = getServiceAndStatusFromReason(appointment.reason);
 
-    const preConsultationUrl = "https://aestheticclinic.vercel.app/intake";
+    const preConsultationUrl = "https://maison-toa-dk99.vercel.app/intake";
 
     const subject = `Appointment confirmation - ${dateLabel} ${timeLabel}`;
 

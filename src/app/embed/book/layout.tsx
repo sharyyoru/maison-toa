@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { GoogleTagManager, GoogleTagManagerNoScript } from "@/components/GoogleTagManager";
 
 export const metadata: Metadata = {
-  title: "Book Appointment | Aesthetics Clinic",
-  description: "Book your appointment at Aesthetics Clinic Geneva",
+  title: "Book Appointment | Maison Toa",
+  description: "Book your appointment at Maison Toa",
 };
 
 export default function EmbedBookLayout({

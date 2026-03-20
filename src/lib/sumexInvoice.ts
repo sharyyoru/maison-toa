@@ -791,10 +791,10 @@ export async function buildInvoiceRequest(
     // --- SetPackage ---
     await reqPost("IGeneralInvoiceRequest", "SetPackage", {
       pIGeneralInvoiceRequest: req,
-      bstrSoftwarePackage: input.softwarePackage || "AestheticsClinic",
+      bstrSoftwarePackage: input.softwarePackage || "MaisonToa",
       lSoftwareVersion: input.softwareVersion || 100,
       lSoftwareID: input.softwareId || 0,
-      bstrSoftwareCopyright: input.softwareCopyright || "Aesthetics Clinic XT SA",
+      bstrSoftwareCopyright: input.softwareCopyright || "Maison Toa",
     });
 
     // --- SetRequest ---

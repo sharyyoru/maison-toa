@@ -93,7 +93,7 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
               </a>
             </p>
             <p style="color: #64748b; font-size: 14px;">Ce lien expire dans 30 jours.</p>
-            <p style="color: #475569;">Cordialement,<br/>L'équipe Aesthetics</p>
+            <p style="color: #475569;">Cordialement,<br/>L'équipe Maison Toa</p>
           </div>
         `
         : `
@@ -106,7 +106,7 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
               </a>
             </p>
             <p style="color: #64748b; font-size: 14px;">This link expires in 30 days.</p>
-            <p style="color: #475569;">Best regards,<br/>The Aesthetics Team</p>
+            <p style="color: #475569;">Best regards,<br/>The Maison Toa Team</p>
           </div>
         `;
 

@@ -63,8 +63,8 @@ export default function RootLayout({
               <aside className="hidden w-60 border-r border-slate-100/80 bg-gradient-to-b from-slate-50/90 to-slate-50/40 px-4 py-5 transition-all duration-200 ease-out sm:flex sm:flex-col peer-checked:sm:w-0 peer-checked:sm:border-r-0 peer-checked:sm:px-0 peer-checked:sm:opacity-0 peer-checked:sm:pointer-events-none app-shell-sidebar">
               <div className="mb-6 flex justify-center px-2">
                 <Image
-                  src="/logos/aliice-logo.png"
-                  alt="Aliice logo"
+                  src="/logos/maisontoa-logo.png"
+                  alt="Maison Toa logo"
                   width={120}
                   height={28}
                   className="h-8 w-auto"
@@ -455,8 +455,8 @@ export default function RootLayout({
                       <div className="flex items-center gap-3">
                         <Link href="/" aria-label="Go to dashboard" className="inline-flex items-center">
                           <Image
-                            src="/logos/aesthetics-logo.svg"
-                            alt="Aesthetics logo"
+                            src="/logos/maisontoa-logo.png"
+                            alt="Maison Toa logo"
                             width={90}
                             height={32}
                             className="h-8 w-auto"

@@ -844,8 +844,8 @@ function IntakeStepsContent() {
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col">
         <header className="px-4 sm:px-6 py-4 flex items-center justify-between">
           <Image
-            src="/logos/aesthetics-logo.svg"
-            alt="Aesthetics Clinic"
+            src="/logos/maisontoa-logo.png"
+            alt="Maison Toa"
             width={60}
             height={60}
             className="h-12 w-auto"
@@ -866,7 +866,7 @@ function IntakeStepsContent() {
               We're so Glad to Have you at
             </h1>
             <h2 className="text-2xl sm:text-3xl font-medium text-amber-600 mb-8">
-              Aliice Aesthetics Team!
+              Maison Toa Team!
             </h2>
 
             <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
@@ -886,7 +886,7 @@ function IntakeStepsContent() {
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
                 </svg>
-                <span className="text-sm">info@aesthetics-ge.ch</span>
+                <span className="text-sm">info@maisontoa.com</span>
               </div>
             </div>
           </div>
@@ -901,8 +901,8 @@ function IntakeStepsContent() {
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col">
         <header className="px-4 sm:px-6 py-4 flex items-center justify-between">
           <Image
-            src="/logos/aesthetics-logo.svg"
-            alt="Aesthetics Clinic"
+            src="/logos/maisontoa-logo.png"
+            alt="Maison Toa"
             width={60}
             height={60}
             className="h-12 w-auto"
@@ -1027,8 +1027,8 @@ function IntakeStepsContent() {
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col">
         <header className="px-4 sm:px-6 py-4 flex items-center justify-between">
           <Image
-            src="/logos/aesthetics-logo.svg"
-            alt="Aesthetics Clinic"
+            src="/logos/maisontoa-logo.png"
+            alt="Maison Toa"
             width={60}
             height={60}
             className="h-12 w-auto"
@@ -1082,7 +1082,7 @@ function IntakeStepsContent() {
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
                 </svg>
-                <span className="text-sm">info@aesthetics-ge.ch</span>
+                <span className="text-sm">info@maisontoa.com</span>
               </div>
             </div>
           </div>
@@ -1097,8 +1097,8 @@ function IntakeStepsContent() {
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col">
         <header className="px-4 sm:px-6 py-3 flex items-center justify-between">
           <Image
-            src="/logos/aesthetics-logo.svg"
-            alt="Aesthetics Clinic"
+            src="/logos/maisontoa-logo.png"
+            alt="Maison Toa"
             width={60}
             height={60}
             className="h-10 w-auto"
@@ -1198,8 +1198,8 @@ function IntakeStepsContent() {
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col">
       <header className="px-4 sm:px-6 py-3 flex items-center justify-between">
         <Image
-          src="/logos/aesthetics-logo.svg"
-          alt="Aesthetics Clinic"
+          src="/logos/maisontoa-logo.png"
+          alt="Maison Toa"
           width={60}
           height={60}
           className="h-10 w-auto"

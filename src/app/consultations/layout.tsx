@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Consultation Form | Aesthetics Clinic",
-  description: "Patient consultation form for Aesthetics Clinic Geneva",
+  title: "Consultation Form | Maison Toa",
+  description: "Patient consultation form for Maison Toa",
 };
 
 export default function ConsultationsLayout({

@@ -261,7 +261,7 @@ async function handleBuildFromConsultation(body: Record<string, unknown>) {
     billerGln,
     billerZsr: billerZsr || undefined,
     billerAddress: {
-      companyName: clinicConfig?.clinic_name || "Aesthetics Clinic XT SA",
+      companyName: clinicConfig?.clinic_name || "Maison Toa",
       department: clinicConfig?.department || "",
       street: clinicConfig?.street || "",
       zip: clinicConfig?.zip || "",

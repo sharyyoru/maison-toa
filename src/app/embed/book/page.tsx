@@ -65,7 +65,7 @@ const DOCTORS: Record<string, {
   },
   "clinic": {
     name: "Laser & Treatments",
-    specialty: "Aesthetics Clinic Services",
+    specialty: "Maison Toa Services",
     image: "/doctors/clinic.png",
     email: "treatments@aesthetics-ge.ch",
     description: "Advanced laser treatments and aesthetic services.",

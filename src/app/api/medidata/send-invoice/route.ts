@@ -565,7 +565,7 @@ export async function POST(request: NextRequest) {
           xmlContent,
           `${invoiceNumber}.xml`,
           {
-            source: "aestheticclinic",
+            source: "maisontoa",
             invoiceNumber,
             senderGln: senderGln || provGln,
             receiverGln: uploadReceiverGln,

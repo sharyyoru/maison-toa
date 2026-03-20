@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Invoice Payment | Aesthetics Clinic",
+  title: "Invoice Payment | Maison Toa",
   description: "Pay your invoice securely",
 };
 

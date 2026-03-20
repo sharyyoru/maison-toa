@@ -145,7 +145,7 @@ export const translations = {
     
     // Confirmation
     gladToHave: "We're so Glad to Have you at",
-    aliiceTeam: "Aliice Aesthetics Team!",
+    aliiceTeam: "Maison Toa Team!",
     thankYouMessage: "Your registration has been submitted successfully. Our team will contact you shortly to discuss the next steps.",
     name: "Name",
     haveQuestions: "Have any questions in mind?",
@@ -295,7 +295,7 @@ export const translations = {
     
     // Confirmation
     gladToHave: "Nous sommes ravis de vous avoir chez",
-    aliiceTeam: "L'équipe Aliice Aesthetics !",
+    aliiceTeam: "L'équipe Maison Toa !",
     thankYouMessage: "Votre inscription a été soumise avec succès. Notre équipe vous contactera prochainement pour discuter des prochaines étapes.",
     name: "Nom",
     haveQuestions: "Vous avez des questions ?",

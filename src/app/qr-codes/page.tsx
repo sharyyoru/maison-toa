@@ -8,13 +8,13 @@ const QR_CODES = [
   {
     id: "intake",
     title: "Patient Intake Form",
-    url: "https://aestheticclinic.vercel.app/intake",
+    url: "https://maison-toa-dk99.vercel.app/intake",
     description: "Scan to complete your patient intake form",
   },
   {
     id: "booking",
     title: "Book Appointment",
-    url: "https://aestheticclinic.vercel.app/book-appointment",
+    url: "https://maison-toa-dk99.vercel.app/book-appointment",
     description: "Scan to book an appointment",
   },
 ];
@@ -54,8 +54,8 @@ export default function QRCodesPage() {
         {/* Header */}
         <div className="text-center mb-8 print:mb-4">
           <Image
-            src="/logos/aesthetics-logo.svg"
-            alt="Aesthetics Clinic"
+            src="/logos/maisontoa-logo.png"
+            alt="Maison Toa"
             width={200}
             height={60}
             className="h-12 w-auto mx-auto mb-4"

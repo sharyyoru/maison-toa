@@ -94,7 +94,7 @@ const ALL_DOCTORS = [
   {
     slug: "clinic",
     name: "Laser & Treatments",
-    specialty: "Aesthetics Clinic Services",
+    specialty: "Maison Toa Services",
     image: "/doctors/clinic.png",
     description: "Advanced laser treatments and aesthetic clinic services.",
   },
@@ -141,8 +141,8 @@ function DoctorsListContent() {
         <div className="text-center mb-6 sm:mb-8">
           <Link href="/book-appointment">
             <Image
-              src="/logos/aesthetics-logo.svg"
-              alt="Aesthetics Clinic"
+              src="/logos/maisontoa-logo.png"
+              alt="Maison Toa"
               width={280}
               height={80}
               className="h-12 sm:h-14 md:h-16 w-auto mx-auto"
@@ -240,7 +240,7 @@ function DoctorsListContent() {
       <footer className="bg-slate-900 text-white py-6 sm:py-8 mt-12 sm:mt-16">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-slate-400 text-xs sm:text-sm">
-            © {new Date().getFullYear()} Aesthetics Clinic. All rights reserved.
+            © {new Date().getFullYear()} Maison Toa. All rights reserved.
           </p>
         </div>
       </footer>

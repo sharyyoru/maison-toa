@@ -44,8 +44,8 @@ export default function LocationSelectionPage() {
         <div className="text-center mb-6 sm:mb-8">
           <Link href="/book-appointment">
             <Image
-              src="/logos/aesthetics-logo.svg"
-              alt="Aesthetics Clinic"
+              src="/logos/maisontoa-logo.png"
+              alt="Maison Toa"
               width={280}
               height={80}
               className="h-12 sm:h-14 md:h-16 w-auto mx-auto"

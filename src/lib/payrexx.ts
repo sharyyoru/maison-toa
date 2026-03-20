@@ -146,7 +146,7 @@ export type CreateGatewayParams = {
 export async function createPayrexxGateway(
   params: CreateGatewayParams
 ): Promise<PayrexxGatewayResponse> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://aestheticclinic.vercel.app";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
   
   // Build JSON body with correct structure
   const requestBody: Record<string, unknown> = {

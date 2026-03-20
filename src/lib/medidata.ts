@@ -243,7 +243,7 @@ export function generateSumexXml(request: MediDataInvoiceRequest): string {
       <body role="${billingRole}" place="practice" request_date="${formatDate(request.invoiceDate)}" request_id="${requestId}">
         
         <prolog>
-          <package name="AestheticsClinic" version="1.0.0" id="0"/>
+          <package name="MaisonToa" version="1.0.0" id="0"/>
         </prolog>
         
         <remark>${request.reminderLevel && request.reminderLevel > 0 ? `Reminder ${request.reminderLevel}` : 'Invoice'}</remark>

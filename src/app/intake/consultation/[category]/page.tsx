@@ -400,8 +400,8 @@ function ConsultationContent() {
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col">
         <header className="px-4 sm:px-6 py-4 flex items-center justify-between">
           <Image
-            src="/logos/aesthetics-logo.svg"
-            alt="Aesthetics Clinic"
+            src="/logos/maisontoa-logo.png"
+            alt="Maison Toa"
             width={60}
             height={60}
             className="h-12 w-auto"
@@ -605,7 +605,7 @@ function ConsultationContent() {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col">
         <header className="px-4 sm:px-6 py-4 flex items-center justify-between">
-          <Image src="/logos/aesthetics-logo.svg" alt="Aesthetics Clinic" width={60} height={60} className="h-12 w-auto" />
+          <Image src="/logos/maisontoa-logo.png" alt="Maison Toa" width={60} height={60} className="h-12 w-auto" />
         </header>
 
         <div className="flex-1 overflow-auto px-4 sm:px-6 py-6">
@@ -898,7 +898,7 @@ function ConsultationContent() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col">
       <header className="px-4 sm:px-6 py-4 flex items-center justify-between">
-        <Image src="/logos/aesthetics-logo.svg" alt="Aesthetics Clinic" width={60} height={60} className="h-12 w-auto" />
+        <Image src="/logos/maisontoa-logo.png" alt="Maison Toa" width={60} height={60} className="h-12 w-auto" />
       </header>
 
       <div className="flex-1 overflow-auto px-4 sm:px-6 py-6">

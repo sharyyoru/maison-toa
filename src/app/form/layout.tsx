@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Patient Form - Aesthetics Clinic",
+  title: "Patient Form - Maison Toa",
   description: "Complete your patient form",
 };
 

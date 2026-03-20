@@ -303,7 +303,7 @@ export default function EmbedContactPage() {
 
           {/* Privacy notice */}
           <p className="text-xs text-slate-500">
-            Aesthetics Clinic Geneva a besoin des coordonnées que vous nous fournissez pour nous contacter
+            Maison Toa a besoin des coordonnées que vous nous fournissez pour nous contacter
             à propos de nos produits et services.
           </p>
           <p className="text-xs text-slate-500">

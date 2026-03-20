@@ -156,8 +156,8 @@ export default function InvoicePaymentPage() {
               <span className="text-lg font-bold text-white">A</span>
             </div>
             <div>
-              <h1 className="text-sm font-semibold text-slate-900">AESTHETICS</h1>
-              <p className="text-xs text-slate-600">Clinic XT SA</p>
+              <h1 className="text-sm font-semibold text-slate-900">MAISON TOA</h1>
+              <p className="text-xs text-slate-600">Geneva</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -173,7 +173,7 @@ export default function InvoicePaymentPage() {
       <div className="mx-auto max-w-2xl p-4 py-8">
         <div className="mb-6 text-center">
           <h2 className="mb-2 text-2xl font-bold text-slate-900">Invoice Payment</h2>
-          <p className="text-sm text-slate-600">Aesthetics Clinic XT SA</p>
+          <p className="text-sm text-slate-600">Maison Toa</p>
         </div>
 
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
@@ -284,7 +284,7 @@ export default function InvoicePaymentPage() {
               <div className="space-y-3 text-sm">
                 <div>
                   <span className="block text-xs font-medium text-slate-600">Account Holder:</span>
-                  <span className="block font-mono text-slate-900">Aesthetics Clinic XT SA</span>
+                  <span className="block font-mono text-slate-900">Maison Toa</span>
                 </div>
                 <div>
                   <span className="block text-xs font-medium text-slate-600">IBAN:</span>

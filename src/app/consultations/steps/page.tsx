@@ -222,8 +222,8 @@ function ConsultationStepsContent() {
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col">
         <header className="px-4 sm:px-6 py-4 flex items-center justify-between">
           <Image
-            src="/logos/aesthetics-logo.svg"
-            alt="Aesthetics Clinic"
+            src="/logos/maisontoa-logo.png"
+            alt="Maison Toa"
             width={60}
             height={60}
             className="h-12 w-auto"
@@ -357,8 +357,8 @@ function ConsultationStepsContent() {
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col">
         <header className="px-4 sm:px-6 py-4 flex items-center justify-between">
           <Image
-            src="/logos/aesthetics-logo.svg"
-            alt="Aesthetics Clinic"
+            src="/logos/maisontoa-logo.png"
+            alt="Maison Toa"
             width={60}
             height={60}
             className="h-12 w-auto"

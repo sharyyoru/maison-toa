@@ -94,7 +94,7 @@ const translations: Record<Language, {
   submitErrorGeneric: string;
 }> = {
   en: {
-    brandTitle: "Aesthetics Clinic",
+    brandTitle: "Maison Toa",
     searchTitle: "Search",
     searchEmailLabel: "Email",
     searchButton: "Search",
@@ -172,7 +172,7 @@ const translations: Record<Language, {
     submitErrorGeneric: "Unexpected error submitting the form. Please try again.",
   },
   fr: {
-    brandTitle: "Aesthetics Clinic",
+    brandTitle: "Maison Toa",
     searchTitle: "Rechercher",
     searchEmailLabel: "Email",
     searchButton: "Rechercher",

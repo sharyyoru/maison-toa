@@ -47,7 +47,7 @@ function PaymentCancelledContent() {
 
         <div className="mt-8 border-t border-slate-100 pt-6">
           <p className="text-xs text-slate-400">
-            Aesthetics Clinic XT SA<br />
+            Maison Toa<br />
             Chemin Rieu 18, 1208 Genève<br />
             Tél. 022 732 22 23
           </p>

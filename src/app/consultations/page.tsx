@@ -100,8 +100,8 @@ export default function ConsultationsPage() {
           {/* Logo */}
           <div className="flex justify-center mb-6 sm:mb-8">
             <Image
-              src="/logos/aesthetics-logo.svg"
-              alt="Aesthetics Clinic"
+              src="/logos/maisontoa-logo.png"
+              alt="Maison Toa"
               width={280}
               height={80}
               className="h-16 sm:h-20 w-auto"

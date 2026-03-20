@@ -30,8 +30,8 @@ export default function BookAppointmentPage() {
           {/* Logo Header */}
           <div className="text-center mb-8 sm:mb-10">
             <Image
-              src="/logos/aesthetics-logo.svg"
-              alt="Aesthetics Clinic"
+              src="/logos/maisontoa-logo.png"
+              alt="Maison Toa"
               width={280}
               height={80}
               className="h-12 sm:h-14 md:h-16 w-auto mx-auto"
@@ -88,7 +88,7 @@ export default function BookAppointmentPage() {
           {/* Welcome Message */}
           <div className="max-w-3xl mx-auto text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-6">
-              Welcome to Aesthetics Clinic
+              Welcome to Maison Toa
             </h2>
             <p className="text-lg text-slate-600 leading-relaxed mb-8">
               We believe your vision matters. Our mission is to truly listen, understand your unique needs, 
@@ -149,7 +149,7 @@ export default function BookAppointmentPage() {
       <footer className="bg-slate-900 text-white py-8 mt-16">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-slate-400 text-sm">
-            © {new Date().getFullYear()} Aesthetics Clinic. All rights reserved.
+            © {new Date().getFullYear()} Maison Toa. All rights reserved.
           </p>
         </div>
       </footer>

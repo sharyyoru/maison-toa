@@ -136,7 +136,7 @@ export async function POST(request: Request) {
     // Add tracking pixel to the email HTML for read tracking
     let htmlWithTracking = sanitizedHtml;
     if (emailId) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://aestheticclinic.vercel.app";
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
       const trackingPixel = `<img src="${appUrl}/api/emails/track?id=${emailId}" width="1" height="1" style="display:none;visibility:hidden;width:1px;height:1px;opacity:0;" alt="" />`;
       // Insert tracking pixel before closing </body> tag, or at the end if no </body>
       if (htmlWithTracking.includes("</body>")) {

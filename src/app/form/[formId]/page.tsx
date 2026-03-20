@@ -547,8 +547,8 @@ export default function PublicFormPage() {
         <div className="mb-8 text-center">
           <div className="mb-4 flex justify-center">
             <Image
-              src="/logos/aesthetics-logo.svg"
-              alt="Aesthetics Clinic"
+              src="/logos/maisontoa-logo.png"
+              alt="Maison Toa"
               width={140}
               height={40}
               className="h-10 w-auto"

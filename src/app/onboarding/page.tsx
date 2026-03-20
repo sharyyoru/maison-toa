@@ -378,8 +378,8 @@ export default function OnboardingPage() {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center p-4">
         <Image
-          src="/logos/aliice-logo.png"
-          alt="Aliice"
+          src="/logos/maisontoa-logo.png"
+          alt="Maison Toa"
           width={120}
           height={32}
           className="h-8 w-auto brightness-0 invert mb-8"
@@ -396,8 +396,8 @@ export default function OnboardingPage() {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center p-4">
         <Image
-          src="/logos/aliice-logo.png"
-          alt="Aliice"
+          src="/logos/maisontoa-logo.png"
+          alt="Maison Toa"
           width={120}
           height={32}
           className="h-8 w-auto brightness-0 invert mb-8"
@@ -425,8 +425,8 @@ export default function OnboardingPage() {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center p-4">
         <Image
-          src="/logos/aliice-logo.png"
-          alt="Aliice"
+          src="/logos/maisontoa-logo.png"
+          alt="Maison Toa"
           width={120}
           height={32}
           className="h-8 w-auto brightness-0 invert mb-8"
@@ -459,8 +459,8 @@ export default function OnboardingPage() {
         <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
             <Image
-              src="/logos/aliice-logo.png"
-              alt="Aliice"
+              src="/logos/maisontoa-logo.png"
+              alt="Maison Toa"
               width={100}
               height={28}
               className="h-6 sm:h-7 w-auto brightness-0 invert"

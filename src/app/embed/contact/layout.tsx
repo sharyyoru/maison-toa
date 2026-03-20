@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { GoogleTagManager, GoogleTagManagerNoScript } from "@/components/GoogleTagManager";
 
 export const metadata: Metadata = {
-  title: "Contact Us | Aesthetics Clinic",
-  description: "Get in touch with Aesthetics Clinic Geneva",
+  title: "Contact Us | Maison Toa",
+  description: "Get in touch with Maison Toa",
 };
 
 export default function EmbedContactLayout({

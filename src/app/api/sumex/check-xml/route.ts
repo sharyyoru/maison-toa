@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
     };
     const provGln = pickValidGln(billingEntity?.gln, invoice.provider_gln);
     const provZsr = billingEntity?.zsr || invoice.provider_zsr || "";
-    const provName = billingEntity?.name || invoice.provider_name || "Aesthetics Clinic XT SA";
+    const provName = billingEntity?.name || invoice.provider_name || "Maison Toa";
     const provStreet = billingEntity?.street
       ? `${billingEntity.street}${billingEntity.street_no ? " " + billingEntity.street_no : ""}`
       : "";

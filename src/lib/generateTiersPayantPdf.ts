@@ -524,7 +524,7 @@ export async function generateTiersPayantPdf(
   const qrPaymentData = [
     "SPC", "0200", "1",
     provIban,
-    "K", provider.name || "Aesthetics Clinic XT SA", provAddr, provCity, "", "", "CH",
+    "K", provider.name || "Maison Toa", provAddr, provCity, "", "", "CH",
     "", "", "", "", "", "", "",
     num(amountDue), "CHF",
     "K", `${patient.first_name} ${patient.last_name}`, patient.street_address || "", [patient.postal_code, patient.town].filter(Boolean).join(" "), "", "", "CH",

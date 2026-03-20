@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { GoogleTagManager, GoogleTagManagerNoScript } from "@/components/GoogleTagManager";
 
 export const metadata: Metadata = {
-  title: "Patient Intake Form | Aesthetics Clinic",
-  description: "Complete your patient intake form for Aesthetics Clinic Geneva",
+  title: "Patient Intake Form | Maison Toa",
+  description: "Complete your patient intake form for Maison Toa",
 };
 
 export default function IntakeLayout({

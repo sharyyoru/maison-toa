@@ -153,7 +153,7 @@ export async function POST(request: Request) {
             .join("\n");
 
     const systemPrompt =
-      "You are an expert email copywriter for Aesthetics Clinic. You generate clear, concise, empathetic emails for patients. Always output strict JSON.";
+      "You are an expert email copywriter for Maison Toa. You generate clear, concise, empathetic emails for patients. Always output strict JSON.";
 
     const userPrompt = `
 Write a patient-facing email for a medical clinic workflow.

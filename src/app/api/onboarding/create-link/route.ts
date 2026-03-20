@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     }
 
     // Build the magic link URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://aestheticclinic.vercel.app";
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
     const magicLink = `${baseUrl}/onboarding?token=${token}`;
 
     return NextResponse.json({
