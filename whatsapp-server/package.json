@@ -1,0 +1,24 @@
+{
+  "name": "aestheticclinic-whatsapp-server",
+  "version": "1.0.0",
+  "description": "Multi-user WhatsApp Web server for Aesthetics Clinic",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.99.1",
+    "better-sqlite3": "^9.4.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "qrcode": "^1.5.3",
+    "whatsapp-web.js": "^1.25.0",
+    "ws": "^8.16.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

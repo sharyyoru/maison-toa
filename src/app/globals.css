@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: radial-gradient(circle at top, #eef2ff, #e0f2fe 40%, #fdf2ff 80%);
+  color: var(--foreground);
+  font-family: var(--font-manrope), system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+}
+
+.power-button-bg {
+  background: radial-gradient(circle at 30% 0%, #f9fafb, #d1d5db 40%, #9ca3af 100%);
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.5), 0 6px 14px rgba(15,23,42,0.25);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af;
+  opacity: 1;
+}
+
+.crm-glow {
+  border-radius: 9999px;
+  background: radial-gradient(circle at center, rgba(16, 185, 129, 0.4), transparent 65%);
+  filter: blur(14px);
+  animation: crmGlow 5s ease-in-out infinite;
+}
+
+@keyframes crmGlow {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.08);
+  }
+}
+
+.medical-glow {
+  border-radius: 9999px;
+  background: radial-gradient(circle at center, rgba(56, 189, 248, 0.45), transparent 65%);
+  filter: blur(16px);
+  animation: medicalGlow 5s ease-in-out infinite;
+}
+
+@keyframes medicalGlow {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.1);
+  }
+}
+
+.crm-id-strip {
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.95), rgba(45, 212, 191, 0.95));
+  background-size: 200% 100%;
+  animation: crmIdSweep 8s ease-in-out infinite alternate;
+}
+
+@keyframes crmIdSweep {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 100% 0%;
+  }
+}
+
+/* Kanban board horizontal scrollbar - enhanced for Safari/Chrome visibility */
+.kanban-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 1) rgba(241, 245, 249, 1);
+  /* Force scrollbar to always show on WebKit browsers */
+  overflow-x: scroll;
+  -webkit-overflow-scrolling: touch;
+}
+
+.kanban-scroll::-webkit-scrollbar {
+  height: 10px;
+  -webkit-appearance: none;
+}
+
+.kanban-scroll::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 1);
+  border-radius: 5px;
+  border: 1px solid rgba(203, 213, 225, 0.5);
+}
+
+.kanban-scroll::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.9);
+  border-radius: 5px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.15);
+}
+
+.kanban-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 1);
+  border-color: rgba(51, 65, 85, 0.5);
+}
+
+/* Top scrollbar for better UX */
+.kanban-scroll-top {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 1) rgba(241, 245, 249, 1);
+  overflow-x: scroll;
+  -webkit-overflow-scrolling: touch;
+}
+
+.kanban-scroll-top::-webkit-scrollbar {
+  height: 10px;
+  -webkit-appearance: none;
+}
+
+.kanban-scroll-top::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 1);
+  border-radius: 5px;
+  border: 1px solid rgba(203, 213, 225, 0.5);
+}
+
+.kanban-scroll-top::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.9);
+  border-radius: 5px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.15);
+}
+
+.kanban-scroll-top::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 1);
+  border-color: rgba(51, 65, 85, 0.5);
+}
+
+/* Calendar day view vertical scrollbar */
+.calendar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.9) rgba(248, 250, 252, 0.35);
+}
+
+.calendar-scroll::-webkit-scrollbar {
+  width: 7px;
+}
+
+.calendar-scroll::-webkit-scrollbar-track {
+  background: rgba(248, 250, 252, 0.35);
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.25);
+  backdrop-filter: blur(10px);
+}
+
+.calendar-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(148, 163, 184, 0.95),
+    rgba(226, 232, 240, 0.98)
+  );
+  border-radius: 9999px;
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.08),
+    0 8px 18px rgba(15, 23, 42, 0.26);
+}
+
+@media print {
+  .app-shell-sidebar,
+  .app-shell-header {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+}
