@@ -133,17 +133,31 @@ create table if not exists deal_stages (
   is_default boolean not null default false
 );
 
--- Services
-create table if not exists services (
+-- Service categories (e.g. Aesthetics, Reconstructive) - moved before deals for FK reference
+create table if not exists service_categories (
   id uuid primary key default gen_random_uuid(),
-  clinic_id uuid not null,
   name text not null,
   description text,
-  base_price numeric(12, 2) not null default 0,
-  category_id uuid,
-  created_at timestamp with time zone default now() not null,
-  updated_at timestamp with time zone default now() not null
+  sort_order int not null default 1,
+  created_at timestamptz default now()
 );
+
+create unique index if not exists service_categories_name_key
+  on service_categories(name);
+
+-- Services offered by the clinic, grouped by category - moved before deals for FK reference
+create table if not exists services (
+  id uuid primary key default gen_random_uuid(),
+  category_id uuid references service_categories(id) on delete restrict,
+  name text not null,
+  description text,
+  is_active boolean not null default true,
+  base_price numeric(12,2),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists services_category_id_idx on services(category_id);
 
 -- Deals (cases / opportunities)
 create table if not exists deals (
@@ -557,31 +571,6 @@ create table if not exists task_comment_mentions (
 create index if not exists task_comment_mentions_recipient_idx
   on task_comment_mentions(mentioned_user_id, read_at);
 
--- Service categories (e.g. Aesthetics, Reconstructive)
-create table if not exists service_categories (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  description text,
-  sort_order int not null default 1,
-  created_at timestamptz default now()
-);
-
-create unique index if not exists service_categories_name_key
-  on service_categories(name);
-
--- Services offered by the clinic, grouped by category
-create table if not exists services (
-  id uuid primary key default gen_random_uuid(),
-  category_id uuid not null references service_categories(id) on delete restrict,
-  name text not null,
-  description text,
-  is_active boolean not null default true,
-  base_price numeric(12,2),
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-
-create index if not exists services_category_id_idx on services(category_id);
 create unique index if not exists services_category_id_name_key
   on services(category_id, name);
 
