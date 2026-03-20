@@ -48,9 +48,7 @@ function sanitizeTelLinks(html: string): string {
   return result;
 }
 
-if (!mailgunApiKey || !mailgunDomain) {
-  throw new Error("Missing MAILGUN_API_KEY or MAILGUN_DOMAIN environment variables");
-}
+// Environment check moved to runtime in POST handler
 
 type EmailAttachmentRow = {
   id: string;
@@ -70,6 +68,14 @@ type InlineAttachment = {
 
 export async function POST(request: Request) {
   try {
+    // Runtime check for required environment variables
+    if (!mailgunApiKey || !mailgunDomain) {
+      return NextResponse.json(
+        { error: "Email service not configured" },
+        { status: 503 },
+      );
+    }
+
     const { to, subject, html, fromUserEmail, fromUserName, emailId, patientId, inlineAttachments } = (await request.json()) as {
       to?: string;
       subject?: string;
