@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 
-const BUCKET_NAME = "patient_document";
+const BUCKET_NAME = "patient-documents";
 const IMAGES_PER_PAGE = 10;
 
 interface BeforeAfterImage {

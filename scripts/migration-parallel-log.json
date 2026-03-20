@@ -1,0 +1,50 @@
+{
+  "stats": {
+    "totalFolders": 14128,
+    "processedFolders": 14127,
+    "matchedPatients": 14128,
+    "unmatchedPatients": 0,
+    "uploadedPDFs": 110149,
+    "uploadedImages": 1346,
+    "createdDocuments": 111495,
+    "createdAppointments": 62402,
+    "skippedFiles": 1,
+    "errors": [
+      {
+        "file": "C:\\Users\\user\\Desktop\\Maison-Toa-Data\\11409_Adrienne_Chandler_06-07-1992\\5_Dokumente\\IMG_6918.png",
+        "error": "The object exceeded the maximum allowed size"
+      },
+      {
+        "file": "C:\\Users\\user\\Desktop\\Maison-Toa-Data\\1678_Aline_Beney_07-09-1973\\5_Documents\\BENEY_Aline_photo.jpg",
+        "error": "The object exceeded the maximum allowed size"
+      },
+      {
+        "file": "C:\\Users\\user\\Desktop\\Maison-Toa-Data\\1678_Aline_Beney_07-09-1973\\5_Documents\\BENEY_Aline_photo_2.jpg",
+        "error": "The object exceeded the maximum allowed size"
+      },
+      {
+        "file": "C:\\Users\\user\\Desktop\\Maison-Toa-Data\\286_Gisèle_Marguerat_27-07-1941\\5_Documents\\Photos_accompagnant_lettre_6_10_22.pdf",
+        "error": "The object exceeded the maximum allowed size"
+      }
+    ],
+    "startTime": 1774022068289
+  },
+  "errors": [
+    {
+      "file": "C:\\Users\\user\\Desktop\\Maison-Toa-Data\\11409_Adrienne_Chandler_06-07-1992\\5_Dokumente\\IMG_6918.png",
+      "error": "The object exceeded the maximum allowed size"
+    },
+    {
+      "file": "C:\\Users\\user\\Desktop\\Maison-Toa-Data\\1678_Aline_Beney_07-09-1973\\5_Documents\\BENEY_Aline_photo.jpg",
+      "error": "The object exceeded the maximum allowed size"
+    },
+    {
+      "file": "C:\\Users\\user\\Desktop\\Maison-Toa-Data\\1678_Aline_Beney_07-09-1973\\5_Documents\\BENEY_Aline_photo_2.jpg",
+      "error": "The object exceeded the maximum allowed size"
+    },
+    {
+      "file": "C:\\Users\\user\\Desktop\\Maison-Toa-Data\\286_Gisèle_Marguerat_27-07-1941\\5_Documents\\Photos_accompagnant_lettre_6_10_22.pdf",
+      "error": "The object exceeded the maximum allowed size"
+    }
+  ]
+}

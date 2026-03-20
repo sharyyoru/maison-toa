@@ -10,7 +10,7 @@ const supabaseAdmin = createClient(
 );
 
 const BUCKET_NAME = "patient-docs";
-const PATIENT_DOCUMENTS_BUCKET = "patient_document";
+const PATIENT_DOCUMENTS_BUCKET = "patient-documents";
 
 type DocumentFile = {
   name: string;

@@ -33,7 +33,7 @@ interface PatientDocumentsTabProps {
   patientName?: string;
 }
 
-const BUCKET_NAME = "patient_document";
+const BUCKET_NAME = "patient-documents";
 
 interface StorageItem {
   name: string;

@@ -9,7 +9,7 @@ const supabaseAdmin = createClient(
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const bucket = searchParams.get("bucket") || "patient_document";
+    const bucket = searchParams.get("bucket") || "patient-documents";
     const path = searchParams.get("path");
 
     if (!path) {

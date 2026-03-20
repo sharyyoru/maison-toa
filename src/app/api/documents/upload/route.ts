@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as Blob;
-    const bucket = formData.get("bucket") as string || "patient_document";
+    const bucket = formData.get("bucket") as string || "patient-documents";
     const path = formData.get("path") as string;
 
     if (!file || !path) {

@@ -199,7 +199,7 @@ export default function Patient3DSetupPage() {
     setLoadingImages(true);
     try {
       const { data, error } = await supabaseClient.storage
-        .from("patient_document")
+        .from("patient-documents")
         .list(patientId, {
           limit: 100,
           sortBy: { column: "created_at", order: "desc" },
@@ -214,7 +214,7 @@ export default function Patient3DSetupPage() {
           .map((file) => {
             const fullPath = `${patientId}/${file.name}`;
             const { data: urlData } = supabaseClient.storage
-              .from("patient_document")
+              .from("patient-documents")
               .getPublicUrl(fullPath);
             return {
               name: file.name,
