@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -48,5 +49,6 @@ next-env.d.ts
 .idea
 *.p12
 *.csv
-*.sql
 *.chm
+# Allow supabase SQL files
+!supabase/**/*.sql
