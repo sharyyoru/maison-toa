@@ -692,18 +692,12 @@ async function sendAppointmentConfirmationEmail(
 }
 
 export default function CalendarPage() {
-  const [visibleMonth, setVisibleMonth] = useState<Date>(new Date(2026, 2, 1)); // March 2026
-  const [hasMounted, setHasMounted] = useState(false);
-  
-  // Fix SSR hydration mismatch - set correct date only on client
-  useEffect(() => {
-    if (!hasMounted) {
-      const now = new Date();
-      console.log("[Calendar] Client mount - setting date to:", now.toString());
-      setVisibleMonth(new Date(now.getFullYear(), now.getMonth(), 1));
-      setHasMounted(true);
-    }
-  }, [hasMounted]);
+  // Initialize to current date - will be consistent on client
+  const [visibleMonth, setVisibleMonth] = useState<Date>(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -721,7 +715,6 @@ export default function CalendarPage() {
   const [newCalendarProviderId, setNewCalendarProviderId] = useState("");
   const [view, setView] = useState<CalendarView>("day");
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [rangeEndDate, setRangeEndDate] = useState<Date | null>(null);
   const [isDraggingRange, setIsDraggingRange] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
@@ -874,7 +867,8 @@ export default function CalendarPage() {
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
           .lte("start_time", toIso)
-          .order("start_time", { ascending: true });
+          .order("start_time", { ascending: true })
+          .limit(5000);
 
         console.log("[Calendar] Query result - data:", data?.length ?? 0, "error:", error?.message ?? "none");
 
