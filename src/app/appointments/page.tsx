@@ -1502,11 +1502,12 @@ export default function CalendarPage() {
   }, [timeSearch, allTimeOptions]);
 
   function handleSelectDayView() {
-    const base = selectedDate ?? new Date();
+    const base = selectedDate ?? getSwissToday();
     const day = new Date(
       base.getFullYear(),
       base.getMonth(),
       base.getDate(),
+      12, 0, 0
     );
     setSelectedDate(day);
     setRangeEndDate(null);
@@ -1515,18 +1516,19 @@ export default function CalendarPage() {
   }
 
   function handleSelectWeekView() {
-    const base = selectedDate ?? new Date();
+    const base = selectedDate ?? getSwissToday();
     const start = new Date(
       base.getFullYear(),
       base.getMonth(),
       base.getDate(),
+      12, 0, 0
     );
     const weekday = start.getDay();
     // Adjust to make Monday the first day of the week (0=Sunday, 1=Monday, ..., 6=Saturday)
     const adjustedWeekday = weekday === 0 ? 6 : weekday - 1;
     start.setDate(start.getDate() - adjustedWeekday);
 
-    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12, 0, 0);
     end.setDate(start.getDate() + 6);
 
     setSelectedDate(start);
@@ -1536,7 +1538,7 @@ export default function CalendarPage() {
   }
 
   function handleSelectMonthView() {
-    const base = selectedDate ?? new Date();
+    const base = selectedDate ?? getSwissToday();
     setVisibleMonth(new Date(base.getFullYear(), base.getMonth(), 1));
     setSelectedDate(null);
     setRangeEndDate(null);
@@ -2245,9 +2247,10 @@ export default function CalendarPage() {
   }
 
   function goToToday() {
-    const now = new Date();
-    setVisibleMonth(new Date(now.getFullYear(), now.getMonth(), 1));
-    setSelectedDate(now);
+    const swiss = getSwissNow();
+    const today = new Date(swiss.year, swiss.month, swiss.day, 12, 0, 0);
+    setVisibleMonth(new Date(swiss.year, swiss.month, 1));
+    setSelectedDate(today);
     setRangeEndDate(null);
     setView("day");
   }
