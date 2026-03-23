@@ -518,25 +518,10 @@ export default function PatientActivityCard({
 
     async function loadServices() {
       try {
-        // First get the Hubspot category
-        const { data: categoryData, error: categoryError } = await supabaseClient
-          .from("service_categories")
-          .select("id")
-          .eq("name", "Hubspot")
-          .single();
-
-        if (!isMounted) return;
-
-        if (categoryError || !categoryData) {
-          setServiceOptions([]);
-          return;
-        }
-
-        // Then get services from Hubspot category only
+        // Load all services from all categories
         const { data, error } = await supabaseClient
           .from("services")
           .select("id, name")
-          .eq("category_id", categoryData.id)
           .order("name", { ascending: true });
 
         if (!isMounted) return;

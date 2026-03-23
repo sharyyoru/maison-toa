@@ -2648,6 +2648,10 @@ export default function CalendarPage() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-lg font-semibold text-slate-900">Calendar</h1>
+            {/* Debug indicator - remove after fixing */}
+            <span className="text-xs text-slate-400 ml-2">
+              [Loaded: {appointments.length} | Filtered: {Object.values(appointmentsByDay).flat().length}]
+            </span>
             <button
               type="button"
               onClick={goToToday}
