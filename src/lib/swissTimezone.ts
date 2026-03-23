@@ -330,3 +330,36 @@ export function formatSwissAppointmentDateTime(date: Date | string): {
   
   return { date: dateStr, time: timeStr };
 }
+
+/**
+ * Get month boundaries in Swiss timezone for database queries
+ * Returns ISO strings that represent the start and end of the month in Swiss time
+ */
+export function getSwissMonthRange(year: number, month: number): { start: string; end: string } {
+  // First day of month at 00:00:00 Swiss time
+  const startDateStr = `${year}-${(month + 1).toString().padStart(2, "0")}-01`;
+  const startDate = createSwissDateTime(startDateStr, 0, 0);
+  
+  // Last day of month at 23:59:59 Swiss time
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const endDateStr = `${year}-${(month + 1).toString().padStart(2, "0")}-${lastDay.toString().padStart(2, "0")}`;
+  const endDate = createSwissDateTime(endDateStr, 23, 59);
+  endDate.setSeconds(59);
+  endDate.setMilliseconds(999);
+  
+  return {
+    start: startDate.toISOString(),
+    end: endDate.toISOString(),
+  };
+}
+
+/**
+ * Get current Swiss timezone date components
+ */
+export function getSwissNow(): { year: number; month: number; day: number; hour: number; minute: number } {
+  const now = new Date();
+  const swissDateStr = now.toLocaleDateString("en-CA", { timeZone: SWISS_TIMEZONE });
+  const [year, month, day] = swissDateStr.split("-").map(Number);
+  const { hour, minute } = getSwissHourMinute(now);
+  return { year, month: month - 1, day, hour, minute }; // month is 0-indexed
+}
