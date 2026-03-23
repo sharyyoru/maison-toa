@@ -692,7 +692,18 @@ async function sendAppointmentConfirmationEmail(
 }
 
 export default function CalendarPage() {
-  const [visibleMonth, setVisibleMonth] = useState(() => new Date());
+  const [visibleMonth, setVisibleMonth] = useState<Date>(new Date(2026, 2, 1)); // March 2026
+  const [hasMounted, setHasMounted] = useState(false);
+  
+  // Fix SSR hydration mismatch - set correct date only on client
+  useEffect(() => {
+    if (!hasMounted) {
+      const now = new Date();
+      console.log("[Calendar] Client mount - setting date to:", now.toString());
+      setVisibleMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+      setHasMounted(true);
+    }
+  }, [hasMounted]);
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -710,7 +721,7 @@ export default function CalendarPage() {
   const [newCalendarProviderId, setNewCalendarProviderId] = useState("");
   const [view, setView] = useState<CalendarView>("day");
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [rangeEndDate, setRangeEndDate] = useState<Date | null>(null);
   const [isDraggingRange, setIsDraggingRange] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
@@ -850,6 +861,10 @@ export default function CalendarPage() {
 
         const fromIso = monthStart.toISOString();
         const toIso = monthEnd.toISOString();
+        
+        console.log("[Calendar] Query params - from:", fromIso, "to:", toIso);
+        console.log("[Calendar] monthStart:", monthStart.toString());
+        console.log("[Calendar] monthEnd:", monthEnd.toString());
 
         const { data, error } = await supabaseClient
           .from("appointments")
@@ -861,17 +876,19 @@ export default function CalendarPage() {
           .lte("start_time", toIso)
           .order("start_time", { ascending: true });
 
+        console.log("[Calendar] Query result - data:", data?.length ?? 0, "error:", error?.message ?? "none");
+
         if (!isMounted) return;
 
         if (error || !data) {
-          console.error("[Calendar] Error loading appointments:", error?.message);
+          console.error("[Calendar] Error loading appointments:", error?.message, error);
           setError(error?.message ?? "Failed to load appointments.");
           setAppointments([]);
           setLoading(false);
           return;
         }
 
-        console.log("[Calendar] Loaded appointments:", data.length, "from", fromIso, "to", toIso);
+        console.log("[Calendar] Successfully loaded appointments:", data.length, "from", fromIso, "to", toIso);
         if (data.length > 0) {
           console.log("[Calendar] Sample appointment:", data[0]);
         }
