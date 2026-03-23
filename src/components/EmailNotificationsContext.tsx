@@ -72,7 +72,10 @@ export function EmailNotificationsProvider({ children }: { children: ReactNode }
         .limit(20);
 
       if (error) {
-        console.error("Error fetching email notifications:", error);
+        // Silently ignore if table doesn't exist (feature not yet deployed)
+        if (!error.message?.includes("Could not find the table")) {
+          console.error("Error fetching email notifications:", error);
+        }
         setUnreadCount(0);
         setNotifications([]);
         setLoading(false);

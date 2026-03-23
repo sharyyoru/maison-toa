@@ -867,12 +867,17 @@ export default function CalendarPage() {
         if (!isMounted) return;
 
         if (error || !data) {
+          console.error("[Calendar] Error loading appointments:", error?.message);
           setError(error?.message ?? "Failed to load appointments.");
           setAppointments([]);
           setLoading(false);
           return;
         }
 
+        console.log("[Calendar] Loaded appointments:", data.length, "from", fromIso, "to", toIso);
+        if (data.length > 0) {
+          console.log("[Calendar] Sample appointment:", data[0]);
+        }
         setAppointments(data as unknown as CalendarAppointment[]);
         setLoading(false);
       } catch {
@@ -941,9 +946,11 @@ export default function CalendarPage() {
         if (!isMounted) return;
 
         if (error || !data) {
+          console.error("[Calendar] Error loading providers:", error?.message);
           setProviders([]);
           setProvidersError(error?.message ?? "Failed to load providers.");
         } else {
+          console.log("[Calendar] Loaded providers:", data.length);
           setProviders(
             (data as any[]).map((row) => {
               const providerName = (row.name as string | null) ?? null;
@@ -1004,15 +1011,6 @@ export default function CalendarPage() {
           .trim();
       }
 
-      // Load saved calendar selections from localStorage
-      let savedSelectedIds: string[] | null = null;
-      try {
-        const saved = localStorage.getItem("appointments_selected_calendars");
-        if (saved) {
-          savedSelectedIds = JSON.parse(saved) as string[];
-        }
-      } catch {}
-
       // Deduplicate providers by normalized name
       const seenNormalizedNames = new Map<string, typeof providers[0]>();
       const uniqueProviders = providers.filter((provider) => {
@@ -1025,6 +1023,25 @@ export default function CalendarPage() {
         seenNormalizedNames.set(normalized, provider);
         return true;
       });
+
+      // Load saved calendar selections from localStorage
+      let savedSelectedIds: string[] | null = null;
+      try {
+        const saved = localStorage.getItem("appointments_selected_calendars");
+        if (saved) {
+          const parsed = JSON.parse(saved) as string[];
+          // Validate that saved IDs match current provider IDs (invalidate stale cache from users table)
+          const providerIds = uniqueProviders.map(p => p.id);
+          const hasValidIds = parsed.some(id => providerIds.includes(id));
+          if (hasValidIds) {
+            savedSelectedIds = parsed;
+          } else {
+            // Clear stale localStorage (old user IDs that don't match provider IDs)
+            console.log("[Calendar] Clearing stale localStorage - saved IDs don't match providers");
+            localStorage.removeItem("appointments_selected_calendars");
+          }
+        }
+      } catch {}
 
       const baseCalendars: DoctorCalendar[] = uniqueProviders.map((provider, index) => {
         const rawName = provider.name ?? "Unnamed doctor";
@@ -1205,12 +1222,17 @@ export default function CalendarPage() {
       .filter((value) => value.length > 0);
     const hasAnyCalendars = doctorCalendars.length > 0;
 
+    console.log("[Calendar] appointmentsByDay - appointments:", appointments.length, "selectedCalendars:", selectedCalendars.length, "selectedProviderIds:", selectedProviderIds);
+
     // Get active tab info if a specific doctor tab is selected
     const activeTabCalendar = activeDoctorTabId
       ? selectedCalendars.find((c) => c.id === activeDoctorTabId)
       : null;
     const activeTabProviderId = activeTabCalendar?.providerId ?? null;
     const activeTabDoctorName = activeTabCalendar?.name.trim().toLowerCase() ?? null;
+
+    let matchedCount = 0;
+    let skippedCount = 0;
 
     appointments.forEach((appt) => {
       if (hasAnyCalendars && selectedCalendars.length > 0) {
@@ -1234,7 +1256,14 @@ export default function CalendarPage() {
         });
         
         // Skip only if no match found by any method
-        if (!matchesByProviderId && !matchesByDoctorKey && !matchesByReasonText) return;
+        if (!matchesByProviderId && !matchesByDoctorKey && !matchesByReasonText) {
+          skippedCount++;
+          if (skippedCount <= 3) {
+            console.log("[Calendar] SKIPPED appointment:", appt.id, "provider_id:", appt.provider_id, "matchesByProviderId:", matchesByProviderId);
+          }
+          return;
+        }
+        matchedCount++;
 
         // Filter by active doctor tab if one is selected
         if (activeTabCalendar) {
@@ -1263,6 +1292,7 @@ export default function CalendarPage() {
       map[key].push(appt);
     });
 
+    console.log("[Calendar] appointmentsByDay result - matched:", matchedCount, "skipped:", skippedCount, "keys:", Object.keys(map).length);
     return map;
   }, [appointments, patientSearch, doctorCalendars, activeDoctorTabId]);
 
