@@ -13,9 +13,6 @@ import {
   SWISS_TIMEZONE,
   SWISS_LOCALE,
   getSwissHourMinute,
-  getSwissMonthRange,
-  getSwissNow,
-  getSwissToday,
 } from "@/lib/swissTimezone";
 
 type AppointmentStatus =
@@ -695,11 +692,7 @@ async function sendAppointmentConfirmationEmail(
 }
 
 export default function CalendarPage() {
-  const [visibleMonth, setVisibleMonth] = useState(() => {
-    // Use Swiss timezone to get current month
-    const swiss = getSwissNow();
-    return new Date(swiss.year, swiss.month, 1);
-  });
+  const [visibleMonth, setVisibleMonth] = useState(() => new Date());
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -717,7 +710,7 @@ export default function CalendarPage() {
   const [newCalendarProviderId, setNewCalendarProviderId] = useState("");
   const [view, setView] = useState<CalendarView>("day");
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(() => getSwissToday());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
   const [rangeEndDate, setRangeEndDate] = useState<Date | null>(null);
   const [isDraggingRange, setIsDraggingRange] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
@@ -839,8 +832,12 @@ export default function CalendarPage() {
     closeEditModalDropdowns();
   };
 
-  const monthRange = useMemo(() => {
-    return getSwissMonthRange(visibleMonth.getFullYear(), visibleMonth.getMonth());
+  const monthStart = useMemo(() => {
+    return new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1);
+  }, [visibleMonth]);
+
+  const monthEnd = useMemo(() => {
+    return new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0, 23, 59, 59, 999);
   }, [visibleMonth]);
 
   useEffect(() => {
@@ -851,8 +848,8 @@ export default function CalendarPage() {
         setLoading(true);
         setError(null);
 
-        const fromIso = monthRange.start;
-        const toIso = monthRange.end;
+        const fromIso = monthStart.toISOString();
+        const toIso = monthEnd.toISOString();
 
         const { data, error } = await supabaseClient
           .from("appointments")
@@ -893,7 +890,7 @@ export default function CalendarPage() {
     return () => {
       isMounted = false;
     };
-  }, [monthRange]);
+  }, [monthStart, monthEnd]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1532,7 +1529,7 @@ export default function CalendarPage() {
   }, [timeSearch, allTimeOptions]);
 
   function handleSelectDayView() {
-    const base = selectedDate ?? getSwissToday();
+    const base = selectedDate ?? new Date();
     const day = new Date(
       base.getFullYear(),
       base.getMonth(),
@@ -1546,7 +1543,7 @@ export default function CalendarPage() {
   }
 
   function handleSelectWeekView() {
-    const base = selectedDate ?? getSwissToday();
+    const base = selectedDate ?? new Date();
     const start = new Date(
       base.getFullYear(),
       base.getMonth(),
@@ -1568,7 +1565,7 @@ export default function CalendarPage() {
   }
 
   function handleSelectMonthView() {
-    const base = selectedDate ?? getSwissToday();
+    const base = selectedDate ?? new Date();
     setVisibleMonth(new Date(base.getFullYear(), base.getMonth(), 1));
     setSelectedDate(null);
     setRangeEndDate(null);
@@ -2277,9 +2274,8 @@ export default function CalendarPage() {
   }
 
   function goToToday() {
-    const swiss = getSwissNow();
-    const today = new Date(swiss.year, swiss.month, swiss.day, 12, 0, 0);
-    setVisibleMonth(new Date(swiss.year, swiss.month, 1));
+    const today = new Date();
+    setVisibleMonth(new Date(today.getFullYear(), today.getMonth(), 1));
     setSelectedDate(today);
     setRangeEndDate(null);
     setView("day");
