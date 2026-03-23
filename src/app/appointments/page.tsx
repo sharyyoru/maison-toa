@@ -367,11 +367,16 @@ function getCalendarColorForIndex(index: number): string {
 }
 
 function formatMonthYear(date: Date) {
-  return formatSwissMonthYear(date);
+  // Use local timezone for calendar display consistency
+  return date.toLocaleDateString("fr-CH", { month: "long", year: "numeric" });
 }
 
 function formatYmd(date: Date) {
-  return formatSwissYmd(date);
+  // Use local timezone for date key consistency with mini calendar
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function formatTimeRangeLabel(start: Date, end: Date | null): string {
