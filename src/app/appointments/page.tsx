@@ -329,14 +329,18 @@ const DAY_VIEW_SLOT_HEIGHT = 28;
 
 // Priority doctors to show first in the list
 const PRIORITY_DOCTOR_NAMES = [
-  "xavier tenorio",
-  "cesar rodrigues",
-  "cezar rodrigues",
-  "yulia raspertova",
-  "burbuqe fazliu",
-  "laser",
-  "monia khedir",
-  "lily radionova",
+  "Claire",
+  "Dr Alexandra Miles",
+  "Dr Natalia Koltunova",
+  "Dr Reda Benani",
+  "Dr Sophie Nordback",
+  "Dr. Adnan Plakalo",
+  "Gwendoline",
+  "Juliette",
+  "Laetitia Guarino",
+  "Louise Goerig",
+  "Ophélie",
+  "Valiny",
 ];
 
 type ProviderOption = {
@@ -2528,14 +2532,24 @@ export default function CalendarPage() {
               const activeCalendars = doctorCalendars.filter(
                 (calendar) => !calendar.name.toLowerCase().includes("(deactivated")
               );
+
+              const normalizePriorityMatch = (value: string) =>
+                value
+                  .toLowerCase()
+                  .replace(/^(mme|mr|mrs|ms|dr|prof)\.?\s*/i, "")
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .replace(/\s+/g, " ")
+                  .trim();
+
               const priorityCalendars = activeCalendars.filter((calendar) =>
                 PRIORITY_DOCTOR_NAMES.some((name) =>
-                  calendar.name.toLowerCase().includes(name)
+                  normalizePriorityMatch(calendar.name).includes(normalizePriorityMatch(name))
                 )
               );
               const otherCalendars = activeCalendars.filter((calendar) =>
                 !PRIORITY_DOCTOR_NAMES.some((name) =>
-                  calendar.name.toLowerCase().includes(name)
+                  normalizePriorityMatch(calendar.name).includes(normalizePriorityMatch(name))
                 )
               );
               const calendarsToShow = showAllDoctors
