@@ -71,6 +71,7 @@ type PatientPrescription = {
   product_name: string;
   product_no: number | null;
   product_type: string | null;
+  prescription_line_id: string | null;
   prescription_sheet_id: string | null;
   amount_morning: string | null;
   amount_noon: string | null;
@@ -295,9 +296,9 @@ export async function POST(request: NextRequest) {
     );
 
     if (validTabType === "prescription") {
-      // Prescription tab: only items with prescription_sheet_id
-      filteredMeds = filteredMeds.filter(
-        (med: PatientPrescription) => med.prescription_sheet_id !== null
+      // Prescription tab: items linked to a prescription (sheet or line)
+      filteredMeds = filteredMeds.filter((med: PatientPrescription) =>
+        med.prescription_sheet_id !== null || med.prescription_line_id !== null
       );
       
       // If a specific prescriptionSheetId is provided, filter to only that prescription
@@ -307,10 +308,9 @@ export async function POST(request: NextRequest) {
         );
       }
     } else if (validTabType === "medicine") {
-      // Medicine tab: no prescription_sheet_id AND product_type is MEDICATION
-      filteredMeds = filteredMeds.filter(
-        (med: PatientPrescription) =>
-          med.prescription_sheet_id === null && med.product_type === "MEDICATION"
+      // Medicine tab: no prescription_sheet_id (include medications + consumables)
+      filteredMeds = filteredMeds.filter((med: PatientPrescription) =>
+        med.prescription_sheet_id === null && med.prescription_line_id === null
       );
     }
 

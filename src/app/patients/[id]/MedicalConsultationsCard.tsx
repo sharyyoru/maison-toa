@@ -691,7 +691,6 @@ export default function MedicalConsultationsCard({
           .update({ last_emailed_at: now })
           .eq("patient_id", patientId)
           .eq("active", true)
-          .eq("product_type", "MEDICATION")
           .is("prescription_sheet_id", null);
       }
 

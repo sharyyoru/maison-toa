@@ -139,10 +139,10 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
     // Filter logic
     const filteredMedications = medications.filter((med) => {
         if (subTab === "prescription") {
-            return med.prescription_sheet_id !== null;
+            return med.prescription_sheet_id !== null || med.prescription_line_id !== null;
         } else {
             // medicine
-            return med.prescription_sheet_id === null && med.product_type === "MEDICATION";
+            return med.prescription_sheet_id === null && med.prescription_line_id === null;
         }
     });
 
