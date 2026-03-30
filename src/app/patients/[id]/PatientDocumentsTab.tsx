@@ -295,6 +295,21 @@ export default function PatientDocumentsTab({
           continue;
         }
 
+        const isFolder = (raw as any).id == null && (raw as any).metadata == null;
+
+        if (isFolder) {
+          const folderName = raw.name;
+          if (!folderName) continue;
+
+          folders[folderName] = {
+            ...base,
+            name: folderName,
+            kind: "folder",
+            path: `${currentPrefix}${folderName}/`,
+          };
+          continue;
+        }
+
         if (raw.name.includes("/")) {
           const [folderName] = raw.name.split("/");
 
