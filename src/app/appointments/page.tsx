@@ -856,12 +856,49 @@ export default function CalendarPage() {
         setLoading(true);
         setError(null);
 
-        const fromIso = monthStart.toISOString();
-        const toIso = monthEnd.toISOString();
-        
-        console.log("[Calendar] Query params - from:", fromIso, "to:", toIso);
-        console.log("[Calendar] monthStart:", monthStart.toString());
-        console.log("[Calendar] monthEnd:", monthEnd.toString());
+        // Determine query range based on current view
+        let fromIso: string;
+        let toIso: string;
+
+        if (view === "day" && selectedDate) {
+          // For day view, query only the selected date using Swiss timezone
+          const year = selectedDate.getFullYear();
+          const month = selectedDate.getMonth();
+          const day = selectedDate.getDate();
+          
+          // Create start of day (00:00:00) in Swiss timezone
+          const startDateStr = `${year}-${(month + 1).toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+          const startDate = new Date(startDateStr + "T00:00:00+01:00"); // Swiss timezone (CET/CEST)
+          
+          // Create end of day (23:59:59.999) in Swiss timezone
+          const endDate = new Date(startDateStr + "T23:59:59.999+01:00");
+          
+          fromIso = startDate.toISOString();
+          toIso = endDate.toISOString();
+        } else if (view === "range" && selectedDate && rangeEndDate) {
+          // For range view, query the selected range
+          const start = selectedDate < rangeEndDate ? selectedDate : rangeEndDate;
+          const end = selectedDate < rangeEndDate ? rangeEndDate : selectedDate;
+          
+          const startYear = start.getFullYear();
+          const startMonth = start.getMonth();
+          const startDay = start.getDate();
+          const startDateStr = `${startYear}-${(startMonth + 1).toString().padStart(2, "0")}-${startDay.toString().padStart(2, "0")}`;
+          const startDate = new Date(startDateStr + "T00:00:00+01:00");
+          
+          const endYear = end.getFullYear();
+          const endMonth = end.getMonth();
+          const endDay = end.getDate();
+          const endDateStr = `${endYear}-${(endMonth + 1).toString().padStart(2, "0")}-${endDay.toString().padStart(2, "0")}`;
+          const endDate = new Date(endDateStr + "T23:59:59.999+01:00");
+          
+          fromIso = startDate.toISOString();
+          toIso = endDate.toISOString();
+        } else {
+          // For month view or no selection, query the entire visible month
+          fromIso = monthStart.toISOString();
+          toIso = monthEnd.toISOString();
+        }
 
         const { data, error } = await supabaseClient
           .from("appointments")
@@ -874,8 +911,6 @@ export default function CalendarPage() {
           .order("start_time", { ascending: true })
           .limit(5000);
 
-        console.log("[Calendar] Query result - data:", data?.length ?? 0, "error:", error?.message ?? "none");
-
         if (!isMounted) return;
 
         if (error || !data) {
@@ -886,10 +921,6 @@ export default function CalendarPage() {
           return;
         }
 
-        console.log("[Calendar] Successfully loaded appointments:", data.length, "from", fromIso, "to", toIso);
-        if (data.length > 0) {
-          console.log("[Calendar] Sample appointment:", data[0]);
-        }
         setAppointments(data as unknown as CalendarAppointment[]);
         setLoading(false);
       } catch {
@@ -905,7 +936,7 @@ export default function CalendarPage() {
     return () => {
       isMounted = false;
     };
-  }, [monthStart, monthEnd]);
+  }, [monthStart, monthEnd, view, selectedDate, rangeEndDate]);
 
   useEffect(() => {
     let isMounted = true;
@@ -964,7 +995,6 @@ export default function CalendarPage() {
             .maybeSingle();
           
           if (!existing) {
-            console.log(`[Calendar] Adding missing ${doctor.name}`);
             await supabaseClient
               .from("providers")
               .insert({
@@ -988,9 +1018,6 @@ export default function CalendarPage() {
           setProviders([]);
           setProvidersError(error?.message ?? "Failed to load providers.");
         } else {
-          console.log("[Calendar] Loaded providers:", data.length);
-          console.log("[Calendar] All provider names:", (data as any[]).map(p => p.name));
-          
           // Filter to only show Maison Toa doctors - exact names only
           const MAISON_TOA_DOCTOR_NAMES = [
             // Standard format
@@ -1052,10 +1079,6 @@ export default function CalendarPage() {
             return true;
           });
           
-          console.log("[Calendar] Filtered to Maison Toa doctors:", maisontoaDoctors.length);
-          console.log("[Calendar] After dedup unique doctors:", uniqueDoctors.length);
-          console.log("[Calendar] Unique doctor names:", uniqueDoctors.map(p => p.name));
-          
           setProviders(
             uniqueDoctors.map((row) => {
               const providerName = (row.name as string | null) ?? null;
@@ -1101,9 +1124,6 @@ export default function CalendarPage() {
     setDoctorCalendars(() => {
       // Use providers directly - we've already filtered to Maison Toa doctors
       const uniqueProviders = providers;
-      
-      console.log(`[Calendar] Building calendars for ${uniqueProviders.length} providers`);
-      console.log(`[Calendar] Provider names:`, uniqueProviders.map(p => p.name));
 
       // Load saved calendar selections from localStorage
       let savedSelectedIds: string[] | null = null;
@@ -1119,7 +1139,6 @@ export default function CalendarPage() {
             savedSelectedIds = parsed;
           } else {
             // Clear stale localStorage (old user IDs that don't match provider IDs)
-            console.log("[Calendar] Clearing stale localStorage - saved IDs don't match providers");
             localStorage.removeItem("appointments_selected_calendars");
           }
         }
@@ -1135,13 +1154,10 @@ export default function CalendarPage() {
         let selected: boolean;
         if (savedSelectedIds !== null) {
           selected = savedSelectedIds.includes(provider.id);
-          console.log(`[Calendar] ${trimmedName} selected from localStorage: ${selected}`);
         } else if (currentUserId) {
           selected = provider.id === currentUserId;
-          console.log(`[Calendar] ${trimmedName} matched current user: ${selected} (provider: ${provider.id}, user: ${currentUserId})`);
         } else {
           selected = true;
-          console.log(`[Calendar] ${trimmedName} auto-selected (no saved selection, no current user): ${selected}`);
         }
 
         const calendar = {
@@ -1152,12 +1168,8 @@ export default function CalendarPage() {
           selected,
         };
         
-        console.log(`[Calendar] Created calendar for ${trimmedName}:`, calendar);
         return calendar;
       });
-      
-      console.log(`[Calendar] Final baseCalendars count: ${baseCalendars.length}`);
-      console.log(`[Calendar] Final baseCalendars:`, baseCalendars.map(c => ({ name: c.name, selected: c.selected })));
 
       // Only apply fallback logic if no saved selections exist
       if (savedSelectedIds === null && currentUserId) {
@@ -1315,8 +1327,6 @@ export default function CalendarPage() {
       .filter((value) => value.length > 0);
     const hasAnyCalendars = doctorCalendars.length > 0;
 
-    console.log("[Calendar] appointmentsByDay - appointments:", appointments.length, "selectedCalendars:", selectedCalendars.length, "selectedProviderIds:", selectedProviderIds);
-
     // Get active tab info if a specific doctor tab is selected
     const activeTabCalendar = activeDoctorTabId
       ? selectedCalendars.find((c) => c.id === activeDoctorTabId)
@@ -1351,9 +1361,6 @@ export default function CalendarPage() {
         // Skip only if no match found by any method
         if (!matchesByProviderId && !matchesByDoctorKey && !matchesByReasonText) {
           skippedCount++;
-          if (skippedCount <= 3) {
-            console.log("[Calendar] SKIPPED appointment:", appt.id, "provider_id:", appt.provider_id, "matchesByProviderId:", matchesByProviderId);
-          }
           return;
         }
         matchedCount++;
@@ -1384,14 +1391,7 @@ export default function CalendarPage() {
       if (!map[key]) map[key] = [];
       map[key].push(appt);
       
-      // Debug: log matched appointment date keys
-      if (matchedCount <= 5) {
-        console.log("[Calendar] MATCHED appt:", appt.id, "start_time:", appt.start_time, "key:", key, "reason:", appt.reason?.substring(0, 60));
-      }
-    });
-
-    console.log("[Calendar] appointmentsByDay result - matched:", matchedCount, "skipped:", skippedCount, "keys:", Object.keys(map));
-    console.log("[Calendar] appointmentsByDay map keys:", Object.keys(map).join(", "));
+      });
     return map;
   }, [appointments, patientSearch, doctorCalendars, activeDoctorTabId]);
 
@@ -1402,6 +1402,7 @@ export default function CalendarPage() {
       visibleMonth.getFullYear(),
       visibleMonth.getMonth(),
       1,
+      12, 0, 0 // Set to noon to avoid timezone boundary issues
     );
     const startWeekday = firstOfMonth.getDay();
     const diff = (startWeekday - firstDayOfWeek + 7) % 7;
@@ -1409,6 +1410,7 @@ export default function CalendarPage() {
       firstOfMonth.getFullYear(),
       firstOfMonth.getMonth(),
       firstOfMonth.getDate() - diff,
+      12, 0, 0 // Set to noon to avoid timezone boundary issues
     );
 
     for (let i = 0; i < 42; i += 1) {
@@ -1416,6 +1418,7 @@ export default function CalendarPage() {
         gridStart.getFullYear(),
         gridStart.getMonth(),
         gridStart.getDate() + i,
+        12, 0, 0 // Set to noon to avoid timezone boundary issues
       );
       dates.push(d);
     }
@@ -1435,7 +1438,6 @@ export default function CalendarPage() {
     if (!selectedDate) return [] as Date[];
     if (view === "day" || !rangeEndDate) {
       const dates = [selectedDate];
-      console.log("[Calendar] activeRangeDates (day view):", dates.map(d => formatYmd(d)));
       return dates;
     }
 
@@ -2408,8 +2410,13 @@ export default function CalendarPage() {
 
   function handleMiniDayMouseEnter(date: Date) {
     if (!isDraggingRange || !selectedDate) return;
-    setRangeEndDate(date);
-    setView("range");
+    // Only set range if hovering over a different date than the selected one
+    const hoveredYmd = formatYmd(date);
+    const selectedYmd = formatYmd(selectedDate);
+    if (hoveredYmd !== selectedYmd) {
+      setRangeEndDate(date);
+      setView("range");
+    }
   }
 
   function handleMonthDayClick(date: Date) {
@@ -2551,9 +2558,15 @@ export default function CalendarPage() {
                 <button
                   key={ymd + "mini"}
                   type="button"
-                  onMouseDown={() => handleMiniDayMouseDown(date)}
+                  onMouseDown={(e) => {
+                    e.preventDefault(); // Prevent text selection during drag
+                    handleMiniDayMouseDown(date);
+                  }}
                   onMouseEnter={() => handleMiniDayMouseEnter(date)}
-                  onTouchStart={() => handleMiniDayMouseDown(date)}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    handleMiniDayMouseDown(date);
+                  }}
                   onTouchMove={(e) => {
                     if (!isDraggingRange) return;
                     const touch = e.touches[0];
@@ -2568,11 +2581,6 @@ export default function CalendarPage() {
                     }
                   }}
                   onTouchEnd={() => setIsDraggingRange(false)}
-                  onClick={() =>
-                    setVisibleMonth(
-                      new Date(date.getFullYear(), date.getMonth(), 1),
-                    )
-                  }
                   data-mini-date={ymd}
                   className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] ${
                     isCurrentMonth ? "text-slate-700" : "text-slate-400"
@@ -2760,10 +2768,6 @@ export default function CalendarPage() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-lg font-semibold text-slate-900">Calendar</h1>
-            {/* Debug indicator - remove after fixing */}
-            <span className="text-xs text-slate-400 ml-2">
-              [Loaded: {appointments.length} | Filtered: {Object.values(appointmentsByDay).flat().length}]
-            </span>
             <button
               type="button"
               onClick={goToToday}
@@ -2923,12 +2927,8 @@ export default function CalendarPage() {
                   <div
                     key={ymd}
                     onClick={() => handleMonthDayClick(date)}
-                    onMouseDown={() => handleMiniDayMouseDown(date)}
-                    onMouseEnter={() => handleMiniDayMouseEnter(date)}
-                    onTouchStart={() => handleMiniDayMouseDown(date)}
-                    onTouchEnd={() => setIsDraggingRange(false)}
                     data-month-date={ymd}
-                    className={`flex min-h-[96px] flex-col border-b border-r border-slate-100 px-2 py-1 text-left last:border-r-0 ${
+                    className={`flex min-h-[96px] flex-col border-b border-r border-slate-100 px-2 py-1 text-left cursor-pointer hover:bg-slate-50 ${
                       isCurrentMonth ? "bg-white" : "bg-slate-50/80 text-slate-400"
                     } ${inRange ? "bg-sky-50" : ""}`}
                   >
