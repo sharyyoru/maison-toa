@@ -15,40 +15,40 @@ const DOCTORS: Record<string, {
   email: string;
   description: string;
 }> = {
-  "xavier-tenorio": {
-    name: "Dr. Xavier Tenorio",
-    specialty: "Chirurgien plasticien et esthétique",
-    image: "/doctors/xavier-tenorio.jpg",
-    email: "xavier@aesthetics-ge.ch",
-    description: "Expert in facial rejuvenation and body contouring procedures with over 15 years of experience.",
+  "sophie-nordback": {
+    name: "Dr. Sophie Nordback",
+    specialty: "Dermatology & Venereology",
+    image: "/doctors/dr-sophie-nordback-correct.png",
+    email: "info@maisontoa.com",
+    description: "FMH-qualified plastic and aesthetic surgeon. Co-founder of Clinique Maison TÓĀ.",
   },
-  "cesar-rodriguez": {
-    name: "Dr. Cesar Rodriguez",
-    specialty: "Aesthetic Medicine Specialist",
-    image: "/doctors/cesar-rodriguez.jpg",
-    email: "cesar@aesthetics-ge.ch",
-    description: "Specialized in non-invasive aesthetic treatments and advanced skin care solutions.",
+  "alexandra-miles": {
+    name: "Dr. Alexandra Miles",
+    specialty: "Dermatology & Venereology",
+    image: "/doctors/dr-alexandra-miles.webp",
+    email: "info@maisontoa.com",
+    description: "Spec. FMH in Dermatology and Venereology. Practicing dermatology since 2011.",
   },
-  "yulia-raspertova": {
-    name: "Dr. Yulia Raspertova",
-    specialty: "Dermatology & Aesthetic Medicine",
-    image: "/doctors/yulia-raspertova.jpg",
-    email: "yulia@aesthetics-ge.ch",
-    description: "Expert in dermatological treatments, anti-aging procedures, and skin health.",
+  "reda-benani": {
+    name: "Dr. Reda Benani",
+    specialty: "Longevity Medicine",
+    image: "/doctors/dr-reda-benanni.webp",
+    email: "info@maisontoa.com",
+    description: "Practicing physician specializing in longevity medicine.",
   },
-  "clinic": {
-    name: "Laser & Treatments",
-    specialty: "Aesthetics Clinic Services",
-    image: "/doctors/clinic.png",
-    email: "treatments@aesthetics-ge.ch",
-    description: "Advanced laser treatments, body contouring, and aesthetic clinic services.",
+  "adnan-plakalo": {
+    name: "Dr. Adnan Plakalo",
+    specialty: "Medical Practitioner",
+    image: "/doctors/dr-adnan-plakalo.png",
+    email: "info@maisontoa.com",
+    description: "Medical practitioner.",
   },
-  "lily-radionova": {
-    name: "Nurse Lily Radionova",
-    specialty: "Aesthetic Nurse Specialist",
-    image: "/doctors/lily-radionova.jpeg",
-    email: "lily@aesthetics-ge.ch",
-    description: "Expert aesthetic nurse specializing in non-invasive treatments and patient care at our Gstaad location.",
+  "natalia-koltunova": {
+    name: "Dr. Natalia Koltunova",
+    specialty: "Dermatology & Venereology",
+    image: "/doctors/dr-natalia-koltunova.webp",
+    email: "info@maisontoa.com",
+    description: "Russian postgraduate diploma in Dermatology and Venereology.",
   },
 };
 
@@ -56,77 +56,54 @@ const DOCTORS: Record<string, {
 // Format: { [locationId]: { [dayOfWeek]: { start: "HH:MM", end: "HH:MM" } } }
 // dayOfWeek: 0 = Sunday, 1 = Monday, ..., 6 = Saturday
 const DOCTOR_AVAILABILITY: Record<string, Record<string, Record<number, { start: string; end: string }>>> = {
-  "xavier-tenorio": {
-    rhone: {
-      1: { start: "14:00", end: "18:30" }, // Monday 2pm-6:30pm
-      5: { start: "14:00", end: "18:30" }, // Friday 2pm-6:30pm
-    },
-    montreux: {
-      4: { start: "10:00", end: "12:30" }, // Thursday 10am-12:30pm
-    },
-    gstaad: {
-      6: { start: "16:00", end: "18:30" }, // Saturday 4pm-6:30pm
+  "sophie-nordback": {
+    lausanne: {
+      1: { start: "09:00", end: "17:00" }, // Monday 9am-5pm
+      2: { start: "09:00", end: "17:00" }, // Tuesday 9am-5pm
+      3: { start: "09:00", end: "17:00" }, // Wednesday 9am-5pm
+      4: { start: "09:00", end: "17:00" }, // Thursday 9am-5pm
+      5: { start: "09:00", end: "17:00" }, // Friday 9am-5pm
     },
   },
-  "yulia-raspertova": {
-    rhone: {
-      1: { start: "10:00", end: "18:30" }, // Monday 10am-6:30pm
-      2: { start: "10:00", end: "12:30" }, // Tuesday 10am-12:30pm
-      4: { start: "10:00", end: "18:30" }, // Thursday 10am-6:30pm
-      3: { start: "08:00", end: "12:00" }, // Wednesday 8am-12pm
-      5: { start: "08:00", end: "12:00" }, // Friday 8am-12pm
-    },
-    champel: {
-      2: { start: "14:00", end: "18:30" }, // Tuesday 2pm-6:30pm
+  "alexandra-miles": {
+    lausanne: {
+      1: { start: "09:00", end: "17:00" }, // Monday 9am-5pm
+      2: { start: "09:00", end: "17:00" }, // Tuesday 9am-5pm
+      3: { start: "09:00", end: "17:00" }, // Wednesday 9am-5pm
+      4: { start: "09:00", end: "17:00" }, // Thursday 9am-5pm
+      5: { start: "09:00", end: "17:00" }, // Friday 9am-5pm
     },
   },
-  "cesar-rodriguez": {
-    champel: {
-      2: { start: "13:00", end: "17:00" }, // Tuesday 1pm-5pm
-      5: { start: "13:00", end: "17:00" }, // Friday 1pm-5pm
-    },
-    rhone: {
-      1: { start: "14:00", end: "18:30" }, // Monday 2pm-6:30pm
-      5: { start: "14:00", end: "18:30" }, // Friday 2pm-6:30pm
-    },
-    montreux: {
-      3: { start: "15:00", end: "17:00" }, // Wednesday 3pm-5pm
+  "reda-benani": {
+    lausanne: {
+      1: { start: "10:00", end: "18:00" }, // Monday 10am-6pm
+      3: { start: "10:00", end: "18:00" }, // Wednesday 10am-6pm
+      5: { start: "10:00", end: "18:00" }, // Friday 10am-6pm
     },
   },
-  "clinic": {
-    champel: {
-      1: { start: "10:00", end: "18:30" }, // Monday 10am-6:30pm
-      2: { start: "10:00", end: "12:00" }, // Tuesday 10am-12pm
-      3: { start: "10:00", end: "12:00" }, // Wednesday 10am-12pm
-      4: { start: "10:00", end: "12:00" }, // Thursday 10am-12pm
-      5: { start: "10:00", end: "12:00" }, // Friday 10am-12pm
-      6: { start: "10:00", end: "12:00" }, // Saturday 10am-12pm
+  "adnan-plakalo": {
+    lausanne: {
+      2: { start: "09:00", end: "17:00" }, // Tuesday 9am-5pm
+      4: { start: "09:00", end: "17:00" }, // Thursday 9am-5pm
     },
   },
-  "lily-radionova": {
-    gstaad: {
-      1: { start: "10:00", end: "18:30" }, // Monday 10am-6:30pm
-      2: { start: "10:00", end: "18:30" }, // Tuesday 10am-6:30pm
-      3: { start: "10:00", end: "18:30" }, // Wednesday 10am-6:30pm
-      4: { start: "10:00", end: "18:30" }, // Thursday 10am-6:30pm
-      5: { start: "10:00", end: "18:30" }, // Friday 10am-6:30pm
-      6: { start: "10:00", end: "18:30" }, // Saturday 10am-6:30pm
+  "natalia-koltunova": {
+    lausanne: {
+      1: { start: "09:00", end: "17:00" }, // Monday 9am-5pm
+      2: { start: "09:00", end: "17:00" }, // Tuesday 9am-5pm
+      3: { start: "09:00", end: "17:00" }, // Wednesday 9am-5pm
+      4: { start: "09:00", end: "17:00" }, // Thursday 9am-5pm
+      5: { start: "09:00", end: "17:00" }, // Friday 9am-5pm
     },
   },
 };
 
 const LOCATION_NAMES: Record<string, string> = {
-  rhone: "Rhône",
-  champel: "Champel",
-  gstaad: "Gstaad",
-  montreux: "Montreux",
+  lausanne: "Lausanne",
 };
 
 const LOCATION_LABELS: Record<string, string> = {
-  rhone: "Genève - Rue du Rhône",
-  champel: "Genève - Champel",
-  gstaad: "Gstaad",
-  montreux: "Montreux",
+  lausanne: "Lausanne",
 };
 
 // Parse date string YYYY-MM-DD as Swiss timezone date

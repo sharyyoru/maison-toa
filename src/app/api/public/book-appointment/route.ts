@@ -262,16 +262,43 @@ export async function POST(request: Request) {
     // Look up the provider ID for this doctor to filter appointments correctly
     let providerId: string | null = null;
     const doctorNameClean = doctorName.replace(/^Dr\.\s*/i, "").trim();
+    const doctorNameParts = doctorNameClean.split(" ");
+    const doctorFirstName = doctorNameParts[0] || "";
+    const doctorLastName = doctorNameParts.slice(1).join(" ") || "";
     
+    // Try multiple name formats: "FirstName LastName", "LastName FirstName", or partial matches
     const { data: provider } = await supabase
       .from("providers")
-      .select("id")
-      .or(`name.ilike.*${doctorNameClean}*,name.ilike.*${doctorNameClean.split(" ")[0]}*`)
+      .select("id, name")
+      .or(`name.ilike.%${doctorNameClean}%,name.ilike.%${doctorLastName} ${doctorFirstName}%,name.ilike.%${doctorFirstName}%`)
       .limit(1)
       .single();
     
     if (provider) {
       providerId = provider.id;
+      console.log(`[Booking] Found provider: ${provider.name} (${provider.id}) for doctor: ${doctorName}`);
+    } else {
+      console.log(`[Booking] Provider not found for: ${doctorName}, trying alternate lookup...`);
+      
+      // Try searching by individual name parts
+      const { data: altProvider } = await supabase
+        .from("providers")
+        .select("id, name")
+        .or(`name.ilike.%${doctorFirstName}%,name.ilike.%${doctorLastName}%`)
+        .limit(10);
+      
+      if (altProvider && altProvider.length > 0) {
+        // Find the best match - one that contains both first and last name
+        const bestMatch = altProvider.find(p => {
+          const pName = (p.name || "").toLowerCase();
+          return pName.includes(doctorFirstName.toLowerCase()) && pName.includes(doctorLastName.toLowerCase());
+        });
+        
+        if (bestMatch) {
+          providerId = bestMatch.id;
+          console.log(`[Booking] Found provider via alternate lookup: ${bestMatch.name} (${bestMatch.id})`);
+        }
+      }
     }
 
     // Doctor-specific capacity: XT and CR can have 3 concurrent, others have 1

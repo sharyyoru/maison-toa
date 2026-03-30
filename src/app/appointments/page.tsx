@@ -13,6 +13,7 @@ import {
   SWISS_TIMEZONE,
   SWISS_LOCALE,
   getSwissHourMinute,
+  getSwissMonthRange,
 } from "@/lib/swissTimezone";
 
 type AppointmentStatus =
@@ -329,18 +330,11 @@ const DAY_VIEW_SLOT_HEIGHT = 28;
 
 // Priority doctors to show first in the list
 const PRIORITY_DOCTOR_NAMES = [
-  "Claire",
-  "Dr Alexandra Miles",
-  "Dr Natalia Koltunova",
-  "Dr Reda Benani",
-  "Dr Sophie Nordback",
+  "Dr. Sophie Nordback",
+  "Dr. Alexandra Miles", 
+  "Dr. Reda Benani",
   "Dr. Adnan Plakalo",
-  "Gwendoline",
-  "Juliette",
-  "Laetitia Guarino",
-  "Louise Goerig",
-  "Ophélie",
-  "Valiny",
+  "Dr. Natalia Koltunova",
 ];
 
 type ProviderOption = {
@@ -376,11 +370,8 @@ function formatMonthYear(date: Date) {
 }
 
 function formatYmd(date: Date) {
-  // Use local timezone for date key consistency with mini calendar
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  // Use Swiss timezone for consistent date display regardless of browser location
+  return formatSwissYmd(date);
 }
 
 function formatTimeRangeLabel(start: Date, end: Date | null): string {
@@ -846,11 +837,15 @@ export default function CalendarPage() {
   };
 
   const monthStart = useMemo(() => {
-    return new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1);
+    // Use Swiss timezone for month boundaries to ensure correct appointment filtering
+    const { start } = getSwissMonthRange(visibleMonth.getFullYear(), visibleMonth.getMonth());
+    return new Date(start);
   }, [visibleMonth]);
 
   const monthEnd = useMemo(() => {
-    return new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+    // Use Swiss timezone for month boundaries to ensure correct appointment filtering
+    const { end } = getSwissMonthRange(visibleMonth.getFullYear(), visibleMonth.getMonth());
+    return new Date(end);
   }, [visibleMonth]);
 
   useEffect(() => {
@@ -954,6 +949,32 @@ export default function CalendarPage() {
         setProvidersLoading(true);
         setProvidersError(null);
 
+        // First, check and add missing Maison Toa doctors
+        const missingDoctors = [
+          { name: "Dr. Natalia Koltunova", check: "natalia" },
+          { name: "Dr. Reda Benani", check: "reda" },
+          { name: "Dr. Adnan Plakalo", check: "adnan" },
+        ];
+        
+        for (const doctor of missingDoctors) {
+          const { data: existing } = await supabaseClient
+            .from("providers")
+            .select("id")
+            .ilike("name", `%${doctor.check}%`)
+            .maybeSingle();
+          
+          if (!existing) {
+            console.log(`[Calendar] Adding missing ${doctor.name}`);
+            await supabaseClient
+              .from("providers")
+              .insert({
+                name: doctor.name,
+                email: "info@maisontoa.com",
+                specialty: "Dermatology & Venereology"
+              });
+          }
+        }
+
         // Load from providers table (appointments reference provider_id from this table)
         const { data, error } = await supabaseClient
           .from("providers")
@@ -968,8 +989,75 @@ export default function CalendarPage() {
           setProvidersError(error?.message ?? "Failed to load providers.");
         } else {
           console.log("[Calendar] Loaded providers:", data.length);
+          console.log("[Calendar] All provider names:", (data as any[]).map(p => p.name));
+          
+          // Filter to only show Maison Toa doctors - exact names only
+          const MAISON_TOA_DOCTOR_NAMES = [
+            // Standard format
+            "dr. sophie nordback",
+            "dr. alexandra miles",
+            "dr. reda benani",
+            "dr. adnan plakalo",
+            "dr. natalia koltunova",
+            // Without Dr. prefix
+            "sophie nordback",
+            "alexandra miles",
+            "reda benani",
+            "adnan plakalo",
+            "natalia koltunova",
+            // Reversed format (LastName FirstName)
+            "nordback sophie",
+            "miles alexandra",
+            "benani reda",
+            "plakalo adnan",
+            "koltunova natalia",
+          ];
+          
+          const maisontoaDoctors = (data as any[]).filter((row) => {
+            const providerName = (row.name as string | null) ?? null;
+            if (!providerName) return false;
+            
+            const normalizedProviderName = providerName.toLowerCase().trim();
+            
+            // Match exact Maison Toa doctor names OR partial match with key names
+            const isExactMatch = MAISON_TOA_DOCTOR_NAMES.includes(normalizedProviderName);
+            const isPartialMatch = (
+              (normalizedProviderName.includes('sophie') && normalizedProviderName.includes('nordback')) ||
+              (normalizedProviderName.includes('alexandra') && normalizedProviderName.includes('miles')) ||
+              (normalizedProviderName.includes('reda') && normalizedProviderName.includes('benani')) ||
+              (normalizedProviderName.includes('adnan') && normalizedProviderName.includes('plakalo')) ||
+              (normalizedProviderName.includes('natalia') && normalizedProviderName.includes('koltunova'))
+            );
+            
+            return isExactMatch || isPartialMatch;
+          });
+          
+          // Deduplicate by keeping only one entry per doctor (prefer "Dr." prefix version)
+          const seenDoctors = new Set<string>();
+          const uniqueDoctors = maisontoaDoctors.filter((row) => {
+            const providerName = (row.name as string | null) ?? "";
+            const normalized = providerName.toLowerCase().trim();
+            
+            // Create a key based on the core name (without prefix)
+            let key = normalized
+              .replace(/^dr\.?\s*/i, "")
+              .split(" ")
+              .sort()
+              .join("-");
+            
+            if (seenDoctors.has(key)) {
+              return false;
+            }
+            seenDoctors.add(key);
+            return true;
+          });
+          
+          console.log("[Calendar] Filtered to Maison Toa doctors:", maisontoaDoctors.length);
+          console.log("[Calendar] After dedup unique doctors:", uniqueDoctors.length);
+          console.log("[Calendar] Unique doctor names:", uniqueDoctors.map(p => p.name));
+          
           setProviders(
-            (data as any[]).map((row) => {
+            uniqueDoctors.map((row) => {
               const providerName = (row.name as string | null) ?? null;
               const email = (row.email as string | null) ?? null;
               const rawName = providerName && providerName.trim().length > 0 ? providerName : email;
@@ -1009,37 +1097,13 @@ export default function CalendarPage() {
   useEffect(() => {
     if (providers.length === 0) return;
 
-    setDoctorCalendars((prev) => {
-      if (prev.length > 0) return prev;
-
-      // Normalize name for deduplication - remove prefixes, normalize spelling
-      function normalizeName(name: string): string {
-        return name
-          .toLowerCase()
-          .replace(/^(mme|mr|mrs|ms|dr|prof)\.?\s*/i, "") // Remove common prefixes
-          .replace(/[éèêë]/g, "e")
-          .replace(/[àâä]/g, "a")
-          .replace(/[ùûü]/g, "u")
-          .replace(/[îï]/g, "i")
-          .replace(/[ôö]/g, "o")
-          .replace(/[ç]/g, "c")
-          .replace(/z/g, "s") // Cesar/Cezar normalization
-          .replace(/\s+/g, " ")
-          .trim();
-      }
-
-      // Deduplicate providers by normalized name
-      const seenNormalizedNames = new Map<string, typeof providers[0]>();
-      const uniqueProviders = providers.filter((provider) => {
-        const rawName = provider.name ?? "Unnamed doctor";
-        const normalized = normalizeName(rawName);
-        
-        if (seenNormalizedNames.has(normalized)) {
-          return false; // Skip duplicate
-        }
-        seenNormalizedNames.set(normalized, provider);
-        return true;
-      });
+    // Force rebuild calendars when providers change (don't keep stale cache)
+    setDoctorCalendars(() => {
+      // Use providers directly - we've already filtered to Maison Toa doctors
+      const uniqueProviders = providers;
+      
+      console.log(`[Calendar] Building calendars for ${uniqueProviders.length} providers`);
+      console.log(`[Calendar] Provider names:`, uniqueProviders.map(p => p.name));
 
       // Load saved calendar selections from localStorage
       let savedSelectedIds: string[] | null = null;
@@ -1050,7 +1114,8 @@ export default function CalendarPage() {
           // Validate that saved IDs match current provider IDs (invalidate stale cache from users table)
           const providerIds = uniqueProviders.map(p => p.id);
           const hasValidIds = parsed.some(id => providerIds.includes(id));
-          if (hasValidIds) {
+          // Clear stale data if the number of saved selections doesn't match current providers
+          if (hasValidIds && parsed.length === uniqueProviders.length) {
             savedSelectedIds = parsed;
           } else {
             // Clear stale localStorage (old user IDs that don't match provider IDs)
@@ -1058,7 +1123,9 @@ export default function CalendarPage() {
             localStorage.removeItem("appointments_selected_calendars");
           }
         }
-      } catch {}
+      } catch {
+        localStorage.removeItem("appointments_selected_calendars");
+      }
 
       const baseCalendars: DoctorCalendar[] = uniqueProviders.map((provider, index) => {
         const rawName = provider.name ?? "Unnamed doctor";
@@ -1068,20 +1135,29 @@ export default function CalendarPage() {
         let selected: boolean;
         if (savedSelectedIds !== null) {
           selected = savedSelectedIds.includes(provider.id);
+          console.log(`[Calendar] ${trimmedName} selected from localStorage: ${selected}`);
         } else if (currentUserId) {
           selected = provider.id === currentUserId;
+          console.log(`[Calendar] ${trimmedName} matched current user: ${selected} (provider: ${provider.id}, user: ${currentUserId})`);
         } else {
           selected = true;
+          console.log(`[Calendar] ${trimmedName} auto-selected (no saved selection, no current user): ${selected}`);
         }
 
-        return {
+        const calendar = {
           id: provider.id,
           providerId: provider.id,
           name: trimmedName,
           color: getCalendarColorForIndex(index),
           selected,
         };
+        
+        console.log(`[Calendar] Created calendar for ${trimmedName}:`, calendar);
+        return calendar;
       });
+      
+      console.log(`[Calendar] Final baseCalendars count: ${baseCalendars.length}`);
+      console.log(`[Calendar] Final baseCalendars:`, baseCalendars.map(c => ({ name: c.name, selected: c.selected })));
 
       // Only apply fallback logic if no saved selections exist
       if (savedSelectedIds === null && currentUserId) {
@@ -1307,9 +1383,15 @@ export default function CalendarPage() {
 
       if (!map[key]) map[key] = [];
       map[key].push(appt);
+      
+      // Debug: log matched appointment date keys
+      if (matchedCount <= 5) {
+        console.log("[Calendar] MATCHED appt:", appt.id, "start_time:", appt.start_time, "key:", key, "reason:", appt.reason?.substring(0, 60));
+      }
     });
 
-    console.log("[Calendar] appointmentsByDay result - matched:", matchedCount, "skipped:", skippedCount, "keys:", Object.keys(map).length);
+    console.log("[Calendar] appointmentsByDay result - matched:", matchedCount, "skipped:", skippedCount, "keys:", Object.keys(map));
+    console.log("[Calendar] appointmentsByDay map keys:", Object.keys(map).join(", "));
     return map;
   }, [appointments, patientSearch, doctorCalendars, activeDoctorTabId]);
 
@@ -1352,7 +1434,9 @@ export default function CalendarPage() {
   const activeRangeDates = useMemo(() => {
     if (!selectedDate) return [] as Date[];
     if (view === "day" || !rangeEndDate) {
-      return [selectedDate];
+      const dates = [selectedDate];
+      console.log("[Calendar] activeRangeDates (day view):", dates.map(d => formatYmd(d)));
+      return dates;
     }
 
     const start = selectedDate < rangeEndDate ? selectedDate : rangeEndDate;
@@ -2318,6 +2402,8 @@ export default function CalendarPage() {
     setRangeEndDate(null);
     setIsDraggingRange(true);
     setView("day");
+    // Update visible month to match selected date so appointments are loaded
+    setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
   }
 
   function handleMiniDayMouseEnter(date: Date) {

@@ -5,28 +5,10 @@ import Link from "next/link";
 
 const CLINIC_LOCATIONS = [
   {
-    id: "rhone",
-    name: "Rhône",
-    label: "Genève - Rue du Rhône",
-    description: "Our flagship clinic in the heart of Geneva",
-  },
-  {
-    id: "champel",
-    name: "Champel",
-    label: "Genève - Champel",
-    description: "Premium aesthetic services in Champel",
-  },
-  {
-    id: "gstaad",
-    name: "Gstaad",
-    label: "Gstaad",
-    description: "Exclusive mountain retreat clinic",
-  },
-  {
-    id: "montreux",
-    name: "Montreux",
-    label: "Montreux",
-    description: "Lakeside aesthetic excellence",
+    id: "lausanne",
+    name: "Lausanne",
+    label: "Lausanne",
+    description: "Our clinic in the beautiful city of Lausanne",
   },
 ];
 

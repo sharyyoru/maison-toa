@@ -9,28 +9,10 @@ import { pushToDataLayer } from "@/components/GoogleTagManager";
 // Clinic locations
 const CLINIC_LOCATIONS = [
   {
-    id: "rhone",
-    name: "Rhône",
-    label: "Genève - Rue du Rhône",
-    description: "Our flagship clinic in the heart of Geneva",
-  },
-  {
-    id: "champel",
-    name: "Champel",
-    label: "Genève - Champel",
-    description: "Premium aesthetic services in Champel",
-  },
-  {
-    id: "gstaad",
-    name: "Gstaad",
-    label: "Gstaad",
-    description: "Exclusive mountain retreat clinic",
-  },
-  {
-    id: "montreux",
-    name: "Montreux",
-    label: "Montreux",
-    description: "Lakeside aesthetic excellence",
+    id: "lausanne",
+    name: "Lausanne",
+    label: "Lausanne",
+    description: "Our clinic in the beautiful city of Lausanne",
   },
 ];
 
@@ -42,116 +24,93 @@ const DOCTORS: Record<string, {
   email: string;
   description: string;
 }> = {
-  "xavier-tenorio": {
-    name: "Dr. Xavier Tenorio",
-    specialty: "Chirurgien plasticien et esthétique",
-    image: "/doctors/xavier-tenorio.jpg",
-    email: "xavier@aesthetics-ge.ch",
-    description: "Expert in facial rejuvenation and body contouring procedures.",
+  "sophie-nordback": {
+    name: "Dr. Sophie Nordback",
+    specialty: "Dermatology & Venereology",
+    image: "/doctors/dr-sophie-nordback-correct.png",
+    email: "info@maisontoa.com",
+    description: "FMH-qualified plastic and aesthetic surgeon. Co-founder of Clinique Maison TÓĀ.",
   },
-  "cesar-rodriguez": {
-    name: "Dr. Cesar Rodriguez",
-    specialty: "Aesthetic Medicine Specialist",
-    image: "/doctors/cesar-rodriguez.jpg",
-    email: "cesar@aesthetics-ge.ch",
-    description: "Specialized in non-invasive aesthetic treatments.",
+  "alexandra-miles": {
+    name: "Dr. Alexandra Miles",
+    specialty: "Dermatology & Venereology",
+    image: "/doctors/dr-alexandra-miles.webp",
+    email: "info@maisontoa.com",
+    description: "Spec. FMH in Dermatology and Venereology. Practicing dermatology since 2011.",
   },
-  "yulia-raspertova": {
-    name: "Dr. Yulia Raspertova",
-    specialty: "Dermatology & Aesthetic Medicine",
-    image: "/doctors/yulia-raspertova.jpg",
-    email: "yulia@aesthetics-ge.ch",
-    description: "Expert in dermatological treatments and anti-aging.",
+  "reda-benani": {
+    name: "Dr. Reda Benani",
+    specialty: "Longevity Medicine",
+    image: "/doctors/dr-reda-benanni.webp",
+    email: "info@maisontoa.com",
+    description: "Practicing physician specializing in longevity medicine.",
   },
-  "clinic": {
-    name: "Laser & Treatments",
-    specialty: "Maison Toa Services",
-    image: "/doctors/clinic.png",
-    email: "treatments@aesthetics-ge.ch",
-    description: "Advanced laser treatments and aesthetic services.",
+  "adnan-plakalo": {
+    name: "Dr. Adnan Plakalo",
+    specialty: "Medical Practitioner",
+    image: "/doctors/dr-adnan-plakalo.png",
+    email: "info@maisontoa.com",
+    description: "Medical practitioner.",
   },
-  "lily-radionova": {
-    name: "Nurse Lily Radionova",
-    specialty: "Aesthetic Nurse Specialist",
-    image: "/doctors/lily-radionova.jpeg",
-    email: "lily@aesthetics-ge.ch",
-    description: "Expert aesthetic nurse at Gstaad.",
+  "natalia-koltunova": {
+    name: "Dr. Natalia Koltunova",
+    specialty: "Dermatology & Venereology",
+    image: "/doctors/dr-natalia-koltunova.webp",
+    email: "info@maisontoa.com",
+    description: "Russian postgraduate diploma in Dermatology and Venereology.",
   },
 };
 
 // Doctor availability by location
 const DOCTOR_AVAILABILITY: Record<string, Record<string, Record<number, { start: string; end: string }>>> = {
-  "xavier-tenorio": {
-    rhone: {
-      1: { start: "14:00", end: "18:30" },
-      5: { start: "14:00", end: "18:30" },
-    },
-    montreux: {
-      4: { start: "10:00", end: "12:30" },
-    },
-    gstaad: {
-      6: { start: "16:00", end: "18:30" },
+  "sophie-nordback": {
+    lausanne: {
+      1: { start: "09:00", end: "17:00" },
+      2: { start: "09:00", end: "17:00" },
+      3: { start: "09:00", end: "17:00" },
+      4: { start: "09:00", end: "17:00" },
+      5: { start: "09:00", end: "17:00" },
     },
   },
-  "yulia-raspertova": {
-    rhone: {
-      1: { start: "10:00", end: "18:30" },
-      2: { start: "10:00", end: "12:30" },
-      4: { start: "10:00", end: "18:30" },
-      3: { start: "08:00", end: "12:00" },
-      5: { start: "08:00", end: "12:00" },
-    },
-    champel: {
-      2: { start: "14:00", end: "18:30" },
+  "alexandra-miles": {
+    lausanne: {
+      1: { start: "09:00", end: "17:00" },
+      2: { start: "09:00", end: "17:00" },
+      3: { start: "09:00", end: "17:00" },
+      4: { start: "09:00", end: "17:00" },
+      5: { start: "09:00", end: "17:00" },
     },
   },
-  "cesar-rodriguez": {
-    champel: {
-      2: { start: "13:00", end: "17:00" },
-      5: { start: "13:00", end: "17:00" },
-    },
-    rhone: {
-      1: { start: "14:00", end: "18:30" },
-      5: { start: "14:00", end: "18:30" },
-    },
-    montreux: {
-      3: { start: "15:00", end: "17:00" },
+  "reda-benani": {
+    lausanne: {
+      1: { start: "10:00", end: "18:00" },
+      3: { start: "10:00", end: "18:00" },
+      5: { start: "10:00", end: "18:00" },
     },
   },
-  "clinic": {
-    champel: {
-      1: { start: "10:00", end: "18:30" },
-      2: { start: "10:00", end: "12:00" },
-      3: { start: "10:00", end: "12:00" },
-      4: { start: "10:00", end: "12:00" },
-      5: { start: "10:00", end: "12:00" },
-      6: { start: "10:00", end: "12:00" },
+  "adnan-plakalo": {
+    lausanne: {
+      2: { start: "09:00", end: "17:00" },
+      4: { start: "09:00", end: "17:00" },
     },
   },
-  "lily-radionova": {
-    gstaad: {
-      1: { start: "10:00", end: "18:30" },
-      2: { start: "10:00", end: "18:30" },
-      3: { start: "10:00", end: "18:30" },
-      4: { start: "10:00", end: "18:30" },
-      5: { start: "10:00", end: "18:30" },
-      6: { start: "10:00", end: "18:30" },
+  "natalia-koltunova": {
+    lausanne: {
+      1: { start: "09:00", end: "17:00" },
+      2: { start: "09:00", end: "17:00" },
+      3: { start: "09:00", end: "17:00" },
+      4: { start: "09:00", end: "17:00" },
+      5: { start: "09:00", end: "17:00" },
     },
   },
 };
 
 const LOCATION_NAMES: Record<string, string> = {
-  rhone: "Rhône",
-  champel: "Champel",
-  gstaad: "Gstaad",
-  montreux: "Montreux",
+  lausanne: "Lausanne",
 };
 
 const LOCATION_LABELS: Record<string, string> = {
-  rhone: "Genève - Rue du Rhône",
-  champel: "Genève - Champel",
-  gstaad: "Gstaad",
-  montreux: "Montreux",
+  lausanne: "Lausanne",
 };
 
 // Utility functions

@@ -9,109 +9,88 @@ import { Suspense } from "react";
 // Format: { [locationId]: { [dayOfWeek]: { start: "HH:MM", end: "HH:MM" } } }
 // dayOfWeek: 0 = Sunday, 1 = Monday, ..., 6 = Saturday
 const DOCTOR_AVAILABILITY: Record<string, Record<string, Record<number, { start: string; end: string }>>> = {
-  "xavier-tenorio": {
-    rhone: {
-      1: { start: "14:00", end: "18:30" }, // Monday 2pm-6:30pm
-      5: { start: "14:00", end: "18:30" }, // Friday 2pm-6:30pm
-    },
-    montreux: {
-      4: { start: "10:00", end: "12:30" }, // Thursday 10am-12:30pm
-    },
-    gstaad: {
-      6: { start: "16:00", end: "18:30" }, // Saturday 4pm-6:30pm
+  "sophie-nordback": {
+    lausanne: {
+      1: { start: "09:00", end: "17:00" }, // Monday 9am-5pm
+      2: { start: "09:00", end: "17:00" }, // Tuesday 9am-5pm
+      3: { start: "09:00", end: "17:00" }, // Wednesday 9am-5pm
+      4: { start: "09:00", end: "17:00" }, // Thursday 9am-5pm
+      5: { start: "09:00", end: "17:00" }, // Friday 9am-5pm
     },
   },
-  "yulia-raspertova": {
-    rhone: {
-      1: { start: "10:00", end: "18:30" }, // Monday 10am-6:30pm
-      2: { start: "10:00", end: "12:30" }, // Tuesday 10am-12:30pm
-      4: { start: "10:00", end: "18:30" }, // Thursday 10am-6:30pm
-      3: { start: "08:00", end: "12:00" }, // Wednesday 8am-12pm
-      5: { start: "08:00", end: "12:00" }, // Friday 8am-12pm
-    },
-    champel: {
-      2: { start: "14:00", end: "18:30" }, // Tuesday 2pm-6:30pm
+  "alexandra-miles": {
+    lausanne: {
+      1: { start: "09:00", end: "17:00" }, // Monday 9am-5pm
+      2: { start: "09:00", end: "17:00" }, // Tuesday 9am-5pm
+      3: { start: "09:00", end: "17:00" }, // Wednesday 9am-5pm
+      4: { start: "09:00", end: "17:00" }, // Thursday 9am-5pm
+      5: { start: "09:00", end: "17:00" }, // Friday 9am-5pm
     },
   },
-  "cesar-rodriguez": {
-    champel: {
-      2: { start: "13:00", end: "17:00" }, // Tuesday 1pm-5pm
-      5: { start: "13:00", end: "17:00" }, // Friday 1pm-5pm
-    },
-    rhone: {
-      1: { start: "14:00", end: "18:30" }, // Monday 2pm-6:30pm
-      5: { start: "14:00", end: "18:30" }, // Friday 2pm-6:30pm
-    },
-    montreux: {
-      3: { start: "15:00", end: "17:00" }, // Wednesday 3pm-5pm
-    },
-    // Gstaad: Off (not available)
-  },
-  "clinic": {
-    champel: {
-      1: { start: "10:00", end: "18:30" }, // Monday 10am-6:30pm
-      2: { start: "10:00", end: "12:00" }, // Tuesday 10am-12pm
-      3: { start: "10:00", end: "12:00" }, // Wednesday 10am-12pm
-      4: { start: "10:00", end: "12:00" }, // Thursday 10am-12pm
-      5: { start: "10:00", end: "12:00" }, // Friday 10am-12pm
-      6: { start: "10:00", end: "12:00" }, // Saturday 10am-12pm
+  "reda-benani": {
+    lausanne: {
+      1: { start: "10:00", end: "18:00" }, // Monday 10am-6pm
+      3: { start: "10:00", end: "18:00" }, // Wednesday 10am-6pm
+      5: { start: "10:00", end: "18:00" }, // Friday 10am-6pm
     },
   },
-  "lily-radionova": {
-    gstaad: {
-      1: { start: "10:00", end: "18:30" }, // Monday 10am-6:30pm
-      2: { start: "10:00", end: "18:30" }, // Tuesday 10am-6:30pm
-      3: { start: "10:00", end: "18:30" }, // Wednesday 10am-6:30pm
-      4: { start: "10:00", end: "18:30" }, // Thursday 10am-6:30pm
-      5: { start: "10:00", end: "18:30" }, // Friday 10am-6:30pm
-      6: { start: "10:00", end: "18:30" }, // Saturday 10am-6:30pm
+  "adnan-plakalo": {
+    lausanne: {
+      2: { start: "09:00", end: "17:00" }, // Tuesday 9am-5pm
+      4: { start: "09:00", end: "17:00" }, // Thursday 9am-5pm
+    },
+  },
+  "natalia-koltunova": {
+    lausanne: {
+      1: { start: "09:00", end: "17:00" }, // Monday 9am-5pm
+      2: { start: "09:00", end: "17:00" }, // Tuesday 9am-5pm
+      3: { start: "09:00", end: "17:00" }, // Wednesday 9am-5pm
+      4: { start: "09:00", end: "17:00" }, // Thursday 9am-5pm
+      5: { start: "09:00", end: "17:00" }, // Friday 9am-5pm
     },
   },
 };
 
 const ALL_DOCTORS = [
   {
-    slug: "xavier-tenorio",
-    name: "Dr. Xavier Tenorio",
-    specialty: "Chirurgien plasticien et esthétique",
-    image: "/doctors/xavier-tenorio.jpg",
-    description: "Expert in facial rejuvenation and body contouring procedures.",
+    slug: "sophie-nordback",
+    name: "Dr. Sophie Nordback",
+    specialty: "Dermatology & Venereology",
+    image: "/doctors/dr-sophie-nordback-correct.png",
+    description: "FMH-qualified plastic and aesthetic surgeon. Co-founder of Clinique Maison TÓĀ.",
   },
   {
-    slug: "cesar-rodriguez",
-    name: "Dr. Cesar Rodriguez",
-    specialty: "Aesthetic Medicine Specialist",
-    image: "/doctors/cesar-rodriguez.jpg",
-    description: "Specialized in non-invasive aesthetic treatments and skin care.",
+    slug: "alexandra-miles",
+    name: "Dr. Alexandra Miles",
+    specialty: "Dermatology & Venereology",
+    image: "/doctors/dr-alexandra-miles.webp",
+    description: "Spec. FMH in Dermatology and Venereology. Practicing dermatology since 2011.",
   },
   {
-    slug: "yulia-raspertova",
-    name: "Dr. Yulia Raspertova",
-    specialty: "Dermatology & Aesthetic Medicine",
-    image: "/doctors/yulia-raspertova.jpg",
-    description: "Expert in dermatological treatments and anti-aging procedures.",
+    slug: "reda-benani",
+    name: "Dr. Reda Benani",
+    specialty: "Longevity Medicine",
+    image: "/doctors/dr-reda-benanni.webp",
+    description: "Practicing physician specializing in longevity medicine.",
   },
   {
-    slug: "clinic",
-    name: "Laser & Treatments",
-    specialty: "Maison Toa Services",
-    image: "/doctors/clinic.png",
-    description: "Advanced laser treatments and aesthetic clinic services.",
+    slug: "adnan-plakalo",
+    name: "Dr. Adnan Plakalo",
+    specialty: "Medical Practitioner",
+    image: "/doctors/dr-adnan-plakalo.png",
+    description: "Medical practitioner.",
   },
   {
-    slug: "lily-radionova",
-    name: "Nurse Lily Radionova",
-    specialty: "Aesthetic Nurse Specialist",
-    image: "/doctors/lily-radionova.jpeg",
-    description: "Expert aesthetic nurse specializing in non-invasive treatments at Gstaad.",
+    slug: "natalia-koltunova",
+    name: "Dr. Natalia Koltunova",
+    specialty: "Dermatology & Venereology",
+    image: "/doctors/dr-natalia-koltunova.webp",
+    description: "Russian postgraduate diploma in Dermatology and Venereology.",
   },
 ];
 
 const LOCATION_NAMES: Record<string, string> = {
-  rhone: "Rhône",
-  champel: "Champel",
-  gstaad: "Gstaad",
-  montreux: "Montreux",
+  lausanne: "Lausanne",
 };
 
 function DoctorsListContent() {
@@ -181,12 +160,12 @@ function DoctorsListContent() {
 
         {/* Doctors Grid */}
         {availableDoctors.length > 0 ? (
-          <div className="flex flex-wrap justify-center gap-3 sm:gap-4 md:gap-6">
+          <div className="flex justify-center gap-2 sm:gap-3">
             {availableDoctors.map((doctor) => (
               <Link
                 key={doctor.slug}
                 href={`/book-appointment/doctors/${doctor.slug}?location=${location}`}
-                className="group bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-xl hover:border-slate-400 transition-all transform hover:-translate-y-1 w-[calc(50%-0.375rem)] sm:w-[calc(50%-0.5rem)] lg:w-[calc(25%-1.125rem)]"
+                className="group bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-xl hover:border-slate-400 transition-all transform hover:-translate-y-1 flex-1 max-w-48 sm:max-w-56 md:max-w-64"
               >
                 <div className="relative h-28 sm:h-36 md:h-40 bg-gradient-to-br from-slate-100 to-slate-50 overflow-hidden">
                   <Image
