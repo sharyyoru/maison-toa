@@ -1,20 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
 export default function BookAppointmentPage() {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const videoRef = useRef<HTMLIFrameElement>(null);
-
-  const handlePlayVideo = () => {
-    setIsPlaying(true);
-  };
-
-  const handleVideoEnd = () => {
-    setIsPlaying(false);
-  };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
@@ -39,62 +28,17 @@ export default function BookAppointmentPage() {
             />
           </div>
 
-          {/* Video Section */}
-          <div className="max-w-sm mx-auto mb-12">
-            <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
-              <div className="relative aspect-[9/16] bg-black">
-                {!isPlaying ? (
-                  <>
-                    {/* Thumbnail with play button */}
-                    <Image
-                      src="/doctors/welcome.jpg"
-                      alt="Welcome Video"
-                      fill
-                      className="object-cover"
-                      priority
-                    />
-                    <button
-                      onClick={handlePlayVideo}
-                      className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors group"
-                    >
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white/90 flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform">
-                        <svg className="w-8 h-8 sm:w-10 sm:h-10 text-slate-900 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      </div>
-                      <span className="absolute bottom-6 left-0 right-0 text-center text-white text-sm font-medium">
-                        Press to Play
-                      </span>
-                    </button>
-                  </>
-                ) : (
-                  <iframe
-                    ref={videoRef}
-                    src="https://www.youtube.com/embed/u8IIOftkpUs?autoplay=1&controls=0&modestbranding=1&rel=0&showinfo=0&loop=0&fs=0&disablekb=1&playsinline=1"
-                    title="Welcome Video"
-                    className="absolute inset-0 w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen={false}
-                  />
-                )}
-              </div>
-              <div className="p-6 text-center">
-                <h2 className="text-xl font-semibold text-slate-900">Dr. Xavier Tenorio</h2>
-                <p className="text-sm text-slate-500 font-medium">Chirurgien plasticien et esthétique</p>
-              </div>
-            </div>
-          </div>
-
+          
           {/* Welcome Message */}
           <div className="max-w-3xl mx-auto text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-6">
               Welcome to Maison Toa
             </h2>
             <p className="text-lg text-slate-600 leading-relaxed mb-8">
-              We believe your vision matters. Our mission is to truly listen, understand your unique needs, 
-              and make your aesthetic dream become a reality. Start your journey with a free consultation 
-              and 3D simulation at any of our clinics in Switzerland. We also offer online consultations 
-              where possible, making it easy to connect with us.
+              Your destination of choice for quality medical and cosmetic surgery in Lausanne. Our dedicated medical team is here to guide you in your quest for well-being and beauty.<br /><br />
+              At Maison Tóā, it's important to us to be able to offer a tailor-made result with respect for each patient's anatomy and according to their needs.<br /><br />
+              Innovative care protocols, intelligent treatments, the latest technology and expert advice all come together in our holistic aesthetic universe.<br /><br />
+              Safety, quality, discretion, Maison Tóā has one mantra: Enlight your Beauty!
             </p>
 
             {/* CTA Button */}
