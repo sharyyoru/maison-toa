@@ -41,8 +41,10 @@ export async function GET(request: Request) {
       );
     }
 
-    // Generate form URLs for pending submissions
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    // Generate form URLs for pending submissions using request host
+    const host = request.headers.get("host") || "localhost:3000";
+    const protocol = host.includes("localhost") ? "http" : "https";
+    const appUrl = `${protocol}://${host}`;
     const submissionsWithUrls = (submissions || []).map((sub) => ({
       ...sub,
       formUrl: sub.status === "pending" ? `${appUrl}/form/${sub.form_id}?token=${sub.token}` : null,
