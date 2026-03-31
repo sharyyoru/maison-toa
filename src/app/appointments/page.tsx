@@ -980,11 +980,17 @@ export default function CalendarPage() {
         setProvidersLoading(true);
         setProvidersError(null);
 
-        // First, check and add missing Maison Toa doctors
+        // First, check and add missing Maison Toa doctors and staff
         const missingDoctors = [
           { name: "Dr. Natalia Koltunova", check: "natalia" },
           { name: "Dr. Reda Benani", check: "reda" },
           { name: "Dr. Adnan Plakalo", check: "adnan" },
+          { name: "Laetitia Guarino", check: "laetitia guarino" },
+          { name: "Louise Goerig", check: "louise goerig" },
+          { name: "Juliette Le Mentec", check: "juliette le mentec" },
+          { name: "Gwendolyn Boursault", check: "gwendolyn boursault" },
+          { name: "Claire Balbo", check: "claire balbo" },
+          { name: "Ophélie Perrin", check: "ophelie perrin" },
         ];
         
         for (const doctor of missingDoctors) {
@@ -1026,6 +1032,13 @@ export default function CalendarPage() {
             "dr. reda benani",
             "dr. adnan plakalo",
             "dr. natalia koltunova",
+            "laetitia guarino",
+            "louise goerig",
+            "juliette le mentec",
+            "gwendolyn boursault",
+            "claire balbo",
+            "ophélie perrin",
+            "ophelie perrin",
             // Without Dr. prefix
             "sophie nordback",
             "alexandra miles",
@@ -1038,6 +1051,13 @@ export default function CalendarPage() {
             "benani reda",
             "plakalo adnan",
             "koltunova natalia",
+            "guarino laetitia",
+            "goerig louise",
+            "le mentec juliette",
+            "boursault gwendolyn",
+            "balbo claire",
+            "perrin ophélie",
+            "perrin ophelie",
           ];
           
           const maisontoaDoctors = (data as any[]).filter((row) => {
@@ -1053,7 +1073,14 @@ export default function CalendarPage() {
               (normalizedProviderName.includes('alexandra') && normalizedProviderName.includes('miles')) ||
               (normalizedProviderName.includes('reda') && normalizedProviderName.includes('benani')) ||
               (normalizedProviderName.includes('adnan') && normalizedProviderName.includes('plakalo')) ||
-              (normalizedProviderName.includes('natalia') && normalizedProviderName.includes('koltunova'))
+              (normalizedProviderName.includes('natalia') && normalizedProviderName.includes('koltunova')) ||
+              (normalizedProviderName.includes('laetitia') && normalizedProviderName.includes('guarino')) ||
+              (normalizedProviderName.includes('louise') && normalizedProviderName.includes('goerig')) ||
+              (normalizedProviderName.includes('juliette') && normalizedProviderName.includes('mentec')) ||
+              (normalizedProviderName.includes('gwendolyn') && normalizedProviderName.includes('boursault')) ||
+              (normalizedProviderName.includes('claire') && normalizedProviderName.includes('balbo')) ||
+              (normalizedProviderName.includes('ophelie') && normalizedProviderName.includes('perrin')) ||
+              (normalizedProviderName.includes('ophélie') && normalizedProviderName.includes('perrin'))
             );
             
             return isExactMatch || isPartialMatch;
