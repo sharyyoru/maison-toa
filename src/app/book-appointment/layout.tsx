@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { GoogleTagManager, GoogleTagManagerNoScript } from "@/components/GoogleTagManager";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 
 export const metadata: Metadata = {
   title: "Book Appointment | Aesthetics Clinic",
@@ -14,10 +15,10 @@ export default function BookingLayout({
   // This layout bypasses the main app layout's sidebar/header
   // by rendering children directly without the shell components
   return (
-    <>
+    <LanguageProvider>
       <GoogleTagManager />
       <GoogleTagManagerNoScript />
       {children}
-    </>
+    </LanguageProvider>
   );
 }

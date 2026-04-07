@@ -6,6 +6,7 @@ const TABS = [
   { id: "external-labs", label: "External Labs" },
   { id: "doctor-scheduling", label: "Doctor Scheduling" },
   { id: "medidata", label: "MediData Connection" },
+  { id: "booking-categories", label: "Booking Categories" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -66,6 +67,7 @@ export default function SettingsPage() {
         {activeTab === "external-labs" && <ExternalLabsTab />}
         {activeTab === "doctor-scheduling" && <DoctorSchedulingTab />}
         {activeTab === "medidata" && <MediDataConnectionTab />}
+        {activeTab === "booking-categories" && <BookingCategoriesTab />}
       </div>
     </div>
   );
@@ -230,7 +232,7 @@ function DoctorSchedulingTab() {
 
   return (
     <div className="flex gap-6 min-h-[420px]">
-      {/* Left panel – settings list */}
+      {/* Left panel â€“ settings list */}
       <div className="w-80 shrink-0 rounded-2xl border border-slate-200/80 bg-white/80 shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-200/80 px-4 py-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -257,7 +259,7 @@ function DoctorSchedulingTab() {
         <div className="max-h-[340px] overflow-y-auto">
           {loading && (
             <div className="px-4 py-8 text-center text-xs text-slate-400">
-              Loading…
+              Loadingâ€¦
             </div>
           )}
           {!loading && settings.length === 0 && (
@@ -285,7 +287,7 @@ function DoctorSchedulingTab() {
         </div>
       </div>
 
-      {/* Right panel – form */}
+      {/* Right panel â€“ form */}
       <div className="flex-1 rounded-2xl border border-slate-200/80 bg-white/80 shadow-sm">
         {!selectedId ? (
           <div className="flex h-full items-center justify-center text-sm text-slate-400">
@@ -313,7 +315,7 @@ function DoctorSchedulingTab() {
                   disabled={selectedId !== "__new__" && !!selectedSetting}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-sky-400 focus:ring-1 focus:ring-sky-400/30 disabled:bg-slate-50 disabled:text-slate-500"
                 >
-                  <option value="">Select doctor…</option>
+                  <option value="">Select doctorâ€¦</option>
                   {(selectedId === "__new__" ? availableProviders : providers).map((p) => (
                     <option key={p.id} value={p.id}>
                       {(p as any).full_name || p.name || "Unnamed"}
@@ -337,7 +339,7 @@ function DoctorSchedulingTab() {
                     ))}
                   </select>
                   <p className="mt-1 text-[11px] text-slate-400">
-                    Appointments can start every {formInterval} minutes (e.g. 9:00, 9:{formInterval.toString().padStart(2, "0")}…)
+                    Appointments can start every {formInterval} minutes (e.g. 9:00, 9:{formInterval.toString().padStart(2, "0")}â€¦)
                   </p>
                 </div>
                 <div>
@@ -386,7 +388,7 @@ function DoctorSchedulingTab() {
                 disabled={saving}
                 className="rounded-lg bg-sky-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-sky-600 transition-colors disabled:opacity-60"
               >
-                {saving ? "Saving…" : "Save"}
+                {saving ? "Savingâ€¦" : "Save"}
               </button>
             </div>
           </div>
@@ -500,7 +502,7 @@ function ExternalLabsTab() {
 
   return (
     <div className="flex gap-6 min-h-[420px]">
-      {/* Left panel – lab list */}
+      {/* Left panel â€“ lab list */}
       <div className="w-80 shrink-0 rounded-2xl border border-slate-200/80 bg-white/80 shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-200/80 px-4 py-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -527,7 +529,7 @@ function ExternalLabsTab() {
         <div className="max-h-[340px] overflow-y-auto">
           {loading && (
             <div className="px-4 py-8 text-center text-xs text-slate-400">
-              Loading…
+              Loadingâ€¦
             </div>
           )}
           {!loading && labs.length === 0 && (
@@ -553,7 +555,7 @@ function ExternalLabsTab() {
         </div>
       </div>
 
-      {/* Right panel – form */}
+      {/* Right panel â€“ form */}
       <div className="flex-1 rounded-2xl border border-slate-200/80 bg-white/80 shadow-sm">
         {!selectedId ? (
           <div className="flex h-full items-center justify-center text-sm text-slate-400">
@@ -648,7 +650,7 @@ function ExternalLabsTab() {
                     value={form.password}
                     onChange={(e) => { setForm((f) => ({ ...f, password: e.target.value })); setErrors((prev) => ({ ...prev, password: undefined })); }}
                     className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-300 outline-none transition-colors ${errors.password ? "border-red-400 focus:border-red-400 focus:ring-1 focus:ring-red-400/30" : "border-slate-200 focus:border-sky-400 focus:ring-1 focus:ring-sky-400/30"}`}
-                    placeholder="••••••••"
+                    placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   />
                   {errors.password && <p className="mt-1 text-[11px] text-red-500">{errors.password}</p>}
                 </div>
@@ -676,7 +678,7 @@ function ExternalLabsTab() {
                 onClick={handleSave}
                 className="rounded-lg bg-sky-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-sky-600 transition-colors"
               >
-                {saving ? "Saving…" : "Save"}
+                {saving ? "Savingâ€¦" : "Save"}
               </button>
             </div>
           </div>
@@ -750,7 +752,7 @@ function MediDataConnectionTab() {
   if (mdLoading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-slate-400">
-        Loading MediData configuration…
+        Loading MediData configurationâ€¦
       </div>
     );
   }
@@ -780,14 +782,14 @@ function MediDataConnectionTab() {
             <svg className="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
             </svg>
-            <span className="text-xs font-medium text-amber-700">Test Mode — Using MediData ACC environment</span>
+            <span className="text-xs font-medium text-amber-700">Test Mode â€” Using MediData ACC environment</span>
           </div>
         ) : config?.connected ? (
           <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
             <svg className="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="text-xs font-medium text-emerald-700">Production Mode — Connected to MediData</span>
+            <span className="text-xs font-medium text-emerald-700">Production Mode â€” Connected to MediData</span>
           </div>
         ) : null}
       </div>
@@ -858,9 +860,424 @@ function MediDataConnectionTab() {
           disabled={mdSaving}
           className="rounded-lg bg-sky-500 px-5 py-2 text-xs font-medium text-white hover:bg-sky-600 transition-colors disabled:opacity-50"
         >
-          {mdSaving ? "Saving…" : "Save Settings"}
+          {mdSaving ? "Savingâ€¦" : "Save Settings"}
         </button>
       </div>
+    </div>
+  );
+}
+
+
+
+// ---------------------------------------------------------------------------
+// Booking Categories & Treatments Tab
+// ---------------------------------------------------------------------------
+
+interface BookingCategory {
+  id: string;
+  name: string;
+  description: string;
+  patient_type: "new" | "existing";
+  order_index: number;
+  slug: string;
+  enabled: boolean;
+}
+
+interface BookingTreatment {
+  id: string;
+  category_id: string;
+  name: string;
+  description: string;
+  duration_minutes: number;
+  order_index: number;
+  enabled: boolean;
+}
+
+function BookingCategoriesTab() {
+  const [categories, setCategories] = useState<BookingCategory[]>([]);
+  const [treatments, setTreatments] = useState<BookingTreatment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<"new" | "existing">("new");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [view, setView] = useState<"categories" | "treatments">("categories");
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const [catRes, treatRes] = await Promise.all([
+        fetch("/api/settings/booking-categories"),
+        fetch("/api/settings/booking-treatments"),
+      ]);
+      const catData = await catRes.json();
+      const treatData = await treatRes.json();
+      setCategories(catData.categories || []);
+      setTreatments(treatData.treatments || []);
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveCategories = async () => {
+    setSaving(true);
+    try {
+      await fetch("/api/settings/booking-categories", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categories }),
+      });
+      alert("Categories saved!");
+    } catch (error) {
+      alert("Failed to save categories");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveTreatments = async () => {
+    setSaving(true);
+    try {
+      await fetch("/api/settings/booking-treatments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ treatments }),
+      });
+      alert("Treatments saved!");
+    } catch (error) {
+      alert("Failed to save treatments");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addCategory = (patientType: "new" | "existing") => {
+    const newCategory: BookingCategory = {
+      id: crypto.randomUUID(),
+      name: "",
+      description: "",
+      patient_type: patientType,
+      order_index: categories.filter((c) => c.patient_type === patientType).length,
+      slug: "",
+      enabled: true,
+    };
+    setCategories([...categories, newCategory]);
+  };
+
+  const updateCategory = (id: string, field: keyof BookingCategory, value: any) => {
+    setCategories(categories.map((cat) => (cat.id === id ? { ...cat, [field]: value } : cat)));
+  };
+
+  const deleteCategory = (id: string) => {
+    if (confirm("Delete this category and all its treatments?")) {
+      setCategories(categories.filter((cat) => cat.id !== id));
+      setTreatments(treatments.filter((t) => t.category_id !== id));
+    }
+  };
+
+  const addTreatment = (categoryId: string) => {
+    const newTreatment: BookingTreatment = {
+      id: crypto.randomUUID(),
+      category_id: categoryId,
+      name: "",
+      description: "",
+      duration_minutes: 30,
+      order_index: treatments.filter((t) => t.category_id === categoryId).length,
+      enabled: true,
+    };
+    setTreatments([...treatments, newTreatment]);
+  };
+
+  const updateTreatment = (id: string, field: keyof BookingTreatment, value: any) => {
+    setTreatments(treatments.map((t) => (t.id === id ? { ...t, [field]: value } : t)));
+  };
+
+  const deleteTreatment = (id: string) => {
+    if (confirm("Delete this treatment?")) {
+      setTreatments(treatments.filter((t) => t.id !== id));
+    }
+  };
+
+  const filteredCategories = categories
+    .filter((cat) => cat.patient_type === activeSubTab)
+    .sort((a, b) => a.order_index - b.order_index);
+
+  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
+  const categoryTreatments = treatments
+    .filter((t) => t.category_id === selectedCategoryId)
+    .sort((a, b) => a.order_index - b.order_index);
+
+  if (loading) {
+    return <div className="py-12 text-center text-sm text-slate-400">Loading...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* View Toggle */}
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => { setView("categories"); setSelectedCategoryId(null); }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            view === "categories" ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          Categories
+        </button>
+        <button
+          onClick={() => setView("treatments")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            view === "treatments" ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          Treatments
+        </button>
+      </div>
+
+      {/* Sub-tabs for patient type */}
+      <div className="border-b border-slate-200">
+        <div className="flex space-x-8">
+          <button
+            onClick={() => { setActiveSubTab("new"); setSelectedCategoryId(null); }}
+            className={`pb-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+              activeSubTab === "new" ? "border-sky-500 text-sky-600" : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            First-Time Patients
+          </button>
+          <button
+            onClick={() => { setActiveSubTab("existing"); setSelectedCategoryId(null); }}
+            className={`pb-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+              activeSubTab === "existing" ? "border-sky-500 text-sky-600" : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            Existing Patients
+          </button>
+        </div>
+      </div>
+
+      {view === "categories" ? (
+        <>
+          {/* Categories List */}
+          <div className="rounded-xl border border-slate-200 bg-white">
+            <div className="p-4 border-b flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">
+                  {activeSubTab === "new" ? "First-Time" : "Existing"} Patient Categories
+                </h3>
+                <p className="text-xs text-slate-500">{filteredCategories.length} categories</p>
+              </div>
+              <button
+                onClick={() => addCategory(activeSubTab)}
+                className="px-3 py-1.5 bg-sky-500 text-white rounded-lg text-xs font-medium hover:bg-sky-600"
+              >
+                Add Category
+              </button>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {filteredCategories.length === 0 ? (
+                <div className="p-12 text-center text-xs text-slate-400">No categories yet</div>
+              ) : (
+                filteredCategories.map((cat) => (
+                  <div key={cat.id} className="p-4 hover:bg-slate-50/50">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-1">Name</label>
+                        <input
+                          type="text"
+                          value={cat.name}
+                          onChange={(e) => updateCategory(cat.id, "name", e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-1">Slug</label>
+                        <input
+                          type="text"
+                          value={cat.slug}
+                          onChange={(e) => updateCategory(cat.id, "slug", e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-1">Description</label>
+                        <input
+                          type="text"
+                          value={cat.description}
+                          onChange={(e) => updateCategory(cat.id, "description", e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 text-xs text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={cat.enabled}
+                            onChange={(e) => updateCategory(cat.id, "enabled", e.target.checked)}
+                            className="w-3.5 h-3.5 text-sky-500 rounded"
+                          />
+                          Enabled
+                        </label>
+                        <span className="text-xs text-slate-400">
+                          {treatments.filter((t) => t.category_id === cat.id).length} treatments
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { setSelectedCategoryId(cat.id); setView("treatments"); }}
+                          className="px-3 py-1 text-xs text-sky-600 hover:bg-sky-50 rounded-lg"
+                        >
+                          Manage Treatments
+                        </button>
+                        <button
+                          onClick={() => deleteCategory(cat.id)}
+                          className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={saveCategories}
+              disabled={saving}
+              className="px-5 py-2 bg-sky-500 text-white rounded-lg text-xs font-medium hover:bg-sky-600 disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Categories"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Treatments View */}
+          {!selectedCategoryId ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <h3 className="text-sm font-semibold text-slate-800 mb-4">Select a Category</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategoryId(cat.id)}
+                    className="p-4 text-left border border-slate-200 rounded-xl hover:border-sky-300 hover:bg-sky-50/50 transition-colors"
+                  >
+                    <div className="font-medium text-sm text-slate-800">{cat.name || "Untitled"}</div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {treatments.filter((t) => t.category_id === cat.id).length} treatments
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Selected Category Treatments */}
+              <div className="flex items-center gap-3 mb-4">
+                <button
+                  onClick={() => setSelectedCategoryId(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <h3 className="text-lg font-semibold text-slate-800">
+                  {selectedCategory?.name || "Category"} - Treatments
+                </h3>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white">
+                <div className="p-4 border-b flex justify-between items-center">
+                  <p className="text-xs text-slate-500">{categoryTreatments.length} treatments</p>
+                  <button
+                    onClick={() => addTreatment(selectedCategoryId)}
+                    className="px-3 py-1.5 bg-sky-500 text-white rounded-lg text-xs font-medium hover:bg-sky-600"
+                  >
+                    Add Treatment
+                  </button>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {categoryTreatments.length === 0 ? (
+                    <div className="p-12 text-center text-xs text-slate-400">No treatments yet</div>
+                  ) : (
+                    categoryTreatments.map((treat, idx) => (
+                      <div key={treat.id} className="p-4 hover:bg-slate-50/50">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                          <div className="md:col-span-4">
+                            <label className="block text-[10px] font-medium text-slate-500 mb-1">Treatment Name</label>
+                            <input
+                              type="text"
+                              value={treat.name}
+                              onChange={(e) => updateTreatment(treat.id, "name", e.target.value)}
+                              className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                            />
+                          </div>
+                          <div className="md:col-span-4">
+                            <label className="block text-[10px] font-medium text-slate-500 mb-1">Description</label>
+                            <input
+                              type="text"
+                              value={treat.description || ""}
+                              onChange={(e) => updateTreatment(treat.id, "description", e.target.value)}
+                              placeholder="Optional description"
+                              className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                            />
+                          </div>
+                          <div className="md:col-span-1">
+                            <label className="block text-[10px] font-medium text-slate-500 mb-1">Duration</label>
+                            <input
+                              type="number"
+                              value={treat.duration_minutes}
+                              onChange={(e) => updateTreatment(treat.id, "duration_minutes", parseInt(e.target.value) || 0)}
+                              className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                            />
+                          </div>
+                          <div className="md:col-span-1">
+                            <label className="flex items-center gap-2 text-xs text-slate-600">
+                              <input
+                                type="checkbox"
+                                checked={treat.enabled}
+                                onChange={(e) => updateTreatment(treat.id, "enabled", e.target.checked)}
+                                className="w-3.5 h-3.5 text-sky-500 rounded"
+                              />
+                              Enabled
+                            </label>
+                          </div>
+                          <div className="md:col-span-2 flex justify-end">
+                            <button
+                              onClick={() => deleteTreatment(treat.id)}
+                              className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={saveTreatments}
+                  disabled={saving}
+                  className="px-5 py-2 bg-sky-500 text-white rounded-lg text-xs font-medium hover:bg-sky-600 disabled:opacity-50"
+                >
+                  {saving ? "Saving..." : "Save Treatments"}
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -2,8 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { LanguageToggle } from "@/components/LanguageToggle";
 
 export default function BookAppointmentPage() {
+  const { t } = useLanguage();
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
@@ -16,6 +19,11 @@ export default function BookAppointmentPage() {
         </div>
 
         <div className="relative max-w-6xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
+          {/* Language Toggle - Top Right */}
+          <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-10">
+            <LanguageToggle />
+          </div>
+
           {/* Logo Header */}
           <div className="text-center mb-8 sm:mb-10">
             <Image
@@ -32,60 +40,28 @@ export default function BookAppointmentPage() {
           {/* Welcome Message */}
           <div className="max-w-3xl mx-auto text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-6">
-              Welcome to Maison Toa
+              {t("welcome.title")}
             </h2>
             <p className="text-lg text-slate-600 leading-relaxed mb-8">
-              Your destination of choice for quality medical and cosmetic surgery in Lausanne. Our dedicated medical team is here to guide you in your quest for well-being and beauty.<br /><br />
-              At Maison Tóā, it's important to us to be able to offer a tailor-made result with respect for each patient's anatomy and according to their needs.<br /><br />
-              Innovative care protocols, intelligent treatments, the latest technology and expert advice all come together in our holistic aesthetic universe.<br /><br />
-              Safety, quality, discretion, Maison Tóā has one mantra: Enlight your Beauty!
+              {t("welcome.description1")}<br /><br />
+              {t("welcome.description2")}<br /><br />
+              {t("welcome.description3")}<br /><br />
+              {t("welcome.description4")}<br /><br />
+              {t("welcome.description5")}
             </p>
 
             {/* CTA Button */}
             <Link
-              href="/book-appointment/location"
+              href="/book-appointment/first-visit"
               className="inline-flex items-center gap-3 bg-slate-900 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-full text-base sm:text-lg font-semibold shadow-lg hover:shadow-xl hover:bg-slate-800 transition-all transform hover:scale-105"
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              Book Appointment
+              {t("welcome.bookAppointment")}
             </Link>
           </div>
 
-          {/* Features */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 max-w-4xl mx-auto px-2">
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-5 sm:p-6 text-center border border-slate-200 shadow-sm">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="font-semibold text-slate-900 mb-1 sm:mb-2 text-sm sm:text-base">Free Consultation</h3>
-              <p className="text-xs sm:text-sm text-slate-600">Start with a complimentary consultation to discuss your goals</p>
-            </div>
-
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-5 sm:p-6 text-center border border-slate-200 shadow-sm">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 className="font-semibold text-slate-900 mb-1 sm:mb-2 text-sm sm:text-base">3D Simulation</h3>
-              <p className="text-xs sm:text-sm text-slate-600">Visualize your results with advanced 3D technology</p>
-            </div>
-
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-5 sm:p-6 text-center border border-slate-200 shadow-sm">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <h3 className="font-semibold text-slate-900 mb-1 sm:mb-2 text-sm sm:text-base">Swiss Clinics</h3>
-              <p className="text-xs sm:text-sm text-slate-600">Multiple convenient locations across Switzerland</p>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -93,10 +69,16 @@ export default function BookAppointmentPage() {
       <footer className="bg-slate-900 text-white py-8 mt-16">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-slate-400 text-sm">
-            © {new Date().getFullYear()} Maison Toa. All rights reserved.
+            {t("common.footer").replace("{year}", new Date().getFullYear().toString())}
           </p>
         </div>
       </footer>
     </main>
   );
 }
+
+
+
+
+
+
