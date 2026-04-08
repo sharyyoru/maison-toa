@@ -28,7 +28,7 @@ export default function NewPatientTreatmentsPage() {
   const { t } = useLanguage();
   const categorySlug = params.category as string;
 
-  const [treatments, setTreatments] = useState<Treatment[]>();
+  const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [category, setCategory] = useState<Category | null>(null);
   const [loading, setLoading] = useState(true);
 
