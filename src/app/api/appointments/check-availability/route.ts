@@ -47,12 +47,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch appointments within the date range
+    // Fetch appointments that OVERLAP the date range (not just those starting within it).
+    // This correctly catches multi-day blocking events (VACANCES, STOP) that started
+    // before the queried day but still cover it.
     let query = supabase
       .from("appointments")
       .select("id, start_time, end_time, status, reason, no_patient, provider_id")
-      .gte("start_time", start)
-      .lte("start_time", end)
+      .lt("start_time", end)   // appointment starts before the range ends
+      .gt("end_time", start)   // appointment ends after the range starts
       .neq("status", "cancelled");
 
     const { data: appointments, error } = await query;
@@ -65,77 +67,83 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Exclude no_patient appointments (placeholder bookings that don't block real patients)
-    let filteredAppointments = (appointments || []).filter(
-      (apt) => apt.no_patient !== true
-    );
-    
-    // Filter by doctor if specified
-    if (doctorName) {
-      const doctorNameLower = doctorName.toLowerCase().replace(/^dr\.\s*/i, "");
-      
-      filteredAppointments = filteredAppointments.filter((apt) => {
-        // First, check by provider_id (most reliable)
-        if (providerId && apt.provider_id === providerId) {
-          return true;
-        }
-        
-        // Fallback: check the reason field for [Doctor: Name] pattern
-        if (apt.reason) {
-          const match = apt.reason.match(/\[Doctor:\s*(.+?)\s*\]/i);
-          if (match && match[1].toLowerCase().includes(doctorNameLower)) {
-            return true;
-          }
-        }
-        
-        return false;
-      });
-    }
+    // Separate blocking (no_patient) appointments from regular patient appointments.
+    // no_patient appointments (e.g. VACANCES, STOP) block all overlapping slots via
+    // overlap detection. Regular patient appointments count toward the doctor's capacity.
+    const allAppointments = appointments || [];
 
-    // Count appointments per 30-minute slot using the SAME logic as booking API
-    // Booking API counts appointments that START within each 30-minute window
-    // We need to match this exactly to prevent showing slots that will fail on booking
-    const slotCounts: Record<string, number> = {};
-    
+    const doctorNameLower = doctorName ? doctorName.toLowerCase().replace(/^dr\.\s*/i, "") : "";
+
+    const matchesDoctor = (apt: { provider_id: string | null; reason: string | null }) => {
+      if (!doctorName) return true;
+      if (providerId && apt.provider_id === providerId) return true;
+      if (apt.reason) {
+        const match = apt.reason.match(/\[Doctor:\s*(.+?)\s*\]/i);
+        if (match && match[1].toLowerCase().includes(doctorNameLower)) return true;
+      }
+      return false;
+    };
+
+    const patientAppointments = allAppointments.filter(
+      (apt) => apt.no_patient !== true && matchesDoctor(apt)
+    );
+    const blockingAppointments = allAppointments.filter(
+      (apt) => apt.no_patient === true && matchesDoctor(apt)
+    );
+
     // Generate all 30-minute slots for the requested time range
     const rangeStart = new Date(start);
     const rangeEnd = new Date(end);
     const allSlots: Date[] = [];
-    
+
     let currentSlot = new Date(rangeStart);
     // Round to nearest 30 minutes
     currentSlot.setMinutes(Math.floor(currentSlot.getMinutes() / 30) * 30, 0, 0);
-    
+
     while (currentSlot < rangeEnd) {
       allSlots.push(new Date(currentSlot));
       currentSlot = new Date(currentSlot.getTime() + 30 * 60 * 1000);
     }
-    
-    // For each 30-minute slot, count appointments that START within that window
-    // This matches the booking API logic exactly
-    allSlots.forEach((slotStart) => {
-      const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
-      
-      const appointmentsInSlot = filteredAppointments.filter((apt) => {
-        const aptStart = new Date(apt.start_time);
-        return aptStart >= slotStart && aptStart < slotEnd;
-      });
-      
-      if (appointmentsInSlot.length > 0) {
-        slotCounts[slotStart.toISOString()] = appointmentsInSlot.length;
-      }
-    });
 
     // Get the max capacity for this doctor
     const maxCapacity = getMaxCapacity(doctorSlug);
 
-    // Return appointments, slot counts, and which slots are fully booked
-    const fullSlots = Object.entries(slotCounts)
-      .filter(([_, count]) => count >= maxCapacity)
-      .map(([slot, _]) => slot);
+    // For each 30-minute slot determine if it's unavailable:
+    // 1. Patient appointments that START within the window count toward capacity
+    // 2. Blocking (no_patient) appointments that OVERLAP the window block it entirely
+    const slotCounts: Record<string, number> = {};
+    const fullSlots: string[] = [];
 
-    return NextResponse.json({ 
-      appointments: filteredAppointments,
+    allSlots.forEach((slotStart) => {
+      const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
+
+      // Count patient appointments that OVERLAP this window.
+      // Using overlap (not just start-in-window) so a 14:00-15:00 appointment
+      // correctly blocks both the 14:00 and 14:30 slots.
+      const patientCount = patientAppointments.filter((apt) => {
+        const aptStart = new Date(apt.start_time);
+        const aptEnd = new Date(apt.end_time);
+        return aptStart < slotEnd && aptEnd > slotStart;
+      }).length;
+
+      if (patientCount > 0) {
+        slotCounts[slotStart.toISOString()] = patientCount;
+      }
+
+      // Check if any blocking appointment overlaps this slot
+      const isBlocked = blockingAppointments.some((apt) => {
+        const aptStart = new Date(apt.start_time);
+        const aptEnd = new Date(apt.end_time);
+        return aptStart < slotEnd && aptEnd > slotStart;
+      });
+
+      if (patientCount >= maxCapacity || isBlocked) {
+        fullSlots.push(slotStart.toISOString());
+      }
+    });
+
+    return NextResponse.json({
+      appointments: patientAppointments,
       slotCounts,
       fullSlots,
       maxConcurrent: maxCapacity

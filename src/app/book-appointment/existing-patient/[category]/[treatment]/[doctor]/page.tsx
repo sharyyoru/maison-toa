@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabaseClient";
-import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, formatSwissDateWithWeekday, getSwissDayRange, getSwissSlotString, createSwissDateTime } from "@/lib/swissTimezone";
+import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, formatSwissDateWithWeekday, getSwissDayRange, getSwissSlotString, createSwissDateTime, SWISS_TIMEZONE } from "@/lib/swissTimezone";
 import { pushToDataLayer } from "@/components/GoogleTagManager";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
@@ -54,47 +54,26 @@ const DOCTORS: Record<string, {
   },
 };
 
+// Default slot window Mon–Sat for all doctors.
+// Day 0 = Sunday (no slots), 1 = Monday … 6 = Saturday.
+// Actual availability is determined by the real calendar: blocking appointments
+// (no_patient = true, e.g. VACANCES / STOP / PAUSE) remove overlapping slots,
+// and booked patient appointments remove their overlapping slots too.
+const ALL_WEEK_SLOTS = {
+  1: { start: "09:00", end: "18:00" },
+  2: { start: "09:00", end: "18:00" },
+  3: { start: "09:00", end: "18:00" },
+  4: { start: "09:00", end: "18:00" },
+  5: { start: "09:00", end: "18:00" },
+  6: { start: "09:00", end: "18:00" },
+};
+
 const DOCTOR_AVAILABILITY: Record<string, Record<string, Record<number, { start: string; end: string }>>> = {
-  "sophie-nordback": {
-    lausanne: {
-      1: { start: "09:00", end: "17:00" },
-      2: { start: "09:00", end: "17:00" },
-      3: { start: "09:00", end: "17:00" },
-      4: { start: "09:00", end: "17:00" },
-      5: { start: "09:00", end: "17:00" },
-    },
-  },
-  "alexandra-miles": {
-    lausanne: {
-      1: { start: "09:00", end: "17:00" },
-      2: { start: "09:00", end: "17:00" },
-      3: { start: "09:00", end: "17:00" },
-      4: { start: "09:00", end: "17:00" },
-      5: { start: "09:00", end: "17:00" },
-    },
-  },
-  "reda-benani": {
-    lausanne: {
-      1: { start: "10:00", end: "18:00" },
-      3: { start: "10:00", end: "18:00" },
-      5: { start: "10:00", end: "18:00" },
-    },
-  },
-  "adnan-plakalo": {
-    lausanne: {
-      2: { start: "09:00", end: "17:00" },
-      4: { start: "09:00", end: "17:00" },
-    },
-  },
-  "natalia-koltunova": {
-    lausanne: {
-      1: { start: "09:00", end: "17:00" },
-      2: { start: "09:00", end: "17:00" },
-      3: { start: "09:00", end: "17:00" },
-      4: { start: "09:00", end: "17:00" },
-      5: { start: "09:00", end: "17:00" },
-    },
-  },
+  "sophie-nordback":   { lausanne: ALL_WEEK_SLOTS },
+  "alexandra-miles":   { lausanne: ALL_WEEK_SLOTS },
+  "reda-benani":       { lausanne: ALL_WEEK_SLOTS },
+  "adnan-plakalo":     { lausanne: ALL_WEEK_SLOTS },
+  "natalia-koltunova": { lausanne: ALL_WEEK_SLOTS },
 };
 
 function parseLocalDate(dateStr: string): Date {
@@ -401,15 +380,15 @@ function DoctorBookingContent() {
   }
 
   const getMinDate = () => {
-    const tomorrow = new Date();
+    const tomorrow = getSwissToday();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split("T")[0];
+    return formatSwissYmd(tomorrow);
   };
 
   const getMaxDate = () => {
-    const maxDate = new Date();
+    const maxDate = getSwissToday();
     maxDate.setMonth(maxDate.getMonth() + 3);
-    return maxDate.toISOString().split("T")[0];
+    return formatSwissYmd(maxDate);
   };
 
   return (
@@ -630,7 +609,7 @@ function DoctorBookingContent() {
                   />
                   {nearestAvailableDate && !selectedDate && (
                     <p className="mt-2 text-xs text-slate-500">
-                      Next available date: {new Date(nearestAvailableDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                      Next available date: {new Date(nearestAvailableDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: SWISS_TIMEZONE })}
                     </p>
                   )}
                 </div>
@@ -740,7 +719,7 @@ function DoctorBookingContent() {
                   <div className="flex justify-between">
                     <span className="text-slate-600">{t("booking.date")}</span>
                     <span className="font-medium text-slate-900">
-                      {new Date(selectedDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                      {new Date(selectedDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: SWISS_TIMEZONE })}
                     </span>
                   </div>
                   <div className="flex justify-between">

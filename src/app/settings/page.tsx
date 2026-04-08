@@ -881,6 +881,7 @@ interface BookingCategory {
   order_index: number;
   slug: string;
   enabled: boolean;
+  skip_treatment: boolean;
 }
 
 interface BookingTreatment {
@@ -964,6 +965,7 @@ function BookingCategoriesTab() {
       order_index: categories.filter((c) => c.patient_type === patientType).length,
       slug: "",
       enabled: true,
+      skip_treatment: false,
     };
     setCategories([...categories, newCategory]);
   };
@@ -1122,6 +1124,15 @@ function BookingCategoriesTab() {
                             className="w-3.5 h-3.5 text-sky-500 rounded"
                           />
                           Enabled
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={cat.skip_treatment ?? false}
+                            onChange={(e) => updateCategory(cat.id, "skip_treatment", e.target.checked)}
+                            className="w-3.5 h-3.5 text-sky-500 rounded"
+                          />
+                          Skip treatment step
                         </label>
                         <span className="text-xs text-slate-400">
                           {treatments.filter((t) => t.category_id === cat.id).length} treatments

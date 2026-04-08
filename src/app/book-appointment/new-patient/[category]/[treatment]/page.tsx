@@ -61,6 +61,10 @@ export default function SelectDoctorPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (treatmentId === "none") {
+      setLoading(false);
+      return;
+    }
     const fetchTreatment = async () => {
       try {
         const res = await fetch(`/api/settings/booking-treatments`);
@@ -120,11 +124,11 @@ export default function SelectDoctorPage() {
             <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">2</span>
             </div>
-            <div className="w-12 h-0.5 bg-slate-900"></div>
-            <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-medium">3</span>
+            <div className={`w-12 h-0.5 ${treatmentId === "none" ? "bg-slate-300" : "bg-slate-900"}`}></div>
+            <div className={`w-8 h-8 ${treatmentId === "none" ? "bg-slate-200" : "bg-slate-900"} rounded-full flex items-center justify-center`}>
+              <span className={`text-sm font-medium ${treatmentId === "none" ? "text-slate-400 line-through" : "text-white"}`}>3</span>
             </div>
-            <div className="w-12 h-0.5 bg-slate-300"></div>
+            <div className="w-12 h-0.5 bg-slate-900"></div>
             <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">4</span>
             </div>
@@ -137,7 +141,7 @@ export default function SelectDoctorPage() {
 
         {/* Back Button */}
         <Link
-          href={`/book-appointment/new-patient/${categorySlug}`}
+          href={treatmentId === "none" ? `/book-appointment/new-patient` : `/book-appointment/new-patient/${categorySlug}`}
           className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-6 transition-colors"
         >
           <svg
@@ -158,14 +162,16 @@ export default function SelectDoctorPage() {
 
         {/* Title */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 bg-slate-100 rounded-full px-4 py-2 mb-4">
-            <svg className="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            <span className="text-sm font-medium text-slate-700">
-              {loading ? t("common.loading") : treatment?.name || "Treatment"}
-            </span>
-          </div>
+          {treatmentId !== "none" && (
+            <div className="inline-flex items-center gap-2 bg-slate-100 rounded-full px-4 py-2 mb-4">
+              <svg className="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <span className="text-sm font-medium text-slate-700">
+                {loading ? t("common.loading") : treatment?.name || "Treatment"}
+              </span>
+            </div>
+          )}
           <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
             {t("doctor.title")}
           </h1>

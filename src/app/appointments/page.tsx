@@ -14,6 +14,7 @@ import {
   SWISS_LOCALE,
   getSwissHourMinute,
   getSwissMonthRange,
+  getSwissDayRange,
 } from "@/lib/swissTimezone";
 
 type AppointmentStatus =
@@ -832,39 +833,20 @@ export default function CalendarPage() {
         let toIso: string;
 
         if (view === "day" && selectedDate) {
-          // For day view, query only the selected date using Swiss timezone
-          const year = selectedDate.getFullYear();
-          const month = selectedDate.getMonth();
-          const day = selectedDate.getDate();
-          
-          // Create start of day (00:00:00) in Swiss timezone
-          const startDateStr = `${year}-${(month + 1).toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
-          const startDate = new Date(startDateStr + "T00:00:00+01:00"); // Swiss timezone (CET/CEST)
-          
-          // Create end of day (23:59:59.999) in Swiss timezone
-          const endDate = new Date(startDateStr + "T23:59:59.999+01:00");
-          
-          fromIso = startDate.toISOString();
-          toIso = endDate.toISOString();
+          // For day view, query only the selected date using Swiss timezone.
+          // Use formatSwissYmd so the date string reflects the Swiss calendar date
+          // regardless of browser timezone, then getSwissDayRange for DST-aware bounds.
+          const dateStr = formatSwissYmd(selectedDate);
+          ({ start: fromIso, end: toIso } = getSwissDayRange(dateStr));
         } else if (view === "range" && selectedDate && rangeEndDate) {
           // For range view, query the selected range
           const start = selectedDate < rangeEndDate ? selectedDate : rangeEndDate;
           const end = selectedDate < rangeEndDate ? rangeEndDate : selectedDate;
-          
-          const startYear = start.getFullYear();
-          const startMonth = start.getMonth();
-          const startDay = start.getDate();
-          const startDateStr = `${startYear}-${(startMonth + 1).toString().padStart(2, "0")}-${startDay.toString().padStart(2, "0")}`;
-          const startDate = new Date(startDateStr + "T00:00:00+01:00");
-          
-          const endYear = end.getFullYear();
-          const endMonth = end.getMonth();
-          const endDay = end.getDate();
-          const endDateStr = `${endYear}-${(endMonth + 1).toString().padStart(2, "0")}-${endDay.toString().padStart(2, "0")}`;
-          const endDate = new Date(endDateStr + "T23:59:59.999+01:00");
-          
-          fromIso = startDate.toISOString();
-          toIso = endDate.toISOString();
+
+          const startDateStr = formatSwissYmd(start);
+          const endDateStr = formatSwissYmd(end);
+          ({ start: fromIso } = getSwissDayRange(startDateStr));
+          ({ end: toIso } = getSwissDayRange(endDateStr));
         } else {
           // For month view or no selection, query the entire visible month
           fromIso = monthStart.toISOString();

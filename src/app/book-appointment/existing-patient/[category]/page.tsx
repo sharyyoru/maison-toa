@@ -20,6 +20,7 @@ interface Category {
   id: string;
   name: string;
   slug: string;
+  skip_treatment?: boolean;
 }
 
 export default function ExistingPatientTreatmentsPage() {
@@ -44,6 +45,12 @@ export default function ExistingPatientTreatmentsPage() {
         );
 
         if (foundCategory) {
+          // If skip_treatment is enabled, jump straight to doctor selection
+          if (foundCategory.skip_treatment) {
+            router.replace(`/book-appointment/existing-patient/${categorySlug}/none`);
+            return;
+          }
+
           setCategory(foundCategory);
 
           // Then get treatments for this category
@@ -63,7 +70,7 @@ export default function ExistingPatientTreatmentsPage() {
     };
 
     fetchData();
-  }, [categorySlug]);
+  }, [categorySlug, router]);
 
   const formatDuration = (minutes: number) => {
     if (minutes >= 60) {

@@ -58,6 +58,7 @@ export async function PUT(request: NextRequest) {
         order_index: number;
         slug: string;
         enabled: boolean;
+        skip_treatment?: boolean;
       }) => ({
         id: c.id,
         name: c.name,
@@ -66,6 +67,7 @@ export async function PUT(request: NextRequest) {
         order_index: c.order_index,
         slug: c.slug,
         enabled: c.enabled !== undefined ? c.enabled : true,
+        skip_treatment: c.skip_treatment !== undefined ? c.skip_treatment : false,
         updated_at: new Date().toISOString(),
       }));
 
