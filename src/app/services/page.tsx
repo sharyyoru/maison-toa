@@ -20,6 +20,7 @@ type Service = {
   description: string | null;
   is_active: boolean;
   base_price: number | null;
+  duration_minutes: number | null;
 };
 
 type ServiceGroup = {
@@ -36,6 +37,14 @@ type ServiceGroupService = {
   discount_percent: number | null;
   quantity: number | null;
 };
+
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (mins === 0) return `${hrs} hr${hrs > 1 ? "s" : ""}`;
+  return `${hrs} hr${hrs > 1 ? "s" : ""} ${mins} min`;
+}
 
 export default function ServicesPage() {
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
@@ -55,6 +64,7 @@ export default function ServicesPage() {
   const [newServiceName, setNewServiceName] = useState("");
   const [newServiceDescription, setNewServiceDescription] = useState("");
   const [newServicePrice, setNewServicePrice] = useState("");
+  const [newServiceDuration, setNewServiceDuration] = useState("");
   const [creatingService, setCreatingService] = useState(false);
   const [serviceMessage, setServiceMessage] = useState<string | null>(null);
 
@@ -102,6 +112,7 @@ export default function ServicesPage() {
   const [editServiceName, setEditServiceName] = useState("");
   const [editServiceDescription, setEditServiceDescription] = useState("");
   const [editServicePrice, setEditServicePrice] = useState("");
+  const [editServiceDuration, setEditServiceDuration] = useState("");
   const [editServiceCategoryId, setEditServiceCategoryId] = useState<string>(
     "",
   );
@@ -124,9 +135,13 @@ export default function ServicesPage() {
         setLoading(true);
         setError(null);
 
+        // Only load the "Treatment" category for now
+        const TREATMENT_CATEGORY_ID = "78c68bca-9219-487b-a671-892ef8e5e2ac";
+
         const { data: categoryData, error: categoryError } = await supabaseClient
           .from("service_categories")
           .select("id, name, description, sort_order")
+          .eq("id", TREATMENT_CATEGORY_ID)
           .order("sort_order", { ascending: true })
           .order("name", { ascending: true });
 
@@ -146,8 +161,9 @@ export default function ServicesPage() {
         const { data: serviceData, error: serviceError } = await supabaseClient
           .from("services")
           .select(
-            "id, category_id, name, code, description, is_active, base_price",
+            "id, category_id, name, code, description, is_active, base_price, duration_minutes",
           )
+          .eq("category_id", TREATMENT_CATEGORY_ID)
           .order("created_at", { ascending: true });
 
         if (!isMounted) return;
@@ -170,10 +186,15 @@ export default function ServicesPage() {
             row.base_price !== null && row.base_price !== undefined
               ? Number(row.base_price)
               : null,
+          duration_minutes:
+            row.duration_minutes !== null && row.duration_minutes !== undefined
+              ? Number(row.duration_minutes)
+              : null,
         }));
 
         setServices(serviceRows as Service[]);
 
+        // Load service groups that contain only Treatment category services
         const { data: groupData, error: groupError } = await supabaseClient
           .from("service_groups")
           .select("id, name, description, discount_percent")
@@ -188,8 +209,6 @@ export default function ServicesPage() {
           return;
         }
 
-        setServiceGroups(groupData as ServiceGroup[]);
-
         const { data: groupServiceData, error: groupServiceError } =
           await supabaseClient
             .from("service_group_services")
@@ -203,7 +222,26 @@ export default function ServicesPage() {
           return;
         }
 
-        setGroupServices(groupServiceData as ServiceGroupService[]);
+        const allGroupServices = groupServiceData as ServiceGroupService[];
+        
+        // Filter to only show groups that contain Treatment services
+        const treatmentServiceIds = new Set(serviceRows.map(s => s.id));
+        const groupsWithTreatmentServices = new Set(
+          allGroupServices
+            .filter(gs => treatmentServiceIds.has(gs.service_id))
+            .map(gs => gs.group_id)
+        );
+
+        const filteredGroups = (groupData as ServiceGroup[]).filter(g => 
+          groupsWithTreatmentServices.has(g.id)
+        );
+
+        const filteredGroupServices = allGroupServices.filter(gs => 
+          groupsWithTreatmentServices.has(gs.group_id) && treatmentServiceIds.has(gs.service_id)
+        );
+
+        setServiceGroups(filteredGroups);
+        setGroupServices(filteredGroupServices);
 
         if (!selectedCategoryId && categoryRows.length > 0) {
           setSelectedCategoryId(categoryRows[0].id);
@@ -294,6 +332,16 @@ export default function ServicesPage() {
       priceValue = parsed;
     }
 
+    let durationValue: number | null = null;
+    if (newServiceDuration.trim()) {
+      const parsed = parseInt(newServiceDuration, 10);
+      if (Number.isNaN(parsed) || parsed <= 0) {
+        setServiceMessage("Please enter a valid duration in minutes.");
+        return;
+      }
+      durationValue = parsed;
+    }
+
     try {
       setCreatingService(true);
       setServiceMessage(null);
@@ -305,9 +353,10 @@ export default function ServicesPage() {
           name: newServiceName.trim(),
           description: newServiceDescription.trim() || null,
           base_price: priceValue,
+          duration_minutes: durationValue,
           is_active: true,
         })
-        .select("id, category_id, name, code, description, is_active, base_price")
+        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes")
         .single();
 
       if (error || !data) {
@@ -327,12 +376,17 @@ export default function ServicesPage() {
           created.base_price !== null && created.base_price !== undefined
             ? Number(created.base_price)
             : null,
+        duration_minutes:
+          created.duration_minutes !== null && created.duration_minutes !== undefined
+            ? Number(created.duration_minutes)
+            : null,
       };
 
       setServices((prev) => [...prev, newRow]);
       setNewServiceName("");
       setNewServiceDescription("");
       setNewServicePrice("");
+      setNewServiceDuration("");
       setServiceMessage("Service created.");
     } catch {
       setServiceMessage("Failed to create service.");
@@ -576,6 +630,11 @@ export default function ServicesPage() {
         ? String(service.base_price)
         : "",
     );
+    setEditServiceDuration(
+      service.duration_minutes !== null && service.duration_minutes !== undefined
+        ? String(service.duration_minutes)
+        : "",
+    );
   }
 
   function handleCancelEditService() {
@@ -584,6 +643,7 @@ export default function ServicesPage() {
     setEditServiceDescription("");
     setEditServiceCategoryId("");
     setEditServicePrice("");
+    setEditServiceDuration("");
     setServiceMessage(null);
   }
 
@@ -603,6 +663,16 @@ export default function ServicesPage() {
       priceValue = parsed;
     }
 
+    let durationValue: number | null = null;
+    if (editServiceDuration.trim()) {
+      const parsed = parseInt(editServiceDuration, 10);
+      if (Number.isNaN(parsed) || parsed <= 0) {
+        setServiceMessage("Please enter a valid duration in minutes.");
+        return;
+      }
+      durationValue = parsed;
+    }
+
     try {
       setSavingServiceId(serviceId);
       setServiceMessage(null);
@@ -614,9 +684,10 @@ export default function ServicesPage() {
           description: editServiceDescription.trim() || null,
           category_id: editServiceCategoryId,
           base_price: priceValue,
+          duration_minutes: durationValue,
         })
         .eq("id", serviceId)
-        .select("id, category_id, name, code, description, is_active, base_price")
+        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes")
         .single();
 
       if (error || !data) {
@@ -636,6 +707,10 @@ export default function ServicesPage() {
           updated.base_price !== null && updated.base_price !== undefined
             ? Number(updated.base_price)
             : null,
+        duration_minutes:
+          updated.duration_minutes !== null && updated.duration_minutes !== undefined
+            ? Number(updated.duration_minutes)
+            : null,
       };
 
       setServices((prev) =>
@@ -650,6 +725,7 @@ export default function ServicesPage() {
       setEditServiceDescription("");
       setEditServiceCategoryId("");
       setEditServicePrice("");
+      setEditServiceDuration("");
     } catch {
       setServiceMessage("Failed to update service.");
     } finally {
@@ -1047,7 +1123,7 @@ export default function ServicesPage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
                 <div>
                   <label className="block text-xs font-medium text-slate-700">
                     Description (optional)
@@ -1081,7 +1157,24 @@ export default function ServicesPage() {
                     />
                   </div>
                   <p className="mt-1 text-[11px] text-slate-400">
-                    Leave blank if price is variable or defined elsewhere.
+                    Leave blank if variable.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700">
+                    Duration (min)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={newServiceDuration}
+                    onChange={(event) => setNewServiceDuration(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                    placeholder="e.g. 30"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Leave blank if variable.
                   </p>
                 </div>
               </div>
@@ -1281,6 +1374,22 @@ export default function ServicesPage() {
                                     placeholder="0.00"
                                   />
                                 </div>
+                                <div className="mt-1 flex w-full rounded-lg border border-slate-200 bg-white text-xs text-slate-900 shadow-sm focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-400">
+                                  <span className="inline-flex items-center px-2 text-[11px] text-slate-500">
+                                    min
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={editServiceDuration}
+                                    onChange={(event) =>
+                                      setEditServiceDuration(event.target.value)
+                                    }
+                                    className="flex-1 rounded-r-lg border-0 bg-transparent px-2 py-1.5 text-right outline-none"
+                                    placeholder="duration"
+                                  />
+                                </div>
                                 <div className="flex gap-1">
                                   <button
                                     type="button"
@@ -1341,6 +1450,9 @@ export default function ServicesPage() {
                             ) : (
                               <span className="text-slate-400">CHF —</span>
                             )}
+                            {service.duration_minutes !== null ? (
+                              <span className="text-slate-500">{formatDuration(service.duration_minutes)}</span>
+                            ) : null}
                             <div className="flex gap-1">
                               <button
                                 type="button"

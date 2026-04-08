@@ -70,6 +70,7 @@ type AppointmentPatientSuggestion = {
 type ServiceOption = {
   id: string;
   name: string;
+  duration_minutes: number | null;
 };
 
 const BOOKING_STATUS_OPTIONS = [
@@ -1203,7 +1204,7 @@ export default function CalendarPage() {
 
         const { data, error } = await supabaseClient
           .from("services")
-          .select("id, name, is_active")
+          .select("id, name, is_active, duration_minutes")
           .eq("is_active", true)
           .order("name", { ascending: true });
 
@@ -1217,6 +1218,10 @@ export default function CalendarPage() {
             (data as any[]).map((row) => ({
               id: row.id as string,
               name: (row.name as string) ?? "Unnamed service",
+              duration_minutes:
+                row.duration_minutes !== null && row.duration_minutes !== undefined
+                  ? Number(row.duration_minutes)
+                  : null,
             })),
           );
         }
@@ -3961,6 +3966,12 @@ export default function CalendarPage() {
                               setSelectedServiceId(opt.id);
                               setServiceSearch(opt.name);
                               setServiceDropdownOpen(false);
+                              // Auto-set consultation duration from service if it has one
+                              if (opt.duration_minutes !== null && opt.duration_minutes !== undefined) {
+                                setConsultationDuration(opt.duration_minutes);
+                                const durOpt = CONSULTATION_DURATION_OPTIONS.find((o) => o.value === opt.duration_minutes);
+                                setDurationSearch(durOpt ? durOpt.label : `${opt.duration_minutes} minutes`);
+                              }
                             }}
                             className={`w-full px-3 py-1.5 text-left hover:bg-sky-50 ${selectedServiceId === opt.id ? "bg-sky-50 text-sky-700" : "text-slate-700"}`}
                           >
