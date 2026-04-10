@@ -200,6 +200,7 @@ function DoctorBookingContent() {
   const [selectedDate, setSelectedDate] = useState("");
   const [availableDatesSet, setAvailableDatesSet] = useState<Set<string>>(new Set());
   const [nearestAvailableDate, setNearestAvailableDate] = useState<string | null>(null);
+  const [nearestAvailableTime, setNearestAvailableTime] = useState<string | null>(null);
   const [isLoadingDates, setIsLoadingDates] = useState(true);
   const [selectedTime, setSelectedTime] = useState("");
   const [notes, setNotes] = useState("");
@@ -274,8 +275,14 @@ function DoctorBookingContent() {
       const openSlots = currentSlots.filter(time => !blockedSlots.includes(time));
       if (openSlots.length > 0) {
         setSelectedTime(openSlots[0]);
+        if (date === nearestAvailableDate) {
+          setNearestAvailableTime(openSlots[0]);
+        }
       } else {
         setSelectedTime("");
+        if (date === nearestAvailableDate) {
+          setNearestAvailableTime(null);
+        }
       }
     } catch (err) {
       console.error("Error checking availability:", err);
@@ -614,6 +621,20 @@ function DoctorBookingContent() {
                 <p className="text-sm text-slate-600 mb-4">
                   {t("booking.selectDateDesc").replace("{doctor}", doctor.name).replace("{location}", locationLabel)}
                 </p>
+
+                {nearestAvailableDate && (
+                  <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                    <svg className="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-sm text-emerald-700">
+                      <span className="font-medium">Earliest availability:</span>{" "}
+                      {new Date(nearestAvailableDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                      {nearestAvailableTime ? ` at ${nearestAvailableTime}` : isLoadingDates ? " — checking times…" : ""}
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">{t("booking.date")} *</label>
                   <input
@@ -628,11 +649,6 @@ function DoctorBookingContent() {
                     max={getMaxDate()}
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 outline-none transition-all"
                   />
-                  {nearestAvailableDate && !selectedDate && (
-                    <p className="mt-2 text-xs text-slate-500">
-                      Next available date: {new Date(nearestAvailableDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                    </p>
-                  )}
                 </div>
 
                 {selectedDate && availableSlots.length > 0 && (() => {

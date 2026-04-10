@@ -7,43 +7,15 @@ import Image from "next/image";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 
-const DOCTORS = [
-  {
-    slug: "sophie-nordback",
-    name: "Dr. Sophie Nordback",
-    specialty: "Dermatology & Venereology",
-    image: "/doctors/dr-sophie-nordback-correct.png",
-    description: "FMH-qualified plastic and aesthetic surgeon. Co-founder of Clinique Maison TÓĀ.",
-  },
-  {
-    slug: "alexandra-miles",
-    name: "Dr. Alexandra Miles",
-    specialty: "Aesthetic Medicine",
-    image: "/doctors/dr-alexandra-miles.webp",
-    description: "Specialist in aesthetic medicine and anti-aging treatments.",
-  },
-  {
-    slug: "reda-benani",
-    name: "Dr. Reda Benani",
-    specialty: "Longevity Medicine",
-    image: "/doctors/dr-reda-benanni.webp",
-    description: "Practicing physician specializing in longevity medicine.",
-  },
-  {
-    slug: "adnan-plakalo",
-    name: "Dr. Adnan Plakalo",
-    specialty: "Medical Practitioner",
-    image: "/doctors/dr-adnan-plakalo.png",
-    description: "Medical practitioner.",
-  },
-  {
-    slug: "natalia-koltunova",
-    name: "Dr. Natalia Koltunova",
-    specialty: "Dermatology & Venereology",
-    image: "/doctors/dr-natalia-koltunova.webp",
-    description: "Russian postgraduate diploma in Dermatology and Venereology.",
-  },
-];
+interface BookingDoctor {
+  id: string;
+  slug: string;
+  name: string;
+  specialty: string;
+  image_url: string;
+  description: string;
+  enabled: boolean;
+}
 
 interface Treatment {
   id: string;
@@ -58,30 +30,38 @@ export default function SelectDoctorPage() {
   const treatmentId = params.treatment as string;
 
   const [treatment, setTreatment] = useState<Treatment | null>(null);
+  const [doctors, setDoctors] = useState<BookingDoctor[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (treatmentId === "none") {
-      setLoading(false);
-      return;
-    }
-    const fetchTreatment = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch(`/api/settings/booking-treatments`);
-        const data = await res.json();
-        const found = (data.treatments || []).find((t: Treatment) => t.id === treatmentId);
-        if (found) {
-          setTreatment(found);
+        const [treatRes, docRes] = await Promise.all([
+          treatmentId !== "none"
+            ? fetch(`/api/settings/booking-treatments`)
+            : Promise.resolve(null),
+          treatmentId !== "none"
+            ? fetch(`/api/settings/booking-doctors?treatment_id=${treatmentId}`)
+            : fetch(`/api/settings/booking-doctors?category_slug=${categorySlug}`),
+        ]);
+
+        if (treatRes) {
+          const treatData = await treatRes.json();
+          const found = (treatData.treatments || []).find((t: Treatment) => t.id === treatmentId);
+          if (found) setTreatment(found);
         }
+
+        const docData = await docRes!.json();
+        setDoctors((docData.doctors || []).filter((d: BookingDoctor) => d.enabled));
       } catch (error) {
-        console.error("Failed to fetch treatment:", error);
+        console.error("Failed to fetch data:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTreatment();
-  }, [treatmentId]);
+    fetchData();
+  }, [treatmentId, categorySlug]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 relative">
@@ -181,51 +161,57 @@ export default function SelectDoctorPage() {
         </div>
 
         {/* Doctors Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {DOCTORS.map((doctor) => (
-            <Link
-              key={doctor.slug}
-              href={`/book-appointment/existing-patient/${categorySlug}/${treatmentId}/${doctor.slug}`}
-              className="group bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-xl hover:border-slate-300 transition-all duration-300 hover:scale-[1.02]"
-            >
-              <div className="relative h-40 sm:h-48 bg-gradient-to-br from-slate-100 to-slate-50 overflow-hidden">
-                <Image
-                  src={doctor.image}
-                  alt={doctor.name}
-                  fill
-                  className="object-cover object-top group-hover:scale-105 transition-transform duration-300"
-                />
-              </div>
-              <div className="p-4 sm:p-5">
-                <h2 className="text-base sm:text-lg font-semibold text-slate-900 mb-1 group-hover:text-slate-700 transition-colors">
-                  {doctor.name}
-                </h2>
-                <p className="text-sm text-slate-500 font-medium mb-2">
-                  {doctor.specialty}
-                </p>
-                <p className="text-sm text-slate-500 line-clamp-2 mb-3">
-                  {doctor.description}
-                </p>
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-900 group-hover:text-slate-700">
-                  <span>{t("doctor.bookConsultation")}</span>
-                  <svg
-                    className="w-4 h-4 group-hover:translate-x-1 transition-transform"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
+        {loading ? (
+          <div className="text-center py-12 text-slate-400 text-sm">{t("common.loading")}</div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {doctors.map((doctor) => (
+              <Link
+                key={doctor.slug}
+                href={`/book-appointment/existing-patient/${categorySlug}/${treatmentId}/${doctor.slug}`}
+                className="group bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-xl hover:border-slate-300 transition-all duration-300 hover:scale-[1.02]"
+              >
+                <div className="relative h-40 sm:h-48 bg-gradient-to-br from-slate-100 to-slate-50 overflow-hidden">
+                  {doctor.image_url && (
+                    <Image
+                      src={doctor.image_url}
+                      alt={doctor.name}
+                      fill
+                      className="object-cover object-top group-hover:scale-105 transition-transform duration-300"
                     />
-                  </svg>
+                  )}
                 </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+                <div className="p-4 sm:p-5">
+                  <h2 className="text-base sm:text-lg font-semibold text-slate-900 mb-1 group-hover:text-slate-700 transition-colors">
+                    {doctor.name}
+                  </h2>
+                  <p className="text-sm text-slate-500 font-medium mb-2">
+                    {doctor.specialty}
+                  </p>
+                  <p className="text-sm text-slate-500 line-clamp-2 mb-3">
+                    {doctor.description}
+                  </p>
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-900 group-hover:text-slate-700">
+                    <span>{t("doctor.bookConsultation")}</span>
+                    <svg
+                      className="w-4 h-4 group-hover:translate-x-1 transition-transform"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </main>
 
       {/* Footer */}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { supabaseClient } from "@/lib/supabaseClient";
 
 const TABS = [
   { id: "external-labs", label: "External Labs" },
@@ -894,14 +895,27 @@ interface BookingTreatment {
   enabled: boolean;
 }
 
+interface BookingDoctor {
+  id: string;
+  name: string;
+  specialty: string;
+  image_url: string;
+  description: string;
+  slug: string;
+  enabled: boolean;
+  order_index: number;
+}
+
 function BookingCategoriesTab() {
   const [categories, setCategories] = useState<BookingCategory[]>([]);
   const [treatments, setTreatments] = useState<BookingTreatment[]>([]);
+  const [doctors, setDoctors] = useState<BookingDoctor[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<"new" | "existing">("new");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [view, setView] = useState<"categories" | "treatments">("categories");
+  const [selectedTreatmentId, setSelectedTreatmentId] = useState<string | null>(null);
+  const [view, setView] = useState<"categories" | "treatments" | "doctors" | "doctor-assignments" | "category-doctor-assignments">("categories");
 
   useEffect(() => {
     fetchData();
@@ -909,14 +923,17 @@ function BookingCategoriesTab() {
 
   const fetchData = async () => {
     try {
-      const [catRes, treatRes] = await Promise.all([
+      const [catRes, treatRes, docRes] = await Promise.all([
         fetch("/api/settings/booking-categories"),
         fetch("/api/settings/booking-treatments"),
+        fetch("/api/settings/booking-doctors"),
       ]);
       const catData = await catRes.json();
       const treatData = await treatRes.json();
+      const docData = await docRes.json();
       setCategories(catData.categories || []);
       setTreatments(treatData.treatments || []);
+      setDoctors(docData.doctors || []);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -953,6 +970,47 @@ function BookingCategoriesTab() {
       alert("Failed to save treatments");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveDoctors = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/settings/booking-doctors", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ doctors }),
+      });
+      if (!res.ok) throw new Error();
+      alert("Doctors saved!");
+    } catch {
+      alert("Failed to save doctors");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addDoctor = () => {
+    const newDoctor: BookingDoctor = {
+      id: crypto.randomUUID(),
+      name: "",
+      specialty: "",
+      image_url: "",
+      description: "",
+      slug: "",
+      enabled: true,
+      order_index: doctors.length,
+    };
+    setDoctors([...doctors, newDoctor]);
+  };
+
+  const updateDoctor = (id: string, field: keyof BookingDoctor, value: any) => {
+    setDoctors(doctors.map((d) => (d.id === id ? { ...d, [field]: value } : d)));
+  };
+
+  const deleteDoctor = (id: string) => {
+    if (confirm("Delete this doctor?")) {
+      setDoctors(doctors.filter((d) => d.id !== id));
     }
   };
 
@@ -1030,36 +1088,46 @@ function BookingCategoriesTab() {
           Categories
         </button>
         <button
-          onClick={() => setView("treatments")}
+          onClick={() => { setView("treatments"); setSelectedCategoryId(null); }}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             view === "treatments" ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
           }`}
         >
           Treatments
         </button>
+        <button
+          onClick={() => { setView("doctors"); setSelectedCategoryId(null); setSelectedTreatmentId(null); }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            view === "doctors" || view === "doctor-assignments" ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          Doctors
+        </button>
       </div>
 
-      {/* Sub-tabs for patient type */}
-      <div className="border-b border-slate-200">
-        <div className="flex space-x-8">
-          <button
-            onClick={() => { setActiveSubTab("new"); setSelectedCategoryId(null); }}
-            className={`pb-3 px-1 border-b-2 text-sm font-medium transition-colors ${
-              activeSubTab === "new" ? "border-sky-500 text-sky-600" : "border-transparent text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            First-Time Patients
-          </button>
-          <button
-            onClick={() => { setActiveSubTab("existing"); setSelectedCategoryId(null); }}
-            className={`pb-3 px-1 border-b-2 text-sm font-medium transition-colors ${
-              activeSubTab === "existing" ? "border-sky-500 text-sky-600" : "border-transparent text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            Existing Patients
-          </button>
+      {/* Sub-tabs for patient type — hidden in Doctors/assignment views */}
+      {view !== "doctors" && view !== "doctor-assignments" && view !== "category-doctor-assignments" && (
+        <div className="border-b border-slate-200">
+          <div className="flex space-x-8">
+            <button
+              onClick={() => { setActiveSubTab("new"); setSelectedCategoryId(null); }}
+              className={`pb-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+                activeSubTab === "new" ? "border-sky-500 text-sky-600" : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              First-Time Patients
+            </button>
+            <button
+              onClick={() => { setActiveSubTab("existing"); setSelectedCategoryId(null); }}
+              className={`pb-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+                activeSubTab === "existing" ? "border-sky-500 text-sky-600" : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Existing Patients
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {view === "categories" ? (
         <>
@@ -1139,6 +1207,14 @@ function BookingCategoriesTab() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
+                        {cat.skip_treatment && (
+                          <button
+                            onClick={() => { setSelectedCategoryId(cat.id); setView("category-doctor-assignments"); }}
+                            className="px-3 py-1 text-xs text-violet-600 hover:bg-violet-50 rounded-lg"
+                          >
+                            Manage Doctors
+                          </button>
+                        )}
                         <button
                           onClick={() => { setSelectedCategoryId(cat.id); setView("treatments"); }}
                           className="px-3 py-1 text-xs text-sky-600 hover:bg-sky-50 rounded-lg"
@@ -1168,7 +1244,7 @@ function BookingCategoriesTab() {
             </button>
           </div>
         </>
-      ) : (
+      ) : view === "treatments" ? (
         <>
           {/* Treatments View */}
           {!selectedCategoryId ? (
@@ -1262,7 +1338,13 @@ function BookingCategoriesTab() {
                               Enabled
                             </label>
                           </div>
-                          <div className="md:col-span-2 flex justify-end">
+                          <div className="md:col-span-2 flex justify-end gap-2">
+                            <button
+                              onClick={() => { setSelectedTreatmentId(treat.id); setView("doctor-assignments"); }}
+                              className="px-3 py-1 text-xs text-sky-600 hover:bg-sky-50 rounded-lg"
+                            >
+                              Doctors
+                            </button>
                             <button
                               onClick={() => deleteTreatment(treat.id)}
                               className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg"
@@ -1288,7 +1370,356 @@ function BookingCategoriesTab() {
             </>
           )}
         </>
-      )}
+      ) : view === "doctors" ? (
+        <DoctorsView
+          doctors={doctors}
+          saving={saving}
+          onAdd={addDoctor}
+          onUpdate={updateDoctor}
+          onDelete={deleteDoctor}
+          onSave={saveDoctors}
+        />
+      ) : view === "doctor-assignments" && selectedTreatmentId ? (
+        <DoctorAssignmentsView
+          mode="treatment"
+          entityId={selectedTreatmentId}
+          entityName={treatments.find((t) => t.id === selectedTreatmentId)?.name || "Treatment"}
+          doctors={doctors}
+          onBack={() => { setView("treatments"); setSelectedTreatmentId(null); }}
+        />
+      ) : view === "category-doctor-assignments" && selectedCategoryId ? (
+        <DoctorAssignmentsView
+          mode="category"
+          entityId={selectedCategoryId}
+          entityName={categories.find((c) => c.id === selectedCategoryId)?.name || "Category"}
+          doctors={doctors}
+          onBack={() => { setView("categories"); setSelectedCategoryId(null); }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Doctors View — global doctor pool management
+// ---------------------------------------------------------------------------
+
+interface DoctorsViewProps {
+  doctors: BookingDoctor[];
+  saving: boolean;
+  onAdd: () => void;
+  onUpdate: (id: string, field: keyof BookingDoctor, value: any) => void;
+  onDelete: (id: string) => void;
+  onSave: () => void;
+}
+
+const DOCTOR_PLACEHOLDER = (
+  <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <rect width="80" height="80" fill="#e2e8f0"/>
+    <circle cx="40" cy="30" r="14" fill="#94a3b8"/>
+    <ellipse cx="40" cy="68" rx="24" ry="16" fill="#94a3b8"/>
+  </svg>
+);
+
+function DoctorsView({ doctors, saving, onAdd, onUpdate, onDelete, onSave }: DoctorsViewProps) {
+  const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const handleImageUpload = async (doctorId: string, file: File) => {
+    setUploading((prev) => ({ ...prev, [doctorId]: true }));
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${doctorId}.${ext}`;
+
+      const { error: uploadError } = await supabaseClient.storage
+        .from("doctor-images")
+        .upload(path, file, { upsert: true, contentType: file.type });
+
+      if (uploadError) {
+        alert(uploadError.message || "Failed to upload image.");
+        return;
+      }
+
+      const { data: { publicUrl } } = supabaseClient.storage
+        .from("doctor-images")
+        .getPublicUrl(path);
+
+      onUpdate(doctorId, "image_url", publicUrl);
+    } catch (err) {
+      console.error("Upload error:", err);
+      alert("Unexpected error uploading image.");
+    } finally {
+      setUploading((prev) => ({ ...prev, [doctorId]: false }));
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white">
+        <div className="p-4 border-b flex justify-between items-center">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Booking Doctors</h3>
+            <p className="text-xs text-slate-500">{doctors.length} doctors · assign them to treatments via the Treatments tab</p>
+          </div>
+          <button
+            onClick={onAdd}
+            className="px-3 py-1.5 bg-sky-500 text-white rounded-lg text-xs font-medium hover:bg-sky-600"
+          >
+            Add Doctor
+          </button>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {doctors.length === 0 ? (
+            <div className="p-12 text-center text-xs text-slate-400">No doctors yet</div>
+          ) : (
+            doctors.map((doc) => (
+              <div key={doc.id} className="p-4 hover:bg-slate-50/50">
+                <div className="flex gap-4 items-start">
+                  {/* Photo column */}
+                  <div className="flex-shrink-0 flex flex-col items-center gap-1.5">
+                    <div className="w-16 h-16 rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0">
+                      {doc.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={doc.image_url}
+                          alt={doc.name}
+                          className="w-full h-full object-cover object-top"
+                        />
+                      ) : (
+                        DOCTOR_PLACEHOLDER
+                      )}
+                    </div>
+                    {/* Hidden file input */}
+                    <input
+                      ref={(el) => { fileInputRefs.current[doc.id] = el; }}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleImageUpload(doc.id, file);
+                        e.target.value = "";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRefs.current[doc.id]?.click()}
+                      disabled={uploading[doc.id]}
+                      className="text-[10px] text-sky-600 hover:text-sky-700 disabled:text-slate-400 leading-tight text-center"
+                    >
+                      {uploading[doc.id] ? "Uploading..." : doc.image_url ? "Change" : "Upload"}
+                    </button>
+                  </div>
+
+                  {/* Fields */}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-1">Name</label>
+                        <input
+                          type="text"
+                          value={doc.name}
+                          onChange={(e) => onUpdate(doc.id, "name", e.target.value)}
+                          placeholder="Dr. Jane Doe"
+                          className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-1">Specialty</label>
+                        <input
+                          type="text"
+                          value={doc.specialty}
+                          onChange={(e) => onUpdate(doc.id, "specialty", e.target.value)}
+                          placeholder="Dermatology"
+                          className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-1">Slug (URL key)</label>
+                        <input
+                          type="text"
+                          value={doc.slug}
+                          onChange={(e) => onUpdate(doc.id, "slug", e.target.value)}
+                          placeholder="jane-doe"
+                          className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium text-slate-500 mb-1">Description</label>
+                      <input
+                        type="text"
+                        value={doc.description}
+                        onChange={(e) => onUpdate(doc.id, "description", e.target.value)}
+                        placeholder="Short bio shown on the booking page"
+                        className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={doc.enabled}
+                          onChange={(e) => onUpdate(doc.id, "enabled", e.target.checked)}
+                          className="w-3.5 h-3.5 text-sky-500 rounded"
+                        />
+                        Enabled
+                      </label>
+                      <button
+                        onClick={() => onDelete(doc.id)}
+                        className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <button
+          onClick={onSave}
+          disabled={saving}
+          className="px-5 py-2 bg-sky-500 text-white rounded-lg text-xs font-medium hover:bg-sky-600 disabled:opacity-50"
+        >
+          {saving ? "Saving..." : "Save Doctors"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Doctor Assignments View — assign doctors to a specific treatment
+// ---------------------------------------------------------------------------
+
+interface DoctorAssignmentsViewProps {
+  mode: "treatment" | "category";
+  entityId: string;
+  entityName: string;
+  doctors: BookingDoctor[];
+  onBack: () => void;
+}
+
+function DoctorAssignmentsView({ mode, entityId, entityName, doctors, onBack }: DoctorAssignmentsViewProps) {
+  const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const param = mode === "treatment" ? `treatment_id=${entityId}` : `category_id=${entityId}`;
+    fetch(`/api/settings/booking-doctor-assignments?${param}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setAssignedIds(new Set(data.doctor_ids || []));
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [mode, entityId]);
+
+  const toggle = (doctorId: string) => {
+    setAssignedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(doctorId)) next.delete(doctorId);
+      else next.add(doctorId);
+      return next;
+    });
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const body = mode === "treatment"
+        ? { treatment_id: entityId, doctor_ids: [...assignedIds] }
+        : { category_id: entityId, doctor_ids: [...assignedIds] };
+      const res = await fetch("/api/settings/booking-doctor-assignments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error();
+      alert("Doctor assignments saved!");
+    } catch {
+      alert("Failed to save assignments");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const label = mode === "category" ? "category" : "treatment";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onBack}
+          className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div>
+          <h3 className="text-lg font-semibold text-slate-800">{entityName} — Assign Doctors</h3>
+          <p className="text-xs text-slate-500">
+            Check the doctors available for this {label}. If none are selected, all enabled doctors will be shown.
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white">
+        {loading ? (
+          <div className="p-12 text-center text-xs text-slate-400">Loading...</div>
+        ) : doctors.length === 0 ? (
+          <div className="p-12 text-center text-xs text-slate-400">
+            No doctors configured yet. Add doctors in the Doctors tab first.
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {doctors.map((doc) => (
+              <label key={doc.id} className="flex items-center gap-4 p-4 hover:bg-slate-50/50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={assignedIds.has(doc.id)}
+                  onChange={() => toggle(doc.id)}
+                  className="w-4 h-4 text-sky-500 rounded"
+                />
+                {doc.image_url && (
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex-shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={doc.image_url} alt={doc.name} className="w-full h-full object-cover object-top" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-slate-800">{doc.name}</div>
+                  <div className="text-xs text-slate-500">{doc.specialty}</div>
+                </div>
+                {!doc.enabled && (
+                  <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Disabled</span>
+                )}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-slate-400">
+          {assignedIds.size === 0
+            ? `No selection — all enabled doctors will be shown for this ${label}.`
+            : `${assignedIds.size} doctor${assignedIds.size !== 1 ? "s" : ""} selected.`}
+        </p>
+        <button
+          onClick={save}
+          disabled={saving || loading}
+          className="px-5 py-2 bg-sky-500 text-white rounded-lg text-xs font-medium hover:bg-sky-600 disabled:opacity-50"
+        >
+          {saving ? "Saving..." : "Save Assignments"}
+        </button>
+      </div>
     </div>
   );
 }
