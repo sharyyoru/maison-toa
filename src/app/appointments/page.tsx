@@ -1184,10 +1184,14 @@ export default function CalendarPage() {
         setServiceOptionsLoading(true);
         setServiceOptionsError(null);
 
+        // Only load services from the "Treatment" category
+        const TREATMENT_CATEGORY_ID = "78c68bca-9219-487b-a671-892ef8e5e2ac";
+
         const { data, error } = await supabaseClient
           .from("services")
-          .select("id, name, is_active, duration_minutes")
+          .select("id, name, is_active, duration_minutes, category_id")
           .eq("is_active", true)
+          .eq("category_id", TREATMENT_CATEGORY_ID)
           .order("name", { ascending: true });
 
         if (!isMounted) return;
