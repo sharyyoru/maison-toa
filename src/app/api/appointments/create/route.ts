@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { parseSwissDateTimeLocal } from "@/lib/swissTimezone";
+import { brandedEmail, infoRow, infoTable } from "@/utils/emailTemplate";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -101,36 +102,20 @@ function generatePatientEmailHtml(
   notes: string | null
 ): string {
   const formattedDate = formatAppointmentDate(appointmentDate);
-  
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #334155; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fafc;">
-  <div style="background: #1e293b; padding: 40px 30px; border-radius: 16px 16px 0 0; text-align: center;">
-    <img src="https://cdn.jsdelivr.net/gh/sharyyoru/maison-toa@main/public/logos/maisontoa-logo.png" alt="Maison Toa" style="height: 40px; margin-bottom: 20px; filter: brightness(0) invert(1);">
-    <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">Appointment Confirmed!</h1>
-    <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">Thank you for booking with us</p>
-  </div>
-  <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
-    <p style="font-size: 16px; margin-bottom: 20px;">Dear ${patientName},</p>
-    <p style="margin-bottom: 20px;">Your appointment has been scheduled. Here are the details:</p>
-    
-    <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-      <p style="margin: 0 0 10px 0;"><strong>📅 Date & Time:</strong> ${formattedDate}</p>
-      ${location ? `<p style="margin: 0 0 10px 0;"><strong>📍 Location:</strong> ${location}</p>` : ""}
-      ${notes ? `<p style="margin: 0;"><strong>📝 Notes:</strong> ${notes}</p>` : ""}
-    </div>
-    
-    <p style="margin-bottom: 20px;">If you need to reschedule or cancel, please contact us as soon as possible.</p>
-    
-    <p style="margin-bottom: 0;">Best regards,<br><strong>Your Clinic Team</strong></p>
-  </div>
-</body>
-</html>`;
+
+  const rows =
+    infoRow("Date &amp; Time", formattedDate) +
+    (location ? infoRow("Location", location) : "") +
+    (notes ? infoRow("Notes", notes) : "");
+
+  const body = `
+    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">Dear ${patientName},</p>
+    <p style="margin: 0 0 8px 0; color: #4a4742;">Your appointment has been confirmed. Please find the details below.</p>
+    ${infoTable(rows)}
+    <p style="margin: 0; color: #4a4742;">Should you need to reschedule or cancel, please contact us as soon as possible.</p>
+  `;
+
+  return brandedEmail(body);
 }
 
 function generateUserEmailHtml(
@@ -142,36 +127,22 @@ function generateUserEmailHtml(
   notes: string | null
 ): string {
   const formattedDate = formatAppointmentDate(appointmentDate);
-  
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #334155; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fafc;">
-  <div style="background: #1e293b; padding: 40px 30px; border-radius: 16px 16px 0 0; text-align: center;">
-    <img src="https://cdn.jsdelivr.net/gh/sharyyoru/maison-toa@main/public/logos/maisontoa-logo.png" alt="Maison Toa" style="height: 40px; margin-bottom: 20px; filter: brightness(0) invert(1);">
-    <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">New Appointment Scheduled</h1>
-    <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">Via CRM Booking</p>
-  </div>
-  <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
-    <p style="font-size: 16px; margin-bottom: 20px;">Hi ${userName},</p>
-    <p style="margin-bottom: 20px;">A new appointment has been scheduled with one of your patients:</p>
-    
-    <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-      <p style="margin: 0 0 10px 0;"><strong>👤 Patient:</strong> ${patientName}</p>
-      <p style="margin: 0 0 10px 0;"><strong>📧 Email:</strong> ${patientEmail}</p>
-      <p style="margin: 0 0 10px 0;"><strong>📅 Date & Time:</strong> ${formattedDate}</p>
-      ${location ? `<p style="margin: 0 0 10px 0;"><strong>📍 Location:</strong> ${location}</p>` : ""}
-      ${notes ? `<p style="margin: 0;"><strong>📝 Notes:</strong> ${notes}</p>` : ""}
-    </div>
-    
-    <p style="margin-bottom: 0;">This appointment has been added to the patient's record in the CRM.</p>
-  </div>
-</body>
-</html>`;
+
+  const rows =
+    infoRow("Patient", patientName) +
+    infoRow("Email", patientEmail) +
+    infoRow("Date &amp; Time", formattedDate) +
+    (location ? infoRow("Location", location) : "") +
+    (notes ? infoRow("Notes", notes) : "");
+
+  const body = `
+    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">Dear ${userName},</p>
+    <p style="margin: 0 0 8px 0; color: #4a4742;">A new appointment has been scheduled with one of your patients.</p>
+    ${infoTable(rows)}
+    <p style="margin: 0; color: #4a4742;">This appointment has been added to the patient's record in the system.</p>
+  `;
+
+  return brandedEmail(body);
 }
 
 function generateReminderEmailHtml(
@@ -182,63 +153,34 @@ function generateReminderEmailHtml(
   location: string | null
 ): string {
   const formattedDate = formatAppointmentDate(appointmentDate);
-  
+
   if (isPatient) {
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #334155; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fafc;">
-  <div style="background: #1e293b; padding: 40px 30px; border-radius: 16px 16px 0 0; text-align: center;">
-    <img src="https://cdn.jsdelivr.net/gh/sharyyoru/maison-toa@main/public/logos/maisontoa-logo.png" alt="Maison Toa" style="height: 40px; margin-bottom: 20px; filter: brightness(0) invert(1);">
-    <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">⏰ Appointment Reminder</h1>
-    <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">Don't forget your upcoming appointment</p>
-  </div>
-  <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
-    <p style="font-size: 16px; margin-bottom: 20px;">Dear ${recipientName},</p>
-    <p style="margin-bottom: 20px;"><strong>This is a friendly reminder</strong> that you have an appointment scheduled for tomorrow:</p>
-    
-    <div style="background: #fffbeb; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 20px;">
-      <p style="margin: 0 0 10px 0;"><strong>📅 Date & Time:</strong> ${formattedDate}</p>
-      ${location ? `<p style="margin: 0;"><strong>📍 Location:</strong> ${location}</p>` : ""}
-    </div>
-    
-    <p style="margin-bottom: 20px;">If you need to reschedule, please contact us as soon as possible.</p>
-    
-    <p style="margin-bottom: 0;">We look forward to seeing you!<br><strong>Your Clinic Team</strong></p>
-  </div>
-</body>
-</html>`;
+    const rows =
+      infoRow("Date &amp; Time", formattedDate) +
+      (location ? infoRow("Location", location) : "");
+
+    const body = `
+      <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">Dear ${recipientName},</p>
+      <p style="margin: 0 0 8px 0; color: #4a4742;">This is a reminder of your appointment scheduled for tomorrow.</p>
+      ${infoTable(rows)}
+      <p style="margin: 0; color: #4a4742;">Should you need to reschedule, please contact us in advance.</p>
+    `;
+
+    return brandedEmail(body);
   }
-  
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #334155; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fafc;">
-  <div style="background: #1e293b; padding: 40px 30px; border-radius: 16px 16px 0 0; text-align: center;">
-    <img src="https://cdn.jsdelivr.net/gh/sharyyoru/maison-toa@main/public/logos/maisontoa-logo.png" alt="Maison Toa" style="height: 40px; margin-bottom: 20px; filter: brightness(0) invert(1);">
-    <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">⏰ Appointment Reminder</h1>
-    <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">Tomorrow's patient appointment</p>
-  </div>
-  <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
-    <p style="font-size: 16px; margin-bottom: 20px;">Hi ${recipientName},</p>
-    <p style="margin-bottom: 20px;"><strong>Reminder:</strong> You have an appointment scheduled for tomorrow with a patient:</p>
-    
-    <div style="background: #fffbeb; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 20px;">
-      <p style="margin: 0 0 10px 0;"><strong>👤 Patient:</strong> ${patientName}</p>
-      <p style="margin: 0 0 10px 0;"><strong>📅 Date & Time:</strong> ${formattedDate}</p>
-      ${location ? `<p style="margin: 0;"><strong>📍 Location:</strong> ${location}</p>` : ""}
-    </div>
-  </div>
-</body>
-</html>`;
+
+  const rows =
+    infoRow("Patient", patientName) +
+    infoRow("Date &amp; Time", formattedDate) +
+    (location ? infoRow("Location", location) : "");
+
+  const body = `
+    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">Dear ${recipientName},</p>
+    <p style="margin: 0 0 8px 0; color: #4a4742;">This is a reminder of your appointment scheduled for tomorrow with a patient.</p>
+    ${infoTable(rows)}
+  `;
+
+  return brandedEmail(body);
 }
 
 export async function POST(request: Request) {

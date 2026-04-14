@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { formatSwissDateWithWeekday, formatSwissTimeAmPm, parseSwissDateTimeLocal } from "@/lib/swissTimezone";
+import { brandedEmail, infoRow, infoTable } from "@/utils/emailTemplate";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -72,64 +73,21 @@ function generatePatientConfirmationEmail(
   service: string,
   location: string | null
 ): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #334155; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fafc;">
-  <div style="background: #1e293b; padding: 40px 30px; border-radius: 16px 16px 0 0; text-align: center;">
-    <img src="https://cdn.jsdelivr.net/gh/sharyyoru/maison-toa@main/public/logos/maisontoa-logo.png" alt="Maison Toa" style="height: 40px; margin-bottom: 20px; filter: brightness(0) invert(1);">
-    <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">Appointment Confirmed!</h1>
-    <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">Thank you for booking with us</p>
-  </div>
-  <div style="background: #ffffff; padding: 40px 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 16px 16px;">
-    <p style="font-size: 18px; margin-bottom: 24px; color: #1e293b;">Dear <strong>${patientName}</strong>,</p>
-    <p style="margin-bottom: 24px; color: #475569;">Your appointment has been successfully scheduled. We look forward to seeing you!</p>
-    
-    <div style="background: #f8fafc; padding: 24px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #e2e8f0;">
-      <h3 style="margin: 0 0 16px 0; color: #1e293b; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px;">Appointment Details</h3>
-      <table style="width: 100%; border-collapse: collapse;">
-        <tr>
-          <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Doctor</td>
-          <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${doctorName}</td>
-        </tr>
-        <tr>
-          <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Date</td>
-          <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${formatDate(appointmentDate)}</td>
-        </tr>
-        <tr>
-          <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Time</td>
-          <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${formatTime(appointmentDate)}</td>
-        </tr>
-        <tr>
-          <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Service</td>
-          <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${service}</td>
-        </tr>
-        ${location ? `
-        <tr>
-          <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Location</td>
-          <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${location}</td>
-        </tr>
-        ` : ""}
-      </table>
-    </div>
-    
-    <div style="background: #fef3c7; padding: 16px; border-radius: 8px; border-left: 4px solid #1e293b; margin-bottom: 24px;">
-      <p style="margin: 0; color: #1e293b; font-size: 14px;">
-        <strong>Important:</strong> If you need to reschedule or cancel your appointment, please contact us at least 24 hours in advance.
-      </p>
-    </div>
-    
-    <p style="margin-bottom: 0; color: #475569;">Best regards,<br><strong style="color: #1e293b;">Aesthetics Clinic Team</strong></p>
-  </div>
-  <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
-    <p style="margin: 0;">© ${new Date().getFullYear()} Aesthetics Clinic. All rights reserved.</p>
-  </div>
-</body>
-</html>`;
+  const rows =
+    infoRow("Doctor", doctorName) +
+    infoRow("Date", formatDate(appointmentDate)) +
+    infoRow("Time", formatTime(appointmentDate)) +
+    infoRow("Service", service) +
+    (location ? infoRow("Location", location) : "");
+
+  const body = `
+    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">Dear ${patientName},</p>
+    <p style="margin: 0 0 8px 0; color: #4a4742;">Your appointment has been confirmed. Please find the details below.</p>
+    ${infoTable(rows)}
+    <p style="margin: 0; color: #4a4742;">Should you need to reschedule or cancel, please contact us at least 24 hours in advance.</p>
+  `;
+
+  return brandedEmail(body);
 }
 
 function generateDoctorNotificationEmail(
@@ -142,81 +100,29 @@ function generateDoctorNotificationEmail(
   notes: string | null,
   location: string | null
 ): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #334155; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fafc;">
-  <div style="background: #1e293b; padding: 40px 30px; border-radius: 16px 16px 0 0; text-align: center;">
-    <img src="https://cdn.jsdelivr.net/gh/sharyyoru/maison-toa@main/public/logos/maisontoa-logo.png" alt="Maison Toa" style="height: 40px; margin-bottom: 20px; filter: brightness(0) invert(1);">
-    <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">New Appointment Booked</h1>
-    <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">Via Online Booking</p>
-  </div>
-  <div style="background: #ffffff; padding: 40px 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 16px 16px;">
-    <p style="font-size: 18px; margin-bottom: 24px; color: #1e293b;">Hi <strong>${doctorName}</strong>,</p>
-    <p style="margin-bottom: 24px; color: #475569;">A new appointment has been booked through the online booking system.</p>
-    
-    <div style="background: #f8fafc; padding: 24px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #e2e8f0;">
-      <h3 style="margin: 0 0 16px 0; color: #1e293b; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px;">Patient Information</h3>
-      <table style="width: 100%; border-collapse: collapse;">
-        <tr>
-          <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Name</td>
-          <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${patientName}</td>
-        </tr>
-        <tr>
-          <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Email</td>
-          <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${patientEmail}</td>
-        </tr>
-        ${patientPhone ? `
-        <tr>
-          <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Phone</td>
-          <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${patientPhone}</td>
-        </tr>
-        ` : ""}
-      </table>
-    </div>
+  const patientRows =
+    infoRow("Name", patientName) +
+    infoRow("Email", patientEmail) +
+    (patientPhone ? infoRow("Phone", patientPhone) : "");
 
-    <div style="background: #f1f5f9; padding: 24px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #cbd5e1;">
-      <h3 style="margin: 0 0 16px 0; color: #1e293b; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px;">Appointment Details</h3>
-      <table style="width: 100%; border-collapse: collapse;">
-        <tr>
-          <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Date</td>
-          <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${formatDate(appointmentDate)}</td>
-        </tr>
-        <tr>
-          <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Time</td>
-          <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${formatTime(appointmentDate)}</td>
-        </tr>
-        <tr>
-          <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Service</td>
-          <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${service}</td>
-        </tr>
-        ${location ? `
-        <tr>
-          <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Location</td>
-          <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${location}</td>
-        </tr>
-        ` : ""}
-      </table>
-    </div>
-    
-    ${notes ? `
-    <div style="background: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
-      <p style="margin: 0 0 8px 0; color: #64748b; font-size: 14px; font-weight: 600;">Patient Notes:</p>
-      <p style="margin: 0; color: #1e293b; font-size: 14px;">${notes}</p>
-    </div>
-    ` : ""}
-    
-    <p style="margin-bottom: 0; color: #475569;">This appointment has been added to your agenda.</p>
-  </div>
-  <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
-    <p style="margin: 0;">© ${new Date().getFullYear()} Aesthetics Clinic. All rights reserved.</p>
-  </div>
-</body>
-</html>`;
+  const appointmentRows =
+    infoRow("Date", formatDate(appointmentDate)) +
+    infoRow("Time", formatTime(appointmentDate)) +
+    infoRow("Service", service) +
+    (location ? infoRow("Location", location) : "");
+
+  const body = `
+    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">Dear ${doctorName},</p>
+    <p style="margin: 0 0 4px 0; color: #4a4742;">A new appointment has been booked through the online booking portal.</p>
+    <p style="margin: 0 0 4px 0; color: #8a8578; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;">Patient</p>
+    ${infoTable(patientRows)}
+    <p style="margin: 0 0 4px 0; color: #8a8578; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;">Appointment</p>
+    ${infoTable(appointmentRows)}
+    ${notes ? `<p style="margin: 16px 0 4px 0; color: #8a8578; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;">Notes</p>
+    <p style="margin: 0; color: #4a4742; font-size: 14px;">${notes}</p>` : ""}
+  `;
+
+  return brandedEmail(body);
 }
 
 export async function POST(request: Request) {
