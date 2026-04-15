@@ -342,7 +342,7 @@ export async function POST(request: Request) {
         reason,
         location: location || "Geneva",
         status: "scheduled",
-        source: "manual",
+        source: "online_booking",
       })
       .select("id")
       .single();
