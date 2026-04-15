@@ -274,6 +274,7 @@ function DoctorBookingContent() {
   };
 
   async function handleSubmit() {
+    if (!doctor) return;
     if (!firstName || !lastName || !email || !selectedDate || !selectedTime || !locationId) {
       setError(t("error.required"));
       return;
