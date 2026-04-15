@@ -15,6 +15,11 @@ type Patient = {
   source: string | null;
 };
 
+type Provider = {
+  id: string;
+  name: string | null;
+};
+
 type Booking = {
   id: string;
   start_time: string;
@@ -23,23 +28,9 @@ type Booking = {
   reason: string | null;
   location: string | null;
   created_at: string;
+  provider_id: string | null;
   patient: Patient | null;
-};
-
-const STATUS_LABELS: Record<BookingStatus, string> = {
-  scheduled: "Pending",
-  confirmed: "Confirmed",
-  completed: "Completed",
-  cancelled: "Cancelled",
-  no_show: "No Show",
-};
-
-const STATUS_COLORS: Record<BookingStatus, string> = {
-  scheduled: "bg-amber-100 text-amber-800",
-  confirmed: "bg-emerald-100 text-emerald-800",
-  completed: "bg-sky-100 text-sky-800",
-  cancelled: "bg-red-100 text-red-700",
-  no_show: "bg-slate-100 text-slate-600",
+  provider: Provider | null;
 };
 
 function parseReason(reason: string | null): { service: string; doctor: string; notes: string } {
@@ -70,7 +61,6 @@ export default function OnlineBookingsPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -104,25 +94,6 @@ export default function OnlineBookingsPage() {
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
-
-  async function updateStatus(id: string, status: BookingStatus) {
-    setUpdatingId(id);
-    try {
-      const res = await fetch("/api/online-bookings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status }),
-      });
-      if (!res.ok) throw new Error("Failed to update");
-      setBookings((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, status } : b))
-      );
-    } catch {
-      alert("Failed to update booking status.");
-    } finally {
-      setUpdatingId(null);
-    }
-  }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -186,14 +157,13 @@ export default function OnlineBookingsPage() {
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Doctor</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Date & Time</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Type</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Status</th>
               <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-slate-500">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
                   <svg className="mx-auto h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -203,7 +173,7 @@ export default function OnlineBookingsPage() {
             )}
             {!loading && bookings.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
                   No online bookings found
                 </td>
               </tr>
@@ -249,49 +219,13 @@ export default function OnlineBookingsPage() {
                       {isNew ? "New Patient" : "Existing"}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[booking.status]}`}>
-                      {STATUS_LABELS[booking.status]}
-                    </span>
-                  </td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {booking.status === "scheduled" && (
-                        <button
-                          onClick={() => updateStatus(booking.id, "confirmed")}
-                          disabled={updatingId === booking.id}
-                          className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                        >
-                          Confirm
-                        </button>
-                      )}
-                      {booking.status === "confirmed" && (
-                        <button
-                          onClick={() => updateStatus(booking.id, "completed")}
-                          disabled={updatingId === booking.id}
-                          className="rounded-lg bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
-                        >
-                          Complete
-                        </button>
-                      )}
-                      {(booking.status === "scheduled" || booking.status === "confirmed") && (
-                        <button
-                          onClick={() => {
-                            if (confirm("Cancel this booking?")) updateStatus(booking.id, "cancelled");
-                          }}
-                          disabled={updatingId === booking.id}
-                          className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                      )}
-                      <Link
-                        href={`/appointments?date=${formatSwissYmd(new Date(booking.start_time))}`}
-                        className="rounded-lg bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
-                      >
-                        View
-                      </Link>
-                    </div>
+                    <Link
+                      href={`/appointments?date=${formatSwissYmd(new Date(booking.start_time))}${doctor ? `&doctorName=${encodeURIComponent(doctor)}` : ''}`}
+                      className="rounded-lg bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                    >
+                      View
+                    </Link>
                   </td>
                 </tr>
               );

@@ -16,8 +16,9 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from("appointments")
     .select(
-      `id, start_time, end_time, status, reason, location, created_at,
-       patient:patients(id, first_name, last_name, email, phone, source)`,
+      `id, start_time, end_time, status, reason, location, created_at, provider_id,
+       patient:patients(id, first_name, last_name, email, phone, source),
+       provider:providers(id, name)`,
       { count: "exact" }
     )
     // Filter to only online bookings — either by source column (after migration)

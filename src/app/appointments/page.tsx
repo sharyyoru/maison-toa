@@ -668,13 +668,28 @@ export default function CalendarPage() {
   const searchParams = useSearchParams();
 
   // Initialize to date from ?date=YYYY-MM-DD param, or today
+  // Parse URL date as Swiss timezone to avoid day shift
   const initialDate = useMemo(() => {
     const param = searchParams.get("date");
     if (param) {
-      const parsed = new Date(`${param}T00:00:00`);
-      if (!isNaN(parsed.getTime())) return parsed;
+      // Parse YYYY-MM-DD and create date at noon Swiss time to avoid DST issues
+      const [year, month, day] = param.split("-").map(Number);
+      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+        // Create as local date, we'll handle Swiss conversion when needed
+        return new Date(year, month - 1, day, 12, 0, 0);
+      }
     }
     return new Date();
+  }, [searchParams]);
+
+  // Read doctor param from URL to pre-select that doctor's calendar
+  const initialDoctorId = useMemo(() => {
+    return searchParams.get("doctor");
+  }, [searchParams]);
+
+  // Read doctor name from URL as fallback (for matching when IDs differ)
+  const initialDoctorName = useMemo(() => {
+    return searchParams.get("doctorName");
   }, [searchParams]);
 
   const [visibleMonth, setVisibleMonth] = useState<Date>(() => {
@@ -1027,7 +1042,7 @@ export default function CalendarPage() {
           { name: "Laetitia Guarino", check: "laetitia guarino" },
           { name: "Louise Goerig", check: "louise goerig" },
           { name: "Juliette Le Mentec", check: "juliette le mentec" },
-          { name: "Gwendolyn Boursault", check: "gwendolyn boursault" },
+          { name: "Gwendoline Boursault", check: "gwendoline boursault" },
           { name: "Claire Balbo", check: "claire balbo" },
           { name: "Ophélie Perrin", check: "ophelie perrin" },
         ];
@@ -1074,7 +1089,7 @@ export default function CalendarPage() {
             "laetitia guarino",
             "louise goerig",
             "juliette le mentec",
-            "gwendolyn boursault",
+            "gwendoline boursault",
             "claire balbo",
             "ophélie perrin",
             "ophelie perrin",
@@ -1093,7 +1108,7 @@ export default function CalendarPage() {
             "guarino laetitia",
             "goerig louise",
             "le mentec juliette",
-            "boursault gwendolyn",
+            "boursault gwendoline",
             "balbo claire",
             "perrin ophélie",
             "perrin ophelie",
@@ -1116,7 +1131,7 @@ export default function CalendarPage() {
               (normalizedProviderName.includes('laetitia') && normalizedProviderName.includes('guarino')) ||
               (normalizedProviderName.includes('louise') && normalizedProviderName.includes('goerig')) ||
               (normalizedProviderName.includes('juliette') && normalizedProviderName.includes('mentec')) ||
-              (normalizedProviderName.includes('gwendolyn') && normalizedProviderName.includes('boursault')) ||
+              (normalizedProviderName.includes('gwendoline') && normalizedProviderName.includes('boursault')) ||
               (normalizedProviderName.includes('claire') && normalizedProviderName.includes('balbo')) ||
               (normalizedProviderName.includes('ophelie') && normalizedProviderName.includes('perrin')) ||
               (normalizedProviderName.includes('ophélie') && normalizedProviderName.includes('perrin'))
@@ -1195,7 +1210,8 @@ export default function CalendarPage() {
       let savedSelectedIds: string[] | null = null;
       try {
         const saved = localStorage.getItem("appointments_selected_calendars");
-        if (saved) {
+        if (saved && !initialDoctorId) {
+          // Only use localStorage if no doctor param is specified
           const parsed = JSON.parse(saved) as string[];
           // Validate that saved IDs match current provider IDs (invalidate stale cache from users table)
           const providerIds = uniqueProviders.map(p => p.id);
@@ -1216,9 +1232,19 @@ export default function CalendarPage() {
         const rawName = provider.name ?? "Unnamed doctor";
         const trimmedName = rawName.trim() || "Unnamed doctor";
 
-        // Use saved selection if available, otherwise fall back to default logic
+        // Priority: 1) URL doctor ID, 2) URL doctor name, 3) saved selection, 4) default logic
         let selected: boolean;
-        if (savedSelectedIds !== null) {
+        if (initialDoctorId) {
+          // If doctor ID param is specified, match by ID
+          selected = provider.id === initialDoctorId;
+        } else if (initialDoctorName) {
+          // If doctor name param is specified, match by name (case-insensitive, partial match)
+          const nameLower = trimmedName.toLowerCase();
+          const targetLower = initialDoctorName.toLowerCase();
+          selected = nameLower === targetLower || 
+                     nameLower.includes(targetLower) || 
+                     targetLower.includes(nameLower);
+        } else if (savedSelectedIds !== null) {
           selected = savedSelectedIds.includes(provider.id);
         } else if (currentUserId) {
           selected = provider.id === currentUserId;
@@ -1260,7 +1286,7 @@ export default function CalendarPage() {
 
       return baseCalendars;
     });
-  }, [providers, currentUserId]);
+  }, [providers, currentUserId, initialDoctorId, initialDoctorName]);
 
   useEffect(() => {
     let isMounted = true;
