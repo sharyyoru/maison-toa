@@ -52,6 +52,41 @@ const DOCTORS: Record<string, {
     email: "info@maisontoa.com",
     description: "Russian postgraduate diploma in Dermatology and Venereology.",
   },
+  "laetitia-guarino": {
+    name: "Laetitia Guarino",
+    specialty: "Aesthetic Medicine",
+    image: "/doctors/clinic.png",
+    email: "info@maisontoa.com",
+    description: "Specialist in aesthetic medicine.",
+  },
+  "ophelie-perrin": {
+    name: "Ophélie Perrin",
+    specialty: "Laser & Medical Devices",
+    image: "/doctors/clinic.png",
+    email: "info@maisontoa.com",
+    description: "Specialist in laser and medical device treatments.",
+  },
+  "claire-balbo": {
+    name: "Claire Balbo",
+    specialty: "Laser & Medical Devices",
+    image: "/doctors/clinic.png",
+    email: "info@maisontoa.com",
+    description: "Specialist in laser and medical device treatments.",
+  },
+  "juliette-le-mentec": {
+    name: "Juliette Le Mentec",
+    specialty: "Laser & Medical Devices",
+    image: "/doctors/clinic.png",
+    email: "info@maisontoa.com",
+    description: "Specialist in laser and medical device treatments.",
+  },
+  "gwendoline-boursault": {
+    name: "Gwendoline Boursault",
+    specialty: "Laser & Medical Devices",
+    image: "/doctors/clinic.png",
+    email: "info@maisontoa.com",
+    description: "Specialist in laser and medical device treatments.",
+  },
 };
 
 const DOCTOR_AVAILABILITY: Record<string, Record<string, Record<number, { start: string; end: string }>>> = {
@@ -93,6 +128,56 @@ const DOCTOR_AVAILABILITY: Record<string, Record<string, Record<number, { start:
       3: { start: "09:00", end: "17:00" },
       4: { start: "09:00", end: "17:00" },
       5: { start: "09:00", end: "17:00" },
+    },
+  },
+  "laetitia-guarino": {
+    lausanne: {
+      1: { start: "09:00", end: "18:00" },
+      2: { start: "09:00", end: "18:00" },
+      3: { start: "09:00", end: "18:00" },
+      4: { start: "09:00", end: "18:00" },
+      5: { start: "09:00", end: "18:00" },
+      6: { start: "09:00", end: "18:00" },
+    },
+  },
+  "ophelie-perrin": {
+    lausanne: {
+      1: { start: "09:00", end: "18:00" },
+      2: { start: "09:00", end: "18:00" },
+      3: { start: "09:00", end: "18:00" },
+      4: { start: "09:00", end: "18:00" },
+      5: { start: "09:00", end: "18:00" },
+      6: { start: "09:00", end: "18:00" },
+    },
+  },
+  "claire-balbo": {
+    lausanne: {
+      1: { start: "09:00", end: "18:00" },
+      2: { start: "09:00", end: "18:00" },
+      3: { start: "09:00", end: "18:00" },
+      4: { start: "09:00", end: "18:00" },
+      5: { start: "09:00", end: "18:00" },
+      6: { start: "09:00", end: "18:00" },
+    },
+  },
+  "juliette-le-mentec": {
+    lausanne: {
+      1: { start: "09:00", end: "18:00" },
+      2: { start: "09:00", end: "18:00" },
+      3: { start: "09:00", end: "18:00" },
+      4: { start: "09:00", end: "18:00" },
+      5: { start: "09:00", end: "18:00" },
+      6: { start: "09:00", end: "18:00" },
+    },
+  },
+  "gwendoline-boursault": {
+    lausanne: {
+      1: { start: "09:00", end: "18:00" },
+      2: { start: "09:00", end: "18:00" },
+      3: { start: "09:00", end: "18:00" },
+      4: { start: "09:00", end: "18:00" },
+      5: { start: "09:00", end: "18:00" },
+      6: { start: "09:00", end: "18:00" },
     },
   },
 };

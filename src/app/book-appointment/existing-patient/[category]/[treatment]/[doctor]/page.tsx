@@ -52,6 +52,41 @@ const DOCTORS: Record<string, {
     email: "info@maisontoa.com",
     description: "Russian postgraduate diploma in Dermatology and Venereology.",
   },
+  "laetitia-guarino": {
+    name: "Laetitia Guarino",
+    specialty: "Aesthetic Medicine",
+    image: "/doctors/clinic.png",
+    email: "info@maisontoa.com",
+    description: "Specialist in aesthetic medicine.",
+  },
+  "ophelie-perrin": {
+    name: "Ophélie Perrin",
+    specialty: "Laser & Medical Devices",
+    image: "/doctors/clinic.png",
+    email: "info@maisontoa.com",
+    description: "Specialist in laser and medical device treatments.",
+  },
+  "claire-balbo": {
+    name: "Claire Balbo",
+    specialty: "Laser & Medical Devices",
+    image: "/doctors/clinic.png",
+    email: "info@maisontoa.com",
+    description: "Specialist in laser and medical device treatments.",
+  },
+  "juliette-le-mentec": {
+    name: "Juliette Le Mentec",
+    specialty: "Laser & Medical Devices",
+    image: "/doctors/clinic.png",
+    email: "info@maisontoa.com",
+    description: "Specialist in laser and medical device treatments.",
+  },
+  "gwendoline-boursault": {
+    name: "Gwendoline Boursault",
+    specialty: "Laser & Medical Devices",
+    image: "/doctors/clinic.png",
+    email: "info@maisontoa.com",
+    description: "Specialist in laser and medical device treatments.",
+  },
 };
 
 // Default slot window Mon–Sat for all doctors.
@@ -73,7 +108,12 @@ const DOCTOR_AVAILABILITY: Record<string, Record<string, Record<number, { start:
   "alexandra-miles":   { lausanne: ALL_WEEK_SLOTS },
   "reda-benani":       { lausanne: ALL_WEEK_SLOTS },
   "adnan-plakalo":     { lausanne: ALL_WEEK_SLOTS },
-  "natalia-koltunova": { lausanne: ALL_WEEK_SLOTS },
+  "natalia-koltunova":    { lausanne: ALL_WEEK_SLOTS },
+  "laetitia-guarino":     { lausanne: ALL_WEEK_SLOTS },
+  "ophelie-perrin":       { lausanne: ALL_WEEK_SLOTS },
+  "claire-balbo":         { lausanne: ALL_WEEK_SLOTS },
+  "juliette-le-mentec":   { lausanne: ALL_WEEK_SLOTS },
+  "gwendoline-boursault": { lausanne: ALL_WEEK_SLOTS },
 };
 
 function parseLocalDate(dateStr: string): Date {
