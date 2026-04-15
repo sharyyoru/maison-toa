@@ -10,83 +10,22 @@ import { pushToDataLayer } from "@/components/GoogleTagManager";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 
-const DOCTORS: Record<string, {
+interface DoctorInfo {
   name: string;
   specialty: string;
   image: string;
   email: string;
   description: string;
-}> = {
-  "sophie-nordback": {
-    name: "Dr. Sophie Nordback",
-    specialty: "Dermatology & Venereology",
-    image: "/doctors/dr-sophie-nordback-correct.png",
-    email: "info@maisontoa.com",
-    description: "FMH-qualified plastic and aesthetic surgeon. Co-founder of Clinique Maison TÓĀ.",
-  },
-  "alexandra-miles": {
-    name: "Dr. Alexandra Miles",
-    specialty: "Aesthetic Medicine",
-    image: "/doctors/dr-alexandra-miles.webp",
-    email: "info@maisontoa.com",
-    description: "Specialist in aesthetic medicine and anti-aging treatments.",
-  },
-  "reda-benani": {
-    name: "Dr. Reda Benani",
-    specialty: "Longevity Medicine",
-    image: "/doctors/dr-reda-benanni.webp",
-    email: "info@maisontoa.com",
-    description: "Practicing physician specializing in longevity medicine.",
-  },
-  "adnan-plakalo": {
-    name: "Dr. Adnan Plakalo",
-    specialty: "Medical Practitioner",
-    image: "/doctors/dr-adnan-plakalo.png",
-    email: "info@maisontoa.com",
-    description: "Medical practitioner.",
-  },
-  "natalia-koltunova": {
-    name: "Dr. Natalia Koltunova",
-    specialty: "Dermatology & Venereology",
-    image: "/doctors/dr-natalia-koltunova.webp",
-    email: "info@maisontoa.com",
-    description: "Russian postgraduate diploma in Dermatology and Venereology.",
-  },
-  "laetitia-guarino": {
-    name: "Laetitia Guarino",
-    specialty: "Aesthetic Medicine",
-    image: "/doctors/clinic.png",
-    email: "info@maisontoa.com",
-    description: "Specialist in aesthetic medicine.",
-  },
-  "ophelie-perrin": {
-    name: "Ophélie Perrin",
-    specialty: "Laser & Medical Devices",
-    image: "/doctors/clinic.png",
-    email: "info@maisontoa.com",
-    description: "Specialist in laser and medical device treatments.",
-  },
-  "claire-balbo": {
-    name: "Claire Balbo",
-    specialty: "Laser & Medical Devices",
-    image: "/doctors/clinic.png",
-    email: "info@maisontoa.com",
-    description: "Specialist in laser and medical device treatments.",
-  },
-  "juliette-le-mentec": {
-    name: "Juliette Le Mentec",
-    specialty: "Laser & Medical Devices",
-    image: "/doctors/clinic.png",
-    email: "info@maisontoa.com",
-    description: "Specialist in laser and medical device treatments.",
-  },
-  "gwendoline-boursault": {
-    name: "Gwendoline Boursault",
-    specialty: "Laser & Medical Devices",
-    image: "/doctors/clinic.png",
-    email: "info@maisontoa.com",
-    description: "Specialist in laser and medical device treatments.",
-  },
+}
+
+// Default fallback availability: Mon–Sat 09:00–18:00
+const ALL_WEEK_SLOTS = {
+  1: { start: "09:00", end: "18:00" },
+  2: { start: "09:00", end: "18:00" },
+  3: { start: "09:00", end: "18:00" },
+  4: { start: "09:00", end: "18:00" },
+  5: { start: "09:00", end: "18:00" },
+  6: { start: "09:00", end: "18:00" },
 };
 
 const DOCTOR_AVAILABILITY: Record<string, Record<string, Record<number, { start: string; end: string }>>> = {
@@ -189,8 +128,9 @@ function parseLocalDate(dateStr: string): Date {
 function generateTimeSlots(doctorSlug: string, locationId: string, dateStr: string): string[] {
   const date = parseLocalDate(dateStr);
   const dayOfWeek = date.getDay();
-  const availability = DOCTOR_AVAILABILITY[doctorSlug]?.[locationId]?.[dayOfWeek];
-  
+  const availability = DOCTOR_AVAILABILITY[doctorSlug]?.[locationId]?.[dayOfWeek]
+    ?? ALL_WEEK_SLOTS[dayOfWeek as keyof typeof ALL_WEEK_SLOTS];
+
   if (!availability) {
     return [];
   }
@@ -217,7 +157,8 @@ function generateTimeSlots(doctorSlug: string, locationId: string, dateStr: stri
 
 function hasAvailabilityOnDate(doctorSlug: string, locationId: string, date: Date): boolean {
   const dayOfWeek = getSwissDayOfWeek(date);
-  const availability = DOCTOR_AVAILABILITY[doctorSlug]?.[locationId]?.[dayOfWeek];
+  const availability = DOCTOR_AVAILABILITY[doctorSlug]?.[locationId]?.[dayOfWeek]
+    ?? ALL_WEEK_SLOTS[dayOfWeek as keyof typeof ALL_WEEK_SLOTS];
   return !!availability;
 }
 
@@ -264,8 +205,9 @@ function DoctorBookingContent() {
   const categorySlug = params.category as string;
   const treatmentId = params.treatment as string;
   const doctorSlug = params.doctor as string;
-  const doctor = DOCTORS[doctorSlug];
-  
+  const [doctor, setDoctor] = useState<DoctorInfo | null>(null);
+  const [doctorLoading, setDoctorLoading] = useState(true);
+
   const locationId = "lausanne";
   const locationLabel = "Lausanne";
   const { t } = useLanguage();
@@ -291,6 +233,28 @@ function DoctorBookingContent() {
   const [notes, setNotes] = useState("");
 
   const selectedService = treatment?.name || "General Consultation";
+
+  useEffect(() => {
+    const fetchDoctor = async () => {
+      const { data } = await supabaseClient
+        .from("booking_doctors")
+        .select("name, specialty, image_url, description")
+        .eq("slug", doctorSlug)
+        .eq("enabled", true)
+        .single();
+      if (data) {
+        setDoctor({
+          name: data.name,
+          specialty: data.specialty || "",
+          image: data.image_url || "/doctors/clinic.png",
+          email: "info@maisontoa.com",
+          description: data.description || "",
+        });
+      }
+      setDoctorLoading(false);
+    };
+    fetchDoctor();
+  }, [doctorSlug]);
 
   useEffect(() => {
     const fetchTreatment = async () => {
@@ -441,6 +405,14 @@ function DoctorBookingContent() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (doctorLoading) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
+      </main>
+    );
   }
 
   if (!doctor) {
