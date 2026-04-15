@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { formatSwissDateWithWeekday, formatSwissTimeAmPm } from "@/lib/swissTimezone";
+import { formatSwissDateWithWeekday, formatSwissTimeAmPm, formatSwissYmd } from "@/lib/swissTimezone";
 
 type BookingStatus = "scheduled" | "confirmed" | "completed" | "cancelled" | "no_show";
 
@@ -286,7 +286,7 @@ export default function OnlineBookingsPage() {
                         </button>
                       )}
                       <Link
-                        href={`/appointments?patient=${booking.patient?.id || ""}`}
+                        href={`/appointments?date=${formatSwissYmd(new Date(booking.start_time))}`}
                         className="rounded-lg bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
                       >
                         View

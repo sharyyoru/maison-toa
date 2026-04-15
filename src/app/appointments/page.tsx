@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getAppointmentNotes, getAppointmentTitle, getAppointmentDisplayName } from "@/lib/appointmentUtils";
@@ -664,12 +665,23 @@ async function sendAppointmentConfirmationEmail(
 }
 
 export default function CalendarPage() {
-  // Initialize to current date - will be consistent on client
+  const searchParams = useSearchParams();
+
+  // Initialize to date from ?date=YYYY-MM-DD param, or today
+  const initialDate = useMemo(() => {
+    const param = searchParams.get("date");
+    if (param) {
+      const parsed = new Date(`${param}T00:00:00`);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return new Date();
+  }, [searchParams]);
+
   const [visibleMonth, setVisibleMonth] = useState<Date>(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
+    const d = initialDate;
+    return new Date(d.getFullYear(), d.getMonth(), 1);
   });
-  const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(() => initialDate);
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
