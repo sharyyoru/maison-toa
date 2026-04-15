@@ -214,15 +214,17 @@ function DoctorBookingContent() {
   }, [locationId, doctorSlug]);
 
   useEffect(() => {
-    if (selectedDate && locationId) {
+    if (selectedDate && locationId && doctor) {
       const slots = generateTimeSlots(doctorSlug, locationId, selectedDate);
       setAvailableSlots(slots);
       setSelectedTime("");
       checkAvailability(selectedDate);
+    } else if (!doctor) {
+      // doctor not yet loaded — wait for it before checking availability
     } else {
       setAvailableSlots([]);
     }
-  }, [selectedDate, locationId, doctorSlug]);
+  }, [selectedDate, locationId, doctorSlug, doctor]);
 
   async function checkAvailability(date: string) {
     try {
