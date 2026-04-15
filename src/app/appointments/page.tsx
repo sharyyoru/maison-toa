@@ -207,7 +207,7 @@ function getStatusIcon(status: string | null): string {
   return STATUS_ICONS[status] ?? "";
 }
 
-const CLINIC_LOCATION_OPTIONS = ["Rhône", "Champel", "Gstaad", "Montreux"];
+const CLINIC_LOCATION_OPTIONS = ["Rhône", "Champel", "Gstaad", "Montreux", "Lausanne"];
 
 const CONSULTATION_DURATION_OPTIONS = [
   { value: 15, label: "15 minutes" },
@@ -746,6 +746,21 @@ export default function CalendarPage() {
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
   const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
+  
+  // Multi-doctor and multi-service state
+  const [selectedDoctorIds, setSelectedDoctorIds] = useState<string[]>([]);
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+  const [serviceQuantities, setServiceQuantities] = useState<Record<string, number>>({});
+  const [doctorConflicts, setDoctorConflicts] = useState<Record<string, {
+    hasConflict: boolean;
+    conflictingAppointments: Array<{
+      appointmentId: string;
+      patientName: string;
+      startTime: string;
+      endTime: string;
+      location: string;
+    }>;
+  }>>({});
   const [bookingStatus, setBookingStatus] = useState("");
   const [statusSearch, setStatusSearch] = useState("");
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -768,7 +783,66 @@ export default function CalendarPage() {
     if (except !== "location") setLocationDropdownOpen(false);
     if (except !== "duration") setDurationDropdownOpen(false);
     if (except !== "time") setTimeDropdownOpen(false);
+    if (except !== "doctor") setCreateDoctorCalendarId("");
   };
+  
+  // Multi-doctor selection handlers
+  function handleToggleDoctorSelection(doctorId: string) {
+    setSelectedDoctorIds((prev) => {
+      if (prev.includes(doctorId)) {
+        return prev.filter((id) => id !== doctorId);
+      }
+      return [...prev, doctorId];
+    });
+  }
+  
+  // Multi-service selection handlers
+  function handleToggleServiceSelection(serviceId: string) {
+    setSelectedServiceIds((prev) => {
+      if (prev.includes(serviceId)) {
+        // Remove service and its quantity
+        setServiceQuantities((quantities) => {
+          const updated = { ...quantities };
+          delete updated[serviceId];
+          return updated;
+        });
+        return prev.filter((id) => id !== serviceId);
+      }
+      // Add service with default quantity of 1
+      setServiceQuantities((quantities) => ({
+        ...quantities,
+        [serviceId]: 1,
+      }));
+      return [...prev, serviceId];
+    });
+  }
+  
+  function handleServiceQuantityChange(serviceId: string, quantity: number) {
+    const validQuantity = Math.max(1, Math.min(10, quantity));
+    setServiceQuantities((prev) => ({
+      ...prev,
+      [serviceId]: validQuantity,
+    }));
+  }
+  
+  // Calculate total duration from selected services
+  function calculateTotalDuration(
+    selectedServiceIds: string[],
+    serviceQuantities: Record<string, number>,
+    serviceOptions: ServiceOption[]
+  ): number {
+    let totalMinutes = 0;
+    
+    selectedServiceIds.forEach(serviceId => {
+      const service = serviceOptions.find(s => s.id === serviceId);
+      if (service?.duration_minutes) {
+        const quantity = serviceQuantities[serviceId] || 1;
+        totalMinutes += service.duration_minutes * quantity;
+      }
+    });
+    
+    return totalMinutes || 15; // Default to 15 min if no services have duration
+  }
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] =
     useState<CalendarAppointment | null>(null);
@@ -1303,6 +1377,106 @@ export default function CalendarPage() {
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDraggingRange]);
+  
+  // Auto-update consultation duration when services change
+  useEffect(() => {
+    if (selectedServiceIds.length > 0) {
+      const calculatedDuration = calculateTotalDuration(
+        selectedServiceIds,
+        serviceQuantities,
+        serviceOptions
+      );
+      setConsultationDuration(calculatedDuration);
+    }
+  }, [selectedServiceIds, serviceQuantities, serviceOptions]);
+  
+  // Debounced conflict detection
+  useEffect(() => {
+    const timeoutId = setTimeout(async () => {
+      // Only check conflicts if we have doctors selected and time/date set
+      if (selectedDoctorIds.length === 0 || !draftDate || !draftTime) {
+        setDoctorConflicts({});
+        return;
+      }
+      
+      try {
+        const startLocal = new Date(`${draftDate}T${draftTime}:00`);
+        if (isNaN(startLocal.getTime())) {
+          setDoctorConflicts({});
+          return;
+        }
+        
+        const durationMinutes = consultationDuration || 15;
+        const endLocal = new Date(startLocal.getTime() + durationMinutes * 60 * 1000);
+        
+        // Build providers array with IDs and names
+        const providers = selectedDoctorIds.map(doctorId => {
+          const doctor = doctorCalendars.find(c => c.id === doctorId);
+          return {
+            id: doctorId,
+            name: doctor?.name || ''
+          };
+        });
+        
+        const response = await fetch('/api/appointments/check-conflicts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            providers,
+            startTime: startLocal.toISOString(),
+            endTime: endLocal.toISOString(),
+            excludeAppointmentId: editingAppointment?.id
+          })
+        });
+        
+        if (!response.ok) {
+          console.error('Conflict check failed:', response.statusText);
+          return;
+        }
+        
+        const data = await response.json();
+        
+        // Map conflicts by provider ID
+        const conflictMap: Record<string, any> = {};
+        data.conflicts.forEach((conflict: any) => {
+          conflictMap[conflict.providerId] = {
+            hasConflict: conflict.hasConflict,
+            conflictingAppointments: conflict.conflictingAppointments
+          };
+        });
+        
+        setDoctorConflicts(conflictMap);
+      } catch (error) {
+        console.error('Error checking conflicts:', error);
+      }
+    }, 500); // 500ms debounce
+    
+    return () => clearTimeout(timeoutId);
+  }, [selectedDoctorIds, draftDate, draftTime, consultationDuration, editingAppointment?.id]);
+  
+  // Close doctor dropdown when clicking outside
+  useEffect(() => {
+    if (createDoctorCalendarId !== "open") return;
+    
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as HTMLElement;
+      // Check if click is outside the doctor dropdown container
+      const doctorDropdown = document.querySelector('[data-doctor-dropdown]');
+      if (doctorDropdown && !doctorDropdown.contains(target)) {
+        setCreateDoctorCalendarId("");
+      }
+    }
+    
+    // Small delay to avoid closing immediately after opening
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 100);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [createDoctorCalendarId]);
 
   const appointmentsByDay = useMemo(() => {
     const map: Record<string, CalendarAppointment[]> = {};
@@ -1777,10 +1951,22 @@ export default function CalendarPage() {
     // Use the doctor from the dragged column if available, otherwise default
     if (dragDoctorCalendarId) {
       setCreateDoctorCalendarId(dragDoctorCalendarId);
+      // Initialize multi-select with the dragged doctor
+      setSelectedDoctorIds([dragDoctorCalendarId]);
     } else {
       const defaultCalendar = doctorCalendars.find((calendar) => calendar.selected) || doctorCalendars[0] || null;
       setCreateDoctorCalendarId(defaultCalendar?.id ?? "");
+      // Initialize multi-select with the default doctor
+      if (defaultCalendar?.id) {
+        setSelectedDoctorIds([defaultCalendar.id]);
+      } else {
+        setSelectedDoctorIds([]);
+      }
     }
+    // Reset multi-select state
+    setSelectedServiceIds([]);
+    setServiceQuantities({});
+    setDoctorConflicts({});
     setCreateModalOpen(true);
 
     // Reset drag state
@@ -1992,7 +2178,8 @@ export default function CalendarPage() {
       return;
     }
 
-    if (!selectedServiceId) {
+    // Check if at least one service is selected (either old single select or new multi-select)
+    if (!selectedServiceId && selectedServiceIds.length === 0) {
       setCreateError("Please select a service.");
       return;
     }
@@ -2002,8 +2189,8 @@ export default function CalendarPage() {
       return;
     }
 
-    if (doctorCalendars.length > 0 && !createDoctorCalendarId) {
-      setCreateError("Please select a doctor calendar.");
+    if (doctorCalendars.length > 0 && selectedDoctorIds.length === 0) {
+      setCreateError("Please select at least one doctor.");
       return;
     }
 
@@ -2038,79 +2225,170 @@ export default function CalendarPage() {
     try {
       setSavingCreate(true);
 
-      const service = serviceOptions.find(
-        (option) => option.id === selectedServiceId,
-      );
-      const serviceName = service?.name ?? "";
-      const baseReason = serviceName || draftTitle || "Appointment";
-      const selectedCalendar = doctorCalendars.find(
-        (calendar) => calendar.id === createDoctorCalendarId,
-      );
-      const doctorName = selectedCalendar?.name?.trim() || "";
-      const doctorTag = doctorName ? ` [Doctor: ${doctorName}]` : "";
-      const categoryTag = appointmentCategory && appointmentCategory !== "No selection" 
-        ? ` [Category: ${appointmentCategory}]` 
-        : "";
-
-      const notesTag = draftDescription.trim() 
-        ? ` [Notes: ${draftDescription.trim()}]` 
-        : "";
-
-      const reason = bookingStatus
-        ? `${baseReason}${doctorTag}${categoryTag}${notesTag} [Status: ${bookingStatus}]`
-        : `${baseReason}${doctorTag}${categoryTag}${notesTag}`;
-
-      // Don't set provider_id to avoid foreign key issues - doctor info is in [Doctor:] tag
-      const { data, error } = await supabaseClient
-        .from("appointments")
-        .insert({
-          patient_id: createPatientId,
-          start_time: startIso,
-          end_time: endIso,
-          reason,
-          title: draftTitle || baseReason || null,
-          notes: draftDescription.trim() || null,
-          location: draftLocation || null,
-          source: "manual",
-        })
-        .select(
-          "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone), provider:providers(id, name)",
-        )
-        .single();
-
-      if (error || !data) {
-        setCreateError(error?.message ?? "Failed to create appointment.");
-        setSavingCreate(false);
-        return;
-      }
-
-      const inserted = data as unknown as CalendarAppointment;
-
-      // Focus calendar on the booked date so the new appointment is visible
-      const insertedStart = new Date(inserted.start_time);
-      if (!Number.isNaN(insertedStart.getTime())) {
-        setSelectedDate(insertedStart);
-        setRangeEndDate(null);
-        setVisibleMonth(
-          new Date(
-            insertedStart.getFullYear(),
-            insertedStart.getMonth(),
-            1,
-          ),
-        );
-      }
-
-      void sendAppointmentConfirmationEmail(inserted);
-
-      setAppointments((prev) => {
-        const next = [...prev, inserted];
-        next.sort((a, b) => {
-          const aTime = new Date(a.start_time).getTime();
-          const bTime = new Date(b.start_time).getTime();
-          return aTime - bTime;
+      // Use multi-doctor/multi-service API if multiple doctors or services selected
+      const useMultiAPI = selectedDoctorIds.length > 0 || selectedServiceIds.length > 0;
+      
+      if (useMultiAPI) {
+        // Use new multi-appointment creation API
+        const providerIds = selectedDoctorIds.length > 0 
+          ? selectedDoctorIds 
+          : (createDoctorCalendarId ? [createDoctorCalendarId] : []);
+        
+        const serviceIds = selectedServiceIds.length > 0 
+          ? selectedServiceIds 
+          : (selectedServiceId ? [selectedServiceId] : []);
+        
+        const response = await fetch('/api/appointments/create-multi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            patientId: createPatientId,
+            providerIds,
+            serviceIds,
+            serviceQuantities,
+            startTime: startIso,
+            endTime: endIso,
+            location: draftLocation || null,
+            status: 'scheduled',
+            category: appointmentCategory && appointmentCategory !== 'No selection' ? appointmentCategory : null,
+            channel: bookingStatus || null,
+            notes: draftDescription.trim() || null
+          })
         });
-        return next;
-      });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          setCreateError(errorData.error || 'Failed to create appointment.');
+          setSavingCreate(false);
+          return;
+        }
+        
+        const result = await response.json();
+        const createdAppointments = result.appointments || [];
+        
+        // Focus calendar on the booked date
+        if (createdAppointments.length > 0) {
+          const firstAppt = createdAppointments[0];
+          const insertedStart = new Date(firstAppt.start_time);
+          if (!Number.isNaN(insertedStart.getTime())) {
+            setSelectedDate(insertedStart);
+            setRangeEndDate(null);
+            setVisibleMonth(
+              new Date(
+                insertedStart.getFullYear(),
+                insertedStart.getMonth(),
+                1,
+              ),
+            );
+          }
+          
+          // Send confirmation email for first appointment
+          const { data: fullApptData } = await supabaseClient
+            .from("appointments")
+            .select(
+              "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone), provider:providers(id, name)",
+            )
+            .eq('id', firstAppt.id)
+            .single();
+          
+          if (fullApptData) {
+            void sendAppointmentConfirmationEmail(fullApptData as unknown as CalendarAppointment);
+          }
+        }
+        
+        // Reload appointments to show new ones
+        const dateStr = formatSwissYmd(startLocal);
+        const { start: fromIso, end: toIso } = getSwissDayRange(dateStr);
+        const { data: refreshedData } = await supabaseClient
+          .from("appointments")
+          .select(
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone), provider:providers(id, name)",
+          )
+          .neq("status", "cancelled")
+          .gte("start_time", fromIso)
+          .lte("start_time", toIso)
+          .order("start_time", { ascending: true });
+        
+        if (refreshedData) {
+          setAppointments(refreshedData as unknown as CalendarAppointment[]);
+        }
+        
+      } else {
+        // Fallback to old single-doctor/single-service logic
+        const service = serviceOptions.find(
+          (option) => option.id === selectedServiceId,
+        );
+        const serviceName = service?.name ?? "";
+        const baseReason = serviceName || draftTitle || "Appointment";
+        const selectedCalendar = doctorCalendars.find(
+          (calendar) => calendar.id === createDoctorCalendarId,
+        );
+        const doctorName = selectedCalendar?.name?.trim() || "";
+        const doctorTag = doctorName ? ` [Doctor: ${doctorName}]` : "";
+        const categoryTag = appointmentCategory && appointmentCategory !== "No selection" 
+          ? ` [Category: ${appointmentCategory}]` 
+          : "";
+
+        const notesTag = draftDescription.trim() 
+          ? ` [Notes: ${draftDescription.trim()}]` 
+          : "";
+
+        const reason = bookingStatus
+          ? `${baseReason}${doctorTag}${categoryTag}${notesTag} [Status: ${bookingStatus}]`
+          : `${baseReason}${doctorTag}${categoryTag}${notesTag}`;
+
+        // Don't set provider_id to avoid foreign key issues - doctor info is in [Doctor:] tag
+        const { data, error } = await supabaseClient
+          .from("appointments")
+          .insert({
+            patient_id: createPatientId,
+            start_time: startIso,
+            end_time: endIso,
+            reason,
+            title: draftTitle || baseReason || null,
+            notes: draftDescription.trim() || null,
+            location: draftLocation || null,
+            source: "manual",
+          })
+          .select(
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone), provider:providers(id, name)",
+          )
+          .single();
+
+        if (error || !data) {
+          setCreateError(error?.message ?? "Failed to create appointment.");
+          setSavingCreate(false);
+          return;
+        }
+
+        const inserted = data as unknown as CalendarAppointment;
+
+        // Focus calendar on the booked date so the new appointment is visible
+        const insertedStart = new Date(inserted.start_time);
+        if (!Number.isNaN(insertedStart.getTime())) {
+          setSelectedDate(insertedStart);
+          setRangeEndDate(null);
+          setVisibleMonth(
+            new Date(
+              insertedStart.getFullYear(),
+              insertedStart.getMonth(),
+              1,
+            ),
+          );
+        }
+
+        void sendAppointmentConfirmationEmail(inserted);
+
+        setAppointments((prev) => {
+          const next = [...prev, inserted];
+          next.sort((a, b) => {
+            const aTime = new Date(a.start_time).getTime();
+            const bTime = new Date(b.start_time).getTime();
+            return aTime - bTime;
+          });
+          return next;
+        });
+      }
 
       setSavingCreate(false);
       setCreateModalOpen(false);
@@ -2135,6 +2413,11 @@ export default function CalendarPage() {
       setDurationSearch("");
       setCreateError(null);
       setCreateDoctorCalendarId("");
+      // Reset multi-select state
+      setSelectedDoctorIds([]);
+      setSelectedServiceIds([]);
+      setServiceQuantities({});
+      setDoctorConflicts({});
     } catch {
       setCreateError("Failed to create appointment.");
       setSavingCreate(false);
@@ -2216,6 +2499,12 @@ export default function CalendarPage() {
     if (matchedService) {
       setSelectedServiceId(matchedService.id);
       setServiceSearch(matchedService.name);
+      // Initialize multi-select with the matched service
+      setSelectedServiceIds([matchedService.id]);
+      setServiceQuantities({ [matchedService.id]: 1 });
+    } else {
+      setSelectedServiceIds([]);
+      setServiceQuantities({});
     }
 
     setBookingStatus(statusLabel ?? "");
@@ -2235,6 +2524,19 @@ export default function CalendarPage() {
         setDurationSearch(String(diffMinutes));
       }
     }
+    
+    // Initialize multi-select doctors
+    if (copiedAppointment.provider_id) {
+      setSelectedDoctorIds([copiedAppointment.provider_id]);
+    } else {
+      const defaultCalendar = doctorCalendars.find((calendar) => calendar.selected) || doctorCalendars[0] || null;
+      if (defaultCalendar?.id) {
+        setSelectedDoctorIds([defaultCalendar.id]);
+      } else {
+        setSelectedDoctorIds([]);
+      }
+    }
+    setDoctorConflicts({});
 
     // Open the create modal
     setCreateModalOpen(true);
@@ -2446,6 +2748,16 @@ export default function CalendarPage() {
                 null;
               const defaultCalId = defaultCalendar?.id ?? "";
               setCreateDoctorCalendarId(defaultCalId);
+              // Initialize multi-select with default doctor
+              if (defaultCalId) {
+                setSelectedDoctorIds([defaultCalId]);
+              } else {
+                setSelectedDoctorIds([]);
+              }
+              // Reset multi-select state
+              setSelectedServiceIds([]);
+              setServiceQuantities({});
+              setDoctorConflicts({});
               // Apply doctor-specific scheduling defaults
               const docConfig = doctorSchedulingSettings.find((s) => s.provider_id === defaultCalId);
               if (docConfig) {
@@ -3821,40 +4133,111 @@ export default function CalendarPage() {
                     placeholder="Add title"
                   />
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Doctor calendar</p>
-                  <select
-                    value={createDoctorCalendarId}
-                    onChange={(event) => {
-                      const newId = event.target.value;
-                      setCreateDoctorCalendarId(newId);
-                      // Apply doctor-specific scheduling defaults
-                      const config = doctorSchedulingSettings.find((s) => s.provider_id === newId);
-                      if (config) {
-                        setConsultationDuration(config.default_duration_minutes);
-                        const durOpt = CONSULTATION_DURATION_OPTIONS.find((o) => o.value === config.default_duration_minutes);
-                        setDurationSearch(durOpt ? durOpt.label : `${config.default_duration_minutes} minutes`);
-                      } else {
-                        setConsultationDuration(15);
-                        setDurationSearch("15 minutes");
-                      }
-                      // Reset time selection since interval may have changed
-                      setDraftTime("");
-                      setTimeSearch("");
-                    }}
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  >
-                    <option value="">
-                      {doctorCalendars.length === 0
-                        ? "No doctor calendars available"
-                        : "Select doctor"}
-                    </option>
-                    {doctorCalendars.map((calendar) => (
-                      <option key={calendar.id} value={calendar.id}>
-                        {calendar.name}
-                      </option>
-                    ))}
-                  </select>
+                <div className="space-y-1" data-doctor-dropdown>
+                  <p className="text-[11px] font-medium text-slate-600">Doctors *</p>
+                  <div className="relative">
+                    <div
+                      className="min-h-[32px] w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs hover:border-sky-500 cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeAllCreateDropdowns("doctor");
+                        setCreateDoctorCalendarId(createDoctorCalendarId === "open" ? "" : "open");
+                      }}
+                    >
+                      <div className="flex flex-wrap gap-1 pointer-events-none">
+                        {selectedDoctorIds.map((doctorId) => {
+                          const doctor = doctorCalendars.find(c => c.id === doctorId);
+                          const conflict = doctorConflicts[doctorId];
+                          const hasConflict = conflict?.hasConflict ?? false;
+                          if (!doctor) return null;
+                          return (
+                            <span
+                              key={doctorId}
+                              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium pointer-events-auto ${hasConflict ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {hasConflict && (
+                                <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              {doctor.name}
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleDoctorSelection(doctorId);
+                                }}
+                                className="hover:text-slate-600 cursor-pointer"
+                              >
+                                <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </span>
+                            </span>
+                          );
+                        })}
+                        {selectedDoctorIds.length === 0 && (
+                          <span className="text-slate-400">Select doctors...</span>
+                        )}
+                      </div>
+                    </div>
+                    {createDoctorCalendarId === "open" && (
+                      <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-xs shadow-lg">
+                        {doctorCalendars.length === 0 ? (
+                          <div className="px-3 py-2 text-slate-500">No doctors available</div>
+                        ) : (
+                          doctorCalendars.map((calendar) => {
+                            const isSelected = selectedDoctorIds.includes(calendar.id);
+                            const conflict = doctorConflicts[calendar.id];
+                            const hasConflict = conflict?.hasConflict ?? false;
+                            return (
+                              <button
+                                key={calendar.id}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleDoctorSelection(calendar.id);
+                                }}
+                                className={`w-full px-3 py-1.5 text-left hover:bg-sky-50 ${isSelected ? "bg-sky-50" : ""}`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {}}
+                                      className="h-3 w-3 rounded border-slate-300 text-sky-600"
+                                    />
+                                    <span className={isSelected ? "text-sky-700 font-medium" : "text-slate-700"}>
+                                      {calendar.name}
+                                    </span>
+                                  </div>
+                                  {hasConflict && (
+                                    <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-800">
+                                      <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                      </svg>
+                                      CONFLICT
+                                    </span>
+                                  )}
+                                </div>
+                                {hasConflict && conflict.conflictingAppointments.length > 0 && (
+                                  <div className="mt-1 ml-5 text-[10px] text-amber-700">
+                                    {conflict.conflictingAppointments.slice(0, 2).map((appt, idx) => (
+                                      <div key={idx}>
+                                        {formatSwissTimeRange(new Date(appt.startTime), new Date(appt.endTime), 15)} - {appt.patientName}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {selectedDoctorIds.length === 0 && (
+                    <p className="text-[10px] text-rose-600">Please select at least one doctor</p>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium text-slate-600">Date &amp; time</p>
@@ -3917,57 +4300,121 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Service</p>
+                  <p className="text-[11px] font-medium text-slate-600">Services</p>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={serviceSearch}
-                      onChange={(e) => {
-                        setServiceSearch(e.target.value);
-                        setServiceDropdownOpen(true);
-                        if (!e.target.value.trim()) {
-                          setSelectedServiceId("");
-                        }
-                      }}
-                      onFocus={() => { closeAllCreateDropdowns("service"); setServiceDropdownOpen(true); }}
-                      placeholder={serviceOptionsLoading ? "Loading..." : "Search service..."}
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                    {selectedServiceId && (
-                      <button
-                        type="button"
-                        onClick={() => { setSelectedServiceId(""); setServiceSearch(""); }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                      >
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
-                    )}
-                    {serviceDropdownOpen && filteredServiceOptions.length > 0 && (
-                      <div className="absolute z-20 mt-1 max-h-40 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-xs shadow-lg">
-                        {filteredServiceOptions.map((opt) => (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedServiceId(opt.id);
-                              setServiceSearch(opt.name);
-                              setServiceDropdownOpen(false);
-                              // Auto-set consultation duration from service if it has one
-                              if (opt.duration_minutes !== null && opt.duration_minutes !== undefined) {
-                                setConsultationDuration(opt.duration_minutes);
-                                const durOpt = CONSULTATION_DURATION_OPTIONS.find((o) => o.value === opt.duration_minutes);
-                                setDurationSearch(durOpt ? durOpt.label : `${opt.duration_minutes} minutes`);
+                    <div className="min-h-[32px] w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500">
+                      <div className="flex flex-wrap gap-1">
+                        {selectedServiceIds.map((serviceId) => {
+                          const service = serviceOptions.find(s => s.id === serviceId);
+                          const quantity = serviceQuantities[serviceId] || 1;
+                          if (!service) return null;
+                          return (
+                            <span
+                              key={serviceId}
+                              className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800"
+                            >
+                              {service.name}
+                              {quantity > 1 && <span className="text-emerald-600">×{quantity}</span>}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleServiceSelection(serviceId);
+                                }}
+                                className="hover:text-emerald-600"
+                              >
+                                <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </span>
+                          );
+                        })}
+                        <input
+                          type="text"
+                          value={serviceSearch}
+                          onChange={(e) => {
+                            setServiceSearch(e.target.value);
+                            setServiceDropdownOpen(true);
+                          }}
+                          onFocus={() => { closeAllCreateDropdowns("service"); setServiceDropdownOpen(true); }}
+                          onBlur={(e) => {
+                            // Delay closing to allow clicks on dropdown items
+                            setTimeout(() => {
+                              const currentTarget = e.currentTarget;
+                              if (currentTarget && document.activeElement && !currentTarget.contains(document.activeElement)) {
+                                setServiceDropdownOpen(false);
                               }
-                            }}
-                            className={`w-full px-3 py-1.5 text-left hover:bg-sky-50 ${selectedServiceId === opt.id ? "bg-sky-50 text-sky-700" : "text-slate-700"}`}
-                          >
-                            {opt.name}
-                          </button>
-                        ))}
+                            }, 200);
+                          }}
+                          placeholder={selectedServiceIds.length === 0 ? (serviceOptionsLoading ? "Loading..." : "Select services...") : ""}
+                          className="flex-1 min-w-[120px] bg-transparent outline-none placeholder:text-slate-400"
+                        />
+                      </div>
+                    </div>
+                    {serviceDropdownOpen && filteredServiceOptions.length > 0 && (
+                      <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-xs shadow-lg">
+                        {filteredServiceOptions.map((service) => {
+                          const isSelected = selectedServiceIds.includes(service.id);
+                          const quantity = serviceQuantities[service.id] || 1;
+                          return (
+                            <div key={service.id} className={`hover:bg-sky-50 ${isSelected ? "bg-sky-50" : ""}`}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleServiceSelection(service.id);
+                                  // Don't close dropdown - keep it open for multi-select
+                                }}
+                                className="w-full px-3 py-1.5 text-left"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {}}
+                                      className="h-3 w-3 rounded border-slate-300 text-sky-600"
+                                    />
+                                    <span className={isSelected ? "text-sky-700 font-medium" : "text-slate-700"}>
+                                      {service.name}
+                                      {service.duration_minutes && (
+                                        <span className="ml-1.5 text-[10px] text-slate-500">
+                                          ({service.duration_minutes} min)
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                  {isSelected && (
+                                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                      <label className="text-[10px] text-slate-600">Qty:</label>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        value={quantity}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          handleServiceQuantityChange(service.id, parseInt(e.target.value) || 1);
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-12 rounded border border-slate-300 px-1.5 py-0.5 text-[10px] focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
-                  {serviceOptionsError && <p className="text-[10px] text-red-600">{serviceOptionsError}</p>}
+                  {selectedServiceIds.length > 0 && (
+                    <div className="rounded-md bg-slate-50 px-2 py-1 text-[10px]">
+                      <span className="font-medium text-slate-700">Total Duration:</span>
+                      <span className="ml-1.5 text-slate-900">{calculateTotalDuration(selectedServiceIds, serviceQuantities, serviceOptions)} min</span>
+                    </div>
+                  )}
+                  {serviceOptionsError && <p className="text-[10px] text-rose-600">{serviceOptionsError}</p>}
                 </div>
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium text-slate-600">Status</p>
