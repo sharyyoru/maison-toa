@@ -78,9 +78,15 @@ function generateCancellationEmail(
   return brandedEmail(body);
 }
 
+function parseLangFromReason(reason: string | null): string {
+  if (!reason) return "fr";
+  const match = reason.match(/\[Lang:\s*(fr|en)\s*\]/i);
+  return match ? match[1].toLowerCase() : "fr";
+}
+
 export async function POST(request: Request) {
   try {
-    const { id, language = "en" } = await request.json();
+    const { id } = await request.json();
 
     if (!id) {
       return NextResponse.json({ error: "Missing appointment id" }, { status: 400 });
@@ -96,6 +102,8 @@ export async function POST(request: Request) {
     if (apptError || !appt) {
       return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
     }
+
+    const language = parseLangFromReason(appt.reason ?? null);
 
     if (appt.status === "cancelled") {
       return NextResponse.json({ error: "Appointment is already cancelled" }, { status: 410 });

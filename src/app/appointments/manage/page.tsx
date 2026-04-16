@@ -120,7 +120,7 @@ function ManageContent() {
       const res = await fetch("/api/public/appointment/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: appointmentId, language }),
+        body: JSON.stringify({ id: appointmentId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to cancel");
@@ -142,7 +142,7 @@ function ManageContent() {
       const res = await fetch("/api/public/appointment/reschedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: appointmentId, newAppointmentDate, language }),
+        body: JSON.stringify({ id: appointmentId, newAppointmentDate }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to reschedule");

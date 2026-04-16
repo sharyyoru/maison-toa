@@ -177,8 +177,14 @@ export async function DELETE(request: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
+function parseLangFromReason(reason: string | null): string {
+  if (!reason) return "fr";
+  const match = reason.match(/\[Lang:\s*(fr|en)\s*\]/i);
+  return match ? match[1].toLowerCase() : "fr";
+}
+
 export async function PUT(request: NextRequest) {
-  const { id, start_time, end_time, language = "fr" } = await request.json();
+  const { id, start_time, end_time } = await request.json();
 
   if (!id || !start_time) {
     return NextResponse.json({ error: "id and start_time are required" }, { status: 400 });
@@ -203,11 +209,12 @@ export async function PUT(request: NextRequest) {
   try {
     const { data: appt } = await supabase
       .from("appointments")
-      .select("patient_id")
+      .select("patient_id, reason")
       .eq("id", id)
       .single();
 
     if (appt?.patient_id) {
+      const language = parseLangFromReason(appt.reason ?? null);
       const { data: patient } = await supabase
         .from("patients")
         .select("last_name, email, gender")

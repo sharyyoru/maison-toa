@@ -432,8 +432,8 @@ export async function POST(request: Request) {
       console.log("Using provider:", providerId, "for doctor:", doctorName);
     }
 
-    // Build reason field - include [Doctor: Name] for calendar filtering
-    const reason = `${service}${notes ? ` - ${notes}` : ""} [Doctor: ${doctorName.replace("Dr. ", "")}] [Online Booking]`;
+    // Build reason field - include [Doctor: Name], [Online Booking], and [Lang: xx] for downstream use
+    const reason = `${service}${notes ? ` - ${notes}` : ""} [Doctor: ${doctorName.replace("Dr. ", "")}] [Online Booking] [Lang: ${language}]`;
 
     // Create the appointment
     const { data: appointment, error: appointmentError } = await supabase

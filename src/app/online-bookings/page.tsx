@@ -48,6 +48,7 @@ function parseReason(reason: string | null): { service: string; doctor: string; 
   let clean = reason
     .replace(/\s*\[Doctor:[^\]]*\]/gi, "")
     .replace(/\s*\[Online Booking\]/gi, "")
+    .replace(/\s*\[Lang:[^\]]*\]/gi, "")
     .trim();
 
   // Find if any treatment name appears in the string
@@ -109,7 +110,6 @@ export default function OnlineBookingsPage() {
   const [editDuration, setEditDuration] = useState(30);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [emailLanguage, setEmailLanguage] = useState<"fr" | "en">("fr");
 
 
   useEffect(() => {
@@ -236,7 +236,6 @@ export default function OnlineBookingsPage() {
           id: editingBooking.id,
           start_time: startLocal.toISOString(),
           end_time: endLocal.toISOString(),
-          language: emailLanguage,
         }),
       });
 
@@ -550,35 +549,6 @@ export default function OnlineBookingsPage() {
                     </option>
                   ))}
                 </select>
-              </div>
-            </div>
-
-            {/* Email language selector */}
-            <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="mb-2 text-xs font-medium text-slate-500 uppercase tracking-wide">
-                Notification email language
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setEmailLanguage("fr")}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium border transition-colors ${
-                    emailLanguage === "fr"
-                      ? "bg-slate-800 text-white border-slate-800"
-                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
-                  }`}
-                >
-                  🇫🇷 FR
-                </button>
-                <button
-                  onClick={() => setEmailLanguage("en")}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium border transition-colors ${
-                    emailLanguage === "en"
-                      ? "bg-slate-800 text-white border-slate-800"
-                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
-                  }`}
-                >
-                  🇬🇧 EN
-                </button>
               </div>
             </div>
 

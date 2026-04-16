@@ -42,6 +42,7 @@ function parseServiceFromReason(reason: string | null): string {
   return reason
     .replace(/\s*\[Doctor:[^\]]*\]/gi, "")
     .replace(/\s*\[Online Booking\]/gi, "")
+    .replace(/\s*\[Lang:[^\]]*\]/gi, "")
     .replace(/\s*-\s*$/, "")
     .trim();
 }
@@ -102,9 +103,15 @@ function generateRescheduleEmail(
   return brandedEmail(body);
 }
 
+function parseLangFromReason(reason: string | null): string {
+  if (!reason) return "fr";
+  const match = reason.match(/\[Lang:\s*(fr|en)\s*\]/i);
+  return match ? match[1].toLowerCase() : "fr";
+}
+
 export async function POST(request: Request) {
   try {
-    const { id, newAppointmentDate, language = "en" } = await request.json();
+    const { id, newAppointmentDate } = await request.json();
 
     if (!id || !newAppointmentDate) {
       return NextResponse.json({ error: "Missing id or newAppointmentDate" }, { status: 400 });
@@ -124,6 +131,8 @@ export async function POST(request: Request) {
     if (appt.status === "cancelled") {
       return NextResponse.json({ error: "Cannot reschedule a cancelled appointment" }, { status: 410 });
     }
+
+    const language = parseLangFromReason(appt.reason ?? null);
 
     // Parse new date (ISO string from Swiss local time)
     const newStartDate = parseSwissDateTimeLocal(newAppointmentDate);

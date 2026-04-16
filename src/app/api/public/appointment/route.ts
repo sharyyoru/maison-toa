@@ -13,6 +13,7 @@ function parseServiceFromReason(reason: string | null): string {
   return reason
     .replace(/\s*\[Doctor:[^\]]*\]/gi, "")
     .replace(/\s*\[Online Booking\]/gi, "")
+    .replace(/\s*\[Lang:[^\]]*\]/gi, "")
     .replace(/\s*-\s*$/, "")
     .trim();
 }
