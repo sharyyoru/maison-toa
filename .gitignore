@@ -52,3 +52,5 @@ next-env.d.ts
 *.chm
 # Allow supabase SQL files
 !supabase/**/*.sql
+
+.claude

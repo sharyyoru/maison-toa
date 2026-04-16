@@ -71,3 +71,49 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+
+  if (!id) {
+    return NextResponse.json({ error: "id is required" }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from("appointments")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error deleting booking:", error);
+    return NextResponse.json({ error: "Failed to delete booking" }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+export async function PUT(request: NextRequest) {
+  const { id, start_time, end_time } = await request.json();
+
+  if (!id || !start_time) {
+    return NextResponse.json({ error: "id and start_time are required" }, { status: 400 });
+  }
+
+  const updateData: { start_time: string; end_time?: string | null } = { start_time };
+  if (end_time !== undefined) {
+    updateData.end_time = end_time;
+  }
+
+  const { error } = await supabase
+    .from("appointments")
+    .update(updateData)
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error updating booking date/time:", error);
+    return NextResponse.json({ error: "Failed to update booking" }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
