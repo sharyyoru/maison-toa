@@ -57,7 +57,6 @@ export default function OnlineBookingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
-  const [statusFilter, setStatusFilter] = useState<"all" | BookingStatus>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -76,7 +75,6 @@ export default function OnlineBookingsPage() {
     try {
       const params = new URLSearchParams({
         page: String(page),
-        status: statusFilter,
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
       });
       const res = await fetch(`/api/online-bookings?${params}`);
@@ -89,7 +87,7 @@ export default function OnlineBookingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, debouncedSearch]);
+  }, [page, debouncedSearch]);
 
   useEffect(() => {
     fetchBookings();
@@ -128,18 +126,6 @@ export default function OnlineBookingsPage() {
           placeholder="Search by service or doctor…"
           className="h-9 w-64 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
         />
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setPage(1); }}
-          className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-        >
-          <option value="all">All Statuses</option>
-          <option value="scheduled">Pending</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="no_show">No Show</option>
-        </select>
         <span className="ml-auto text-sm text-slate-500">{total} booking{total !== 1 ? "s" : ""}</span>
       </div>
 
