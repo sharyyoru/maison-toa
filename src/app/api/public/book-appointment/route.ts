@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { formatSwissDateWithWeekday, formatSwissTimeAmPm, parseSwissDateTimeLocal } from "@/lib/swissTimezone";
-import { brandedEmail, infoRow, infoTable } from "@/utils/emailTemplate";
+import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -24,6 +24,8 @@ type BookingPayload = {
   doctorEmail: string;
   notes?: string;
   location?: string;
+  language?: string;
+  gender?: string;
 };
 
 async function sendEmail(to: string, subject: string, html: string) {
@@ -58,33 +60,128 @@ async function sendEmail(to: string, subject: string, html: string) {
   }
 }
 
-function formatDate(date: Date): string {
+function formatDate(date: Date, language = "en"): string {
+  if (language === "fr") {
+    return date.toLocaleDateString("fr-FR", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      timeZone: "Europe/Zurich",
+    });
+  }
   return formatSwissDateWithWeekday(date);
 }
 
-function formatTime(date: Date): string {
+function formatTime(date: Date, language = "en"): string {
+  if (language === "fr") {
+    return date.toLocaleTimeString("fr-FR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Europe/Zurich",
+    });
+  }
   return formatSwissTimeAmPm(date);
 }
 
+function getSalutation(
+  lastName: string,
+  gender: string | undefined,
+  language: string
+): string {
+  const isFrench = language === "fr";
+
+  if (gender === "female") {
+    return isFrench ? `Chère Madame ${lastName}` : `Dear Ms. ${lastName}`;
+  } else if (gender === "male") {
+    return isFrench ? `Cher Monsieur ${lastName}` : `Dear Mr. ${lastName}`;
+  }
+  // Fallback when gender is unknown or "other"
+  return isFrench ? "Madame, Monsieur," : "Dear Sir or Madam,";
+}
+
 function generatePatientConfirmationEmail(
-  patientName: string,
+  lastName: string,
+  gender: string | undefined,
   doctorName: string,
   appointmentDate: Date,
   service: string,
-  location: string | null
+  location: string | null,
+  language: string,
+  appointmentId?: string
 ): string {
+  const isFrench = language === "fr";
+  const salutation = getSalutation(lastName, gender, language);
+
+  // Translations
+  const t = {
+    en: {
+      subject: "Your appointment at Maison Tóā",
+      confirmed: "We are pleased to confirm your appointment at Maison Tóā.",
+      yourAppointment: "Your appointment",
+      date: "Date",
+      time: "Time",
+      treatment: "Treatment",
+      practitioner: "Practitioner",
+      manageAppointment: "You may manage your appointment at any time.",
+      reschedule: "Reschedule my appointment",
+      cancel: "Cancel my appointment",
+      closing: "We look forward to welcoming you.",
+      clinicAddress: "Voie du Chariot 6<br>1003 Lausanne",
+    },
+    fr: {
+      subject: "Votre rendez-vous au sein de Maison Tóā",
+      confirmed: "Nous avons le plaisir de vous confirmer votre rendez-vous au sein de Maison Tóā.",
+      yourAppointment: "Votre rendez-vous",
+      date: "Date",
+      time: "Heure",
+      treatment: "Soin",
+      practitioner: "Praticien",
+      manageAppointment: "Vous avez la possibilité de gérer votre rendez-vous à tout moment.",
+      reschedule: "Modifier mon rendez-vous",
+      cancel: "Annuler mon rendez-vous",
+      closing: "Dans l'attente du plaisir de vous accueillir, nous vous prions d'agréer nos salutations distinguées.",
+      clinicAddress: "Voie du Chariot 6<br>1003 Lausanne",
+    },
+  };
+
+  const texts = isFrench ? t.fr : t.en;
+
+  // Build management URL (placeholder - will be implemented when reschedule/cancel pages exist)
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
+  const manageUrl = appointmentId
+    ? `${appUrl}/appointments/manage?id=${appointmentId}`
+    : `${appUrl}/book-appointment`;
+
   const rows =
-    infoRow("Doctor", doctorName) +
-    infoRow("Date", formatDate(appointmentDate)) +
-    infoRow("Time", formatTime(appointmentDate)) +
-    infoRow("Service", service) +
-    (location ? infoRow("Location", location) : "");
+    infoRow(texts.practitioner, doctorName) +
+    infoRow(texts.date, formatDate(appointmentDate, language)) +
+    infoRow(texts.time, formatTime(appointmentDate, language)) +
+    infoRow(texts.treatment, service) +
+    (location ? infoRow(isFrench ? "Lieu" : "Location", location) : "");
 
   const body = `
-    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">Dear ${patientName},</p>
-    <p style="margin: 0 0 8px 0; color: #4a4742;">Your appointment has been confirmed. Please find the details below.</p>
+    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">${salutation}</p>
+    <p style="margin: 0 0 20px 0; color: #4a4742;">${texts.confirmed}</p>
+    <p style="margin: 0 0 8px 0; color: #8a8578; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;">${texts.yourAppointment}</p>
     ${infoTable(rows)}
-    <p style="margin: 0; color: #4a4742;">Should you need to reschedule or cancel, please contact us at least 24 hours in advance.</p>
+    <p style="margin: 16px 0; color: #4a4742;">${texts.manageAppointment}</p>
+    <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin: 24px 0;">
+      <tr>
+        <td style="padding: 0 8px 8px 0;">
+          <a href="${manageUrl}&action=reschedule" style="display: block; background-color: #1a1a18; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500;">${texts.reschedule}</a>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 0 8px 0 0;">
+          <a href="${manageUrl}&action=cancel" style="display: block; background-color: #f5f3ef; color: #1a1a18; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500; border: 1px solid #e8e3db;">${texts.cancel}</a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin: 24px 0 0 0; color: #4a4742;">${texts.closing}</p>
+    <p style="margin: 8px 0 0 0; color: #1a1a18; font-weight: 500;">Maison Tóā</p>
+    <img src="${LOGO_URL}" alt="Maison Tóā" width="80" style="display: block; width: 80px; height: auto; margin: 16px 0 0 0;">
   `;
 
   return brandedEmail(body);
@@ -141,6 +238,7 @@ export async function POST(request: Request) {
       doctorEmail,
       notes,
       location,
+      language = "en",
     } = body;
 
     // Validate required fields
@@ -268,17 +366,23 @@ export async function POST(request: Request) {
 
     console.log(`[Booking] ALLOWED: ${doctorAppointments.length} < ${maxCapacity}`);
 
-    // Check if patient exists or create new
+    // Check if patient exists or create new — use ilike + limit(1) to handle
+    // case-insensitive matching and gracefully tolerate any pre-existing duplicates.
     let patientId: string;
-    const { data: existingPatient } = await supabase
+    let patientGender: string | undefined;
+    const { data: existingPatients } = await supabase
       .from("patients")
-      .select("id")
-      .eq("email", email.toLowerCase())
-      .single();
+      .select("id, gender")
+      .ilike("email", email)
+      .limit(1);
+
+    const existingPatient = existingPatients?.[0] ?? null;
 
     let isNewPatient = false;
     if (existingPatient) {
       patientId = existingPatient.id;
+      patientGender = existingPatient.gender ?? undefined;
+      console.log(`[Booking] Found existing patient: ${patientId}`);
     } else {
       // Create new patient
       const { data: newPatient, error: patientError } = await supabase
@@ -380,19 +484,22 @@ export async function POST(request: Request) {
     console.log("Patient email:", email);
     console.log("Doctor email:", doctorEmail);
     
+    const emailSubject = language === "fr"
+      ? `Votre rendez-vous au sein de Maison Tóā`
+      : `Your appointment at Maison Tóā`;
+
     try {
       const patientEmailHtml = generatePatientConfirmationEmail(
-        patientName,
+        lastName,
+        patientGender,
         doctorName,
         appointmentDateObj,
         service,
-        location || null
+        location || null,
+        language,
+        appointment.id
       );
-      await sendEmail(
-        email,
-        `Appointment Confirmed - ${formatDate(appointmentDateObj)} at ${formatTime(appointmentDateObj)}`,
-        patientEmailHtml
-      );
+      await sendEmail(email, emailSubject, patientEmailHtml);
       console.log("✓ Patient confirmation email sent successfully to:", email);
     } catch (err) {
       console.error("✗ Error sending patient email:", err);

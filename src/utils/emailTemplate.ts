@@ -1,4 +1,4 @@
-const LOGO_URL =
+export const LOGO_URL =
   "https://cdn.jsdelivr.net/gh/sharyyoru/maison-toa@main/public/logos/maisontoa-logo.png";
 
 const SIGNATURE = `
