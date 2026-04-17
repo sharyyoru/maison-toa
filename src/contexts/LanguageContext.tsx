@@ -181,8 +181,11 @@ const translations: Record<Language, Record<string, string>> = {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+type Overrides = Record<Language, Record<string, string>>;
+
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>("en");
+  const [overrides, setOverrides] = useState<Overrides>({ en: {}, fr: {} });
 
   useEffect(() => {
     const saved = localStorage.getItem("booking-language") as Language;
@@ -191,13 +194,27 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  useEffect(() => {
+    fetch("/api/settings/content-translations")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.translations && typeof data.translations === "object") {
+          setOverrides({
+            en: data.translations.en ?? {},
+            fr: data.translations.fr ?? {},
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
     localStorage.setItem("booking-language", lang);
   };
 
   const t = (key: string): string => {
-    return translations[language][key] || key;
+    return overrides[language][key] ?? translations[language][key] ?? key;
   };
 
   return (
