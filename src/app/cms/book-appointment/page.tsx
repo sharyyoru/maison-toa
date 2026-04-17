@@ -1,10 +1,32 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { PageBuilder } from "@/components/PageBuilder";
+import { 
+  PageConfig, 
+  BookingPageId,
+  DEFAULT_BOOKING_PAGES,
+  BOOKING_PAGE_LIST 
+} from "@/components/PageBuilder/types";
+import { 
+  Paintbrush, 
+  Code, 
+  ArrowLeft, 
+  ChevronDown,
+  Home,
+  HelpCircle,
+  LayoutGrid,
+  List,
+  FileText,
+  ClipboardCheck,
+  CheckCircle,
+} from "lucide-react";
+import Link from "next/link";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type Language = "en" | "fr";
+type EditorMode = "visual" | "text";
 
 const DEFAULT_TRANSLATIONS: Record<Language, Record<string, string>> = {
   en: {
@@ -233,8 +255,29 @@ function SectionCard({ children }: { children: React.ReactNode }) {
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
+// Icon mapping for page list
+const PAGE_ICONS: Record<string, React.ReactNode> = {
+  Home: <Home className="w-4 h-4" />,
+  HelpCircle: <HelpCircle className="w-4 h-4" />,
+  LayoutGrid: <LayoutGrid className="w-4 h-4" />,
+  List: <List className="w-4 h-4" />,
+  FileText: <FileText className="w-4 h-4" />,
+  ClipboardCheck: <ClipboardCheck className="w-4 h-4" />,
+  CheckCircle: <CheckCircle className="w-4 h-4" />,
+};
+
 export default function BookAppointmentCMSPage() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [editorMode, setEditorMode] = useState<EditorMode>("visual");
+
+  // ── Page Builder state ───────────────────────────────────────────────────
+  const [selectedPageId, setSelectedPageId] = useState<BookingPageId>("landing");
+  const [allPageConfigs, setAllPageConfigs] = useState<Record<BookingPageId, PageConfig>>(DEFAULT_BOOKING_PAGES);
+  const [pageConfigLoaded, setPageConfigLoaded] = useState(false);
+  const [pageDropdownOpen, setPageDropdownOpen] = useState(false);
+
+  // Get current page config
+  const currentPageConfig = allPageConfigs[selectedPageId];
 
   // ── Content editor state ──────────────────────────────────────────────────
   const [contentLang, setContentLang] = useState<Language>("en");
@@ -266,11 +309,20 @@ export default function BookAppointmentCMSPage() {
           fr: { ...DEFAULT_TRANSLATIONS.fr },
         });
       }
+      // Load all page configs
+      if (data.bookingPages && typeof data.bookingPages === "object") {
+        setAllPageConfigs((prev) => ({
+          ...prev,
+          ...data.bookingPages,
+        }));
+      }
+      setPageConfigLoaded(true);
     } catch {
       setContentDrafts({
         en: { ...DEFAULT_TRANSLATIONS.en },
         fr: { ...DEFAULT_TRANSLATIONS.fr },
       });
+      setPageConfigLoaded(true);
     } finally {
       setContentLoaded(true);
     }
@@ -279,6 +331,31 @@ export default function BookAppointmentCMSPage() {
   useEffect(() => {
     fetchContent();
   }, [fetchContent]);
+
+  // ── Page Config save ─────────────────────────────────────────────────────
+  const savePageConfig = async (config: PageConfig) => {
+    setContentSaving(true);
+    try {
+      // Update local state
+      const updatedPages = {
+        ...allPageConfigs,
+        [selectedPageId]: config,
+      };
+      
+      const res = await fetch("/api/settings/content-translations", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingPages: updatedPages }),
+      });
+      if (!res.ok) throw new Error();
+      setAllPageConfigs(updatedPages);
+      showToast(`${config.name} saved successfully!`);
+    } catch {
+      showToast("Failed to save page layout", false);
+    } finally {
+      setContentSaving(false);
+    }
+  };
 
   // ── Content save ──────────────────────────────────────────────────────────
   const saveContent = async () => {
@@ -316,6 +393,131 @@ export default function BookAppointmentCMSPage() {
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
+  
+  // Show visual page builder
+  if (editorMode === "visual") {
+    if (!pageConfigLoaded) {
+      return (
+        <div className="h-screen flex items-center justify-center bg-slate-100">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900" />
+        </div>
+      );
+    }
+
+    return (
+      <div className="h-screen flex flex-col">
+        {/* Toast */}
+        {toast && (
+          <div
+            className={`fixed top-20 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg text-sm font-medium transition-all ${
+              toast.ok ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+            }`}
+          >
+            {toast.msg}
+          </div>
+        )}
+
+        {/* Mode Toggle Header */}
+        <div className="bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/cms"
+              className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="text-sm font-medium">Back to CMS</span>
+            </Link>
+            <div className="h-6 w-px bg-slate-200" />
+            
+            {/* Page Selector Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setPageDropdownOpen(!pageDropdownOpen)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                {PAGE_ICONS[BOOKING_PAGE_LIST.find(p => p.id === selectedPageId)?.icon || 'Home']}
+                <span className="text-sm font-semibold text-slate-700">
+                  {currentPageConfig?.name || 'Select Page'}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${pageDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {pageDropdownOpen && (
+                <div className="absolute top-full left-0 mt-1 w-72 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50">
+                  <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                    Booking Flow Pages
+                  </div>
+                  {BOOKING_PAGE_LIST.map((page) => (
+                    <button
+                      key={page.id}
+                      onClick={() => {
+                        setSelectedPageId(page.id);
+                        setPageDropdownOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50 transition-colors ${
+                        selectedPageId === page.id ? 'bg-blue-50 text-blue-700' : 'text-slate-700'
+                      }`}
+                    >
+                      <div className={`${selectedPageId === page.id ? 'text-blue-500' : 'text-slate-400'}`}>
+                        {PAGE_ICONS[page.icon]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{page.name}</div>
+                        <div className="text-xs text-slate-400 truncate">{page.path}</div>
+                      </div>
+                      {selectedPageId === page.id && (
+                        <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+              <button
+                onClick={() => setEditorMode("visual")}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all bg-white text-slate-900 shadow-sm"
+              >
+                <Paintbrush className="w-4 h-4" />
+                Visual
+              </button>
+              <button
+                onClick={() => setEditorMode("text")}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all text-slate-500 hover:text-slate-900"
+              >
+                <Code className="w-4 h-4" />
+                Text Editor
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Click outside to close dropdown */}
+        {pageDropdownOpen && (
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setPageDropdownOpen(false)}
+          />
+        )}
+
+        {/* Page Builder */}
+        <div className="flex-1 overflow-hidden">
+          <PageBuilder
+            key={selectedPageId}
+            initialConfig={currentPageConfig}
+            language={contentLang}
+            onLanguageChange={setContentLang}
+            onSave={savePageConfig}
+            isSaving={contentSaving}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Show text editor mode
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Toast */}
@@ -333,11 +535,31 @@ export default function BookAppointmentCMSPage() {
 
       <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">Book Appointment CMS</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Edit the text, labels, and buttons shown in the public booking flow.
-          </p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Book Appointment CMS</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Edit the text, labels, and buttons shown in the public booking flow.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+              <button
+                onClick={() => setEditorMode("visual")}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all text-slate-500 hover:text-slate-900"
+              >
+                <Paintbrush className="w-4 h-4" />
+                Visual
+              </button>
+              <button
+                onClick={() => setEditorMode("text")}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all bg-slate-900 text-white shadow-sm"
+              >
+                <Code className="w-4 h-4" />
+                Text Editor
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-6">
