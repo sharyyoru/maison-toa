@@ -13,96 +13,73 @@ type UserAvailability = {
   location: string;
 };
 
-// All locations map to "lausanne" and its variants in the database
-const LAUSANNE_VARIANTS = ["lausanne", "Lausanne", "Rhône", "rhone", "Champel", "champel", "Geneva", "geneva"];
-
-function getLausanneVariants(): string[] {
-  return LAUSANNE_VARIANTS;
-}
-
 /**
  * GET /api/public/doctor-availability
- * 
- * Fetches doctor availability from user_availability table
- * 
+ *
+ * Fetches doctor availability from user_availability table.
+ * Looks up the user directly by name from booking_doctors (via slug) or doctorName param.
+ *
  * Query params:
- * - doctorName: Doctor's full name (e.g., "Dr. Claire Balbo")
- * - location: Location name (e.g., "Rhône", "Lausanne")
+ * - doctorSlug: Doctor's URL slug (e.g., "claire-balbo") — preferred
+ * - doctorName: Doctor's full name fallback (e.g., "Claire Balbo")
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const doctorSlug = searchParams.get("doctorSlug");
     const doctorName = searchParams.get("doctorName");
-    
-    if (!doctorName) {
+
+    if (!doctorSlug && !doctorName) {
       return NextResponse.json(
-        { error: "doctorName parameter is required" },
+        { error: "doctorSlug or doctorName parameter is required" },
         { status: 400 }
       );
     }
-    
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // Clean doctor name (remove "Dr." prefix and extra spaces)
-    const cleanName = doctorName.replace(/^Dr\.\s*/i, "").trim();
-    
-    // First, try to find the provider by name
-    const { data: provider } = await supabase
-      .from("providers")
-      .select("id, name, email")
-      .or(`name.ilike.%${cleanName}%,name.ilike.%${cleanName.split(" ").join("%")}%`)
+
+    // Resolve the canonical name from booking_doctors when slug is provided
+    let canonicalName = doctorName || "";
+    if (doctorSlug) {
+      const { data: bookingDoctor } = await supabase
+        .from("booking_doctors")
+        .select("name")
+        .eq("slug", doctorSlug)
+        .single();
+      if (bookingDoctor?.name) {
+        // Strip "Dr." prefix for the users table lookup
+        canonicalName = bookingDoctor.name.replace(/^Dr\.\s*/i, "").trim();
+      }
+    } else if (doctorName) {
+      canonicalName = doctorName.replace(/^Dr\.\s*/i, "").trim();
+    }
+
+    if (!canonicalName) {
+      return NextResponse.json({ availability: {}, source: "not_found" });
+    }
+
+    // Search users table directly by full_name — no providers indirection
+    const { data: matchedUser } = await supabase
+      .from("users")
+      .select("id")
+      .ilike("full_name", `%${canonicalName}%`)
       .limit(1)
       .single();
-    
-    if (!provider) {
-      console.log(`[Doctor Availability] Provider not found for: ${doctorName}`);
-      return NextResponse.json({ availability: [], source: "not_found" });
+
+    if (!matchedUser) {
+      console.log(`[Doctor Availability] User not found for name: ${canonicalName}`);
+      return NextResponse.json({ availability: {}, source: "no_user" });
     }
-    
-    // Try to find a user with matching email or name
-    let userId: string | null = null;
-    
-    if (provider.email) {
-      const { data: userByEmail } = await supabase
-        .from("users")
-        .select("id")
-        .ilike("email", provider.email)
-        .limit(1)
-        .single();
-      
-      if (userByEmail) {
-        userId = userByEmail.id;
-      }
-    }
-    
-    // If no user found by email, try by name
-    if (!userId) {
-      const { data: userByName } = await supabase
-        .from("users")
-        .select("id")
-        .ilike("full_name", `%${cleanName}%`)
-        .limit(1)
-        .single();
-      
-      if (userByName) {
-        userId = userByName.id;
-      }
-    }
-    
-    if (!userId) {
-      console.log(`[Doctor Availability] User not found for provider: ${provider.name}`);
-      return NextResponse.json({ availability: [], source: "no_user" });
-    }
-    
-    // Fetch availability for this user (check all Lausanne location variants)
-    const locationVariants = getLausanneVariants();
+
+    const userId = matchedUser.id;
+
+    // Fetch all availability rows for this user (any location)
     const { data: availability, error } = await supabase
       .from("user_availability")
       .select("*")
       .eq("user_id", userId)
-      .in("location", locationVariants)
       .order("day_of_week", { ascending: true });
-    
+
     if (error) {
       console.error("[Doctor Availability] Error fetching availability:", error);
       return NextResponse.json(
@@ -110,24 +87,27 @@ export async function GET(request: NextRequest) {
         { status: 500 }
       );
     }
-    
-    // Transform to a more usable format
+
+    // Build a map: day_of_week → { start, end, available }
+    // Prefer "Lausanne" location entries; fall back to any other location
+    const lausanneEntries = (availability || []).filter(
+      (e: UserAvailability) => e.location.toLowerCase() === "lausanne"
+    );
+    const entriesToUse = lausanneEntries.length > 0 ? lausanneEntries : (availability || []);
+
     const availabilityMap: Record<number, { start: string; end: string; available: boolean }> = {};
-    
-    (availability || []).forEach((entry: UserAvailability) => {
-      if (entry.is_available) {
-        availabilityMap[entry.day_of_week] = {
-          start: entry.start_time.slice(0, 5), // HH:MM format
-          end: entry.end_time.slice(0, 5),
-          available: true,
-        };
-      }
+
+    entriesToUse.forEach((entry: UserAvailability) => {
+      availabilityMap[entry.day_of_week] = {
+        start: entry.start_time.slice(0, 5),
+        end: entry.end_time.slice(0, 5),
+        available: entry.is_available,
+      };
     });
-    
+
     return NextResponse.json({
       availability: availabilityMap,
       source: "database",
-      providerId: provider.id,
       userId,
     });
   } catch (error) {
