@@ -7,6 +7,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const ADMIN_NOTIFICATION_EMAIL = "ralf@mutant.ae";
+
 const mailgunApiKey = process.env.MAILGUN_API_KEY;
 const mailgunDomain = process.env.MAILGUN_DOMAIN;
 const mailgunFromEmail = process.env.MAILGUN_FROM_EMAIL;
@@ -141,6 +143,35 @@ export async function POST(request: Request) {
       } catch (err) {
         console.error("Failed to send cancellation email:", err);
       }
+    }
+
+    // Notify admin
+    try {
+      const patientName = patient
+        ? `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim()
+        : "Unknown patient";
+      const apptDateStr = new Date(appt.start_time).toLocaleString("en-GB", {
+        timeZone: "Europe/Zurich", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
+      });
+      const service = (appt.reason ?? "")
+        .replace(/\s*\[Doctor:[^\]]*\]/gi, "")
+        .replace(/\s*\[Online Booking\]/gi, "")
+        .replace(/\s*\[Lang:[^\]]*\]/gi, "")
+        .replace(/\s*-\s*$/, "")
+        .trim() || "-";
+      await sendEmail(
+        ADMIN_NOTIFICATION_EMAIL,
+        `[Cancellation] ${patientName} – ${service}`,
+        `<p>A patient has <strong>cancelled</strong> their appointment.</p>
+         <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
+           <tr><td><b>Patient:</b></td><td>${patientName}</td></tr>
+           <tr><td><b>Service:</b></td><td>${service}</td></tr>
+           <tr><td><b>Date:</b></td><td>${apptDateStr}</td></tr>
+           <tr><td><b>Location:</b></td><td>${appt.location ?? "-"}</td></tr>
+         </table>`
+      );
+    } catch (err) {
+      console.error("Failed to send admin cancellation notification:", err);
     }
 
     return NextResponse.json({ ok: true, message: "Appointment cancelled" });

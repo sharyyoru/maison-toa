@@ -8,6 +8,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const ADMIN_NOTIFICATION_EMAIL = "ralf@mutant.ae";
+
 const mailgunApiKey = process.env.MAILGUN_API_KEY;
 const mailgunDomain = process.env.MAILGUN_DOMAIN;
 const mailgunFromEmail = process.env.MAILGUN_FROM_EMAIL;
@@ -191,6 +193,31 @@ export async function POST(request: Request) {
       } catch (err) {
         console.error("Failed to send reschedule email:", err);
       }
+    }
+
+    // Notify admin
+    try {
+      const patientName = patient
+        ? `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim()
+        : "Unknown patient";
+      const service = parseServiceFromReason(appt.reason) || "-";
+      const newDateStr = newStartDate.toLocaleString("en-GB", {
+        timeZone: "Europe/Zurich", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
+      });
+      await sendEmail(
+        ADMIN_NOTIFICATION_EMAIL,
+        `[Reschedule] ${patientName} – ${service}`,
+        `<p>A patient has <strong>rescheduled</strong> their appointment.</p>
+         <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
+           <tr><td><b>Patient:</b></td><td>${patientName}</td></tr>
+           <tr><td><b>Service:</b></td><td>${service}</td></tr>
+           <tr><td><b>Practitioner:</b></td><td>${doctorName || "-"}</td></tr>
+           <tr><td><b>New Date:</b></td><td>${newDateStr}</td></tr>
+           <tr><td><b>Location:</b></td><td>${appt.location ?? "-"}</td></tr>
+         </table>`
+      );
+    } catch (err) {
+      console.error("Failed to send admin reschedule notification:", err);
     }
 
     return NextResponse.json({
