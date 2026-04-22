@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const ADMIN_NOTIFICATION_EMAIL = "ralf@mutant.ae";
+const ADMIN_NOTIFICATION_EMAIL = "louise.goerig@maisontoa.com.";
 
 const mailgunApiKey = process.env.MAILGUN_API_KEY;
 const mailgunDomain = process.env.MAILGUN_DOMAIN;
