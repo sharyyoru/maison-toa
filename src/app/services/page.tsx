@@ -10,7 +10,31 @@ type ServiceCategory = {
   name: string;
   description: string | null;
   sort_order: number;
+  color: string | null;
 };
+
+// Preset Tailwind color classes available for category badges.
+const CATEGORY_COLOR_PRESETS: { label: string; value: string }[] = [
+  { label: "Slate", value: "bg-slate-300/70" },
+  { label: "Gray", value: "bg-gray-300/70" },
+  { label: "Red", value: "bg-red-300/70" },
+  { label: "Orange", value: "bg-orange-300/70" },
+  { label: "Amber", value: "bg-amber-300/70" },
+  { label: "Yellow", value: "bg-yellow-300/70" },
+  { label: "Lime", value: "bg-lime-300/70" },
+  { label: "Green", value: "bg-green-300/70" },
+  { label: "Emerald", value: "bg-emerald-300/70" },
+  { label: "Teal", value: "bg-teal-300/70" },
+  { label: "Cyan", value: "bg-cyan-300/70" },
+  { label: "Sky", value: "bg-sky-300/70" },
+  { label: "Blue", value: "bg-blue-300/70" },
+  { label: "Indigo", value: "bg-indigo-300/70" },
+  { label: "Violet", value: "bg-violet-300/70" },
+  { label: "Purple", value: "bg-purple-300/70" },
+  { label: "Fuchsia", value: "bg-fuchsia-300/70" },
+  { label: "Pink", value: "bg-pink-300/70" },
+  { label: "Rose", value: "bg-rose-300/70" },
+];
 
 type Service = {
   id: string;
@@ -107,6 +131,7 @@ export default function ServicesPage() {
   );
   const [editCategoryName, setEditCategoryName] = useState("");
   const [editCategoryDescription, setEditCategoryDescription] = useState("");
+  const [editCategoryColor, setEditCategoryColor] = useState<string>("");
 
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [editServiceName, setEditServiceName] = useState("");
@@ -135,13 +160,9 @@ export default function ServicesPage() {
         setLoading(true);
         setError(null);
 
-        // Only load the "Treatment" category for now
-        const TREATMENT_CATEGORY_ID = "78c68bca-9219-487b-a671-892ef8e5e2ac";
-
         const { data: categoryData, error: categoryError } = await supabaseClient
           .from("service_categories")
-          .select("id, name, description, sort_order")
-          .eq("id", TREATMENT_CATEGORY_ID)
+          .select("id, name, description, sort_order, color")
           .order("sort_order", { ascending: true })
           .order("name", { ascending: true });
 
@@ -155,7 +176,13 @@ export default function ServicesPage() {
           return;
         }
 
-        const categoryRows = categoryData as ServiceCategory[];
+        const categoryRows = (categoryData as any[]).map((row) => ({
+          id: row.id as string,
+          name: row.name as string,
+          description: (row.description as string | null) ?? null,
+          sort_order: Number(row.sort_order ?? 0),
+          color: (row.color as string | null) ?? null,
+        })) as ServiceCategory[];
         setCategories(categoryRows);
 
         const { data: serviceData, error: serviceError } = await supabaseClient
@@ -163,7 +190,6 @@ export default function ServicesPage() {
           .select(
             "id, category_id, name, code, description, is_active, base_price, duration_minutes",
           )
-          .eq("category_id", TREATMENT_CATEGORY_ID)
           .order("created_at", { ascending: true });
 
         if (!isMounted) return;
@@ -223,25 +249,9 @@ export default function ServicesPage() {
         }
 
         const allGroupServices = groupServiceData as ServiceGroupService[];
-        
-        // Filter to only show groups that contain Treatment services
-        const treatmentServiceIds = new Set(serviceRows.map(s => s.id));
-        const groupsWithTreatmentServices = new Set(
-          allGroupServices
-            .filter(gs => treatmentServiceIds.has(gs.service_id))
-            .map(gs => gs.group_id)
-        );
 
-        const filteredGroups = (groupData as ServiceGroup[]).filter(g => 
-          groupsWithTreatmentServices.has(g.id)
-        );
-
-        const filteredGroupServices = allGroupServices.filter(gs => 
-          groupsWithTreatmentServices.has(gs.group_id) && treatmentServiceIds.has(gs.service_id)
-        );
-
-        setServiceGroups(filteredGroups);
-        setGroupServices(filteredGroupServices);
+        setServiceGroups(groupData as ServiceGroup[]);
+        setGroupServices(allGroupServices);
 
         if (!selectedCategoryId && categoryRows.length > 0) {
           setSelectedCategoryId(categoryRows[0].id);
@@ -287,7 +297,7 @@ export default function ServicesPage() {
           description: newCategoryDescription.trim() || null,
           sort_order: sortOrder,
         })
-        .select("id, name, description, sort_order")
+        .select("id, name, description, sort_order, color")
         .single();
 
       if (error || !data) {
@@ -528,12 +538,14 @@ export default function ServicesPage() {
     setEditingCategoryId(category.id);
     setEditCategoryName(category.name);
     setEditCategoryDescription(category.description ?? "");
+    setEditCategoryColor(category.color ?? "");
   }
 
   function handleCancelEditCategory() {
     setEditingCategoryId(null);
     setEditCategoryName("");
     setEditCategoryDescription("");
+    setEditCategoryColor("");
     setCategoryMessage(null);
   }
 
@@ -552,9 +564,10 @@ export default function ServicesPage() {
         .update({
           name: editCategoryName.trim(),
           description: editCategoryDescription.trim() || null,
+          color: editCategoryColor || null,
         })
         .eq("id", categoryId)
-        .select("id, name, description, sort_order")
+        .select("id, name, description, sort_order, color")
         .single();
 
       if (error || !data) {
@@ -575,6 +588,7 @@ export default function ServicesPage() {
       setEditingCategoryId(null);
       setEditCategoryName("");
       setEditCategoryDescription("");
+      setEditCategoryColor("");
     } catch {
       setCategoryMessage("Failed to update category.");
     } finally {
@@ -966,6 +980,28 @@ export default function ServicesPage() {
                                 rows={2}
                                 className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
                               />
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-1">Color</label>
+                                <div className="flex flex-wrap items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditCategoryColor("")}
+                                    title="No color"
+                                    className={`h-5 w-5 rounded-sm border ${editCategoryColor === "" ? "border-emerald-500 ring-2 ring-emerald-200" : "border-slate-300"} bg-white flex items-center justify-center`}
+                                  >
+                                    <span className="text-[10px] text-slate-400">ø</span>
+                                  </button>
+                                  {CATEGORY_COLOR_PRESETS.map((preset) => (
+                                    <button
+                                      key={preset.value}
+                                      type="button"
+                                      onClick={() => setEditCategoryColor(preset.value)}
+                                      title={preset.label}
+                                      className={`h-5 w-5 rounded-sm border ${editCategoryColor === preset.value ? "border-emerald-500 ring-2 ring-emerald-200" : "border-slate-200"} ${preset.value}`}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
                             </div>
                             <div className="flex flex-col items-end gap-1 text-[11px]">
                               <span className="text-slate-400">#{category.sort_order}</span>
@@ -1007,7 +1043,13 @@ export default function ServicesPage() {
                         className="flex items-center justify-between rounded-md bg-slate-50/70 px-2 py-1"
                       >
                         <div>
-                          <div className="font-medium text-slate-900">
+                          <div className="flex items-center gap-2 font-medium text-slate-900">
+                            {category.color ? (
+                              <span
+                                className={`inline-block h-3 w-3 rounded-sm border border-slate-200 ${category.color}`}
+                                title="Category color"
+                              />
+                            ) : null}
                             {category.name}
                           </div>
                           {category.description ? (

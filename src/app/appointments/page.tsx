@@ -59,6 +59,7 @@ type AppointmentPatient = {
   last_name: string | null;
   email: string | null;
   phone: string | null;
+  is_vip?: boolean | null;
 };
 
 type AppointmentPatientSuggestion = {
@@ -208,7 +209,7 @@ function getStatusIcon(status: string | null): string {
   return STATUS_ICONS[status] ?? "";
 }
 
-const CLINIC_LOCATION_OPTIONS = ["Rhône", "Champel", "Gstaad", "Montreux", "Lausanne"];
+const CLINIC_LOCATION_OPTIONS = ["Lausanne", "Rhône", "Champel", "Gstaad", "Montreux"];
 
 const CONSULTATION_DURATION_OPTIONS = [
   { value: 15, label: "15 minutes" },
@@ -894,10 +895,28 @@ export default function CalendarPage() {
   const [deletingAppointment, setDeletingAppointment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Edit modal: doctor & service editing
+  const [editProviderId, setEditProviderId] = useState<string>("");
+  const [editProviderSearch, setEditProviderSearch] = useState("");
+  const [editProviderDropdownOpen, setEditProviderDropdownOpen] = useState(false);
+  const [editServiceId, setEditServiceId] = useState<string>("");
+  const [editServiceSearch, setEditServiceSearch] = useState("");
+  const [editServiceDropdownOpen, setEditServiceDropdownOpen] = useState(false);
+
+  // Categories loaded from service_categories (with optional color) — used to populate
+  // the category dropdowns and override CATEGORY_COLORS when a color is set in DB.
+  const [dbCategories, setDbCategories] = useState<Array<{ id: string; name: string; color: string | null }>>([]);
+
+  // Map of patient_id -> earliest appointment start_time across all time (used to
+  // show the "new patient" badge only on the patient's first appointment).
+  const [firstAppointmentByPatient, setFirstAppointmentByPatient] = useState<Record<string, string>>({});
+
   // Helper to close all edit modal dropdowns
   const closeEditModalDropdowns = () => {
     setEditCategoryDropdownOpen(false);
     setEditBookingStatusDropdownOpen(false);
+    setEditProviderDropdownOpen(false);
+    setEditServiceDropdownOpen(false);
   };
 
   // Helper to close edit modal and reset state
@@ -957,7 +976,7 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone), provider:providers(id, name)",
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -991,6 +1010,55 @@ export default function CalendarPage() {
       isMounted = false;
     };
   }, [monthStart, monthEnd, view, selectedDate, rangeEndDate]);
+
+  // Compute, per patient, the earliest appointment start_time across all time.
+  // Used to render the "new patient" badge only on the first appointment.
+  useEffect(() => {
+    let cancelled = false;
+    const patientIds = Array.from(
+      new Set(
+        appointments
+          .map((a) => a.patient_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    if (patientIds.length === 0) {
+      setFirstAppointmentByPatient({});
+      return;
+    }
+
+    async function loadFirsts() {
+      try {
+        const { data, error } = await supabaseClient
+          .from("appointments")
+          .select("patient_id, start_time")
+          .in("patient_id", patientIds)
+          .neq("status", "cancelled")
+          .order("start_time", { ascending: true });
+        if (cancelled) return;
+        if (error || !data) {
+          setFirstAppointmentByPatient({});
+          return;
+        }
+        const map: Record<string, string> = {};
+        for (const row of data as any[]) {
+          const pid = row.patient_id as string | null;
+          const st = row.start_time as string | null;
+          if (!pid || !st) continue;
+          if (!map[pid]) map[pid] = st; // first occurrence wins (ordered asc)
+        }
+        setFirstAppointmentByPatient(map);
+      } catch {
+        if (cancelled) return;
+        setFirstAppointmentByPatient({});
+      }
+    }
+
+    void loadFirsts();
+    return () => {
+      cancelled = true;
+    };
+  }, [appointments]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1296,14 +1364,10 @@ export default function CalendarPage() {
         setServiceOptionsLoading(true);
         setServiceOptionsError(null);
 
-        // Only load services from the "Treatment" category
-        const TREATMENT_CATEGORY_ID = "78c68bca-9219-487b-a671-892ef8e5e2ac";
-
         const { data, error } = await supabaseClient
           .from("services")
           .select("id, name, is_active, duration_minutes, category_id")
           .eq("is_active", true)
-          .eq("category_id", TREATMENT_CATEGORY_ID)
           .order("name", { ascending: true });
 
         if (!isMounted) return;
@@ -1335,6 +1399,40 @@ export default function CalendarPage() {
 
     void loadServices();
 
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Load service_categories from DB to drive editable category colors and the
+  // category dropdown options on the calendar. Falls back silently on error.
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCategories() {
+      try {
+        const { data, error } = await supabaseClient
+          .from("service_categories")
+          .select("id, name, color")
+          .order("sort_order", { ascending: true })
+          .order("name", { ascending: true });
+        if (!isMounted) return;
+        if (error || !data) {
+          setDbCategories([]);
+          return;
+        }
+        setDbCategories(
+          (data as any[]).map((row) => ({
+            id: row.id as string,
+            name: (row.name as string) ?? "",
+            color: (row.color as string | null) ?? null,
+          })),
+        );
+      } catch {
+        if (!isMounted) return;
+        setDbCategories([]);
+      }
+    }
+    void loadCategories();
     return () => {
       isMounted = false;
     };
@@ -1755,11 +1853,75 @@ export default function CalendarPage() {
     return BOOKING_STATUS_OPTIONS.filter((opt) => opt.toLowerCase().includes(search));
   }, [statusSearch]);
 
+  // Merge hardcoded category options with DB-loaded categories so the calendar
+  // reflects any categories created/edited via the Services page.
+  const categoryOptionNames = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    for (const name of APPOINTMENT_CATEGORY_OPTIONS) {
+      const key = name.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(name);
+      }
+    }
+    for (const cat of dbCategories) {
+      const name = cat.name?.trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(name);
+      }
+    }
+    return merged;
+  }, [dbCategories]);
+
+  // Lookup of category name -> Tailwind color class (from DB), falling back to
+  // the static CATEGORY_COLORS map via getCategoryColor() for legacy categories.
+  const dbCategoryColorByName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const cat of dbCategories) {
+      if (cat.color && cat.name) m.set(cat.name.toLowerCase().trim(), cat.color);
+    }
+    return m;
+  }, [dbCategories]);
+
+  const resolveCategoryColor = useCallback(
+    (cat: string | null): string => {
+      if (cat) {
+        const hit = dbCategoryColorByName.get(cat.toLowerCase().trim());
+        if (hit) return hit;
+      }
+      return getCategoryColor(cat);
+    },
+    [dbCategoryColorByName],
+  );
+
   const filteredCategoryOptions = useMemo(() => {
     const search = categorySearch.trim().toLowerCase();
-    if (!search) return APPOINTMENT_CATEGORY_OPTIONS;
-    return APPOINTMENT_CATEGORY_OPTIONS.filter((opt) => opt.toLowerCase().includes(search));
-  }, [categorySearch]);
+    if (!search) return categoryOptionNames;
+    return categoryOptionNames.filter((opt) => opt.toLowerCase().includes(search));
+  }, [categorySearch, categoryOptionNames]);
+
+  const filteredEditCategoryOptions = useMemo(() => {
+    const search = editCategorySearch.trim().toLowerCase();
+    if (!search) return categoryOptionNames;
+    return categoryOptionNames.filter((opt) => opt.toLowerCase().includes(search));
+  }, [editCategorySearch, categoryOptionNames]);
+
+  const filteredEditServiceOptions = useMemo(() => {
+    const search = editServiceSearch.trim().toLowerCase();
+    if (!search) return serviceOptions;
+    return serviceOptions.filter((opt) => opt.name.toLowerCase().includes(search));
+  }, [serviceOptions, editServiceSearch]);
+
+  const filteredEditProviderOptions = useMemo(() => {
+    const search = editProviderSearch.trim().toLowerCase();
+    const list = providers.filter((p) => (p.name ?? "").length > 0);
+    if (!search) return list;
+    return list.filter((p) => (p.name ?? "").toLowerCase().includes(search));
+  }, [providers, editProviderSearch]);
 
   const filteredLocationOptions = useMemo(() => {
     const search = locationSearch.trim().toLowerCase();
@@ -2324,7 +2486,7 @@ export default function CalendarPage() {
           const { data: fullApptData } = await supabaseClient
             .from("appointments")
             .select(
-              "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone), provider:providers(id, name)",
+              "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip), provider:providers(id, name)",
             )
             .eq('id', firstAppt.id)
             .single();
@@ -2340,7 +2502,7 @@ export default function CalendarPage() {
         const { data: refreshedData } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone), provider:providers(id, name)",
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -2389,7 +2551,7 @@ export default function CalendarPage() {
             source: "manual",
           })
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone), provider:providers(id, name)",
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip), provider:providers(id, name)",
           )
           .single();
 
@@ -2506,6 +2668,25 @@ export default function CalendarPage() {
     setEditCategory(categoryFromReason ?? "");
     setEditCategorySearch(categoryFromReason ?? "");
 
+    // Initialize provider (doctor) selection from the appointment's provider
+    const initialProviderId = appt.provider_id ?? "";
+    const initialProviderName =
+      appt.provider?.name?.trim() ||
+      getDoctorNameFromReason(appt.reason) ||
+      "";
+    setEditProviderId(initialProviderId);
+    setEditProviderSearch(initialProviderName);
+
+    // Initialize service selection by matching the service label to known services
+    const { serviceLabel } = getServiceAndStatusFromReason(appt.reason);
+    const matchedService = serviceLabel
+      ? serviceOptions.find(
+          (s) => s.name.trim().toLowerCase() === serviceLabel.trim().toLowerCase(),
+        )
+      : undefined;
+    setEditServiceId(matchedService?.id ?? "");
+    setEditServiceSearch(matchedService?.name ?? serviceLabel ?? "");
+
     setEditNotes(getAppointmentNotes(appt) || "");
 
     setEditModalOpen(true);
@@ -2549,8 +2730,8 @@ export default function CalendarPage() {
     setStatusSearch(statusLabel ?? "");
     setAppointmentCategory(categoryFromReason ?? "");
     setCategorySearch(categoryFromReason ?? "");
-    setDraftLocation(copiedAppointment.location ?? "Rhône");
-    setLocationSearch(copiedAppointment.location ?? "Rhône");
+    setDraftLocation(copiedAppointment.location ?? "Lausanne");
+    setLocationSearch(copiedAppointment.location ?? "Lausanne");
 
     // Set duration from copied appointment
     const start = new Date(copiedAppointment.start_time);
@@ -2617,13 +2798,33 @@ export default function CalendarPage() {
     try {
       setSavingEdit(true);
 
-      // Build updated reason string with category and status
+      // Build updated reason string with category, status, and the edited
+      // service/doctor selections (falling back to what's currently parsed from
+      // the existing reason so we never lose information).
       const existingReason = editingAppointment.reason ?? "";
-      const { serviceLabel } = getServiceAndStatusFromReason(existingReason);
-      const doctorName = getDoctorNameFromReason(existingReason);
-      
-      let updatedReason = serviceLabel || "Appointment";
-      if (doctorName) updatedReason += ` [Doctor: ${doctorName}]`;
+      const { serviceLabel: parsedServiceLabel } = getServiceAndStatusFromReason(existingReason);
+      const parsedDoctorName = getDoctorNameFromReason(existingReason);
+
+      const editedServiceOption = editServiceId
+        ? serviceOptions.find((s) => s.id === editServiceId)
+        : undefined;
+      const serviceLabelFinal =
+        editedServiceOption?.name?.trim() ||
+        editServiceSearch.trim() ||
+        parsedServiceLabel ||
+        "Appointment";
+
+      const editedProviderOption = editProviderId
+        ? providers.find((p) => p.id === editProviderId)
+        : undefined;
+      const doctorNameFinal =
+        editedProviderOption?.name?.trim() ||
+        editProviderSearch.trim() ||
+        parsedDoctorName ||
+        "";
+
+      let updatedReason = serviceLabelFinal;
+      if (doctorNameFinal) updatedReason += ` [Doctor: ${doctorNameFinal}]`;
       if (editCategory && editCategory !== "No selection") updatedReason += ` [Category: ${editCategory}]`;
       if (editBookingStatus && editBookingStatus !== "Aucune sélection") updatedReason += ` [Status: ${editBookingStatus}]`;
 
@@ -2636,10 +2837,11 @@ export default function CalendarPage() {
           location: editLocation || null,
           reason: updatedReason,
           notes: editNotes.trim() || null,
+          provider_id: editProviderId || null,
         })
         .eq("id", editingAppointment.id)
         .select(
-          "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone), provider:providers(id, name)",
+          "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip), provider:providers(id, name)",
         )
         .single();
 
@@ -3321,10 +3523,27 @@ export default function CalendarPage() {
                               }}
                               className={`w-full rounded-md px-1 py-0.5 text-[10px] text-left ${getAppointmentStatusColorClasses(
                                 appt.status,
-                              )} ${getCategoryColor(category)}`}
+                              )} ${resolveCategoryColor(category)}`}
                             >
                               <div className="flex items-center gap-1 truncate font-medium text-slate-800">
                                 {statusIcon && <span className="flex-shrink-0">{statusIcon}</span>}
+                                {appt.patient?.is_vip ? (
+                                  <span
+                                    title="VIP patient"
+                                    className="flex-shrink-0 rounded-full bg-amber-400/90 px-1.5 text-[8px] font-bold leading-tight text-white"
+                                  >
+                                    VIP
+                                  </span>
+                                ) : null}
+                                {appt.patient_id &&
+                                firstAppointmentByPatient[appt.patient_id] === appt.start_time ? (
+                                  <span
+                                    title="New patient (first appointment)"
+                                    className="flex-shrink-0 rounded-full bg-emerald-500/90 px-1.5 text-[8px] font-bold leading-tight text-white"
+                                  >
+                                    NEW
+                                  </span>
+                                ) : null}
                                 <span className="truncate">{patientName || serviceLabel}</span>
                               </div>
                               <div className="truncate text-[10px] text-slate-500">
@@ -3597,10 +3816,27 @@ export default function CalendarPage() {
                                         <button
                                           type="button"
                                           onClick={() => openEditModalForAppointment(appt)}
-                                          className={`w-full h-full rounded-md px-1 py-0.5 text-[10px] text-left shadow-sm overflow-hidden ${getAppointmentStatusColorClasses(appt.status)} ${getCategoryColor(category)}`}
+                                          className={`w-full h-full rounded-md px-1 py-0.5 text-[10px] text-left shadow-sm overflow-hidden ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColor(category)}`}
                                         >
                                           <div className="flex items-center gap-1 truncate font-medium text-slate-800">
                                             {dayStatusIcon && <span className="flex-shrink-0">{dayStatusIcon}</span>}
+                                            {appt.patient?.is_vip ? (
+                                              <span
+                                                title="VIP patient"
+                                                className="flex-shrink-0 rounded-full bg-amber-400/90 px-1.5 text-[8px] font-bold leading-tight text-white"
+                                              >
+                                                VIP
+                                              </span>
+                                            ) : null}
+                                            {appt.patient_id &&
+                                            firstAppointmentByPatient[appt.patient_id] === appt.start_time ? (
+                                              <span
+                                                title="New patient (first appointment)"
+                                                className="flex-shrink-0 rounded-full bg-emerald-500/90 px-1.5 text-[8px] font-bold leading-tight text-white"
+                                              >
+                                                NEW
+                                              </span>
+                                            ) : null}
                                             <span className="truncate">{patientName || serviceLabel}</span>
                                           </div>
                                           <div className="truncate text-[9px] text-slate-600">
@@ -3716,17 +3952,104 @@ export default function CalendarPage() {
                 <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
                   <p className="text-[11px] font-semibold text-slate-700">Appointment Details</p>
                   <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <p className="text-[10px] text-slate-500">Service</p>
-                      <p className="text-[11px] text-slate-800">
-                        {getServiceAndStatusFromReason(editingAppointment.reason).serviceLabel || "—"}
-                      </p>
+                    <div className="relative col-span-2 sm:col-span-1">
+                      <p className="text-[10px] text-slate-500 mb-1">Service</p>
+                      <input
+                        type="text"
+                        value={editServiceSearch}
+                        onChange={(e) => {
+                          setEditServiceSearch(e.target.value);
+                          setEditServiceDropdownOpen(true);
+                          if (!e.target.value.trim()) setEditServiceId("");
+                        }}
+                        onFocus={() => {
+                          setEditServiceDropdownOpen(true);
+                          setEditProviderDropdownOpen(false);
+                        }}
+                        placeholder="Search service..."
+                        className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                      />
+                      {editServiceSearch && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditServiceId("");
+                            setEditServiceSearch("");
+                          }}
+                          className="absolute right-2 top-6 text-slate-400 hover:text-slate-600 text-xs"
+                        >
+                          ×
+                        </button>
+                      )}
+                      {editServiceDropdownOpen && filteredEditServiceOptions.length > 0 && (
+                        <div className="absolute z-50 mt-1 max-h-40 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                          {filteredEditServiceOptions.map((svc) => (
+                            <button
+                              key={svc.id}
+                              type="button"
+                              onClick={() => {
+                                setEditServiceId(svc.id);
+                                setEditServiceSearch(svc.name);
+                                setEditServiceDropdownOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50 ${editServiceId === svc.id ? "bg-sky-50 text-sky-700" : ""}`}
+                            >
+                              <span className="truncate">{svc.name}</span>
+                              {svc.duration_minutes ? (
+                                <span className="text-[10px] text-slate-400 flex-shrink-0">{svc.duration_minutes} min</span>
+                              ) : null}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <p className="text-[10px] text-slate-500">Doctor</p>
-                      <p className="text-[11px] text-slate-800">
-                        {getDoctorNameFromReason(editingAppointment.reason) || editingAppointment.provider?.name || "—"}
-                      </p>
+                    <div className="relative col-span-2 sm:col-span-1">
+                      <p className="text-[10px] text-slate-500 mb-1">Doctor</p>
+                      <input
+                        type="text"
+                        value={editProviderSearch}
+                        onChange={(e) => {
+                          setEditProviderSearch(e.target.value);
+                          setEditProviderDropdownOpen(true);
+                          if (!e.target.value.trim()) setEditProviderId("");
+                        }}
+                        onFocus={() => {
+                          setEditProviderDropdownOpen(true);
+                          setEditServiceDropdownOpen(false);
+                        }}
+                        placeholder="Search doctor..."
+                        className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                      />
+                      {editProviderSearch && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditProviderId("");
+                            setEditProviderSearch("");
+                          }}
+                          className="absolute right-2 top-6 text-slate-400 hover:text-slate-600 text-xs"
+                        >
+                          ×
+                        </button>
+                      )}
+                      {editProviderDropdownOpen && filteredEditProviderOptions.length > 0 && (
+                        <div className="absolute z-50 mt-1 max-h-40 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                          {filteredEditProviderOptions.map((prov) => (
+                            <button
+                              key={prov.id}
+                              type="button"
+                              onClick={() => {
+                                setEditProviderId(prov.id);
+                                setEditProviderSearch(prov.name ?? "");
+                                setEditProviderDropdownOpen(false);
+                              }}
+                              className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50 ${editProviderId === prov.id ? "bg-sky-50 text-sky-700" : ""}`}
+                            >
+                              <span className="truncate">{prov.name ?? "—"}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="relative col-span-2">
                       <p className="text-[10px] text-slate-500 mb-1">Category</p>
@@ -3755,9 +4078,7 @@ export default function CalendarPage() {
                       )}
                       {editCategoryDropdownOpen && (
                         <div className="absolute z-50 mt-1 max-h-40 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
-                          {APPOINTMENT_CATEGORY_OPTIONS.filter((opt) =>
-                            opt.toLowerCase().includes(editCategorySearch.toLowerCase())
-                          ).map((opt) => (
+                          {filteredEditCategoryOptions.map((opt) => (
                             <button
                               key={opt}
                               type="button"
@@ -3768,7 +4089,7 @@ export default function CalendarPage() {
                               }}
                               className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50"
                             >
-                              <span className={`h-3 w-3 rounded-sm ${getCategoryColor(opt)}`} />
+                              <span className={`h-3 w-3 rounded-sm ${resolveCategoryColor(opt)}`} />
                               {opt}
                             </button>
                           ))}
@@ -4511,7 +4832,7 @@ export default function CalendarPage() {
                   <div className="relative">
                     <div className="flex items-center">
                       {appointmentCategory && (
-                        <span className={`absolute left-2 z-10 h-3 w-3 rounded-sm ${getCategoryColor(appointmentCategory)}`} />
+                        <span className={`absolute left-2 z-10 h-3 w-3 rounded-sm ${resolveCategoryColor(appointmentCategory)}`} />
                       )}
                       <input
                         type="text"
@@ -4550,7 +4871,7 @@ export default function CalendarPage() {
                             }}
                             className={`flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-sky-50 ${appointmentCategory === opt ? "bg-sky-50 text-sky-700" : "text-slate-700"}`}
                           >
-                            <span className={`h-3 w-3 rounded-sm flex-shrink-0 ${getCategoryColor(opt)}`} />
+                            <span className={`h-3 w-3 rounded-sm flex-shrink-0 ${resolveCategoryColor(opt)}`} />
                             {opt}
                           </button>
                         ))}

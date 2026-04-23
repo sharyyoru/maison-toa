@@ -23,6 +23,7 @@ import PatientCockpitDetails from "./PatientCockpitDetails";
 import PatientPageClientWrapper from "./PatientPageClientWrapper";
 import PatientFormsTab from "./PatientFormsTab";
 import PatientTabRegistrar from "./PatientTabRegistrar";
+import VipToggle from "./VipToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -335,6 +336,7 @@ export default async function PatientPage({
               <h1 className="text-lg font-semibold text-slate-900">
                 {patient.first_name} {patient.last_name}
               </h1>
+              <VipToggle patientId={patient.id} />
               <PatientEditingPresence patientId={patient.id} />
             </div>
             <div className="mt-1 flex items-center gap-3 text-xs">
