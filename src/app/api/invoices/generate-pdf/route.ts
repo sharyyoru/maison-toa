@@ -183,9 +183,9 @@ export async function POST(request: NextRequest) {
       const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
       const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
       const provName = billingEntityData?.name || invoiceData.provider_name || "Aesthetics Clinic XT SA";
-      const provStreet = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "";
-      const provZip = billingEntityData?.zip_code || "";
-      const provCity = billingEntityData?.city || "";
+      const provStreet = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Rue de Lausanne 64";
+      const provZip = billingEntityData?.zip_code || "1202";
+      const provCity = billingEntityData?.city || "Genève";
       const provCanton = billingEntityData?.canton || invoiceData.treatment_canton || "GE";
       // IBAN: strip spaces, validate Swiss format, fallback to QR-IBAN
       const sanitizeIban = (raw: string | null | undefined): string | null => {
@@ -422,9 +422,9 @@ export async function POST(request: NextRequest) {
       const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
       const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
       const provName = billingEntityData?.name || invoiceData.provider_name || "Aesthetics Clinic XT SA";
-      const provStreetFull = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "";
-      const provZip = billingEntityData?.zip_code || "";
-      const provCity = billingEntityData?.city || "";
+      const provStreetFull = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Rue de Lausanne 64";
+      const provZip = billingEntityData?.zip_code || "1202";
+      const provCity = billingEntityData?.city || "Genève";
       const provCanton = billingEntityData?.canton || invoiceData.treatment_canton || "GE";
       const sanitizeIban2 = (raw: string | null | undefined): string | null => {
         if (!raw) return null;
