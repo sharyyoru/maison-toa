@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type PlatformUser = {
@@ -67,6 +68,8 @@ export default function AppointmentModal({
   dealTitle,
   defaultType = "appointment",
 }: AppointmentModalProps) {
+  const t = useTranslations("appointmentModal");
+  const tCommon = useTranslations("common");
   const [title, setTitle] = useState("");
   const [appointmentDate, setAppointmentDate] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("15");
@@ -145,7 +148,7 @@ export default function AppointmentModal({
       setAppointmentDate(formatDateTimeLocal(nextWeekday));
       setAppointmentType(defaultType);
       setDurationMinutes(defaultType === "operation" ? "60" : "15");
-      setTitle(`${defaultType === "operation" ? "Operation" : "Appointment"} with ${patientName}`);
+      setTitle(defaultType === "operation" ? t("defaultTitleOperation", { name: patientName }) : t("defaultTitleAppointment", { name: patientName }));
       setError(null);
       setAssignedUserId("");
       setUserSearch("");
@@ -156,7 +159,7 @@ export default function AppointmentModal({
     event.preventDefault();
 
     if (!appointmentDate) {
-      setError("Please select a date and time for the appointment.");
+      setError(t("errorSelectDate"));
       return;
     }
 
@@ -173,7 +176,7 @@ export default function AppointmentModal({
         patientId,
         dealId,
         providerId: assignedUserId || null,
-        title: title.trim() || `${appointmentType === "operation" ? "Operation" : "Appointment"} with ${patientName}`,
+        title: title.trim() || (appointmentType === "operation" ? t("defaultTitleOperation", { name: patientName }) : t("defaultTitleAppointment", { name: patientName })),
         appointmentDate,
         durationMinutes: parseInt(durationMinutes, 10) || 60,
         location: location.trim(),
@@ -209,7 +212,7 @@ export default function AppointmentModal({
         onClose();
       }, 1500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create appointment.");
+      setError(err instanceof Error ? err.message : t("errorFailedCreate"));
     } finally {
       setSaving(false);
     }
@@ -222,9 +225,9 @@ export default function AppointmentModal({
       <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Schedule Appointment</h2>
+            <h2 className="text-lg font-semibold text-slate-900">{t("title")}</h2>
             <p className="text-sm text-slate-500">
-              {dealTitle ? `For deal: ${dealTitle}` : `Patient: ${patientName}`}
+              {dealTitle ? t("forDeal", { title: dealTitle }) : t("forPatient", { name: patientName })}
             </p>
           </div>
           <button
@@ -247,8 +250,8 @@ export default function AppointmentModal({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <p className="text-sm font-medium text-emerald-700">Appointment Booked Successfully!</p>
-              <p className="text-xs text-emerald-600 mt-1">Redirecting...</p>
+              <p className="text-sm font-medium text-emerald-700">{t("successTitle")}</p>
+              <p className="text-xs text-emerald-600 mt-1">{t("successRedirect")}</p>
             </div>
           )}
           {error && (
@@ -260,14 +263,14 @@ export default function AppointmentModal({
           {/* Appointment Type Selection */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              Type <span className="text-red-500">*</span>
+              {t("typeLabel")} <span className="text-red-500">*</span>
             </label>
             <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => {
                   setAppointmentType("appointment");
-                  setTitle(`Appointment with ${patientName}`);
+                  setTitle(t("defaultTitleAppointment", { name: patientName }));
                   setDurationMinutes("15");
                 }}
                 className={`flex-1 rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
@@ -278,15 +281,15 @@ export default function AppointmentModal({
               >
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-lg">📅</span>
-                  <span>Appointment</span>
+                  <span>{t("appointment")}</span>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">Regular consultation</p>
+                <p className="text-xs text-slate-500 mt-1">{t("regularConsultation")}</p>
               </button>
               <button
                 type="button"
                 onClick={() => {
                   setAppointmentType("operation");
-                  setTitle(`Operation with ${patientName}`);
+                  setTitle(t("defaultTitleOperation", { name: patientName }));
                   setDurationMinutes("60");
                 }}
                 className={`flex-1 rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
@@ -297,9 +300,9 @@ export default function AppointmentModal({
               >
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-lg">🏥</span>
-                  <span>Operation</span>
+                  <span>{t("operation")}</span>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">Surgical procedure</p>
+                <p className="text-xs text-slate-500 mt-1">{t("surgicalProcedure")}</p>
               </button>
             </div>
           </div>
@@ -307,7 +310,7 @@ export default function AppointmentModal({
           {/* User/Doctor Selection */}
           <div className="space-y-2" ref={userDropdownRef}>
             <label className="block text-sm font-medium text-slate-700">
-              Assign to Doctor <span className="text-red-500">*</span>
+              {t("assignDoctor")} <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <input
@@ -321,7 +324,7 @@ export default function AppointmentModal({
                   }
                 }}
                 onFocus={() => setUserDropdownOpen(true)}
-                placeholder="Search for a doctor..."
+                placeholder={t("searchDoctor")}
                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
               {assignedUserId && (
@@ -346,7 +349,7 @@ export default function AppointmentModal({
                         assignedUserId === user.id ? "bg-emerald-50 text-emerald-700" : "text-slate-700"
                       }`}
                     >
-                      <div className="font-medium">{user.full_name || "Unnamed"}</div>
+                      <div className="font-medium">{user.full_name || t("unnamed")}</div>
                       {user.email && (
                         <div className="text-xs text-slate-500">{user.email}</div>
                       )}
@@ -356,26 +359,26 @@ export default function AppointmentModal({
               )}
               {userDropdownOpen && filteredUsers.length === 0 && userSearch.trim() && (
                 <div className="absolute z-10 mt-1 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-500 shadow-lg">
-                  No doctors found
+                  {t("noDoctorsFound")}
                 </div>
               )}
             </div>
             {!assignedUserId && (
               <p className="text-xs text-slate-500">
-                Select which doctor&apos;s calendar this appointment will be added to
+                {t("doctorHint")}
               </p>
             )}
           </div>
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              Appointment Title
+              {t("appointmentTitle")}
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder={`Appointment with ${patientName}`}
+              placeholder={t("titlePlaceholder", { name: patientName })}
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
           </div>
@@ -383,7 +386,7 @@ export default function AppointmentModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="block text-sm font-medium text-slate-700">
-                Date & Time <span className="text-red-500">*</span>
+                {t("dateTime")} <span className="text-red-500">*</span>
               </label>
               <input
                 type="datetime-local"
@@ -395,7 +398,7 @@ export default function AppointmentModal({
             </div>
             <div className="space-y-2">
               <label className="block text-sm font-medium text-slate-700">
-                Duration
+                {t("duration")}
               </label>
               {appointmentType === "operation" ? (
                 <div className="flex items-center gap-2">
@@ -407,7 +410,7 @@ export default function AppointmentModal({
                     onChange={(e) => setDurationMinutes(e.target.value)}
                     className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
-                  <span className="text-sm text-slate-500 whitespace-nowrap">minutes</span>
+                  <span className="text-sm text-slate-500 whitespace-nowrap">{t("minutes")}</span>
                 </div>
               ) : (
                 <select
@@ -415,10 +418,10 @@ export default function AppointmentModal({
                   onChange={(e) => setDurationMinutes(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 >
-                  <option value="15">15 minutes</option>
-                  <option value="30">30 minutes</option>
-                  <option value="45">45 minutes</option>
-                  <option value="60">60 minutes</option>
+                  <option value="15">{t("duration15")}</option>
+                  <option value="30">{t("duration30")}</option>
+                  <option value="45">{t("duration45")}</option>
+                  <option value="60">{t("duration60")}</option>
                 </select>
               )}
             </div>
@@ -426,7 +429,7 @@ export default function AppointmentModal({
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              Location
+              {t("location")}
             </label>
             <select
               value={location}
@@ -444,19 +447,19 @@ export default function AppointmentModal({
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              Notes
+              {t("notes")}
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              placeholder="Add any notes about this appointment..."
+              placeholder={t("notesPlaceholder")}
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-            <p className="text-sm font-medium text-slate-700">Email Notifications</p>
+            <p className="text-sm font-medium text-slate-700">{t("emailNotifications")}</p>
             <div className="space-y-2">
               <label className="flex items-center gap-3">
                 <input
@@ -466,7 +469,7 @@ export default function AppointmentModal({
                   className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                 />
                 <span className="text-sm text-slate-700">
-                  Send confirmation email to patient
+                  {t("sendPatientEmail")}
                 </span>
               </label>
               <label className="flex items-center gap-3">
@@ -477,7 +480,7 @@ export default function AppointmentModal({
                   className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                 />
                 <span className="text-sm text-slate-700">
-                  Send notification email to me
+                  {t("sendUserEmail")}
                 </span>
               </label>
               <label className="flex items-center gap-3">
@@ -488,7 +491,7 @@ export default function AppointmentModal({
                   className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                 />
                 <span className="text-sm text-slate-700">
-                  Send reminder 1 day before appointment
+                  {t("sendReminder")}
                 </span>
               </label>
             </div>
@@ -501,14 +504,14 @@ export default function AppointmentModal({
               disabled={saving}
               className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
-              Cancel
+              {tCommon("cancel")}
             </button>
             <button
               type="submit"
               disabled={saving}
               className="rounded-full border border-emerald-500 bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
             >
-              {saving ? "Creating..." : "Create Appointment"}
+              {saving ? t("creating") : t("createBtn")}
             </button>
           </div>
         </form>

@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type WorkflowRow = {
@@ -20,15 +21,15 @@ type DealStage = {
   name: string;
 };
 
-const TRIGGER_LABELS: Record<string, string> = {
-  deal_stage_changed: "Deal Stage Changed",
-  patient_created: "Patient Created",
-  appointment_created: "Appointment Created",
-  appointment_completed: "Appointment Completed",
-  form_submitted: "Form Submitted",
-  task_completed: "Task Completed",
-  manual: "Manual Trigger",
-};
+const TRIGGER_KEYS = [
+  "deal_stage_changed",
+  "patient_created",
+  "appointment_created",
+  "appointment_completed",
+  "form_submitted",
+  "task_completed",
+  "manual",
+] as const;
 
 const TRIGGER_ICONS: Record<string, string> = {
   deal_stage_changed: "📊",
@@ -51,7 +52,14 @@ const TRIGGER_COLORS: Record<string, string> = {
 };
 
 export default function WorkflowsPage() {
+  const t = useTranslations("workflowsPage");
   const router = useRouter();
+  const triggerLabel = (type: string) => {
+    if ((TRIGGER_KEYS as readonly string[]).includes(type)) {
+      return t(`triggerLabels.${type}` as any);
+    }
+    return type;
+  };
   const [workflows, setWorkflows] = useState<WorkflowRow[]>([]);
   const [stages, setStages] = useState<Map<string, DealStage>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -113,7 +121,7 @@ export default function WorkflowsPage() {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load workflows");
+      setError(err instanceof Error ? err.message : t("errorLoad"));
     } finally {
       setLoading(false);
     }
@@ -133,7 +141,7 @@ export default function WorkflowsPage() {
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const matchesName = w.name.toLowerCase().includes(query);
-        const matchesTrigger = (TRIGGER_LABELS[w.trigger_type] || w.trigger_type).toLowerCase().includes(query);
+        const matchesTrigger = triggerLabel(w.trigger_type).toLowerCase().includes(query);
         if (!matchesName && !matchesTrigger) return false;
       }
       
@@ -171,14 +179,14 @@ export default function WorkflowsPage() {
         )
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to toggle workflow");
+      setError(err instanceof Error ? err.message : t("errorToggle"));
     } finally {
       setTogglingId(null);
     }
   }
 
   async function deleteWorkflow(workflow: WorkflowRow) {
-    if (!confirm(`Are you sure you want to delete "${workflow.name}"?`)) return;
+    if (!confirm(t("confirmDelete", { name: workflow.name }))) return;
 
     try {
       setDeletingId(workflow.id);
@@ -199,7 +207,7 @@ export default function WorkflowsPage() {
 
       setWorkflows((prev) => prev.filter((w) => w.id !== workflow.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete workflow");
+      setError(err instanceof Error ? err.message : t("errorDelete"));
     } finally {
       setDeletingId(null);
     }
@@ -213,7 +221,7 @@ export default function WorkflowsPage() {
       const { data: newWorkflow, error } = await supabaseClient
         .from("workflows")
         .insert({
-          name: `${workflow.name} (Copy)`,
+          name: `${workflow.name} ${t("copySuffix")}`,
           trigger_type: workflow.trigger_type,
           active: false, // Start as inactive
           config: workflow.config,
@@ -227,7 +235,7 @@ export default function WorkflowsPage() {
         setWorkflows((prev) => [newWorkflow as WorkflowRow, ...prev]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to duplicate workflow");
+      setError(err instanceof Error ? err.message : t("errorDuplicate"));
     } finally {
       setDuplicatingId(null);
     }
@@ -238,10 +246,10 @@ export default function WorkflowsPage() {
     
     if (workflow.trigger_type === "deal_stage_changed" && config?.to_stage_id) {
       const stage = stages.get(config.to_stage_id);
-      return stage ? `When deal moves to "${stage.name}"` : "When deal stage changes";
+      return stage ? t("triggerDesc.dealMovesTo", { stage: stage.name }) : t("triggerDesc.dealStageChanges");
     }
     
-    return TRIGGER_LABELS[workflow.trigger_type] || workflow.trigger_type;
+    return triggerLabel(workflow.trigger_type);
   }
 
   function getActionsCount(workflow: WorkflowRow): number {
@@ -259,12 +267,12 @@ export default function WorkflowsPage() {
     const actions = config.nodes.filter((n: any) => n.type === "action");
     return actions.map((a: any) => {
       switch (a.data?.actionType) {
-        case "send_email": return "📧 Send Email";
-        case "send_whatsapp": return "💬 Send WhatsApp";
-        case "send_notification": return "🔔 Notification";
-        case "create_task": return "📋 Create Task";
-        case "update_deal": return "📈 Update Deal";
-        default: return a.data?.actionType || "Action";
+        case "send_email": return `📧 ${t("actionLabels.send_email")}`;
+        case "send_whatsapp": return `💬 ${t("actionLabels.send_whatsapp")}`;
+        case "send_notification": return `🔔 ${t("actionLabels.send_notification")}`;
+        case "create_task": return `📋 ${t("actionLabels.create_task")}`;
+        case "update_deal": return `📈 ${t("actionLabels.update_deal")}`;
+        default: return a.data?.actionType || t("actionLabels.fallback");
       }
     }).slice(0, 3);
   }
@@ -275,9 +283,9 @@ export default function WorkflowsPage() {
         {/* Header */}
         <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Workflows</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{t("title")}</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Automate tasks, emails, and notifications based on triggers
+              {t("subtitle")}
             </p>
           </div>
           <Link
@@ -287,14 +295,14 @@ export default function WorkflowsPage() {
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Create Workflow
+            {t("createWorkflow")}
           </Link>
         </header>
 
         {error && (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
-            <button onClick={() => setError(null)} className="ml-2 underline">Dismiss</button>
+            <button onClick={() => setError(null)} className="ml-2 underline">{t("dismiss")}</button>
           </div>
         )}
 
@@ -309,7 +317,7 @@ export default function WorkflowsPage() {
             }`}
           >
             <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
-            <p className="text-xs text-slate-500">Total Workflows</p>
+            <p className="text-xs text-slate-500">{t("stats.total")}</p>
           </button>
           <button
             onClick={() => setStatusFilter("active")}
@@ -320,7 +328,7 @@ export default function WorkflowsPage() {
             }`}
           >
             <p className="text-2xl font-bold text-emerald-600">{stats.active}</p>
-            <p className="text-xs text-slate-500">Active</p>
+            <p className="text-xs text-slate-500">{t("stats.active")}</p>
           </button>
           <button
             onClick={() => setStatusFilter("inactive")}
@@ -331,7 +339,7 @@ export default function WorkflowsPage() {
             }`}
           >
             <p className="text-2xl font-bold text-slate-600">{stats.inactive}</p>
-            <p className="text-xs text-slate-500">Inactive</p>
+            <p className="text-xs text-slate-500">{t("stats.inactive")}</p>
           </button>
         </div>
 
@@ -355,7 +363,7 @@ export default function WorkflowsPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search workflows..."
+              placeholder={t("search")}
               className="w-full rounded-lg border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
             />
           </div>
@@ -364,10 +372,10 @@ export default function WorkflowsPage() {
             onChange={(e) => setTriggerFilter(e.target.value)}
             className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
           >
-            <option value="all">All Triggers</option>
+            <option value="all">{t("allTriggers")}</option>
             {triggerTypes.map((type) => (
               <option key={type} value={type}>
-                {TRIGGER_LABELS[type] || type}
+                {triggerLabel(type)}
               </option>
             ))}
           </select>
@@ -380,7 +388,7 @@ export default function WorkflowsPage() {
               }}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50"
             >
-              Clear Filters
+              {t("clearFilters")}
             </button>
           )}
         </div>
@@ -388,25 +396,25 @@ export default function WorkflowsPage() {
         {/* Workflows Grid */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <p className="text-sm text-slate-500">Loading workflows...</p>
+            <p className="text-sm text-slate-500">{t("loading")}</p>
           </div>
         ) : filteredWorkflows.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
             <div className="mb-3 text-4xl">🔄</div>
             <h3 className="font-medium text-slate-900">
-              {workflows.length === 0 ? "No workflows yet" : "No matching workflows"}
+              {workflows.length === 0 ? t("emptyTitle") : t("emptyMatchingTitle")}
             </h3>
             <p className="mt-1 text-sm text-slate-500">
               {workflows.length === 0
-                ? "Create your first workflow to automate tasks"
-                : "Try adjusting your filters"}
+                ? t("emptyDesc")
+                : t("emptyMatchingDesc")}
             </p>
             {workflows.length === 0 && (
               <Link
                 href="/workflows/builder"
                 className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
               >
-                Create Workflow
+                {t("createWorkflow")}
               </Link>
             )}
           </div>
@@ -432,7 +440,7 @@ export default function WorkflowsPage() {
                         ? "bg-emerald-100 text-emerald-700"
                         : "bg-slate-100 text-slate-500"
                     }`}>
-                      {workflow.active ? "Active" : "Inactive"}
+                      {workflow.active ? t("active") : t("inactive")}
                     </span>
                   </div>
                 </div>
@@ -450,7 +458,7 @@ export default function WorkflowsPage() {
                       </span>
                     ))}
                     {getActionsCount(workflow) > 3 && (
-                      <span className="text-[10px] text-slate-400">+{getActionsCount(workflow) - 3} more</span>
+                      <span className="text-[10px] text-slate-400">{t("moreActions", { n: getActionsCount(workflow) - 3 })}</span>
                     )}
                   </div>
                 )}
@@ -463,7 +471,7 @@ export default function WorkflowsPage() {
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
-                  <span className="font-medium">{enrollmentCounts.get(workflow.id) || 0}</span> patients enrolled
+                  <span className="font-medium">{enrollmentCounts.get(workflow.id) || 0}</span> {t("patientsEnrolled")}
                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
@@ -489,7 +497,7 @@ export default function WorkflowsPage() {
                     <Link
                       href={`/workflows/builder?id=${workflow.id}`}
                       className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                      title="Edit"
+                      title={t("edit")}
                     >
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -499,7 +507,7 @@ export default function WorkflowsPage() {
                       onClick={() => duplicateWorkflow(workflow)}
                       disabled={duplicatingId === workflow.id}
                       className="rounded-lg p-2 text-slate-400 hover:bg-sky-50 hover:text-sky-500 disabled:opacity-50"
-                      title="Duplicate"
+                      title={t("duplicate")}
                     >
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -509,7 +517,7 @@ export default function WorkflowsPage() {
                       onClick={() => deleteWorkflow(workflow)}
                       disabled={deletingId === workflow.id}
                       className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
-                      title="Delete"
+                      title={t("delete")}
                     >
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -527,7 +535,7 @@ export default function WorkflowsPage() {
       {showEnrollmentsModal && (
         <WorkflowEnrollmentsModal
           workflowId={showEnrollmentsModal}
-          workflowName={workflows.find((w) => w.id === showEnrollmentsModal)?.name || "Workflow"}
+          workflowName={workflows.find((w) => w.id === showEnrollmentsModal)?.name || t("enrollments.fallbackName")}
           onClose={() => setShowEnrollmentsModal(null)}
         />
       )}
@@ -583,6 +591,7 @@ function WorkflowEnrollmentsModal({
   workflowName: string;
   onClose: () => void;
 }) {
+  const t = useTranslations("workflowsPage.enrollments");
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -681,7 +690,7 @@ function WorkflowEnrollmentsModal({
 
       setEnrollments(enrollmentsWithSteps);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load enrollments");
+      setError(err instanceof Error ? err.message : t("errorLoad"));
     } finally {
       setLoading(false);
     }
@@ -692,9 +701,9 @@ function WorkflowEnrollmentsModal({
       const first = enrollment.patient.first_name || "";
       const last = enrollment.patient.last_name || "";
       if (first || last) return `${first} ${last}`.trim();
-      return enrollment.patient.email || "Unknown";
+      return enrollment.patient.email || t("unknown");
     }
-    return "Unknown Patient";
+    return t("unknownPatient");
   }
 
   function getStepStatusBadge(status: string) {
@@ -772,7 +781,7 @@ function WorkflowEnrollmentsModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Enrolled Patients</h2>
+            <h2 className="text-lg font-semibold text-slate-900">{t("modalTitle")}</h2>
             <p className="text-sm text-slate-500">{workflowName}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -786,7 +795,7 @@ function WorkflowEnrollmentsModal({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                 </svg>
                 <span className="max-w-32 truncate">
-                  {serviceFilter === "all" ? "All Services" : services.find((s) => s.id === serviceFilter)?.name || "Service"}
+                  {serviceFilter === "all" ? t("allServices") : services.find((s) => s.id === serviceFilter)?.name || t("service")}
                 </span>
                 <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -797,7 +806,7 @@ function WorkflowEnrollmentsModal({
                   <div className="p-2 border-b border-slate-100">
                     <input
                       type="text"
-                      placeholder="Search services..."
+                      placeholder={t("searchServices")}
                       value={serviceFilterSearch}
                       onChange={(e) => setServiceFilterSearch(e.target.value)}
                       className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-sm focus:border-sky-500 focus:outline-none"
@@ -809,7 +818,7 @@ function WorkflowEnrollmentsModal({
                       onClick={() => { setServiceFilter("all"); setServiceFilterOpen(false); setServiceFilterSearch(""); }}
                       className={`w-full rounded-md px-3 py-2 text-left text-sm ${serviceFilter === "all" ? "bg-sky-50 text-sky-700" : "text-slate-700 hover:bg-slate-50"}`}
                     >
-                      All Services
+                      {t("allServices")}
                     </button>
                     {filteredServices.map((service) => (
                       <button
@@ -821,7 +830,7 @@ function WorkflowEnrollmentsModal({
                       </button>
                     ))}
                     {filteredServices.length === 0 && (
-                      <p className="px-3 py-2 text-sm text-slate-400">No services found</p>
+                      <p className="px-3 py-2 text-sm text-slate-400">{t("noServicesFound")}</p>
                     )}
                   </div>
                 </div>
@@ -834,7 +843,7 @@ function WorkflowEnrollmentsModal({
               </svg>
               <input
                 type="text"
-                placeholder="Search by name or email..."
+                placeholder={t("searchByNameEmail")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-64 rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
@@ -866,7 +875,7 @@ function WorkflowEnrollmentsModal({
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-3">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-sky-500" />
-              <p className="text-sm text-slate-500">Loading enrollments...</p>
+              <p className="text-sm text-slate-500">{t("loading")}</p>
             </div>
           ) : error ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -875,17 +884,17 @@ function WorkflowEnrollmentsModal({
           ) : enrollments.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="mb-3 text-4xl">📭</div>
-              <h3 className="font-medium text-slate-900">No patients enrolled yet</h3>
+              <h3 className="font-medium text-slate-900">{t("emptyTitle")}</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Patients will appear here when the workflow is triggered
+                {t("emptyDesc")}
               </p>
             </div>
           ) : filteredEnrollments.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="mb-3 text-4xl">🔍</div>
-              <h3 className="font-medium text-slate-900">No results found</h3>
+              <h3 className="font-medium text-slate-900">{t("noResultsTitle")}</h3>
               <p className="mt-1 text-sm text-slate-500">
-                No patients match &quot;{searchQuery}&quot;
+                {t("noResultsDesc", { query: searchQuery })}
               </p>
             </div>
           ) : (
@@ -893,11 +902,11 @@ function WorkflowEnrollmentsModal({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left">
-                    <th className="pb-3 font-medium text-slate-700">Patient</th>
-                    <th className="pb-3 font-medium text-slate-700">Service</th>
-                    <th className="pb-3 font-medium text-slate-700">Enrolled</th>
-                    <th className="pb-3 font-medium text-slate-700">Status</th>
-                    <th className="pb-3 font-medium text-slate-700">Steps Completed</th>
+                    <th className="pb-3 font-medium text-slate-700">{t("columns.patient")}</th>
+                    <th className="pb-3 font-medium text-slate-700">{t("columns.service")}</th>
+                    <th className="pb-3 font-medium text-slate-700">{t("columns.enrolled")}</th>
+                    <th className="pb-3 font-medium text-slate-700">{t("columns.status")}</th>
+                    <th className="pb-3 font-medium text-slate-700">{t("columns.stepsCompleted")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -951,7 +960,7 @@ function WorkflowEnrollmentsModal({
                           {(() => {
                             const completedSteps = enrollment.steps.filter((s) => s.status === "completed");
                             return completedSteps.length === 0 ? (
-                              <span className="text-slate-400 text-xs">No steps completed</span>
+                              <span className="text-slate-400 text-xs">{t("noStepsCompleted")}</span>
                             ) : (
                               completedSteps.map((step) => (
                                 <span
@@ -979,9 +988,9 @@ function WorkflowEnrollmentsModal({
         <div className="border-t border-slate-200 px-6 py-4 flex justify-between items-center">
           <p className="text-sm text-slate-500">
             {searchQuery ? (
-              <>Showing {filteredEnrollments.length} of {enrollments.length} patient{enrollments.length !== 1 ? "s" : ""}</>
+              <>{t("showingFiltered", { filtered: filteredEnrollments.length, total: enrollments.length, label: enrollments.length !== 1 ? t("patientLabelPlural") : t("patientLabel") })}</>
             ) : (
-              <>{enrollments.length} patient{enrollments.length !== 1 ? "s" : ""} enrolled</>
+              <>{t("totalEnrolled", { total: enrollments.length, label: enrollments.length !== 1 ? t("patientLabelPlural") : t("patientLabel") })}</>
             )}
           </p>
           
@@ -998,7 +1007,7 @@ function WorkflowEnrollmentsModal({
                 </svg>
               </button>
               <span className="text-sm text-slate-600">
-                Page {currentPage} of {totalPages}
+                {t("pageInfo", { current: currentPage, total: totalPages })}
               </span>
               <button
                 onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
@@ -1016,7 +1025,7 @@ function WorkflowEnrollmentsModal({
             onClick={onClose}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            Close
+            {t("close")}
           </button>
         </div>
       </div>

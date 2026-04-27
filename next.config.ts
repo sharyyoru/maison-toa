@@ -1,4 +1,9 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
+
+// next-intl plugin. Picks up our request config at src/i18n/request.ts (the
+// default location). Uses cookie-based locale with no URL prefix.
+const withNextIntl = createNextIntlPlugin();
 
 const nextConfig: NextConfig = {
   eslint: {
@@ -26,4 +31,4 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

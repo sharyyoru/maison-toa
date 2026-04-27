@@ -2,8 +2,10 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 export default function NewUserForm() {
+  const t = useTranslations("usersPage.form");
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +25,7 @@ export default function NewUserForm() {
     const role = ((formData.get("role") as string | null) || "staff").trim();
 
     if (!firstName || !lastName || !email || !password || !designation || !role) {
-      setError("All fields are required.");
+      setError(t("allFieldsRequired"));
       return;
     }
 
@@ -55,14 +57,14 @@ export default function NewUserForm() {
       }
 
       if (!response.ok) {
-        setError(json?.error ?? "Failed to create user");
+        setError(json?.error ?? t("failedCreate"));
       } else {
-        setSuccess("User created successfully.");
+        setSuccess(t("success"));
         form.reset();
         router.refresh();
       }
     } catch (err) {
-      setError("Network or server error while creating user.");
+      setError(t("networkError"));
     } finally {
       setLoading(false);
     }
@@ -79,7 +81,7 @@ export default function NewUserForm() {
             htmlFor="first_name"
             className="block text-xs font-medium text-slate-700"
           >
-            First name
+            {t("firstName")}
           </label>
           <input
             id="first_name"
@@ -94,7 +96,7 @@ export default function NewUserForm() {
             htmlFor="last_name"
             className="block text-xs font-medium text-slate-700"
           >
-            Last name
+            {t("lastName")}
           </label>
           <input
             id="last_name"
@@ -111,7 +113,7 @@ export default function NewUserForm() {
             htmlFor="email"
             className="block text-xs font-medium text-slate-700"
           >
-            Email
+            {t("email")}
           </label>
           <input
             id="email"
@@ -126,7 +128,7 @@ export default function NewUserForm() {
             htmlFor="password"
             className="block text-xs font-medium text-slate-700"
           >
-            Temporary password
+            {t("tempPassword")}
           </label>
           <div className="relative">
             <input
@@ -142,7 +144,7 @@ export default function NewUserForm() {
               className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
             >
               <span className="sr-only">
-                {showPassword ? "Hide password" : "Show password"}
+                {showPassword ? t("hidePassword") : t("showPassword")}
               </span>
               {showPassword ? (
                 <svg
@@ -183,7 +185,7 @@ export default function NewUserForm() {
           htmlFor="role"
           className="block text-xs font-medium text-slate-700"
         >
-          Role
+          {t("role")}
         </label>
         <select
           id="role"
@@ -192,8 +194,8 @@ export default function NewUserForm() {
           required
           className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
         >
-          <option value="staff">Staff</option>
-          <option value="admin">Admin</option>
+          <option value="staff">{t("staffOption")}</option>
+          <option value="admin">{t("adminOption")}</option>
         </select>
       </div>
       <div className="space-y-1">
@@ -201,13 +203,13 @@ export default function NewUserForm() {
           htmlFor="designation"
           className="block text-xs font-medium text-slate-700"
         >
-          Designation
+          {t("designation")}
         </label>
         <input
           id="designation"
           name="designation"
           type="text"
-          placeholder="e.g. Practice manager, Surgeon, Nurse"
+          placeholder={t("designationPlaceholder")}
           required
           className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
         />
@@ -219,7 +221,7 @@ export default function NewUserForm() {
         disabled={loading}
         className="inline-flex items-center rounded-full border border-sky-200/80 bg-sky-600 px-4 py-1.5 text-xs font-medium text-white shadow-[0_10px_25px_rgba(15,23,42,0.22)] backdrop-blur hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loading ? "Creating..." : "Create user"}
+        {loading ? t("creating") : t("createUser")}
       </button>
     </form>
   );

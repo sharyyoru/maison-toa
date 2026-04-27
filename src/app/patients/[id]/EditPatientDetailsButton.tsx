@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 import PatientDetailsWizard from "./details/PatientDetailsWizard";
 
 export default function EditPatientDetailsButton({
@@ -11,6 +12,7 @@ export default function EditPatientDetailsButton({
   patientId: string;
 }) {
   const router = useRouter();
+  const t = useTranslations("patient");
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -36,7 +38,7 @@ export default function EditPatientDetailsButton({
             <path d="M13.7 3.3a1 1 0 011.4 0l1.6 1.6a1 1 0 010 1.4L15.7 8l-2.5-2.5 2.5-2.2z" />
           </svg>
         </span>
-        <span>Edit</span>
+        <span>{t("editBtn")}</span>
       </button>
       {open && mounted
         ? createPortal(

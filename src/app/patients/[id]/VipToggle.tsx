@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type Props = {
@@ -13,6 +14,7 @@ type Props = {
  * patient's appointments.
  */
 export default function VipToggle({ patientId }: Props) {
+  const t = useTranslations("patient");
   const [isVip, setIsVip] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +68,7 @@ export default function VipToggle({ patientId }: Props) {
       type="button"
       onClick={() => void toggle()}
       disabled={saving}
-      title={error ?? (isVip ? "Remove VIP status" : "Mark patient as VIP")}
+      title={error ?? (isVip ? t("removeVipTooltip") : t("markVipTooltip"))}
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium shadow-sm transition ${
         isVip
           ? "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
@@ -74,7 +76,7 @@ export default function VipToggle({ patientId }: Props) {
       } disabled:cursor-not-allowed disabled:opacity-60`}
     >
       <span aria-hidden>{isVip ? "⭐" : "☆"}</span>
-      <span>{isVip ? "VIP" : "Mark VIP"}</span>
+      <span>{isVip ? t("vip") : t("markVip")}</span>
     </button>
   );
 }

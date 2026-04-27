@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { Pencil, X } from "lucide-react";
 
@@ -28,6 +29,7 @@ export default function PatientCockpitDetails({
   patient: PatientData;
 }) {
   const router = useRouter();
+  const t = useTranslations("patient.cockpit");
   const [openModal, setOpenModal] = useState<ModalType>(null);
   const [saving, setSaving] = useState(false);
 
@@ -109,88 +111,88 @@ export default function PatientCockpitDetails({
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1 text-[11px]">
             <h3 className="mb-2 flex items-center text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Patient Details
+              {t("patientDetails")}
               {editBtn("details")}
             </h3>
             <p className="text-slate-500">
-              <span className="font-semibold text-slate-700">Email:</span>{" "}
-              <span className="text-slate-900">{patient.email ?? "N/A"}</span>
+              <span className="font-semibold text-slate-700">{t("email")}</span>{" "}
+              <span className="text-slate-900">{patient.email ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
-              <span className="font-semibold text-slate-700">Mobile Number:</span>{" "}
-              <span className="text-slate-900">{patient.phone ?? "N/A"}</span>
+              <span className="font-semibold text-slate-700">{t("mobileNumber")}</span>{" "}
+              <span className="text-slate-900">{patient.phone ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
-              <span className="font-semibold text-slate-700">Civil Status:</span>{" "}
-              <span className="text-slate-900">{patient.marital_status ?? "N/A"}</span>
+              <span className="font-semibold text-slate-700">{t("civilStatus")}</span>{" "}
+              <span className="text-slate-900">{patient.marital_status ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
-              <span className="font-semibold text-slate-700">Gender:</span>{" "}
-              <span className="text-slate-900">{patient.gender ?? "N/A"}</span>
+              <span className="font-semibold text-slate-700">{t("gender")}</span>{" "}
+              <span className="text-slate-900">{patient.gender ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
-              <span className="font-semibold text-slate-700">Patient Number:</span>{" "}
+              <span className="font-semibold text-slate-700">{t("patientNumber")}</span>{" "}
               <span className="text-slate-900">{patient.id}</span>
             </p>
           </div>
 
           <div className="space-y-1 text-[11px]">
             <h3 className="mb-2 flex items-center text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Patient Address
+              {t("patientAddress")}
               {editBtn("address")}
             </h3>
             <p className="text-slate-500">
-              <span className="font-semibold text-slate-700">Street:</span>{" "}
-              <span className="text-slate-900">{patient.street_address ?? "N/A"}</span>
+              <span className="font-semibold text-slate-700">{t("street")}</span>{" "}
+              <span className="text-slate-900">{patient.street_address ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
-              <span className="font-semibold text-slate-700">Zip Code:</span>{" "}
-              <span className="text-slate-900">{patient.postal_code ?? "N/A"}</span>
+              <span className="font-semibold text-slate-700">{t("zipCode")}</span>{" "}
+              <span className="text-slate-900">{patient.postal_code ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
-              <span className="font-semibold text-slate-700">Town:</span>{" "}
-              <span className="text-slate-900">{patient.town ?? "N/A"}</span>
+              <span className="font-semibold text-slate-700">{t("town")}</span>{" "}
+              <span className="text-slate-900">{patient.town ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
-              <span className="font-semibold text-slate-700">Country:</span>{" "}
+              <span className="font-semibold text-slate-700">{t("country")}</span>{" "}
               <span className="text-slate-900">{
-                ({ CH:"🇨🇭 Switzerland", DE:"🇩🇪 Germany", FR:"🇫🇷 France", AT:"🇦🇹 Austria", IT:"🇮🇹 Italy", LI:"🇱🇮 Liechtenstein", LU:"🇱🇺 Luxembourg", BE:"🇧🇪 Belgium", NL:"🇳🇱 Netherlands", ES:"🇪🇸 Spain", PT:"🇵🇹 Portugal", GB:"🇬🇧 United Kingdom", US:"🇺🇸 United States" } as Record<string,string>)[patient.country ?? ""] || patient.country || "N/A"
+                ({ CH:"🇨🇭 Switzerland", DE:"🇩🇪 Germany", FR:"🇫🇷 France", AT:"🇦🇹 Austria", IT:"🇮🇹 Italy", LI:"🇱🇮 Liechtenstein", LU:"🇱🇺 Luxembourg", BE:"🇧🇪 Belgium", NL:"🇳🇱 Netherlands", ES:"🇪🇸 Spain", PT:"🇵🇹 Portugal", GB:"🇬🇧 United Kingdom", US:"🇺🇸 United States" } as Record<string,string>)[patient.country ?? ""] || patient.country || t("na")
               }</span>
             </p>
           </div>
 
           <div className="space-y-1 text-[11px]">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Patient Emergency Contact
+              {t("emergencyContact")}
             </h3>
             <p className="text-slate-500">
-              <span className="font-semibold text-slate-700">Name:</span>{" "}
-              <span className="text-slate-900">{patient.emergency_contact_name ?? "N/A"}</span>
+              <span className="font-semibold text-slate-700">{t("emergencyName")}</span>{" "}
+              <span className="text-slate-900">{patient.emergency_contact_name ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
-              <span className="font-semibold text-slate-700">Mobile Number:</span>{" "}
-              <span className="text-slate-900">{patient.emergency_contact_phone ?? "N/A"}</span>
+              <span className="font-semibold text-slate-700">{t("emergencyPhone")}</span>{" "}
+              <span className="text-slate-900">{patient.emergency_contact_phone ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
-              <span className="font-semibold text-slate-700">Relation to Patient:</span>{" "}
-              <span className="text-slate-900">{patient.emergency_contact_relation ?? "N/A"}</span>
+              <span className="font-semibold text-slate-700">{t("emergencyRelation")}</span>{" "}
+              <span className="text-slate-900">{patient.emergency_contact_relation ?? t("na")}</span>
             </p>
           </div>
 
           <div className="space-y-2 text-[11px]">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Before and After
+              {t("beforeAndAfter")}
             </h3>
             <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-medium text-slate-500">
-                  View reconstruction
+                  {t("viewReconstruction")}
                 </p>
                 <button
                   type="button"
                   className="inline-flex items-center rounded-full border border-sky-200/80 bg-sky-600 px-3 py-1 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700"
                 >
-                  View
+                  {t("view")}
                 </button>
               </div>
             </div>
@@ -211,15 +213,15 @@ export default function PatientCockpitDetails({
             </button>
 
             <h2 className="mb-4 text-sm font-semibold text-slate-900">
-              {openModal === "details" && "Edit Patient Details"}
-              {openModal === "address" && "Edit Patient Address"}
+              {openModal === "details" && t("editDetails")}
+              {openModal === "address" && t("editAddress")}
             </h2>
 
             <div className="space-y-3">
               {openModal === "details" && (
                 <>
                   <label className="block">
-                    <span className="text-xs font-medium text-slate-600">Email</span>
+                    <span className="text-xs font-medium text-slate-600">{t("emailLabel")}</span>
                     <input
                       type="email"
                       value={email}
@@ -228,7 +230,7 @@ export default function PatientCockpitDetails({
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs font-medium text-slate-600">Mobile Number</span>
+                    <span className="text-xs font-medium text-slate-600">{t("mobileLabel")}</span>
                     <input
                       type="text"
                       value={phone}
@@ -237,7 +239,7 @@ export default function PatientCockpitDetails({
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs font-medium text-slate-600">Civil Status</span>
+                    <span className="text-xs font-medium text-slate-600">{t("civilStatusLabel")}</span>
                     <input
                       type="text"
                       value={maritalStatus}
@@ -246,16 +248,16 @@ export default function PatientCockpitDetails({
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs font-medium text-slate-600">Gender</span>
+                    <span className="text-xs font-medium text-slate-600">{t("genderLabel")}</span>
                     <select
                       value={gender}
                       onChange={(e) => setGender(e.target.value)}
                       className="mt-1 block w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
                     >
-                      <option value="">Select</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
+                      <option value="">{t("selectGender")}</option>
+                      <option value="male">{t("male")}</option>
+                      <option value="female">{t("female")}</option>
+                      <option value="other">{t("other")}</option>
                     </select>
                   </label>
                 </>
@@ -264,7 +266,7 @@ export default function PatientCockpitDetails({
               {openModal === "address" && (
                 <>
                   <label className="block">
-                    <span className="text-xs font-medium text-slate-600">Street</span>
+                    <span className="text-xs font-medium text-slate-600">{t("streetLabel")}</span>
                     <input
                       type="text"
                       value={streetAddress}
@@ -273,7 +275,7 @@ export default function PatientCockpitDetails({
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs font-medium text-slate-600">Zip Code</span>
+                    <span className="text-xs font-medium text-slate-600">{t("zipCodeLabel")}</span>
                     <input
                       type="text"
                       value={postalCode}
@@ -282,7 +284,7 @@ export default function PatientCockpitDetails({
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs font-medium text-slate-600">Town</span>
+                    <span className="text-xs font-medium text-slate-600">{t("townLabel")}</span>
                     <input
                       type="text"
                       value={town}
@@ -291,13 +293,13 @@ export default function PatientCockpitDetails({
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs font-medium text-slate-600">Country</span>
+                    <span className="text-xs font-medium text-slate-600">{t("countryLabel")}</span>
                     <select
                       value={country}
                       onChange={(e) => setCountry(e.target.value)}
                       className="mt-1 block w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
                     >
-                      <option value="">Select country</option>
+                      <option value="">{t("selectCountry")}</option>
                       <option value="CH">🇨🇭 Switzerland (CH)</option>
                       <option value="DE">🇩🇪 Germany (DE)</option>
                       <option value="FR">🇫🇷 France (FR)</option>
@@ -323,7 +325,7 @@ export default function PatientCockpitDetails({
                 onClick={() => setOpenModal(null)}
                 className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 type="button"
@@ -331,7 +333,7 @@ export default function PatientCockpitDetails({
                 disabled={saving}
                 className="rounded-lg bg-sky-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-sky-700 disabled:opacity-50"
               >
-                {saving ? "Saving..." : "Save"}
+                {saving ? t("saving") : t("save")}
               </button>
             </div>
           </div>

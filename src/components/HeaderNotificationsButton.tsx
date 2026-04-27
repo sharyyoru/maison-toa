@@ -2,10 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEmailNotifications } from "@/components/EmailNotificationsContext";
 
 export default function HeaderNotificationsButton() {
   const router = useRouter();
+  const t = useTranslations("header");
   const { unreadCount, notifications, loading, markAsRead, markAllAsRead } = useEmailNotifications();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -36,16 +38,16 @@ export default function HeaderNotificationsButton() {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffMins < 1) return t("justNow");
+    if (diffMins < 60) return t("minutesAgo", { n: diffMins });
+    if (diffHours < 24) return t("hoursAgo", { n: diffHours });
+    if (diffDays < 7) return t("daysAgo", { n: diffDays });
     return date.toLocaleDateString();
   }
 
   function getPatientName(patient: { first_name: string | null; last_name: string | null } | null): string {
-    if (!patient) return "Unknown";
-    return `${patient.first_name || ""} ${patient.last_name || ""}`.trim() || "Unknown";
+    if (!patient) return t("unknownPatient");
+    return `${patient.first_name || ""} ${patient.last_name || ""}`.trim() || t("unknownPatient");
   }
 
   function stripHtml(html: string | null): string {
@@ -59,9 +61,9 @@ export default function HeaderNotificationsButton() {
         type="button"
         onClick={() => setDropdownOpen(!dropdownOpen)}
         className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 bg-white/80 text-slate-500 shadow-sm hover:bg-slate-50"
-        title="Email Notifications"
+        title={t("emailNotifications")}
       >
-        <span className="sr-only">Email notifications</span>
+        <span className="sr-only">{t("emailNotifications")}</span>
         <svg
           className="h-4 w-4"
           viewBox="0 0 24 24"
@@ -84,22 +86,22 @@ export default function HeaderNotificationsButton() {
       {dropdownOpen && (
         <div className="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-lg">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-            <h3 className="text-sm font-semibold text-slate-900">Email Replies</h3>
+            <h3 className="text-sm font-semibold text-slate-900">{t("emailReplies")}</h3>
             {hasUnread && (
               <button
                 type="button"
                 onClick={() => void markAllAsRead()}
                 className="text-[10px] font-medium text-sky-600 hover:text-sky-700"
               >
-                Mark all read
+                {t("markAllRead")}
               </button>
             )}
           </div>
           <div className="max-h-80 overflow-y-auto">
             {loading ? (
-              <p className="px-4 py-6 text-center text-xs text-slate-500">Loading...</p>
+              <p className="px-4 py-6 text-center text-xs text-slate-500">{t("loadingUser")}</p>
             ) : notifications.length === 0 ? (
-              <p className="px-4 py-6 text-center text-xs text-slate-500">No email notifications</p>
+              <p className="px-4 py-6 text-center text-xs text-slate-500">{t("noEmailNotifications")}</p>
             ) : (
               notifications.map((notification) => (
                 <button
@@ -134,7 +136,7 @@ export default function HeaderNotificationsButton() {
                       </span>
                     </div>
                     <p className="truncate text-[11px] text-slate-600">
-                      {notification.reply_email?.subject || "New reply"}
+                      {notification.reply_email?.subject || t("newReply")}
                     </p>
                     <p className="mt-0.5 truncate text-[10px] text-slate-400">
                       {stripHtml(notification.reply_email?.body ?? null)}
@@ -156,7 +158,7 @@ export default function HeaderNotificationsButton() {
               }}
               className="w-full text-center text-[11px] font-medium text-sky-600 hover:text-sky-700"
             >
-              View all notifications
+              {t("viewAllNotifications")}
             </button>
           </div>
         </div>

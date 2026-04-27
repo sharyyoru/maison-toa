@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import NewUserForm from "./NewUserForm";
 
@@ -18,6 +19,7 @@ type UserRow = {
 const ITEMS_PER_PAGE = 10;
 
 export default function UsersPage() {
+  const t = useTranslations("usersPage");
   const router = useRouter();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,7 +154,7 @@ export default function UsersPage() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-sm text-slate-500">Loading users...</p>
+        <p className="text-sm text-slate-500">{t("loading")}</p>
       </div>
     );
   }
@@ -161,11 +163,11 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">User Management</h1>
+          <h1 className="text-xl font-semibold text-slate-900">{t("title")}</h1>
           <p className="text-sm text-slate-500">
             {isAdmin
-              ? "Invite, manage, and configure roles for team members using the CRM."
-              : "View team members using the CRM."}
+              ? t("subtitleAdmin")
+              : t("subtitleStaff")}
           </p>
         </div>
         {isAdmin && (
@@ -183,14 +185,14 @@ export default function UsersPage() {
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 6 6 18M6 6l12 12" />
                 </svg>
-                Hide Form
+                {t("hideForm")}
               </>
             ) : (
               <>
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 5v14M5 12h14" />
                 </svg>
-                Add User
+                {t("addUser")}
               </>
             )}
           </button>
@@ -202,6 +204,7 @@ export default function UsersPage() {
       )}
 
       <UserTable
+        t={t}
         users={paginatedUsers}
         allUsersCount={filteredUsers.length}
         isAdmin={isAdmin}
@@ -221,6 +224,7 @@ export default function UsersPage() {
 }
 
 function UserTable({
+  t,
   users,
   allUsersCount,
   isAdmin,
@@ -235,6 +239,7 @@ function UserTable({
   onPageChange,
   itemsPerPage,
 }: {
+  t: ReturnType<typeof useTranslations>;
   users: UserRow[];
   allUsersCount: number;
   isAdmin: boolean;
@@ -253,9 +258,9 @@ function UserTable({
     <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-medium text-slate-800">Team</h2>
+          <h2 className="text-sm font-medium text-slate-800">{t("team")}</h2>
           <p className="text-xs text-slate-500">
-            {allUsersCount} team member{allUsersCount !== 1 ? "s" : ""} in the system.
+            {t("teamCount", { count: allUsersCount })}
           </p>
         </div>
         <div className="relative flex-1 max-w-xs min-w-[200px]">
@@ -267,24 +272,24 @@ function UserTable({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search by name, email, role..."
+            placeholder={t("searchPlaceholder")}
             className="w-full rounded-lg border border-slate-200 bg-slate-50/80 py-1.5 pl-9 pr-3 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
           />
         </div>
       </div>
       {users.length === 0 ? (
-        <p className="text-slate-500 text-xs">No users found{searchQuery ? " matching your search" : ""}.</p>
+        <p className="text-slate-500 text-xs">{searchQuery ? t("noUsersSearch") : t("noUsers")}</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-xs sm:text-sm">
             <thead className="border-b text-[11px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="py-2 pr-4 font-medium">Name</th>
-                <th className="py-2 pr-4 font-medium">Email</th>
-                <th className="py-2 pr-4 font-medium">Role</th>
-                <th className="py-2 pr-4 font-medium">Designation</th>
-                <th className="py-2 pr-4 font-medium">Created</th>
-                {isAdmin && <th className="py-2 pr-4 font-medium">Actions</th>}
+                <th className="py-2 pr-4 font-medium">{t("columns.name")}</th>
+                <th className="py-2 pr-4 font-medium">{t("columns.email")}</th>
+                <th className="py-2 pr-4 font-medium">{t("columns.role")}</th>
+                <th className="py-2 pr-4 font-medium">{t("columns.designation")}</th>
+                <th className="py-2 pr-4 font-medium">{t("columns.created")}</th>
+                {isAdmin && <th className="py-2 pr-4 font-medium">{t("columns.actions")}</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -315,7 +320,7 @@ function UserTable({
                             : "bg-slate-50 text-slate-700"
                         }`}
                       >
-                        {user.role || "staff"}
+                        {user.role || t("staff")}
                       </span>
                     </td>
                     <td className="py-2 pr-4 text-slate-700">
@@ -337,7 +342,7 @@ function UserTable({
                                 disabled={isUpdating}
                                 className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50"
                               >
-                                {isUpdating ? "..." : "Remove Admin"}
+                                {isUpdating ? "..." : t("removeAdmin")}
                               </button>
                             ) : (
                               <button
@@ -346,13 +351,13 @@ function UserTable({
                                 disabled={isUpdating}
                                 className="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 shadow-sm hover:bg-amber-100 disabled:opacity-50"
                               >
-                                {isUpdating ? "..." : "Make Admin"}
+                                {isUpdating ? "..." : t("makeAdmin")}
                               </button>
                             )}
                           </>
                         )}
                         {isSelf && (
-                          <span className="text-[10px] text-slate-400">You</span>
+                          <span className="text-[10px] text-slate-400">{t("you")}</span>
                         )}
                       </td>
                     )}
@@ -368,7 +373,7 @@ function UserTable({
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
           <p className="text-[11px] text-slate-500">
-            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, allUsersCount)} of {allUsersCount} users
+            {t("showing", { from: ((currentPage - 1) * itemsPerPage) + 1, to: Math.min(currentPage * itemsPerPage, allUsersCount), total: allUsersCount })}
           </p>
           <div className="flex items-center gap-1">
             <button

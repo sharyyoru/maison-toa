@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { useCommentsUnread } from "@/components/CommentsUnreadContext";
 import TaskEditModal from "@/components/TaskEditModal";
@@ -76,6 +77,7 @@ type TaskMentionRow = {
 type MentionRow = NoteMentionRow | TaskMentionRow;
 
 export default function CommentsPage() {
+  const t = useTranslations("commentsPage");
   const router = useRouter();
   const [mentions, setMentions] = useState<MentionRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,7 +107,7 @@ export default function CommentsPage() {
 
         if (!user) {
           if (!isMounted) return;
-          setError("You must be logged in to view comments.");
+          setError(t("mustBeLoggedIn"));
           setMentions([]);
           setLoading(false);
           return;
@@ -141,7 +143,7 @@ export default function CommentsPage() {
         if (!isMounted) return;
 
         if (noteError && taskError) {
-          setError("Failed to load comments.");
+          setError(t("failedLoad"));
           setMentions([]);
           setLoading(false);
           return;
@@ -175,7 +177,7 @@ export default function CommentsPage() {
         setLoading(false);
       } catch {
         if (!isMounted) return;
-        setError("Failed to load comments.");
+        setError(t("failedLoad"));
         setMentions([]);
         setLoading(false);
       }
@@ -221,7 +223,7 @@ export default function CommentsPage() {
       // Only update local state if database updates succeeded
       if (noteError || taskError) {
         console.error("Failed to mark comments as read:", noteError, taskError);
-        setToastMessage("Failed to mark comments as read. Please try again.");
+        setToastMessage(t("failedMarkRead"));
         setMarkingRead(false);
         return;
       }
@@ -234,11 +236,11 @@ export default function CommentsPage() {
         ),
       );
       setUnreadCountOptimistic((prev) => prev - unreadNotes.length - unreadTasks.length);
-      setToastMessage("All comments marked as read.");
+      setToastMessage(t("allMarkedRead"));
       setMarkingRead(false);
     } catch (err) {
       console.error("Error marking comments as read:", err);
-      setToastMessage("Failed to mark comments as read. Please try again.");
+      setToastMessage(t("failedMarkRead"));
       setMarkingRead(false);
     }
   }
@@ -330,9 +332,9 @@ export default function CommentsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Comments</h1>
+          <h1 className="text-lg font-semibold text-slate-900">{t("title")}</h1>
           <p className="text-xs text-slate-500">
-            Notes where teammates mentioned you. Click through to open the patient.
+            {t("subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -350,7 +352,7 @@ export default function CommentsPage() {
                   : "text-slate-600 hover:text-slate-900")
               }
             >
-              All
+              {t("filterAll")}
             </button>
             <button
               type="button"
@@ -365,7 +367,7 @@ export default function CommentsPage() {
                   : "text-slate-600 hover:text-slate-900")
               }
             >
-              Unread
+              {t("filterUnread")}
             </button>
             <button
               type="button"
@@ -380,7 +382,7 @@ export default function CommentsPage() {
                   : "text-slate-600 hover:text-slate-900")
               }
             >
-              Read
+              {t("filterRead")}
             </button>
           </div>
           <button
@@ -392,7 +394,7 @@ export default function CommentsPage() {
             disabled={loading}
             className="inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? "Refreshing..." : "Refresh"}
+            {loading ? t("refreshing") : t("refresh")}
           </button>
           {mentions.some((m) => !m.read_at) ? (
             <button
@@ -401,7 +403,7 @@ export default function CommentsPage() {
               disabled={markingRead}
               className="inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {markingRead ? "Marking..." : "Mark all as read"}
+              {markingRead ? t("markingRead") : t("markAllRead")}
             </button>
           ) : null}
         </div>
@@ -409,11 +411,11 @@ export default function CommentsPage() {
 
       <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
         {loading ? (
-          <p className="text-xs text-slate-500">Loading comments...</p>
+          <p className="text-xs text-slate-500">{t("loading")}</p>
         ) : error ? (
           <p className="text-xs text-red-600">{error}</p>
         ) : mentions.length === 0 ? (
-          <p className="text-xs text-slate-500">No comments yet.</p>
+          <p className="text-xs text-slate-500">{t("noComments")}</p>
         ) : (
           <div className="space-y-4 text-xs">
             {(() => {
@@ -451,7 +453,7 @@ export default function CommentsPage() {
                 const patient = mention.patient;
                 const patientName = patient
                   ? `${patient.first_name} ${patient.last_name}`
-                  : "Unknown patient";
+                  : t("unknownPatient");
                 const patientId = patient?.id;
 
                 // Handle task mention
@@ -474,12 +476,12 @@ export default function CommentsPage() {
                           <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                             {createdLabel ? <span>{createdLabel}</span> : null}
                             <span className="inline-flex items-center rounded-full bg-purple-100 px-1.5 py-0.5 text-[9px] font-medium text-purple-700">
-                              Task Comment
+                              {t("taskComment")}
                             </span>
                             <span>
-                              Task:{" "}
+                              {t("taskLabel")}{" "}
                               <span className="font-medium text-purple-700">
-                                {task?.name || "No Task Name"}
+                                {task?.name || t("noTaskName")}
                               </span>
                             </span>
                           </div>
@@ -487,10 +489,10 @@ export default function CommentsPage() {
                             {comment?.author_name ? (
                               <span className="font-medium">{comment.author_name}: </span>
                             ) : null}
-                            <span>{stripHtmlTags(comment?.body ?? "(Comment unavailable)")}</span>
+                            <span>{stripHtmlTags(comment?.body ?? t("commentUnavailable"))}</span>
                           </p>
                           <p className="mt-0.5 text-[10px] text-slate-500">
-                            Patient:{" "}
+                            {t("patientLabel")}{" "}
                             {patientId ? (
                               <span
                                 onClick={(e) => {
@@ -517,7 +519,7 @@ export default function CommentsPage() {
                                 }}
                                 className="inline-flex items-center rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700 hover:bg-purple-100 transition-colors"
                               >
-                                Mark as read
+                                {t("markAsRead")}
                               </button>
                               <span className="inline-flex h-2 w-2 rounded-full bg-purple-500" />
                             </>
@@ -551,10 +553,10 @@ export default function CommentsPage() {
                         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                           {createdLabel ? <span>{createdLabel}</span> : null}
                           <span className="inline-flex items-center rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-medium text-sky-700">
-                            Patient Note
+                            {t("patientNote")}
                           </span>
                           <span>
-                            Patient:{" "}
+                            {t("patientLabel")}{" "}
                             {patientId ? (
                               <span
                                 onClick={(e) => {
@@ -576,7 +578,7 @@ export default function CommentsPage() {
                           {note?.author_name ? (
                             <span className="font-medium">{note.author_name}: </span>
                           ) : null}
-                          <span>{stripHtmlTags(note?.body ?? "(Note unavailable)")}</span>
+                          <span>{stripHtmlTags(note?.body ?? t("noteUnavailable"))}</span>
                         </p>
                       </button>
                       <div className="flex items-center gap-2">
@@ -590,7 +592,7 @@ export default function CommentsPage() {
                               }}
                               className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700 hover:bg-sky-100 transition-colors"
                             >
-                              Mark as read
+                              {t("markAsRead")}
                             </button>
                             <span className="inline-flex h-2 w-2 rounded-full bg-sky-500" />
                           </>
@@ -605,18 +607,18 @@ export default function CommentsPage() {
                 <>
                   {paginatedUnread.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-[11px] font-semibold text-slate-600">Unread</p>
+                      <p className="text-[11px] font-semibold text-slate-600">{t("unreadSection")}</p>
                       {paginatedUnread.map((m) => renderMentionRow(m))}
                     </div>
                   )}
                   {paginatedRead.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-[11px] font-semibold text-slate-600">Read</p>
+                      <p className="text-[11px] font-semibold text-slate-600">{t("readSection")}</p>
                       {paginatedRead.map((m) => renderMentionRow(m))}
                     </div>
                   )}
                   {allMentions.length === 0 && (
-                    <p className="text-xs text-slate-500">No comments in this category.</p>
+                    <p className="text-xs text-slate-500">{t("noCommentsInCategory")}</p>
                   )}
                   {totalPages > 1 && (
                     <div className="flex items-center justify-center gap-2 pt-4 border-t border-slate-200">
@@ -626,10 +628,10 @@ export default function CommentsPage() {
                         disabled={currentPage === 1}
                         className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Previous
+                        {t("previous")}
                       </button>
                       <span className="text-[11px] text-slate-600">
-                        Page {currentPage} of {totalPages}
+                        {t("pageInfo", { current: currentPage, total: totalPages })}
                       </span>
                       <button
                         type="button"
@@ -637,7 +639,7 @@ export default function CommentsPage() {
                         disabled={currentPage === totalPages}
                         className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Next
+                        {t("next")}
                       </button>
                     </div>
                   )}

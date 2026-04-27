@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { useTasksNotifications } from "@/components/TasksNotificationsContext";
 import TaskEditModal from "@/components/TaskEditModal";
@@ -35,6 +36,7 @@ type TaskNotificationRow = {
 };
 
 export default function NotificationsPage() {
+  const t = useTranslations("notificationsPage");
   const router = useRouter();
   const [rows, setRows] = useState<TaskNotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +66,7 @@ export default function NotificationsPage() {
 
         if (!user) {
           if (!isMounted) return;
-          setError("You must be logged in to view notifications.");
+          setError(t("errorMustLogin"));
           setRows([]);
           setLoading(false);
           return;
@@ -81,7 +83,7 @@ export default function NotificationsPage() {
         if (!isMounted) return;
 
         if (error || !data) {
-          setError(error?.message ?? "Failed to load notifications.");
+          setError(error?.message ?? t("errorFailedLoad"));
           setRows([]);
           setLoading(false);
           return;
@@ -92,7 +94,7 @@ export default function NotificationsPage() {
           task: {
             id: row.id as string,
             patient_id: row.patient_id as string,
-            name: (row.name as string) ?? "Untitled task",
+            name: (row.name as string) ?? t("untitledTask"),
             content: (row.content as string | null) ?? null,
             status: row.status as NotificationTask["status"],
             priority: row.priority as NotificationTask["priority"],
@@ -117,7 +119,7 @@ export default function NotificationsPage() {
         setLoading(false);
       } catch {
         if (!isMounted) return;
-        setError("Failed to load notifications.");
+        setError(t("errorFailedLoad"));
         setRows([]);
         setLoading(false);
       }
@@ -236,7 +238,7 @@ export default function NotificationsPage() {
                 task: {
                   id: updated.id as string,
                   patient_id: updated.patient_id as string,
-                  name: (updated.name as string) ?? "Untitled task",
+                  name: (updated.name as string) ?? t("untitledTask"),
                   content: (updated.content as string | null) ?? null,
                   status: updated.status as NotificationTask["status"],
                   priority: updated.priority as NotificationTask["priority"],
@@ -270,9 +272,9 @@ export default function NotificationsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Notifications</h1>
+          <h1 className="text-lg font-semibold text-slate-900">{t("title")}</h1>
           <p className="text-xs text-slate-500">
-            Tasks assigned to you across all patients.
+            {t("subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -290,7 +292,7 @@ export default function NotificationsPage() {
                   : "text-slate-600 hover:text-slate-900")
               }
             >
-              All
+              {t("filterAll")}
             </button>
             <button
               type="button"
@@ -305,7 +307,7 @@ export default function NotificationsPage() {
                   : "text-slate-600 hover:text-slate-900")
               }
             >
-              Unread
+              {t("filterUnread")}
             </button>
             <button
               type="button"
@@ -320,7 +322,7 @@ export default function NotificationsPage() {
                   : "text-slate-600 hover:text-slate-900")
               }
             >
-              Read
+              {t("filterRead")}
             </button>
           </div>
           <button
@@ -332,7 +334,7 @@ export default function NotificationsPage() {
             disabled={loading}
             className="inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? "Refreshing..." : "Refresh"}
+            {loading ? t("refreshing") : t("refresh")}
           </button>
           {rows.some((row) => row.task && !row.task.assigned_read_at) ? (
             <button
@@ -341,7 +343,7 @@ export default function NotificationsPage() {
               disabled={markingAllRead}
               className="inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {markingAllRead ? "Marking..." : "Mark all as read"}
+              {markingAllRead ? t("marking") : t("markAllRead")}
             </button>
           ) : null}
         </div>
@@ -349,11 +351,11 @@ export default function NotificationsPage() {
 
       <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
         {loading ? (
-          <p className="text-xs text-slate-500">Loading notifications...</p>
+          <p className="text-xs text-slate-500">{t("loading")}</p>
         ) : error ? (
           <p className="text-xs text-red-600">{error}</p>
         ) : rows.length === 0 ? (
-          <p className="text-xs text-slate-500">No task notifications yet.</p>
+          <p className="text-xs text-slate-500">{t("empty")}</p>
         ) : (
           <div className="space-y-4 text-xs">
             {(() => {
@@ -405,7 +407,7 @@ export default function NotificationsPage() {
                 const patient = row.patient;
                 const patientName = patient
                   ? `${patient.first_name} ${patient.last_name}`
-                  : "Unknown patient";
+                  : t("unknownPatient");
                 const patientId = patient?.id;
 
                 const isCompleted = task.status === "completed";
@@ -428,7 +430,7 @@ export default function NotificationsPage() {
                       <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                         {createdLabel ? <span>{createdLabel}</span> : null}
                         <span>
-                          Task for:{" "}
+                          {t("taskFor")}{" "}
                           {patientId ? (
                             <button
                               type="button"
@@ -454,23 +456,23 @@ export default function NotificationsPage() {
                         ) : null}
                       </p>
                       <p className="mt-0.5 text-[10px] text-slate-500">
-                        Status:{" "}
+                        {t("statusLabel")}{" "}
                         <span className="font-medium capitalize">
                           {task.status === "in_progress"
                             ? "In progress"
                             : task.status.replace("_", " ")}
                         </span>
-                        {" "}• Priority:{" "}
+                        {" "}• {t("priorityLabel")}{" "}
                         <span className="font-medium capitalize">
                           {task.priority}
                         </span>
-                        {" "}• Type:{" "}
+                        {" "}• {t("typeLabel")}{" "}
                         <span className="font-medium capitalize">{task.type}</span>
                       </p>
                       <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
                         {task.created_by_name ? (
                           <span>
-                            Created by{" "}
+                            {t("createdBy")}{" "}
                             <span className="font-medium">
                               {task.created_by_name}
                             </span>
@@ -484,7 +486,7 @@ export default function NotificationsPage() {
                               : "border-emerald-200 bg-emerald-50 text-emerald-700")
                           }
                         >
-                          {isRead ? "Read" : "Unread"}
+                          {isRead ? t("read") : t("unread")}
                         </span>
                       </div>
                     </div>
@@ -496,11 +498,11 @@ export default function NotificationsPage() {
                         }}
                         className="mt-1 inline-flex items-center rounded-full border border-slate-300 bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-800 shadow-sm hover:bg-slate-300 cursor-pointer"
                       >
-                        {isUpdating ? "Updating..." : "Set complete"}
+                        {isUpdating ? t("updating") : t("setComplete")}
                       </span>
                     ) : (
                       <span className="mt-1 inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                        Completed
+                        {t("completed")}
                       </span>
                     )}
                   </button>
@@ -512,7 +514,7 @@ export default function NotificationsPage() {
                   {paginatedOpen.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-[11px] font-semibold text-slate-600">
-                        Open tasks
+                        {t("openTasks")}
                       </p>
                       {paginatedOpen.map((row) => renderRow(row))}
                     </div>
@@ -520,13 +522,13 @@ export default function NotificationsPage() {
                   {paginatedCompleted.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-[11px] font-semibold text-slate-600">
-                        Completed
+                        {t("completedSection")}
                       </p>
                       {paginatedCompleted.map((row) => renderRow(row))}
                     </div>
                   )}
                   {allRows.length === 0 && (
-                    <p className="text-xs text-slate-500">No notifications in this category.</p>
+                    <p className="text-xs text-slate-500">{t("emptyCategory")}</p>
                   )}
                   {totalPages > 1 && (
                     <div className="flex items-center justify-center gap-2 pt-4 border-t border-slate-200">
@@ -536,10 +538,10 @@ export default function NotificationsPage() {
                         disabled={currentPage === 1}
                         className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Previous
+                        {t("previous")}
                       </button>
                       <span className="text-[11px] text-slate-600">
-                        Page {currentPage} of {totalPages}
+                        {t("pageInfo", { current: currentPage, total: totalPages })}
                       </span>
                       <button
                         type="button"
@@ -547,7 +549,7 @@ export default function NotificationsPage() {
                         disabled={currentPage === totalPages}
                         className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Next
+                        {t("next")}
                       </button>
                     </div>
                   )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 type TabKey = "primary" | "address" | "insurance";
 
@@ -15,6 +16,7 @@ export default function PatientDetailsTabs({
   insurance: any[];
 }) {
   const [activeTab, setActiveTab] = useState<TabKey>("primary");
+  const t = useTranslations("patient.detailsTabs");
 
   // Defensive: ensure insurance is always an array
   const safeInsurance = Array.isArray(insurance) ? insurance : [];
@@ -36,9 +38,9 @@ export default function PatientDetailsTabs({
           <div className="inline-flex min-w-[260px] justify-center rounded-full border border-slate-200/80 bg-white/80 px-1.5 py-0.5 text-xs shadow-sm backdrop-blur">
             {(
               [
-                { key: "primary" as TabKey, label: "Primary details" },
-                { key: "address" as TabKey, label: "Address & background" },
-                { key: "insurance" as TabKey, label: "Insurance" },
+                { key: "primary" as TabKey, label: t("primaryDetails") },
+                { key: "address" as TabKey, label: t("addressBackground") },
+                { key: "insurance" as TabKey, label: t("insurance") },
               ]
             ).map((tab) => (
               <button
@@ -62,7 +64,7 @@ export default function PatientDetailsTabs({
           <dl className="divide-y divide-slate-100 text-sm">
             <div className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
               <dt className="min-w-[120px] text-[11px] font-medium text-slate-500">
-                Full name:
+                {t("fullName")}
               </dt>
               <dd className="flex items-center gap-2 text-[11px] font-medium text-slate-900">
                 <span>{fullName || "—"}</span>
@@ -89,7 +91,7 @@ export default function PatientDetailsTabs({
             </div>
             <div className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
               <dt className="min-w-[120px] text-[11px] font-medium text-slate-500">
-                Email:
+                {t("email")}
               </dt>
               <dd className="flex items-center gap-2 text-[11px] font-medium text-slate-900">
                 <span>{patient.email ?? "—"}</span>
@@ -116,7 +118,7 @@ export default function PatientDetailsTabs({
             </div>
             <div className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
               <dt className="min-w-[120px] text-[11px] font-medium text-slate-500">
-                Phone:
+                {t("phone")}
               </dt>
               <dd className="flex items-center gap-2 text-[11px] font-medium text-slate-900">
                 <span>{patient.phone ?? "—"}</span>
@@ -143,7 +145,7 @@ export default function PatientDetailsTabs({
             </div>
             <div className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
               <dt className="min-w-[120px] text-[11px] font-medium text-slate-500">
-                Source:
+                {t("source")}
               </dt>
               <dd className="text-[11px] font-medium capitalize text-slate-900">
                 {patient.source ?? "—"}
@@ -151,7 +153,7 @@ export default function PatientDetailsTabs({
             </div>
             <div className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
               <dt className="min-w-[120px] text-[11px] font-medium text-slate-500">
-                Date of birth:
+                {t("dateOfBirth")}
               </dt>
               <dd className="text-[11px] font-medium text-slate-900">
                 {patient.dob ?? "—"}
@@ -159,7 +161,7 @@ export default function PatientDetailsTabs({
             </div>
             <div className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
               <dt className="min-w-[120px] text-[11px] font-medium text-slate-500">
-                Marital status:
+                {t("maritalStatus")}
               </dt>
               <dd className="text-[11px] font-medium text-slate-900">
                 {patient.marital_status ?? "—"}
@@ -172,7 +174,7 @@ export default function PatientDetailsTabs({
           <dl className="divide-y divide-slate-100 text-sm">
             <div className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
               <dt className="min-w-[120px] text-[11px] font-medium text-slate-500">
-                Nationality:
+                {t("nationality")}
               </dt>
               <dd className="text-[11px] font-medium text-slate-900">
                 {patient.nationality ?? "—"}
@@ -180,7 +182,7 @@ export default function PatientDetailsTabs({
             </div>
             <div className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
               <dt className="min-w-[120px] text-[11px] font-medium text-slate-500">
-                Street address:
+                {t("streetAddress")}
               </dt>
               <dd className="text-[11px] font-medium text-slate-900">
                 {patient.street_address ?? "—"}
@@ -188,7 +190,7 @@ export default function PatientDetailsTabs({
             </div>
             <div className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
               <dt className="min-w-[120px] text-[11px] font-medium text-slate-500">
-                Postal code:
+                {t("postalCode")}
               </dt>
               <dd className="text-[11px] font-medium text-slate-900">
                 {patient.postal_code ?? "—"}
@@ -196,7 +198,7 @@ export default function PatientDetailsTabs({
             </div>
             <div className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
               <dt className="min-w-[120px] text-[11px] font-medium text-slate-500">
-                Town:
+                {t("town")}
               </dt>
               <dd className="text-[11px] font-medium text-slate-900">
                 {patient.town ?? "—"}
@@ -204,7 +206,7 @@ export default function PatientDetailsTabs({
             </div>
             <div className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
               <dt className="min-w-[120px] text-[11px] font-medium text-slate-500">
-                Profession:
+                {t("profession")}
               </dt>
               <dd className="text-[11px] font-medium text-slate-900">
                 {patient.profession ?? "—"}
@@ -212,7 +214,7 @@ export default function PatientDetailsTabs({
             </div>
             <div className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
               <dt className="min-w-[120px] text-[11px] font-medium text-slate-500">
-                Current employer:
+                {t("currentEmployer")}
               </dt>
               <dd className="text-[11px] font-medium text-slate-900">
                 {patient.current_employer ?? "—"}
@@ -225,7 +227,7 @@ export default function PatientDetailsTabs({
           <div className="space-y-3">
             {safeInsurance.length === 0 ? (
               <p className="text-sm text-slate-500">
-                No insurance information on file.
+                {t("noInsurance")}
               </p>
             ) : (
               <div className="space-y-3">
@@ -239,7 +241,7 @@ export default function PatientDetailsTabs({
                         {item.provider_name}
                       </p>
                       <p className="text-xs text-slate-500">
-                        Card {item.card_number}
+                        {t("card")} {item.card_number}
                       </p>
                     </div>
                     <div className="text-right text-xs text-slate-500">
@@ -248,7 +250,7 @@ export default function PatientDetailsTabs({
                       </p>
                       {item.created_at ? (
                         <p>
-                          Added {new Date(item.created_at).toLocaleDateString()}
+                          {t("added")} {new Date(item.created_at).toLocaleDateString()}
                         </p>
                       ) : null}
                     </div>

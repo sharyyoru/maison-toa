@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type TaskStatus = "not_started" | "in_progress" | "completed";
@@ -91,6 +92,8 @@ export default function TaskEditModal({
   onMarkAsRead,
   isMessageRead = true,
 }: TaskEditModalProps) {
+  const t = useTranslations("taskModal");
+  const tCommon = useTranslations("common");
   const [taskName, setTaskName] = useState("");
   const [taskType, setTaskType] = useState<TaskType>("todo");
   const [taskPriority, setTaskPriority] = useState<TaskPriority>("medium");
@@ -392,10 +395,10 @@ export default function TaskEditModal({
       <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Edit Task</h2>
+            <h2 className="text-lg font-semibold text-slate-900">{t("editTitle")}</h2>
             {patient && (
               <p className="text-sm text-slate-500">
-                Patient:{" "}
+                {t("patientLabel")}:{" "}
                 <Link
                   href={`/patients/${patient.id}?mode=crm&tab=tasks&taskId=${task?.id || ""}`}
                   className="text-sky-600 hover:text-sky-700 hover:underline"
@@ -426,7 +429,7 @@ export default function TaskEditModal({
           )}
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">Name</label>
+            <label className="block text-sm font-medium text-slate-700">{t("name")}</label>
             <input
               type="text"
               value={taskName}
@@ -437,35 +440,35 @@ export default function TaskEditModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">Type</label>
+              <label className="block text-sm font-medium text-slate-700">{t("type")}</label>
               <select
                 value={taskType}
                 onChange={(e) => setTaskType(e.target.value as TaskType)}
                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               >
-                <option value="todo">Todo</option>
-                <option value="call">Call</option>
-                <option value="email">Email</option>
-                <option value="other">Other</option>
+                <option value="todo">{t("typeTodo")}</option>
+                <option value="call">{t("typeCall")}</option>
+                <option value="email">{t("typeEmail")}</option>
+                <option value="other">{t("typeOther")}</option>
               </select>
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">Priority</label>
+              <label className="block text-sm font-medium text-slate-700">{t("priority")}</label>
               <select
                 value={taskPriority}
                 onChange={(e) => setTaskPriority(e.target.value as TaskPriority)}
                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="low">{t("priorityLow")}</option>
+                <option value="medium">{t("priorityMedium")}</option>
+                <option value="high">{t("priorityHigh")}</option>
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">User</label>
+              <label className="block text-sm font-medium text-slate-700">{t("user")}</label>
               <div className="relative">
                 <input
                   type="text"
@@ -478,7 +481,7 @@ export default function TaskEditModal({
                     }
                   }}
                   onFocus={() => setTaskAssignedUserDropdownOpen(true)}
-                  placeholder="Search user..."
+                  placeholder={t("searchUser")}
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
                 {taskAssignedUserId && (
@@ -506,7 +509,7 @@ export default function TaskEditModal({
                           taskAssignedUserId === user.id ? "bg-emerald-50 text-emerald-700" : "text-slate-700"
                         }`}
                       >
-                        <div className="font-medium">{user.full_name || "Unnamed"}</div>
+                        <div className="font-medium">{user.full_name || t("unnamed")}</div>
                         {user.email && <div className="text-xs text-slate-500">{user.email}</div>}
                       </button>
                     ))}
@@ -515,7 +518,7 @@ export default function TaskEditModal({
               </div>
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">Activity Date</label>
+              <label className="block text-sm font-medium text-slate-700">{t("activityDate")}</label>
               <input
                 type="datetime-local"
                 value={taskActivityDate}
@@ -526,7 +529,7 @@ export default function TaskEditModal({
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">Content</label>
+            <label className="block text-sm font-medium text-slate-700">{t("content")}</label>
             <textarea
               value={taskContent}
               onChange={(e) => setTaskContent(e.target.value)}
@@ -537,11 +540,11 @@ export default function TaskEditModal({
 
           {/* Comments Section */}
           <div className="border-t border-slate-200 pt-4">
-            <p className="mb-2 text-sm font-semibold text-slate-700">Comments</p>
+            <p className="mb-2 text-sm font-semibold text-slate-700">{t("comments")}</p>
             {commentsLoading ? (
-              <p className="text-xs text-slate-500">Loading comments...</p>
+              <p className="text-xs text-slate-500">{t("loadingComments")}</p>
             ) : comments.length === 0 ? (
-              <p className="text-xs text-slate-400 mb-2">No comments yet.</p>
+              <p className="text-xs text-slate-400 mb-2">{t("noComments")}</p>
             ) : (
               <div className="mb-3 max-h-48 space-y-2 overflow-y-auto">
                 {comments.map((comment) => {
@@ -555,7 +558,7 @@ export default function TaskEditModal({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="font-medium text-slate-700">{comment.author_name || "Unknown"}</p>
+                          <p className="font-medium text-slate-700">{comment.author_name || t("unknownAuthor")}</p>
                           <p className="mt-0.5 whitespace-pre-wrap">{renderTextWithMentions(comment.body)}</p>
                         </div>
                         {cLabel && <p className="shrink-0 text-[10px] text-slate-400">{cLabel}</p>}
@@ -578,7 +581,7 @@ export default function TaskEditModal({
                   type="text"
                   value={commentInput}
                   onChange={(e) => handleCommentInputChange(e.target.value)}
-                  placeholder="Add a comment... Use @ to mention."
+                  placeholder={t("addCommentPlaceholder")}
                   className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   disabled={commentSaving}
                 />
@@ -597,7 +600,7 @@ export default function TaskEditModal({
               {mentionOptions.length > 0 && (
                 <div className="mt-1 max-h-40 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white text-xs shadow">
                   {mentionOptions.map((user) => {
-                    const display = user.full_name || user.email || "Unnamed user";
+                    const display = user.full_name || user.email || t("unnamedUser");
                     return (
                       <button
                         key={user.id}
@@ -625,7 +628,7 @@ export default function TaskEditModal({
                 }}
                 className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
               >
-                Mark as Read
+                {t("markAsRead")}
               </button>
             )}
             {task.status !== "completed" && (
@@ -635,7 +638,7 @@ export default function TaskEditModal({
                 disabled={completing || saving}
                 className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {completing ? "Completing..." : "Set Complete"}
+                {completing ? t("completing") : t("setComplete")}
               </button>
             )}
           </div>
@@ -646,7 +649,7 @@ export default function TaskEditModal({
               disabled={saving || completing}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Cancel
+              {tCommon("cancel")}
             </button>
             <button
               type="button"
@@ -654,7 +657,7 @@ export default function TaskEditModal({
               disabled={saving || completing}
               className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {saving ? "Updating..." : "Update Task"}
+              {saving ? t("updating") : t("updateBtn")}
             </button>
           </div>
         </div>

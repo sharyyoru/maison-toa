@@ -2,11 +2,13 @@
 
 import { useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 const GlobalWhatsAppPanel = dynamic(() => import("@/components/GlobalWhatsAppPanel"), { ssr: false });
 
 export default function HeaderWhatsAppButton() {
+  const t = useTranslations("header");
   const [panelOpen, setPanelOpen] = useState(false);
   const [waStatus, setWaStatus] = useState<string>("disconnected");
   const [notifCount, setNotifCount] = useState(0);
@@ -53,9 +55,9 @@ export default function HeaderWhatsAppButton() {
         type="button"
         onClick={() => setPanelOpen(true)}
         className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 bg-white/80 text-slate-500 shadow-sm hover:bg-slate-50"
-        title="WhatsApp"
+        title={t("whatsapp")}
       >
-        <span className="sr-only">WhatsApp</span>
+        <span className="sr-only">{t("whatsapp")}</span>
         <svg
           className="h-4 w-4"
           fill="currentColor"

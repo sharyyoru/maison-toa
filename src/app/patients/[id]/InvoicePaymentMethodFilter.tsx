@@ -2,18 +2,21 @@
 
 import type { ChangeEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 type InvoicePaymentMethodFilterProps = {
   patientId: string;
   value: string | null;
 };
 
-const PAYMENT_METHOD_OPTIONS: { value: string; label: string }[] = [
-  { value: "", label: "All" },
-  { value: "Cash", label: "Cash" },
-  { value: "Online Payment", label: "Online Payment" },
-  { value: "Bank transfer", label: "Bank transfer" },
-  { value: "Insurance", label: "Insurance" },
+type PaymentOptionKey = "all" | "cash" | "onlinePayment" | "bankTransfer" | "insurance";
+
+const PAYMENT_METHOD_OPTIONS: { value: string; key: PaymentOptionKey }[] = [
+  { value: "", key: "all" },
+  { value: "Cash", key: "cash" },
+  { value: "Online Payment", key: "onlinePayment" },
+  { value: "Bank transfer", key: "bankTransfer" },
+  { value: "Insurance", key: "insurance" },
 ];
 
 export default function InvoicePaymentMethodFilter({
@@ -22,6 +25,7 @@ export default function InvoicePaymentMethodFilter({
 }: InvoicePaymentMethodFilterProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations("patient.payment");
 
   const selectedValue = value ?? "";
 
@@ -45,7 +49,7 @@ export default function InvoicePaymentMethodFilter({
 
   return (
     <div className="flex items-center gap-1 text-[11px]">
-      <span className="text-slate-500">Payment:</span>
+      <span className="text-slate-500">{t("label")}</span>
       <select
         value={selectedValue}
         onChange={handleChange}
@@ -56,7 +60,7 @@ export default function InvoicePaymentMethodFilter({
             key={option.value || "all"}
             value={option.value}
           >
-            {option.label}
+            {t(option.key)}
           </option>
         ))}
       </select>

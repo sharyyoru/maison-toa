@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { useTranslations } from "next-intl";
 
 type IntakeSubmission = {
   id: string;
@@ -137,6 +138,7 @@ function calculateBMI(height: number | null, weight: number | null): number | nu
 }
 
 export default function PatientIntakeDataCard({ patientId }: { patientId: string }) {
+  const t = useTranslations("patient.intakeData");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submission, setSubmission] = useState<IntakeSubmission | null>(null);
@@ -322,8 +324,8 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </div>
-        <p className="text-sm text-slate-600">No intake form data available</p>
-        <p className="text-xs text-slate-400 mt-1">Patient has not completed the intake form yet</p>
+        <p className="text-sm text-slate-600">{t("noIntakeData")}</p>
+        <p className="text-xs text-slate-400 mt-1">{t("noIntakeDataHint")}</p>
       </div>
     );
   }
@@ -431,7 +433,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
       </svg>
-      Edit
+      {t("edit")}
     </button>
   );
 
@@ -439,7 +441,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
     <div className="space-y-6">
       {/* Header with Status */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-900">Patient Intake Data</h3>
+        <h3 className="text-lg font-semibold text-slate-900">{t("title")}</h3>
         <span
           className={`px-3 py-1 rounded-full text-xs font-medium ${
             submission.status === "completed"
@@ -449,15 +451,15 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
               : "bg-slate-100 text-slate-600"
           }`}
         >
-          {submission.status === "completed" ? "Completed" : submission.status === "in_progress" ? "In Progress" : submission.status}
+          {submission.status === "completed" ? t("completed") : submission.status === "in_progress" ? t("inProgress") : submission.status}
         </span>
       </div>
 
       {/* Submission Info */}
       <div className="text-xs text-slate-500 flex gap-4">
-        <span>Started: {new Date(submission.started_at).toLocaleDateString()}</span>
+        <span>{t("started")}: {new Date(submission.started_at).toLocaleDateString()}</span>
         {submission.completed_at && (
-          <span>Completed: {new Date(submission.completed_at).toLocaleDateString()}</span>
+          <span>{t("completed")}: {new Date(submission.completed_at).toLocaleDateString()}</span>
         )}
       </div>
 
@@ -473,7 +475,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
-            <h4 className="font-medium text-slate-900">Preferences</h4>
+            <h4 className="font-medium text-slate-900">{t("preferences")}</h4>
             <EditButton onClick={() => {
               setEditPrefs(preferences || { preferred_language: "en", consultation_type: "either", preferred_contact_method: "email", preferred_contact_time: "anytime", additional_notes: null });
               setEditingSection("preferences");
@@ -483,7 +485,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
           {editingSection === "preferences" && editPrefs ? (
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-slate-500">Language</label>
+                <label className="text-xs text-slate-500">{t("language")}</label>
                 <select value={editPrefs.preferred_language} onChange={(e) => setEditPrefs({ ...editPrefs, preferred_language: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black">
                   <option value="en">English</option>
                   <option value="fr">French</option>
@@ -493,15 +495,15 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                 </select>
               </div>
               <div>
-                <label className="text-xs text-slate-500">Consultation Type</label>
+                <label className="text-xs text-slate-500">{t("consultationType")}</label>
                 <select value={editPrefs.consultation_type} onChange={(e) => setEditPrefs({ ...editPrefs, consultation_type: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black">
-                  <option value="in-person">In Person</option>
-                  <option value="virtual">Virtual</option>
-                  <option value="either">Either</option>
+                  <option value="in-person">{t("inPerson")}</option>
+                  <option value="virtual">{t("virtual")}</option>
+                  <option value="either">{t("either")}</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs text-slate-500">Contact Method</label>
+                <label className="text-xs text-slate-500">{t("contactMethod")}</label>
                 <select value={editPrefs.preferred_contact_method} onChange={(e) => setEditPrefs({ ...editPrefs, preferred_contact_method: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black">
                   <option value="email">Email</option>
                   <option value="phone">Phone</option>
@@ -509,33 +511,33 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                 </select>
               </div>
               <div>
-                <label className="text-xs text-slate-500">Best Time</label>
+                <label className="text-xs text-slate-500">{t("bestTime")}</label>
                 <select value={editPrefs.preferred_contact_time} onChange={(e) => setEditPrefs({ ...editPrefs, preferred_contact_time: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black">
-                  <option value="morning">Morning</option>
-                  <option value="afternoon">Afternoon</option>
-                  <option value="evening">Evening</option>
-                  <option value="anytime">Anytime</option>
+                  <option value="morning">{t("morning")}</option>
+                  <option value="afternoon">{t("afternoon")}</option>
+                  <option value="evening">{t("evening")}</option>
+                  <option value="anytime">{t("anytime")}</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs text-slate-500">Notes</label>
+                <label className="text-xs text-slate-500">{t("notes")}</label>
                 <textarea value={editPrefs.additional_notes || ""} onChange={(e) => setEditPrefs({ ...editPrefs, additional_notes: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" rows={2} />
               </div>
               <div className="flex gap-2 pt-2">
-                <button onClick={() => savePreferences(editPrefs)} disabled={saving} className="px-4 py-2 bg-black text-white text-xs rounded-lg hover:bg-slate-800 disabled:opacity-50">{saving ? "Saving..." : "Save"}</button>
-                <button onClick={() => setEditingSection(null)} className="px-4 py-2 text-slate-600 text-xs hover:bg-slate-100 rounded-lg">Cancel</button>
+                <button onClick={() => savePreferences(editPrefs)} disabled={saving} className="px-4 py-2 bg-black text-white text-xs rounded-lg hover:bg-slate-800 disabled:opacity-50">{saving ? t("saving") : t("save")}</button>
+                <button onClick={() => setEditingSection(null)} className="px-4 py-2 text-slate-600 text-xs hover:bg-slate-100 rounded-lg">{t("cancel")}</button>
               </div>
             </div>
           ) : preferences ? (
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-slate-500">Language</span><span className="text-slate-900 font-medium">{LANGUAGE_LABELS[preferences.preferred_language] || preferences.preferred_language}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Consultation</span><span className="text-slate-900 font-medium capitalize">{preferences.consultation_type}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Contact via</span><span className="text-slate-900 font-medium capitalize">{preferences.preferred_contact_method}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Best time</span><span className="text-slate-900 font-medium capitalize">{preferences.preferred_contact_time}</span></div>
-              {preferences.additional_notes && <div className="pt-2 border-t border-slate-100"><span className="text-slate-500 text-xs">Notes:</span><p className="text-slate-700 mt-1">{preferences.additional_notes}</p></div>}
+              <div className="flex justify-between"><span className="text-slate-500">{t("language")}</span><span className="text-slate-900 font-medium">{LANGUAGE_LABELS[preferences.preferred_language] || preferences.preferred_language}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t("consultationType")}</span><span className="text-slate-900 font-medium capitalize">{preferences.consultation_type}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t("contactMethod")}</span><span className="text-slate-900 font-medium capitalize">{preferences.preferred_contact_method}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t("bestTime")}</span><span className="text-slate-900 font-medium capitalize">{preferences.preferred_contact_time}</span></div>
+              {preferences.additional_notes && <div className="pt-2 border-t border-slate-100"><span className="text-slate-500 text-xs">{t("notes")}:</span><p className="text-slate-700 mt-1">{preferences.additional_notes}</p></div>}
             </div>
           ) : (
-            <p className="text-sm text-slate-400 italic">No preferences set. Click Edit to add.</p>
+            <p className="text-sm text-slate-400 italic">{t("noPreferences")}</p>
           )}
         </div>
 
@@ -547,23 +549,23 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
             </div>
-            <h4 className="font-medium text-slate-900">Treatment Areas</h4>
+            <h4 className="font-medium text-slate-900">{t("treatmentAreas")}</h4>
           </div>
           {consultationData.length > 0 ? (
             <div className="space-y-4">
               {consultationData.map((consultation) => (
                 <div key={consultation.id} className="border-l-2 border-rose-300 pl-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="font-medium text-slate-900 capitalize">{consultation.consultation_type} Consultation</span>
+                    <span className="font-medium text-slate-900 capitalize">{consultation.consultation_type} {t("consultation")}</span>
                     <span className="text-xs text-white bg-rose-500 px-2 py-0.5 rounded-full">
-                      {consultation.upload_mode === "now" ? "Photos Uploaded" : "Photos Pending"}
+                      {consultation.upload_mode === "now" ? t("photosUploaded") : t("photosPending")}
                     </span>
                   </div>
                   
                   {/* Liposuction: show selected areas */}
                   {consultation.consultation_type === "liposuction" && consultation.selected_areas && (
                     <div className="mb-2">
-                      <span className="text-xs text-slate-500">Selected Areas:</span>
+                      <span className="text-xs text-slate-500">{t("selectedAreas")}:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {consultation.selected_areas.map((area: string) => (
                           <span key={area} className="text-xs bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full">{area}</span>
@@ -575,7 +577,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                   {/* Breast: show procedure types */}
                   {consultation.consultation_type === "breast" && consultation.breast_data && (
                     <div className="mb-2">
-                      <span className="text-xs text-slate-500">Procedure Types:</span>
+                      <span className="text-xs text-slate-500">{t("procedureTypes")}:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {((consultation.breast_data as Record<string, unknown>).procedure_types as string[] || []).map((proc: string) => (
                           <span key={proc} className="text-xs bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full">{proc}</span>
@@ -589,7 +591,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                     <div className="space-y-2">
                       {((consultation.face_data as Record<string, unknown>).effects as string[] || []).length > 0 && (
                         <div>
-                          <span className="text-xs text-slate-500">Desired Effects:</span>
+                          <span className="text-xs text-slate-500">{t("desiredEffects")}:</span>
                           <div className="flex flex-wrap gap-1 mt-1">
                             {((consultation.face_data as Record<string, unknown>).effects as string[]).map((effect: string) => (
                               <span key={effect} className="text-xs bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full">{effect}</span>
@@ -599,7 +601,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                       )}
                       {((consultation.face_data as Record<string, unknown>).priority_areas as string[] || []).length > 0 && (
                         <div>
-                          <span className="text-xs text-slate-500">Priority Areas:</span>
+                          <span className="text-xs text-slate-500">{t("priorityAreas")}:</span>
                           <div className="flex flex-wrap gap-1 mt-1">
                             {((consultation.face_data as Record<string, unknown>).priority_areas as string[]).map((area: string) => (
                               <span key={area} className="text-xs bg-sky-50 text-sky-700 px-2 py-0.5 rounded-full">{area}</span>
@@ -609,7 +611,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                       )}
                       {typeof (consultation.face_data as Record<string, unknown>).budget === 'string' && (
                         <div className="text-xs text-slate-600">
-                          <span className="text-slate-500">Budget:</span> {(consultation.face_data as Record<string, string>).budget}
+                          <span className="text-slate-500">{t("budget")}:</span> {(consultation.face_data as Record<string, string>).budget}
                         </div>
                       )}
                     </div>
@@ -618,7 +620,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                   {/* Measurements if available */}
                   {consultation.measurements && Object.keys(consultation.measurements).length > 0 && (
                     <div className="mt-2 pt-2 border-t border-slate-100">
-                      <span className="text-xs text-slate-500">Measurements:</span>
+                      <span className="text-xs text-slate-500">{t("measurements")}:</span>
                       <div className="grid grid-cols-2 gap-1 mt-1 text-xs">
                         {Object.entries(consultation.measurements).slice(0, 4).map(([key, value]) => (
                           <div key={key} className="text-slate-600">
@@ -626,7 +628,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                           </div>
                         ))}
                         {Object.keys(consultation.measurements).length > 4 && (
-                          <div className="text-slate-400">+{Object.keys(consultation.measurements).length - 4} more</div>
+                          <div className="text-slate-400">+{Object.keys(consultation.measurements).length - 4} {t("more")}</div>
                         )}
                       </div>
                     </div>
@@ -654,7 +656,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
               ))}
             </div>
           ) : (
-            <p className="text-sm text-slate-400 italic">No treatment areas selected.</p>
+            <p className="text-sm text-slate-400 italic">{t("noTreatmentAreas")}</p>
           )}
         </div>
 
@@ -666,7 +668,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
-            <h4 className="font-medium text-slate-900">Treatment Preferences</h4>
+            <h4 className="font-medium text-slate-900">{t("treatmentPreferences")}</h4>
             <EditButton onClick={() => {
               setEditTreatmentPrefs(treatmentPrefs || { preferred_date_range_start: null, preferred_date_range_end: null, flexibility: "flexible", budget_range: "standard", financing_interest: false, special_requests: null });
               setEditingSection("treatment_prefs");
@@ -677,54 +679,54 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-500">Start Date</label>
+                  <label className="text-xs text-slate-500">{t("startDate")}</label>
                   <input type="date" value={editTreatmentPrefs.preferred_date_range_start || ""} onChange={(e) => setEditTreatmentPrefs({ ...editTreatmentPrefs, preferred_date_range_start: e.target.value || null })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500">End Date</label>
+                  <label className="text-xs text-slate-500">{t("endDate")}</label>
                   <input type="date" value={editTreatmentPrefs.preferred_date_range_end || ""} onChange={(e) => setEditTreatmentPrefs({ ...editTreatmentPrefs, preferred_date_range_end: e.target.value || null })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" />
                 </div>
               </div>
               <div>
-                <label className="text-xs text-slate-500">Flexibility</label>
+                <label className="text-xs text-slate-500">{t("flexibility")}</label>
                 <select value={editTreatmentPrefs.flexibility} onChange={(e) => setEditTreatmentPrefs({ ...editTreatmentPrefs, flexibility: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black">
-                  <option value="flexible">Flexible</option>
-                  <option value="specific_dates">Specific Dates</option>
-                  <option value="asap">ASAP</option>
+                  <option value="flexible">{t("flexible")}</option>
+                  <option value="specific_dates">{t("specificDates")}</option>
+                  <option value="asap">{t("asap")}</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs text-slate-500">Budget Range</label>
+                <label className="text-xs text-slate-500">{t("budgetRange")}</label>
                 <select value={editTreatmentPrefs.budget_range} onChange={(e) => setEditTreatmentPrefs({ ...editTreatmentPrefs, budget_range: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black">
-                  <option value="economy">Economy</option>
-                  <option value="standard">Standard</option>
-                  <option value="premium">Premium</option>
-                  <option value="no_limit">No Limit</option>
+                  <option value="economy">{t("economy")}</option>
+                  <option value="standard">{t("standard")}</option>
+                  <option value="premium">{t("premium")}</option>
+                  <option value="no_limit">{t("noLimit")}</option>
                 </select>
               </div>
               <div className="flex items-center gap-2">
                 <input type="checkbox" id="financing_edit" checked={editTreatmentPrefs.financing_interest} onChange={(e) => setEditTreatmentPrefs({ ...editTreatmentPrefs, financing_interest: e.target.checked })} className="w-4 h-4" />
-                <label htmlFor="financing_edit" className="text-sm text-slate-600">Interested in financing</label>
+                <label htmlFor="financing_edit" className="text-sm text-slate-600">{t("financingInterest")}</label>
               </div>
               <div>
-                <label className="text-xs text-slate-500">Special Requests</label>
+                <label className="text-xs text-slate-500">{t("specialRequests")}</label>
                 <textarea value={editTreatmentPrefs.special_requests || ""} onChange={(e) => setEditTreatmentPrefs({ ...editTreatmentPrefs, special_requests: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" rows={2} />
               </div>
               <div className="flex gap-2 pt-2">
-                <button onClick={() => saveTreatmentPrefs(editTreatmentPrefs)} disabled={saving} className="px-4 py-2 bg-black text-white text-xs rounded-lg hover:bg-slate-800 disabled:opacity-50">{saving ? "Saving..." : "Save"}</button>
-                <button onClick={() => setEditingSection(null)} className="px-4 py-2 text-slate-600 text-xs hover:bg-slate-100 rounded-lg">Cancel</button>
+                <button onClick={() => saveTreatmentPrefs(editTreatmentPrefs)} disabled={saving} className="px-4 py-2 bg-black text-white text-xs rounded-lg hover:bg-slate-800 disabled:opacity-50">{saving ? t("saving") : t("save")}</button>
+                <button onClick={() => setEditingSection(null)} className="px-4 py-2 text-slate-600 text-xs hover:bg-slate-100 rounded-lg">{t("cancel")}</button>
               </div>
             </div>
           ) : treatmentPrefs ? (
             <div className="space-y-2 text-sm">
-              {(treatmentPrefs.preferred_date_range_start || treatmentPrefs.preferred_date_range_end) && <div className="flex justify-between"><span className="text-slate-500">Preferred dates</span><span className="text-slate-900 font-medium">{treatmentPrefs.preferred_date_range_start && new Date(treatmentPrefs.preferred_date_range_start).toLocaleDateString()}{treatmentPrefs.preferred_date_range_start && treatmentPrefs.preferred_date_range_end && " - "}{treatmentPrefs.preferred_date_range_end && new Date(treatmentPrefs.preferred_date_range_end).toLocaleDateString()}</span></div>}
-              <div className="flex justify-between"><span className="text-slate-500">Flexibility</span><span className="text-slate-900 font-medium capitalize">{treatmentPrefs.flexibility.replace("_", " ")}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Budget</span><span className="text-slate-900 font-medium capitalize">{treatmentPrefs.budget_range.replace("_", " ")}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Financing interest</span><span className={`font-medium ${treatmentPrefs.financing_interest ? "text-emerald-600" : "text-slate-400"}`}>{treatmentPrefs.financing_interest ? "Yes" : "No"}</span></div>
-              {treatmentPrefs.special_requests && <div className="pt-2 border-t border-slate-100"><span className="text-slate-500 text-xs">Special requests:</span><p className="text-slate-700 mt-1">{treatmentPrefs.special_requests}</p></div>}
+              {(treatmentPrefs.preferred_date_range_start || treatmentPrefs.preferred_date_range_end) && <div className="flex justify-between"><span className="text-slate-500">{t("preferredDates")}</span><span className="text-slate-900 font-medium">{treatmentPrefs.preferred_date_range_start && new Date(treatmentPrefs.preferred_date_range_start).toLocaleDateString()}{treatmentPrefs.preferred_date_range_start && treatmentPrefs.preferred_date_range_end && " - "}{treatmentPrefs.preferred_date_range_end && new Date(treatmentPrefs.preferred_date_range_end).toLocaleDateString()}</span></div>}
+              <div className="flex justify-between"><span className="text-slate-500">{t("flexibility")}</span><span className="text-slate-900 font-medium capitalize">{treatmentPrefs.flexibility.replace("_", " ")}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t("budget")}</span><span className="text-slate-900 font-medium capitalize">{treatmentPrefs.budget_range.replace("_", " ")}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t("financingInterest")}</span><span className={`font-medium ${treatmentPrefs.financing_interest ? "text-emerald-600" : "text-slate-400"}`}>{treatmentPrefs.financing_interest ? t("yes") : t("no")}</span></div>
+              {treatmentPrefs.special_requests && <div className="pt-2 border-t border-slate-100"><span className="text-slate-500 text-xs">{t("specialRequests")}:</span><p className="text-slate-700 mt-1">{treatmentPrefs.special_requests}</p></div>}
             </div>
           ) : (
-            <p className="text-sm text-slate-400 italic">No treatment preferences set. Click Edit to add.</p>
+            <p className="text-sm text-slate-400 italic">{t("noTreatmentPrefs")}</p>
           )}
         </div>
 
@@ -736,7 +738,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
             </div>
-            <h4 className="font-medium text-slate-900">Insurance Information</h4>
+            <h4 className="font-medium text-slate-900">{t("insuranceInfo")}</h4>
             <EditButton onClick={() => {
               setEditInsurance(insurance || { provider_name: "", card_number: "", insurance_type: "" });
               setEditingSection("insurance");
@@ -746,35 +748,35 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
           {editingSection === "insurance" && editInsurance ? (
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-slate-500">Provider Name</label>
-                <input type="text" value={editInsurance.provider_name || ""} onChange={(e) => setEditInsurance({ ...editInsurance, provider_name: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" placeholder="Insurance Provider" />
+                <label className="text-xs text-slate-500">{t("providerName")}</label>
+                <input type="text" value={editInsurance.provider_name || ""} onChange={(e) => setEditInsurance({ ...editInsurance, provider_name: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" placeholder={t("providerName")} />
               </div>
               <div>
-                <label className="text-xs text-slate-500">Card Number</label>
-                <input type="text" value={editInsurance.card_number || ""} onChange={(e) => setEditInsurance({ ...editInsurance, card_number: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" placeholder="Card Number" />
+                <label className="text-xs text-slate-500">{t("cardNumber")}</label>
+                <input type="text" value={editInsurance.card_number || ""} onChange={(e) => setEditInsurance({ ...editInsurance, card_number: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" placeholder={t("cardNumber")} />
               </div>
               <div>
-                <label className="text-xs text-slate-500">Insurance Type</label>
+                <label className="text-xs text-slate-500">{t("insuranceType")}</label>
                 <select value={editInsurance.insurance_type || ""} onChange={(e) => setEditInsurance({ ...editInsurance, insurance_type: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black">
-                  <option value="">Select Type</option>
-                  <option value="private">Private</option>
-                  <option value="semi-private">Semi-Private</option>
-                  <option value="basic">Basic</option>
+                  <option value="">{t("selectType")}</option>
+                  <option value="private">{t("private")}</option>
+                  <option value="semi-private">{t("semiPrivate")}</option>
+                  <option value="basic">{t("basic")}</option>
                 </select>
               </div>
               <div className="flex gap-2 pt-2">
-                <button onClick={() => saveInsurance(editInsurance)} disabled={saving} className="px-4 py-2 bg-black text-white text-xs rounded-lg hover:bg-slate-800 disabled:opacity-50">{saving ? "Saving..." : "Save"}</button>
-                <button onClick={() => setEditingSection(null)} className="px-4 py-2 text-slate-600 text-xs hover:bg-slate-100 rounded-lg">Cancel</button>
+                <button onClick={() => saveInsurance(editInsurance)} disabled={saving} className="px-4 py-2 bg-black text-white text-xs rounded-lg hover:bg-slate-800 disabled:opacity-50">{saving ? t("saving") : t("save")}</button>
+                <button onClick={() => setEditingSection(null)} className="px-4 py-2 text-slate-600 text-xs hover:bg-slate-100 rounded-lg">{t("cancel")}</button>
               </div>
             </div>
           ) : insurance ? (
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-slate-500">Provider</span><span className="text-slate-900 font-medium">{insurance.provider_name || "N/A"}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Card Number</span><span className="text-slate-900 font-medium">{insurance.card_number || "N/A"}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Type</span><span className="text-slate-900 font-medium">{insurance.insurance_type || "N/A"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t("provider")}</span><span className="text-slate-900 font-medium">{insurance.provider_name || "N/A"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t("cardNumber")}</span><span className="text-slate-900 font-medium">{insurance.card_number || "N/A"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t("type")}</span><span className="text-slate-900 font-medium">{insurance.insurance_type || "N/A"}</span></div>
             </div>
           ) : (
-            <p className="text-sm text-slate-400 italic">No insurance information provided. Click Edit to add.</p>
+            <p className="text-sm text-slate-400 italic">{t("noInsurance")}</p>
           )}
         </div>
 
@@ -786,47 +788,47 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
             </div>
-            <h4 className="font-medium text-slate-900">Health Background & Lifestyle</h4>
+            <h4 className="font-medium text-slate-900">{t("healthBackground")}</h4>
           </div>
           {healthBackground ? (
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
               <div>
-                <p className="text-slate-500 text-xs mb-1">Physical</p>
+                <p className="text-slate-500 text-xs mb-1">{t("physical")}</p>
                 <div className="space-y-1">
-                  <div className="flex justify-between"><span className="text-slate-500">Weight</span><span className="text-slate-900 font-medium">{healthBackground.weight_kg ? `${healthBackground.weight_kg} kg` : "N/A"}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Height</span><span className="text-slate-900 font-medium">{healthBackground.height_cm ? `${healthBackground.height_cm} cm` : "N/A"}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">BMI</span><span className="text-slate-900 font-medium">{healthBackground.bmi || "N/A"}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">{t("weight")}</span><span className="text-slate-900 font-medium">{healthBackground.weight_kg ? `${healthBackground.weight_kg} kg` : "N/A"}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">{t("height")}</span><span className="text-slate-900 font-medium">{healthBackground.height_cm ? `${healthBackground.height_cm} cm` : "N/A"}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">{t("bmi")}</span><span className="text-slate-900 font-medium">{healthBackground.bmi || "N/A"}</span></div>
                 </div>
               </div>
               <div>
-                <p className="text-slate-500 text-xs mb-1">Medical History</p>
+                <p className="text-slate-500 text-xs mb-1">{t("medicalHistory")}</p>
                 <div className="space-y-1">
-                  <div><span className="text-slate-500">Illnesses:</span> <span className="text-slate-900">{healthBackground.known_illnesses || "N/A"}</span></div>
-                  <div><span className="text-slate-500">Surgeries:</span> <span className="text-slate-900">{healthBackground.previous_surgeries || "N/A"}</span></div>
-                  <div><span className="text-slate-500">Allergies:</span> <span className="text-slate-900">{healthBackground.allergies || "N/A"}</span></div>
-                  <div><span className="text-slate-500">Medications:</span> <span className="text-slate-900">{healthBackground.medications || "N/A"}</span></div>
+                  <div><span className="text-slate-500">{t("illnesses")}:</span> <span className="text-slate-900">{healthBackground.known_illnesses || "N/A"}</span></div>
+                  <div><span className="text-slate-500">{t("surgeries")}:</span> <span className="text-slate-900">{healthBackground.previous_surgeries || "N/A"}</span></div>
+                  <div><span className="text-slate-500">{t("allergies")}:</span> <span className="text-slate-900">{healthBackground.allergies || "N/A"}</span></div>
+                  <div><span className="text-slate-500">{t("medications")}:</span> <span className="text-slate-900">{healthBackground.medications || "N/A"}</span></div>
                 </div>
               </div>
               <div>
-                <p className="text-slate-500 text-xs mb-1">Lifestyle</p>
+                <p className="text-slate-500 text-xs mb-1">{t("lifestyle")}</p>
                 <div className="space-y-1">
-                  <div className="flex justify-between"><span className="text-slate-500">Cigarettes</span><span className="text-slate-900 font-medium">{healthBackground.cigarettes || "N/A"}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Alcohol</span><span className="text-slate-900 font-medium">{healthBackground.alcohol_consumption || "N/A"}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Sports</span><span className="text-slate-900 font-medium">{healthBackground.sports_activity || "N/A"}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">{t("cigarettes")}</span><span className="text-slate-900 font-medium">{healthBackground.cigarettes || "N/A"}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">{t("alcohol")}</span><span className="text-slate-900 font-medium">{healthBackground.alcohol_consumption || "N/A"}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">{t("sports")}</span><span className="text-slate-900 font-medium">{healthBackground.sports_activity || "N/A"}</span></div>
                 </div>
               </div>
               <div>
-                <p className="text-slate-500 text-xs mb-1">Healthcare Providers</p>
+                <p className="text-slate-500 text-xs mb-1">{t("healthcareProviders")}</p>
                 <div className="space-y-1">
-                  <div><span className="text-slate-500">GP:</span> <span className="text-slate-900">{healthBackground.general_practitioner || "N/A"}</span></div>
-                  <div><span className="text-slate-500">Gynecologist:</span> <span className="text-slate-900">{healthBackground.gynecologist || "N/A"}</span></div>
+                  <div><span className="text-slate-500">{t("gp")}:</span> <span className="text-slate-900">{healthBackground.general_practitioner || "N/A"}</span></div>
+                  <div><span className="text-slate-500">{t("gynecologist")}:</span> <span className="text-slate-900">{healthBackground.gynecologist || "N/A"}</span></div>
                 </div>
               </div>
               {healthBackground.children_count && healthBackground.children_count > 0 && (
                 <div>
-                  <p className="text-slate-500 text-xs mb-1">Children</p>
+                  <p className="text-slate-500 text-xs mb-1">{t("children")}</p>
                   <div className="space-y-1">
-                    <div className="flex justify-between"><span className="text-slate-500">Count</span><span className="text-slate-900 font-medium">{healthBackground.children_count}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-500">{t("count")}</span><span className="text-slate-900 font-medium">{healthBackground.children_count}</span></div>
                     {healthBackground.birth_type_1 && <div className="flex justify-between"><span className="text-slate-500">Birth 1</span><span className="text-slate-900 font-medium">{healthBackground.birth_type_1}</span></div>}
                     {healthBackground.birth_type_2 && <div className="flex justify-between"><span className="text-slate-500">Birth 2</span><span className="text-slate-900 font-medium">{healthBackground.birth_type_2}</span></div>}
                   </div>
@@ -834,7 +836,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
               )}
             </div>
           ) : (
-            <p className="text-sm text-slate-400 italic">No health background information provided.</p>
+            <p className="text-sm text-slate-400 italic">{t("healthBackground")}</p>
           )}
         </div>
       </div>
@@ -847,7 +849,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
-          <h4 className="font-medium text-slate-900">Uploaded Photos</h4>
+          <h4 className="font-medium text-slate-900">{t("uploadedPhotos")}</h4>
           <span className="text-xs text-slate-400">({photos.length})</span>
         </div>
         {photos.length > 0 ? (
@@ -871,7 +873,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
             ))}
           </div>
         ) : (
-          <p className="text-sm text-slate-400 italic">No photos uploaded.</p>
+          <p className="text-sm text-slate-400 italic">{t("noPhotos")}</p>
         )}
       </div>
     </div>

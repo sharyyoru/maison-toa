@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { clearDemoCache } from "@/lib/demoMode";
 
@@ -15,6 +16,8 @@ interface CurrentUserInfo {
 
 export default function HeaderUser() {
   const router = useRouter();
+  const t = useTranslations("header");
+  const tCommon = useTranslations("common");
   const [userInfo, setUserInfo] = useState<CurrentUserInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -77,7 +80,7 @@ export default function HeaderUser() {
           --
         </div>
         <div className="hidden flex-col sm:flex">
-          <span className="font-medium">Loading...</span>
+          <span className="font-medium">{t("loadingUser")}</span>
         </div>
       </div>
     );
@@ -115,11 +118,11 @@ export default function HeaderUser() {
         onClick={() => setConfirmOpen(true)}
         className="relative inline-flex h-8 w-8 items-center justify-center text-slate-500"
       >
-        <span className="sr-only">Log out</span>
+        <span className="sr-only">{t("logOut")}</span>
         <div className="power-button-bg absolute inset-0 rounded-full" />
         <Image
           src="/logos/power-button.png"
-          alt="Log out"
+          alt={t("logOut")}
           width={20}
           height={20}
           className="relative h-[18px] w-[18px]"
@@ -129,9 +132,9 @@ export default function HeaderUser() {
       {confirmOpen ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm">
           <div className="w-full max-w-xs rounded-2xl border border-white/70 bg-white/95 p-4 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.25)]">
-            <h2 className="text-sm font-semibold text-slate-900">Sign out</h2>
+            <h2 className="text-sm font-semibold text-slate-900">{t("signOut")}</h2>
             <p className="mt-1 text-xs text-slate-500">
-              Are you sure you want to log out?
+              {t("signOutConfirm")}
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -139,7 +142,7 @@ export default function HeaderUser() {
                 onClick={() => setConfirmOpen(false)}
                 className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50"
               >
-                No
+                {tCommon("no")}
               </button>
               <button
                 type="button"
@@ -149,7 +152,7 @@ export default function HeaderUser() {
                 }}
                 className="inline-flex items-center rounded-full border border-sky-200/80 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-[0_8px_20px_rgba(15,23,42,0.25)] hover:bg-sky-700"
               >
-                Yes
+                {tCommon("yes")}
               </button>
             </div>
           </div>

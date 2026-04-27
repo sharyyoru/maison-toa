@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import AppointmentModal, { type AppointmentData } from "@/components/AppointmentModal";
 import { formatSwissShortDate, formatSwissTime } from "@/lib/swissTimezone";
@@ -67,6 +68,7 @@ type DealRow = {
 type DealsView = "list" | "board";
 
 export default function DealsPage() {
+  const t = useTranslations("dealsPage");
   const router = useRouter();
   const [view, setView] = useState<DealsView>("list");
   const [deals, setDeals] = useState<DealRow[]>([]);
@@ -158,7 +160,7 @@ export default function DealsPage() {
         }
 
         if (dealsError || !dealsData) {
-          setError(dealsError?.message ?? "Failed to load deals.");
+          setError(dealsError?.message ?? t("errorFailedLoad"));
           setDeals([]);
           setLoading(false);
           return;
@@ -218,7 +220,7 @@ export default function DealsPage() {
         setLoading(false);
       } catch {
         if (!isMounted) return;
-        setError("Failed to load deals.");
+        setError(t("errorFailedLoad"));
         setDeals([]);
         setLoading(false);
       }
@@ -396,7 +398,7 @@ export default function DealsPage() {
 
   function getStageName(stageId: string) {
     const stage = dealStages.find((candidate) => candidate.id === stageId);
-    return stage ? stage.name : "Unknown";
+    return stage ? stage.name : t("unknownStage");
   }
 
   async function handleDropOnStage(stageId: string) {
@@ -535,10 +537,9 @@ export default function DealsPage() {
         <div className="w-full max-w-5xl space-y-6">
           <div className="flex items-baseline justify-between gap-3">
             <div>
-              <h1 className="text-xl font-semibold text-slate-900">Deals</h1>
+              <h1 className="text-xl font-semibold text-slate-900">{t("title")}</h1>
               <p className="text-sm text-slate-500">
-                Global overview of all deals. Use a patient record to create and
-                manage individual deals.
+                {t("subtitle")}
               </p>
             </div>
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-slate-50/80 p-1 text-[11px] text-slate-600">
@@ -552,7 +553,7 @@ export default function DealsPage() {
                     : "hover:text-slate-900")
                 }
               >
-                List
+                {t("viewList")}
               </button>
               <button
                 type="button"
@@ -564,7 +565,7 @@ export default function DealsPage() {
                     : "hover:text-slate-900")
                 }
               >
-                Board
+                {t("viewBoard")}
               </button>
             </div>
           </div>
@@ -573,32 +574,32 @@ export default function DealsPage() {
             {/* Metrics */}
             <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-xl border border-slate-200/80 bg-white/90 p-3 text-xs shadow-sm">
-                <p className="text-[11px] font-medium text-slate-500">Total Deal Amount</p>
+                <p className="text-[11px] font-medium text-slate-500">{t("metrics.totalDealAmount")}</p>
                 <p className="mt-2 text-lg font-semibold text-slate-900">
                   {metrics.totalDealAmount.toLocaleString('en-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CHF
                 </p>
-                <p className="mt-1 text-[11px] text-slate-400">Sum of all deal values</p>
+                <p className="mt-1 text-[11px] text-slate-400">{t("metrics.totalDealAmountHint")}</p>
               </div>
               <div className="rounded-xl border border-slate-200/80 bg-white/90 p-3 text-xs shadow-sm">
-                <p className="text-[11px] font-medium text-slate-500">Weighted Deal</p>
+                <p className="text-[11px] font-medium text-slate-500">{t("metrics.weightedDeal")}</p>
                 <p className="mt-2 text-lg font-semibold text-slate-900">
                   {metrics.weightedDeal.toLocaleString('en-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CHF
                 </p>
-                <p className="mt-1 text-[11px] text-slate-400">Invoiced deals only</p>
+                <p className="mt-1 text-[11px] text-slate-400">{t("metrics.weightedDealHint")}</p>
               </div>
               <div className="rounded-xl border border-slate-200/80 bg-white/90 p-3 text-xs shadow-sm">
-                <p className="text-[11px] font-medium text-slate-500">Open Deal Amount</p>
+                <p className="text-[11px] font-medium text-slate-500">{t("metrics.openDealAmount")}</p>
                 <p className="mt-2 text-lg font-semibold text-slate-900">
                   {metrics.openDealAmount.toLocaleString('en-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CHF
                 </p>
-                <p className="mt-1 text-[11px] text-slate-400">Before Closed Won</p>
+                <p className="mt-1 text-[11px] text-slate-400">{t("metrics.openDealAmountHint")}</p>
               </div>
               <div className="rounded-xl border border-slate-200/80 bg-white/90 p-3 text-xs shadow-sm">
-                <p className="text-[11px] font-medium text-slate-500">Closed Deal Amount</p>
+                <p className="text-[11px] font-medium text-slate-500">{t("metrics.closedDealAmount")}</p>
                 <p className="mt-2 text-lg font-semibold text-slate-900">
                   {metrics.closedDealAmount.toLocaleString('en-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CHF
                 </p>
-                <p className="mt-1 text-[11px] text-slate-400">{totalDeals} total deals</p>
+                <p className="mt-1 text-[11px] text-slate-400">{t("metrics.totalDeals", { n: totalDeals })}</p>
               </div>
             </div>
 
@@ -610,7 +611,7 @@ export default function DealsPage() {
                   onChange={(event) => setStageFilter(event.target.value)}
                   className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                 >
-                  <option value="all">All stages</option>
+                  <option value="all">{t("filters.allStages")}</option>
                   {dealStages.map((stage) => (
                     <option key={stage.id} value={stage.id}>
                       {stage.name}
@@ -622,7 +623,7 @@ export default function DealsPage() {
                   onChange={(event) => setServiceFilter(event.target.value)}
                   className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                 >
-                  <option value="all">All services</option>
+                  <option value="all">{t("filters.allServices")}</option>
                   {uniqueServices.map((service) => (
                     <option key={service.id} value={service.id}>
                       {service.name}
@@ -636,7 +637,7 @@ export default function DealsPage() {
                     type="text"
                     value={contactOwnerSearch}
                     onChange={(event) => handleContactOwnerSearchChange(event.target.value)}
-                    placeholder="Contact Owner..."
+                    placeholder={t("filters.contactOwner")}
                     className="w-48 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1.5 pr-7 text-[11px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                   {contactOwnerFilter && (
@@ -662,7 +663,7 @@ export default function DealsPage() {
                     return (
                       <div className="absolute top-full left-0 right-0 mt-1 max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white text-[10px] shadow-lg z-10">
                         {filteredUsers.map((user) => {
-                          const display = user.full_name || user.email || "Unnamed user";
+                          const display = user.full_name || user.email || t("filters.unnamedUser");
                           return (
                             <button
                               key={user.id}
@@ -685,7 +686,7 @@ export default function DealsPage() {
                     type="text"
                     value={dealOwnerSearch}
                     onChange={(event) => handleDealOwnerSearchChange(event.target.value)}
-                    placeholder="Deal Owner..."
+                    placeholder={t("filters.dealOwner")}
                     className="w-48 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1.5 pr-7 text-[11px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                   {dealOwnerFilter && (
@@ -711,7 +712,7 @@ export default function DealsPage() {
                     return (
                       <div className="absolute top-full left-0 right-0 mt-1 max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white text-[10px] shadow-lg z-10">
                         {filteredUsers.map((user) => {
-                          const display = user.full_name || user.email || "Unnamed user";
+                          const display = user.full_name || user.email || t("filters.unnamedUser");
                           return (
                             <button
                               key={user.id}
@@ -733,7 +734,7 @@ export default function DealsPage() {
                   type="text"
                   value={patientSearch}
                   onChange={(event) => setPatientSearch(event.target.value)}
-                  placeholder="Search patient..."
+                  placeholder={t("filters.searchPatient")}
                   className="w-48 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                 />
               </div>
@@ -748,7 +749,7 @@ export default function DealsPage() {
                       type="text"
                       value={searchQuery}
                       onChange={(event) => setSearchQuery(event.target.value)}
-                      placeholder="Search by deal, patient, pipeline, or service"
+                      placeholder={t("search")}
                       className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                   </div>
@@ -771,32 +772,32 @@ export default function DealsPage() {
                           <path d="M4 10h12" />
                         </svg>
                       </span>
-                      <span>Create Deal (via patient)</span>
+                      <span>{t("createViaPatient")}</span>
                     </Link>
                   </div>
                 </div>
 
                 {loading ? (
-                  <p className="text-[11px] text-slate-500">Loading deals...</p>
+                  <p className="text-[11px] text-slate-500">{t("loading")}</p>
                 ) : error ? (
                   <p className="text-[11px] text-red-600">{error}</p>
                 ) : filteredDeals.length === 0 ? (
-                  <p className="text-[11px] text-slate-500">No deals found.</p>
+                  <p className="text-[11px] text-slate-500">{t("empty")}</p>
                 ) : (
                   <>
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-left text-[11px]">
                       <thead className="border-b text-[10px] uppercase tracking-wide text-slate-500">
                         <tr>
-                          <th className="py-2 pr-3 font-medium">ID</th>
-                          <th className="py-2 pr-3 font-medium">Deal Name</th>
-                          <th className="py-2 pr-3 font-medium">Pipeline</th>
-                          <th className="py-2 pr-3 font-medium">Stage</th>
-                          <th className="py-2 pr-3 font-medium">Service</th>
-                          <th className="py-2 pr-3 font-medium">Patient</th>
-                          <th className="py-2 pr-3 font-medium">Contact Owner</th>
-                          <th className="py-2 pr-3 font-medium">Deal Owner</th>
-                          <th className="py-2 pr-3 font-medium">Created</th>
+                          <th className="py-2 pr-3 font-medium">{t("columns.id")}</th>
+                          <th className="py-2 pr-3 font-medium">{t("columns.dealName")}</th>
+                          <th className="py-2 pr-3 font-medium">{t("columns.pipeline")}</th>
+                          <th className="py-2 pr-3 font-medium">{t("columns.stage")}</th>
+                          <th className="py-2 pr-3 font-medium">{t("columns.service")}</th>
+                          <th className="py-2 pr-3 font-medium">{t("columns.patient")}</th>
+                          <th className="py-2 pr-3 font-medium">{t("columns.contactOwner")}</th>
+                          <th className="py-2 pr-3 font-medium">{t("columns.dealOwner")}</th>
+                          <th className="py-2 pr-3 font-medium">{t("columns.created")}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -805,8 +806,8 @@ export default function DealsPage() {
                           const patientName = deal.patient
                             ? `${deal.patient.first_name ?? ""} ${
                                 deal.patient.last_name ?? ""
-                              }`.trim() || "Unknown patient"
-                            : "Unknown patient";
+                              }`.trim() || t("unknownPatient")
+                            : t("unknownPatient");
                           const createdDate = deal.created_at
                             ? new Date(deal.created_at)
                             : null;
@@ -815,7 +816,7 @@ export default function DealsPage() {
                               ? createdDate.toLocaleDateString()
                               : "—";
 
-                          const serviceName = deal.service?.name ?? "Not set";
+                          const serviceName = deal.service?.name ?? t("notSet");
 
                           return (
                             <tr
@@ -831,7 +832,7 @@ export default function DealsPage() {
                                 {deal.id.slice(0, 8)}
                               </td>
                               <td className="py-2 pr-3 align-top text-slate-900">
-                                {deal.title || "Untitled deal"}
+                                {deal.title || t("untitledDeal")}
                               </td>
                               <td className="py-2 pr-3 align-top text-slate-700">
                                 {deal.pipeline || "Geneva"}
@@ -881,7 +882,7 @@ export default function DealsPage() {
                   {totalListPages > 1 && (
                     <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
                       <p className="text-[11px] text-slate-500">
-                        Showing {((listPage - 1) * LIST_ITEMS_PER_PAGE) + 1} to {Math.min(listPage * LIST_ITEMS_PER_PAGE, filteredDeals.length)} of {filteredDeals.length} deals
+                        {t("showingRange", { from: ((listPage - 1) * LIST_ITEMS_PER_PAGE) + 1, to: Math.min(listPage * LIST_ITEMS_PER_PAGE, filteredDeals.length), total: filteredDeals.length })}
                       </p>
                       <div className="flex items-center gap-1">
                         <button
@@ -943,7 +944,7 @@ export default function DealsPage() {
           <div className="mx-auto max-w-5xl">
             <div className="flex items-center justify-between gap-2 px-1 text-xs">
               <span className="text-[11px] text-slate-400">
-                Drag deals between stages to update their status.
+                {t("dragHint")}
               </span>
             </div>
           </div>
@@ -1008,7 +1009,7 @@ export default function DealsPage() {
                         <div className="flex-1 space-y-2 overflow-y-auto p-2">
                           {stageDeals.length === 0 ? (
                             <p className="text-[10px] text-slate-400">
-                              No deals in this stage.
+                              {t("emptyStage")}
                             </p>
                           ) : (
                             stageDeals.map((deal) => {
@@ -1021,12 +1022,12 @@ export default function DealsPage() {
                                   ? createdDate.toLocaleDateString()
                                   : "—";
 
-                              const serviceName = deal.service?.name ?? "Not set";
+                              const serviceName = deal.service?.name ?? t("notSet");
                               const patientName = deal.patient
                                 ? `${deal.patient.first_name ?? ""} ${
                                     deal.patient.last_name ?? ""
-                                  }`.trim() || "Unknown patient"
-                                : "Unknown patient";
+                                  }`.trim() || t("unknownPatient")
+                                : t("unknownPatient");
 
                               const isUpdating = updatingDealId === deal.id;
 
@@ -1044,34 +1045,34 @@ export default function DealsPage() {
                                   className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] text-slate-800 shadow-sm transition hover:border-sky-300 hover:shadow-md"
                                 >
                                   <p className="text-[11px] font-semibold text-sky-700">
-                                    {deal.title || "Untitled deal"}
+                                    {deal.title || t("untitledDeal")}
                                   </p>
                                   <p className="mt-0.5 text-[12px] font-semibold text-emerald-700">
-                                    Patient: {patientName}
+                                    {t("card.patient")} {patientName}
                                   </p>
                                   <p className="mt-0.5 text-[10px] text-slate-600">
-                                    Pipeline: {deal.pipeline || "Geneva"}
+                                    {t("card.pipeline")} {deal.pipeline || "Geneva"}
                                   </p>
                                   <p className="mt-0.5 text-[10px] text-slate-600">
-                                    Location: {deal.location || "Rhône"}
+                                    {t("card.location")} {deal.location || "Rhône"}
                                   </p>
                                   <p className="mt-0.5 text-[10px] text-slate-600">
-                                    Service:{" "}
+                                    {t("card.service")}{" "}
                                     <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">
                                       {serviceName}
                                     </span>
                                   </p>
                                   <p className="mt-0.5 text-[10px] text-slate-600">
-                                    Contact label: {deal.contact_label || "Marketing"}
+                                    {t("card.contactLabel")} {deal.contact_label || "Marketing"}
                                   </p>
                                   <p className="mt-0.5 text-[10px] text-slate-600">
-                                    Contact Owner: <span className="font-medium text-emerald-700">{deal.patient?.contact_owner_name || "—"}</span>
+                                    {t("card.contactOwner")} <span className="font-medium text-emerald-700">{deal.patient?.contact_owner_name || "—"}</span>
                                   </p>
                                   <p className="mt-0.5 text-[10px] text-slate-600">
-                                    Deal Owner: <span className="font-medium text-sky-700">{deal.owner_name || "—"}</span>
+                                    {t("card.dealOwner")} <span className="font-medium text-sky-700">{deal.owner_name || "—"}</span>
                                   </p>
                                   <p className="mt-0.5 text-[10px] text-slate-500">
-                                    Created: {createdLabel}
+                                    {t("card.created")} {createdLabel}
                                   </p>
                                   {/* Show appointment details for "Appointment Set" stage */}
                                   {deal.appointment && (
@@ -1080,7 +1081,7 @@ export default function DealsPage() {
                                         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                         </svg>
-                                        <span className="text-[10px] font-semibold">Appointment Scheduled</span>
+                                        <span className="text-[10px] font-semibold">{t("appointmentScheduled")}</span>
                                       </div>
                                       <p className="mt-1 text-[10px] text-emerald-600">
                                         {new Date(deal.appointment.start_time).toLocaleDateString("en-US", {
@@ -1103,7 +1104,7 @@ export default function DealsPage() {
                                   )}
                                   {isUpdating ? (
                                     <p className="mt-0.5 text-[9px] text-slate-400">
-                                      Updating stage…
+                                      {t("updatingStage")}
                                     </p>
                                   ) : null}
                                 </div>
@@ -1116,7 +1117,7 @@ export default function DealsPage() {
                               onClick={() => handleLoadMoreForStage(stage.id)}
                               className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
                             >
-                              Load more ({allStageDeals.length - stageDeals.length} remaining)
+                              {t("loadMore", { n: allStageDeals.length - stageDeals.length })}
                             </button>
                           )}
                         </div>
@@ -1192,8 +1193,8 @@ export default function DealsPage() {
           appointmentDeal?.patient
             ? [appointmentDeal.patient.first_name, appointmentDeal.patient.last_name]
                 .filter(Boolean)
-                .join(" ") || "Patient"
-            : "Patient"
+                .join(" ") || t("patientFallback")
+            : t("patientFallback")
         }
         dealId={appointmentDeal?.id}
         dealTitle={appointmentDeal?.title}

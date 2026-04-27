@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import CollapseSidebarOnMount from "@/components/CollapseSidebarOnMount";
 
@@ -42,12 +43,12 @@ function formatPatientForDisplay(
   if (name) return name;
   if (email) return email;
   if (phone) return phone;
-  return "Unnamed patient";
+  return "";
 }
 
 function generateConversationTitleFromContent(source: string): string {
   const normalized = source.trim().replace(/\s+/g, " ");
-  if (!normalized) return "New chat";
+  if (!normalized) return "";
   const maxLength = 60;
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, maxLength)}…`;
@@ -64,12 +65,13 @@ function isPlaceholderTitle(title: string | null | undefined): boolean {
 
 function formatConversationTitle(conversation: ChatConversation): string {
   const raw = (conversation.title || "").trim();
-  if (!raw) return "Untitled chat";
+  if (!raw) return "";
   if (raw.length <= 60) return raw;
   return `${raw.slice(0, 60)}…`;
 }
 
 export default function ChatWithAliicePage() {
+  const t = useTranslations("chatPage");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -153,7 +155,7 @@ export default function ChatWithAliicePage() {
 
         if (error || !rows) {
           setConversations([]);
-          setConversationsError(error?.message ?? "Failed to load conversations.");
+          setConversationsError(error?.message ?? t("failedLoadConversations"));
         } else {
           const items = (rows as any[]).map((row) => ({
             id: row.id as string,
@@ -174,7 +176,7 @@ export default function ChatWithAliicePage() {
       } catch {
         if (!isMounted) return;
         setConversations([]);
-        setConversationsError("Failed to load conversations.");
+        setConversationsError(t("failedLoadConversations"));
         setConversationsLoading(false);
       }
     }
@@ -204,7 +206,7 @@ export default function ChatWithAliicePage() {
 
         if (error || !data) {
           setPatientOptions([]);
-          setPatientOptionsError(error?.message ?? "Failed to load patients.");
+          setPatientOptionsError(error?.message ?? t("failedLoadPatients"));
         } else {
           setPatientOptions(data as ChatPatientSuggestion[]);
         }
@@ -213,7 +215,7 @@ export default function ChatWithAliicePage() {
       } catch {
         if (!isMounted) return;
         setPatientOptions([]);
-        setPatientOptionsError("Failed to load patients.");
+        setPatientOptionsError(t("failedLoadPatients"));
         setPatientOptionsLoading(false);
       }
     }
@@ -334,7 +336,7 @@ export default function ChatWithAliicePage() {
       .single();
 
     if (error || !data) {
-      setError(error?.message ?? "Failed to create conversation.");
+      setError(error?.message ?? t("failedCreateConversation"));
       return null;
     }
 
@@ -369,7 +371,7 @@ export default function ChatWithAliicePage() {
         .from("chat_conversations")
         .insert({
           user_id: currentUserId,
-          title: "New chat",
+          title: t("newChat"),
         })
         .select(
           "id, title, created_at, updated_at, is_archived, archived_at, patient_id",
@@ -377,7 +379,7 @@ export default function ChatWithAliicePage() {
         .single();
 
       if (error || !data) {
-        setError(error?.message ?? "Failed to create conversation.");
+        setError(error?.message ?? t("failedCreateConversation"));
         setLoading(false);
         return;
       }
@@ -399,7 +401,7 @@ export default function ChatWithAliicePage() {
       setMessages([]);
       setLoading(false);
     } catch {
-      setError("Failed to create conversation.");
+      setError(t("failedCreateConversation"));
       setLoading(false);
     }
   }
@@ -469,7 +471,7 @@ export default function ChatWithAliicePage() {
         const payload = (await response.json().catch(() => null)) as
           | { error?: string }
           | null;
-        setError(payload?.error ?? "Failed to get a response from Aliice.");
+        setError(payload?.error ?? t("failedResponse"));
         setLoading(false);
         return;
       }
@@ -479,7 +481,7 @@ export default function ChatWithAliicePage() {
       };
 
       if (!json.message || !json.message.content) {
-        setError("Aliice did not return a response.");
+        setError(t("noResponse"));
         setLoading(false);
         return;
       }
@@ -562,7 +564,7 @@ export default function ChatWithAliicePage() {
 
       setLoading(false);
     } catch {
-      setError("Network error talking to Aliice.");
+      setError(t("networkError"));
       setLoading(false);
     }
   }
@@ -599,10 +601,10 @@ export default function ChatWithAliicePage() {
         .eq("user_id", currentUserId);
 
       if (updateError) {
-        setError(updateError.message ?? "Failed to rename conversation.");
+        setError(updateError.message ?? t("failedRename"));
       }
     } catch {
-      setError("Failed to rename conversation.");
+      setError(t("failedRename"));
     }
   }
 
@@ -641,10 +643,10 @@ export default function ChatWithAliicePage() {
         .eq("user_id", currentUserId);
 
       if (updateError) {
-        setError(updateError.message ?? "Failed to archive conversation.");
+        setError(updateError.message ?? t("failedArchive"));
       }
     } catch {
-      setError("Failed to archive conversation.");
+      setError(t("failedArchive"));
     }
   }
 
@@ -669,10 +671,10 @@ export default function ChatWithAliicePage() {
         .eq("user_id", currentUserId);
 
       if (deleteError) {
-        setError(deleteError.message ?? "Failed to delete conversation.");
+        setError(deleteError.message ?? t("failedDelete"));
       }
     } catch {
-      setError("Failed to delete conversation.");
+      setError(t("failedDelete"));
     }
   }
 
@@ -707,10 +709,10 @@ export default function ChatWithAliicePage() {
         .eq("user_id", currentUserId);
 
       if (updateError) {
-        setError(updateError.message ?? "Failed to update patient for conversation.");
+        setError(updateError.message ?? t("failedUpdatePatient"));
       }
     } catch {
-      setError("Failed to update patient for conversation.");
+      setError(t("failedUpdatePatient"));
     }
   }
 
@@ -743,10 +745,10 @@ export default function ChatWithAliicePage() {
         .eq("user_id", currentUserId);
 
       if (updateError) {
-        setError(updateError.message ?? "Failed to clear patient for conversation.");
+        setError(updateError.message ?? t("failedClearPatient"));
       }
     } catch {
-      setError("Failed to clear patient for conversation.");
+      setError(t("failedClearPatient"));
     }
   }
 
@@ -754,17 +756,16 @@ export default function ChatWithAliicePage() {
     <div className="h-full space-y-4">
       <CollapseSidebarOnMount />
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Chat with Aliice</h1>
+        <h1 className="text-xl font-semibold text-slate-900">{t("title")}</h1>
         <p className="text-sm text-slate-500">
-          Your AI assistant for bookings, post-op docs, and patient or insurance
-          communication.
+          {t("subtitle")}
         </p>
       </div>
       <div className="flex min-h-[540px] flex-col gap-4 sm:flex-row">
         <aside className="flex w-full flex-shrink-0 flex-col rounded-xl border border-slate-200/80 bg-white/90 text-[13px] shadow-[0_12px_30px_rgba(15,23,42,0.12)] sm:w-64">
           <div className="flex items-center justify-between border-b border-slate-100/80 px-3 py-2">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-              Conversations
+              {t("conversations")}
             </span>
             <button
               type="button"
@@ -772,15 +773,15 @@ export default function ChatWithAliicePage() {
               disabled={loading || !currentUserId}
               className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              New
+              {t("new")}
             </button>
           </div>
           <div className="flex-1 space-y-1 overflow-y-auto px-2 py-2">
             {conversationsLoading ? (
-              <p className="px-2 text-[12px] text-slate-400">Loading...</p>
+              <p className="px-2 text-[12px] text-slate-400">{t("loadingConversations")}</p>
             ) : conversations.length === 0 ? (
               <p className="px-2 text-[12px] text-slate-400">
-                No conversations yet.
+                {t("noConversations")}
               </p>
             ) : (
               conversations.map((conversation) => {
@@ -820,7 +821,7 @@ export default function ChatWithAliicePage() {
                     void handleTitleSave();
                   }
                 }}
-                placeholder="Name this conversation..."
+                placeholder={t("titlePlaceholder")}
                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
               />
             </div>
@@ -831,7 +832,7 @@ export default function ChatWithAliicePage() {
                 disabled={!activeConversationId || !currentUserId}
                 className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Archive
+                {t("archive")}
               </button>
               <button
                 type="button"
@@ -839,7 +840,7 @@ export default function ChatWithAliicePage() {
                 disabled={!activeConversationId || !currentUserId}
                 className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Delete
+                {t("delete")}
               </button>
             </div>
           </div>
@@ -850,7 +851,7 @@ export default function ChatWithAliicePage() {
                 value={patientSearch}
                 onChange={(event) => setPatientSearch(event.target.value)}
                 disabled={!activeConversationId || !currentUserId}
-                placeholder="Search patient by name, email, or phone..."
+                placeholder={t("searchPatientPlaceholder")}
                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
               />
               {patientOptionsError ? (
@@ -858,14 +859,14 @@ export default function ChatWithAliicePage() {
               ) : null}
               {patientOptionsLoading ? (
                 <div className="absolute z-10 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-500 shadow-lg">
-                  Loading patients...
+                  {t("loadingPatients")}
                 </div>
               ) : null}
               {!patientOptionsLoading && patientSearch.trim().length > 0 ? (
                 <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-[11px] shadow-lg">
                   {filteredPatientOptions.length === 0 ? (
                     <div className="px-3 py-1.5 text-slate-500">
-                      No matching patients.
+                      {t("noMatchingPatients")}
                     </div>
                   ) : (
                     filteredPatientOptions.map((patient) => (
@@ -887,10 +888,10 @@ export default function ChatWithAliicePage() {
             <div className="flex items-center gap-2 text-[11px]">
               <span className="text-slate-500">
                 {!activeConversationId || !currentUserId
-                  ? "Start a conversation to link it to a patient."
+                  ? t("startToLink")
                   : selectedPatient
-                  ? `Linked patient: ${formatPatientForDisplay(selectedPatient)}`
-                  : "No patient selected."}
+                  ? t("linkedPatient", { name: formatPatientForDisplay(selectedPatient) || t("unnamedPatient") })
+                  : t("noPatientSelected")}
               </span>
               {selectedPatient ? (
                 <button
@@ -898,7 +899,7 @@ export default function ChatWithAliicePage() {
                   onClick={handleClearPatient}
                   className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100"
                 >
-                  Clear
+                  {t("clear")}
                 </button>
               ) : null}
             </div>
@@ -906,11 +907,10 @@ export default function ChatWithAliicePage() {
 
           <div className="flex-1 min-h-[220px] max-h-[440px] space-y-2 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/60 p-3 text-[13px]">
             {initialMessagesLoading ? (
-              <p className="text-[12px] text-slate-500">Loading conversation...</p>
+              <p className="text-[12px] text-slate-500">{t("loadingConversation")}</p>
             ) : messages.length === 0 ? (
               <p className="text-[12px] text-slate-500">
-                Start a conversation with Aliice about bookings, post-op docs, or
-                how to communicate with patients and insurers.
+                {t("emptyPrompt")}
               </p>
             ) : (
               messages.map((message) => (
@@ -947,7 +947,7 @@ export default function ChatWithAliicePage() {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               rows={2}
-              placeholder="Ask Aliice a question..."
+              placeholder={t("inputPlaceholder")}
               className="flex-1 resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
             />
             <button
@@ -955,7 +955,7 @@ export default function ChatWithAliicePage() {
               disabled={loading || !input.trim() || initialMessagesLoading}
               className="inline-flex items-center justify-center rounded-full border border-sky-500 bg-sky-600 px-4 py-2 text-[12px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Sending..." : "Send"}
+              {loading ? t("sending") : t("send")}
             </button>
           </form>
         </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { formatSwissDateTime } from "@/lib/swissTimezone";
 
@@ -20,6 +21,7 @@ type CancelledAppointmentRow = {
 };
 
 export default function CancelledAppointmentsPage() {
+  const t = useTranslations("cancelledAppointments");
   const [rows, setRows] = useState<CancelledAppointmentRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,35 +92,35 @@ export default function CancelledAppointmentsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Cancelled appointments</h1>
+          <h1 className="text-lg font-semibold text-slate-900">{t("title")}</h1>
           <p className="text-xs text-slate-500">
-            Log of appointments that were cancelled from the calendar.
+            {t("subtitle")}
           </p>
         </div>
         <Link
           href="/appointments"
           className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
         >
-          Back to calendar
+          {t("backToCalendar")}
         </Link>
       </div>
 
       <div className="rounded-2xl border border-slate-200/80 bg-white/95 p-4 text-xs shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
         {loading ? (
-          <p className="text-[11px] text-slate-500">Loading cancelled appointments...</p>
+          <p className="text-[11px] text-slate-500">{t("loading")}</p>
         ) : error ? (
           <p className="text-[11px] text-red-600">{error}</p>
         ) : rows.length === 0 ? (
-          <p className="text-[11px] text-slate-500">No cancelled appointments found.</p>
+          <p className="text-[11px] text-slate-500">{t("noResults")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-[11px]">
               <thead className="border-b text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="py-2 pr-3 font-medium">Patient</th>
-                  <th className="py-2 pr-3 font-medium">Original time</th>
-                  <th className="py-2 pr-3 font-medium">Service / reason</th>
-                  <th className="py-2 pr-3 font-medium">Location</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.patient")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.originalTime")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.serviceReason")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.location")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -126,8 +128,8 @@ export default function CancelledAppointmentsPage() {
                   const p = row.patient;
                   const name = p
                     ? `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() ||
-                      "Unknown patient"
-                    : "Unknown patient";
+                      t("unknownPatient")
+                    : t("unknownPatient");
                   const startLabel = formatSwissDateTime(row.start_time);
 
                   return (

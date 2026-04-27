@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useTasksNotifications } from "@/components/TasksNotificationsContext";
 
 export default function HeaderTasksButton() {
   const router = useRouter();
+  const t = useTranslations("header");
   const { openTasksCount } = useTasksNotifications();
 
   const count = openTasksCount ?? 0;
@@ -16,9 +18,9 @@ export default function HeaderTasksButton() {
       type="button"
       onClick={() => router.push("/tasks")}
       className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 bg-white/80 text-slate-500 shadow-sm hover:bg-slate-50"
-      title="Tasks"
+      title={t("tasks")}
     >
-      <span className="sr-only">Tasks</span>
+      <span className="sr-only">{t("tasks")}</span>
       <svg
         className="h-4 w-4"
         viewBox="0 0 24 24"

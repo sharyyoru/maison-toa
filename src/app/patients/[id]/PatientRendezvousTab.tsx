@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getAppointmentNotes, getAppointmentTitle, getAppointmentDisplayName } from "@/lib/appointmentUtils";
+import { useTranslations } from "next-intl";
 import { formatSwissAppointmentDateTime } from "@/lib/swissTimezone";
 
 type AppointmentStatus =
@@ -197,6 +198,7 @@ export default function PatientRendezvousTab({
 }: {
   patientId: string;
 }) {
+  const t = useTranslations("patient.rendezvous");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -487,7 +489,7 @@ export default function PatientRendezvousTab({
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-slate-900">Rendezvous</h3>
+        <h3 className="text-sm font-semibold text-slate-900">{t("title")}</h3>
         
         {/* Filter Toggle */}
         <div className="flex items-center gap-2">
@@ -501,7 +503,7 @@ export default function PatientRendezvousTab({
                   : "bg-transparent text-slate-700 hover:bg-slate-100/80"
               }`}
             >
-              Future Appointments
+              {t("futureAppointments")}
             </button>
             <button
               type="button"
@@ -512,7 +514,7 @@ export default function PatientRendezvousTab({
                   : "bg-transparent text-slate-700 hover:bg-slate-100/80"
               }`}
             >
-              All Appointments
+              {t("allAppointments")}
             </button>
           </div>
         </div>
@@ -539,7 +541,7 @@ export default function PatientRendezvousTab({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by service, doctor, category, location, date..."
+            placeholder={t("searchPlaceholder")}
             className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-4 text-xs text-slate-900 placeholder:text-slate-400 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
           />
           {searchQuery && (
@@ -561,12 +563,12 @@ export default function PatientRendezvousTab({
           onChange={(e) => setStatusFilter(e.target.value as AppointmentStatus | "all")}
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
         >
-          <option value="all">All Status</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="no_show">No Show</option>
+          <option value="all">{t("allStatus")}</option>
+          <option value="scheduled">{t("scheduled")}</option>
+          <option value="confirmed">{t("confirmed")}</option>
+          <option value="completed">{t("completed")}</option>
+          <option value="cancelled">{t("cancelled")}</option>
+          <option value="no_show">{t("noShow")}</option>
         </select>
 
         {/* Location Filter */}
@@ -575,7 +577,7 @@ export default function PatientRendezvousTab({
           onChange={(e) => setLocationFilter(e.target.value)}
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
         >
-          <option value="all">All Locations</option>
+          <option value="all">{t("allLocations")}</option>
           {uniqueLocations.map((loc) => (
             <option key={loc} value={loc}>
               {loc}
@@ -585,7 +587,7 @@ export default function PatientRendezvousTab({
 
         {/* Results count */}
         <span className="text-[11px] text-slate-500">
-          {filteredAndSortedAppointments.length} appointment{filteredAndSortedAppointments.length !== 1 ? "s" : ""}
+          {t("appointmentCount", { count: filteredAndSortedAppointments.length })}
         </span>
       </div>
 
@@ -593,7 +595,7 @@ export default function PatientRendezvousTab({
       {loading && (
         <div className="flex items-center justify-center py-12">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-sky-500"></div>
-          <span className="ml-2 text-xs text-slate-500">Loading appointments...</span>
+          <span className="ml-2 text-xs text-slate-500">{t("loadingAppointments")}</span>
         </div>
       )}
 
@@ -620,11 +622,11 @@ export default function PatientRendezvousTab({
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
             />
           </svg>
-          <p className="text-sm font-medium text-slate-600">No appointments found</p>
+          <p className="text-sm font-medium text-slate-600">{t("noAppointments")}</p>
           <p className="mt-1 text-xs text-slate-500">
             {filterMode === "future"
-              ? "No upcoming appointments for this patient."
-              : "This patient has no appointments yet."}
+              ? t("noUpcoming")
+              : t("noAppointmentsYet")}
           </p>
         </div>
       )}
@@ -641,18 +643,18 @@ export default function PatientRendezvousTab({
                     onClick={() => handleSort("start_time")}
                     className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900"
                   >
-                    Date & Time
+                    {t("dateTime")}
                     <SortIcon field="start_time" />
                   </button>
                 </th>
-                <th className="pb-2 pr-4 font-semibold text-slate-600">Service</th>
+                <th className="pb-2 pr-4 font-semibold text-slate-600">{t("service")}</th>
                 <th className="pb-2 pr-4">
                   <button
                     type="button"
                     onClick={() => handleSort("provider")}
                     className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900"
                   >
-                    Doctor
+                    {t("doctor")}
                     <SortIcon field="provider" />
                   </button>
                 </th>
@@ -662,24 +664,24 @@ export default function PatientRendezvousTab({
                     onClick={() => handleSort("location")}
                     className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900"
                   >
-                    Location
+                    {t("location")}
                     <SortIcon field="location" />
                   </button>
                 </th>
-                <th className="pb-2 pr-4 font-semibold text-slate-600">Duration</th>
+                <th className="pb-2 pr-4 font-semibold text-slate-600">{t("duration")}</th>
                 <th className="pb-2 pr-4">
                   <button
                     type="button"
                     onClick={() => handleSort("status")}
                     className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900"
                   >
-                    Status
+                    {t("status")}
                     <SortIcon field="status" />
                   </button>
                 </th>
-                <th className="pb-2 pr-4 font-semibold text-slate-600">Category</th>
-                <th className="pb-2 font-semibold text-slate-600">Booking Status</th>
-                <th className="pb-2 font-semibold text-slate-600">Actions</th>
+                <th className="pb-2 pr-4 font-semibold text-slate-600">{t("category")}</th>
+                <th className="pb-2 font-semibold text-slate-600">{t("bookingStatus")}</th>
+                <th className="pb-2 font-semibold text-slate-600">{t("actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -753,7 +755,7 @@ export default function PatientRendezvousTab({
                         <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
-                        Edit
+                        {t("edit")}
                       </button>
                     </td>
                   </tr>
@@ -776,7 +778,7 @@ export default function PatientRendezvousTab({
         >
           <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between gap-2 mb-4">
-              <h2 className="text-base font-semibold text-slate-900">Edit appointment</h2>
+              <h2 className="text-base font-semibold text-slate-900">{t("editAppointment")}</h2>
               <button
                 type="button"
                 onClick={() => !savingEdit && setEditModalOpen(false)}
@@ -791,32 +793,32 @@ export default function PatientRendezvousTab({
 
             {/* Patient Info Card */}
             <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-[10px] font-medium text-slate-500 mb-1">Patient Information</p>
-              <p className="text-xs text-slate-700">Current Patient</p>
+              <p className="text-[10px] font-medium text-slate-500 mb-1">{t("patientInformation")}</p>
+              <p className="text-xs text-slate-700">{t("currentPatient")}</p>
             </div>
 
             {/* Appointment Details Card */}
             <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 space-y-3">
-              <p className="text-[10px] font-medium text-sky-600">Appointment Details</p>
+              <p className="text-[10px] font-medium text-sky-600">{t("appointmentDetails")}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-[10px] text-slate-500">Service</p>
+                  <p className="text-[10px] text-slate-500">{t("service")}</p>
                   <p className="text-xs font-medium text-slate-900">{getServiceFromReason(editingAppointment.reason)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-500">Doctor</p>
+                  <p className="text-[10px] text-slate-500">{t("doctor")}</p>
                   <p className="text-xs font-medium text-slate-900">{getDoctorFromReason(editingAppointment.reason) ?? editingAppointment.provider?.name ?? "—"}</p>
                 </div>
               </div>
 
               <div>
-                <p className="text-[10px] text-slate-500 mb-1">Category</p>
+                <p className="text-[10px] text-slate-500 mb-1">{t("category")}</p>
                 <select
                   value={editCategory}
                   onChange={(e) => setEditCategory(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-sky-500 focus:outline-none"
                 >
-                  <option value="">Search category...</option>
+                  <option value="">{t("searchCategory")}</option>
                   {APPOINTMENT_CATEGORY_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
@@ -824,13 +826,13 @@ export default function PatientRendezvousTab({
               </div>
 
               <div>
-                <p className="text-[10px] text-slate-500 mb-1">Status/Channel</p>
+                <p className="text-[10px] text-slate-500 mb-1">{t("statusChannel")}</p>
                 <select
                   value={editBookingStatus}
                   onChange={(e) => setEditBookingStatus(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-sky-500 focus:outline-none"
                 >
-                  <option value="">Search status...</option>
+                  <option value="">{t("searchStatus")}</option>
                   {BOOKING_STATUS_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
@@ -838,7 +840,7 @@ export default function PatientRendezvousTab({
               </div>
 
               <div>
-                <p className="text-[10px] text-slate-500 mb-1">Notes</p>
+                <p className="text-[10px] text-slate-500 mb-1">{t("notes")}</p>
                 <textarea
                   value={editNotes}
                   onChange={(e) => setEditNotes(e.target.value)}
@@ -851,7 +853,7 @@ export default function PatientRendezvousTab({
 
             {/* Workflow Status */}
             <div className="mb-4">
-              <p className="text-[10px] font-medium text-slate-500 mb-2">Workflow status</p>
+              <p className="text-[10px] font-medium text-slate-500 mb-2">{t("workflowStatus")}</p>
               <div className="flex flex-wrap gap-2">
                 {(["pending", "approved", "rescheduled", "cancelled"] as WorkflowStatus[]).map((ws) => (
                   <button
@@ -872,7 +874,7 @@ export default function PatientRendezvousTab({
 
             {/* Date & Time */}
             <div className="mb-4">
-              <p className="text-[10px] font-medium text-slate-500 mb-2">Date & time</p>
+              <p className="text-[10px] font-medium text-slate-500 mb-2">{t("dateTime")}</p>
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="date"
@@ -891,7 +893,7 @@ export default function PatientRendezvousTab({
 
             {/* Duration */}
             <div className="mb-4">
-              <p className="text-[10px] font-medium text-slate-500 mb-2">Consultation duration</p>
+              <p className="text-[10px] font-medium text-slate-500 mb-2">{t("consultationDuration")}</p>
               <select
                 value={editConsultationDuration}
                 onChange={(e) => setEditConsultationDuration(parseInt(e.target.value))}
@@ -905,7 +907,7 @@ export default function PatientRendezvousTab({
 
             {/* Location */}
             <div className="mb-4">
-              <p className="text-[10px] font-medium text-slate-500 mb-2">Location</p>
+              <p className="text-[10px] font-medium text-slate-500 mb-2">{t("location")}</p>
               <select
                 value={editLocation}
                 onChange={(e) => setEditLocation(e.target.value)}
@@ -930,7 +932,7 @@ export default function PatientRendezvousTab({
                 onClick={() => !savingEdit && setEditModalOpen(false)}
                 className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
               >
-                Close
+                {t("cancel")}
               </button>
               <button
                 type="button"
@@ -938,7 +940,7 @@ export default function PatientRendezvousTab({
                 disabled={savingEdit}
                 className="px-4 py-2 rounded-lg bg-sky-600 text-xs font-medium text-white hover:bg-sky-700 transition-colors disabled:opacity-50"
               >
-                {savingEdit ? "Saving..." : "Save changes"}
+                {savingEdit ? t("saving") : t("saveChanges")}
               </button>
             </div>
           </div>

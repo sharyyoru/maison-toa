@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type PatientData = {
@@ -43,6 +44,8 @@ export default function PatientMergeModal({
   onClose,
   onSuccess,
 }: PatientMergeModalProps) {
+  const t = useTranslations("patientMerge");
+  const tCommon = useTranslations("common");
   const [patients, setPatients] = useState<PatientData[]>([]);
   const [loading, setLoading] = useState(true);
   const [merging, setMerging] = useState(false);
@@ -70,7 +73,7 @@ export default function PatientMergeModal({
           .in("id", patientIds);
 
         if (fetchError) throw fetchError;
-        if (!data || data.length === 0) throw new Error("No patients found");
+        if (!data || data.length === 0) throw new Error(t("noPatientsFound"));
 
         setPatients(data as PatientData[]);
         
@@ -95,7 +98,7 @@ export default function PatientMergeModal({
           contact_owner_name: primary.contact_owner_name,
         });
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load patients");
+        setError(err instanceof Error ? err.message : t("failedToLoad"));
       } finally {
         setLoading(false);
       }
@@ -127,7 +130,7 @@ export default function PatientMergeModal({
 
   async function handleMerge() {
     if (!primaryPatientId) {
-      setError("Please select a primary patient");
+      setError(t("selectPrimaryError"));
       return;
     }
 
@@ -148,13 +151,13 @@ export default function PatientMergeModal({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to merge patients");
+        throw new Error(data.error || t("failedToMerge"));
       }
 
       onSuccess();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to merge patients");
+      setError(err instanceof Error ? err.message : t("failedToMerge"));
     } finally {
       setMerging(false);
     }
@@ -166,7 +169,7 @@ export default function PatientMergeModal({
         <div className="rounded-xl bg-white p-8 shadow-xl">
           <div className="flex items-center gap-3">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-sky-500 border-t-transparent" />
-            <p className="text-sm text-slate-600">Loading patient data...</p>
+            <p className="text-sm text-slate-600">{t("loadingData")}</p>
           </div>
         </div>
       </div>
@@ -177,9 +180,9 @@ export default function PatientMergeModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-5xl max-h-[90vh] flex flex-col rounded-xl bg-white shadow-2xl">
         <div className="border-b border-slate-200 px-6 py-3 shrink-0">
-          <h2 className="text-base font-semibold text-slate-900">Merge Patients</h2>
+          <h2 className="text-base font-semibold text-slate-900">{t("title")}</h2>
           <p className="text-xs text-slate-500">
-            Select which data to keep from each patient. All records will be merged into the primary patient.
+            {t("subtitle")}
           </p>
         </div>
 
@@ -193,10 +196,10 @@ export default function PatientMergeModal({
           {/* Primary Patient Selection */}
           <div className="rounded-lg border-2 border-sky-200 bg-sky-50/50 p-3">
             <label className="block text-xs font-semibold text-slate-900 mb-2">
-              Step 1: Select Primary Patient
+              {t("step1")}
             </label>
             <p className="text-xs text-slate-600 mb-3">
-              Choose which patient record to keep. All data from other patients will be merged into this one.
+              {t("step1Desc")}
             </p>
             <div className="space-y-1.5">
               {patients.map((patient) => (
@@ -223,15 +226,15 @@ export default function PatientMergeModal({
                       </span>
                       {primaryPatientId === patient.id && (
                         <span className="rounded-full bg-sky-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                          Primary
+                          {t("primary")}
                         </span>
                       )}
                     </div>
                     <div className="mt-0.5 text-[11px] text-slate-600">
-                      {patient.email || "No email"} • {patient.phone || "No phone"}
+                      {patient.email || t("noEmail")} • {patient.phone || t("noPhone")}
                     </div>
                     <div className="mt-0.5 text-[10px] text-slate-500">
-                      Updated: {new Date(patient.updated_at).toLocaleDateString()}
+                      {t("updatedOn", { date: new Date(patient.updated_at).toLocaleDateString() })}
                     </div>
                   </div>
                 </label>
@@ -242,21 +245,21 @@ export default function PatientMergeModal({
           {/* Data Selection Grid */}
           <div>
             <div className="mb-2">
-              <h3 className="text-xs font-semibold text-slate-900">Step 2: Choose Field Values</h3>
+              <h3 className="text-xs font-semibold text-slate-900">{t("step2")}</h3>
               <p className="text-[11px] text-slate-600 mt-0.5">
-                Click on any value to select it for the merged patient. By default, the primary patient's values are selected.
+                {t("step2Desc")}
               </p>
             </div>
             <div className="overflow-x-auto rounded-lg border border-slate-200">
               <table className="w-full text-xs">
                 <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-700">Field</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-700">{t("fieldHeader")}</th>
                     {patients.map((patient) => (
                       <th key={patient.id} className="px-3 py-2 text-left text-[11px] font-semibold text-slate-700">
                         {patient.first_name} {patient.last_name}
                         {patient.id === primaryPatientId && (
-                          <span className="ml-1.5 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-700">Primary</span>
+                          <span className="ml-1.5 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-700">{t("primary")}</span>
                         )}
                       </th>
                     ))}
@@ -264,16 +267,16 @@ export default function PatientMergeModal({
                 </thead>
               <tbody className="divide-y divide-slate-100">
                 {[
-                  { key: "first_name", label: "First Name" },
-                  { key: "last_name", label: "Last Name" },
-                  { key: "email", label: "Email" },
-                  { key: "phone", label: "Phone" },
-                  { key: "date_of_birth", label: "Date of Birth" },
-                  { key: "address", label: "Address" },
-                  { key: "city", label: "City" },
-                  { key: "postal_code", label: "Postal Code" },
-                  { key: "country", label: "Country" },
-                  { key: "contact_owner_name", label: "Contact Owner" },
+                  { key: "first_name", label: t("fields.firstName") },
+                  { key: "last_name", label: t("fields.lastName") },
+                  { key: "email", label: t("fields.email") },
+                  { key: "phone", label: t("fields.phone") },
+                  { key: "date_of_birth", label: t("fields.dateOfBirth") },
+                  { key: "address", label: t("fields.address") },
+                  { key: "city", label: t("fields.city") },
+                  { key: "postal_code", label: t("fields.postalCode") },
+                  { key: "country", label: t("fields.country") },
+                  { key: "contact_owner_name", label: t("fields.contactOwner") },
                 ].map((field) => (
                   <tr key={field.key} className="hover:bg-slate-50">
                     <td className="px-3 py-2 text-[11px] font-medium text-slate-700">{field.label}</td>
@@ -308,7 +311,7 @@ export default function PatientMergeModal({
 
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
             <p className="text-xs text-amber-800">
-              <strong>Warning:</strong> This will merge all appointments, documents, consultations, deals, invoices, and other data into the primary patient. Files will be copied to the primary patient's folder. Other patient records will be permanently deleted. This cannot be undone.
+              <strong>{t("warningLabel")}</strong> {t("warningBody")}
             </p>
           </div>
         </div>
@@ -319,14 +322,14 @@ export default function PatientMergeModal({
             disabled={merging}
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
-            Cancel
+            {tCommon("cancel")}
           </button>
           <button
             onClick={handleMerge}
             disabled={merging || !primaryPatientId}
             className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-50"
           >
-            {merging ? "Merging..." : "Merge Patients"}
+            {merging ? t("merging") : t("mergeBtn")}
           </button>
         </div>
       </div>

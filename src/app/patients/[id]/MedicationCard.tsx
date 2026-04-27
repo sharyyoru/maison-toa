@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type MedicationSubTab = "medicine" | "prescription";
@@ -81,6 +82,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
     const router = useRouter();
     const searchParams = useSearchParams();
     const params = useParams();
+    const t = useTranslations("patient.medicationCard");
     
     // Use patientId from URL params (more reliable) or fall back to prop
     const patientId = (params?.id as string) || propPatientId;
@@ -167,7 +169,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
     }
 
     async function handleDeleteMedication(journalEntryId: string) {
-        if (!confirm("Are you sure you want to delete this item?")) return;
+        if (!confirm(t("deleteConfirm"))) return;
         
         const { error } = await supabaseClient
             .from("patient_prescriptions")
@@ -175,7 +177,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
             .eq("journal_entry_id", journalEntryId);
 
         if (error) {
-            alert("Failed to delete item");
+            alert(t("deleteFailed"));
             console.error(error);
             return;
         }
@@ -199,7 +201,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
             .eq("journal_entry_id", medication.journal_entry_id);
 
         if (error) {
-            alert("Failed to update item");
+            alert(t("updateFailed"));
             console.error(error);
             return;
         }
@@ -210,7 +212,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
 
     async function handleSendEmediplanEmail(tabType: "medicine" | "prescription", prescriptionSheetId?: string) {
         if (!patientEmail) {
-            alert("Patient does not have an email address");
+            alert(t("noEmail"));
             return;
         }
 
@@ -273,7 +275,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
             }
 
             loadMedications();
-            alert("Email sent successfully to " + patientEmail);
+            alert(t("emailSent", { email: patientEmail }));
         } catch (error) {
             console.error("Error sending eMediplan email:", error);
             alert(error instanceof Error ? error.message : "Failed to send eMediplan email");
@@ -297,7 +299,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
     async function handleCreatePrescription() {
         const validProducts = newPrescriptionProducts.filter((p) => p.productName.trim());
         if (validProducts.length === 0) {
-            alert("Please add at least one product");
+            alert(t("addAtLeastOneProduct"));
             return;
         }
 
@@ -437,7 +439,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                             " inline-flex items-center border-b-2 px-1.5 py-2"
                         }
                     >
-                        Medicine
+                        {t("medicine")}
                     </button>
                     <button
                         onClick={() => changeSubTab("prescription")}
@@ -448,7 +450,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                             " inline-flex items-center border-b-2 px-1.5 py-2"
                         }
                     >
-                        Prescription
+                        {t("prescription")}
                     </button>
                 </nav>
                 
@@ -462,7 +464,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
-                        Create New Prescription
+                        {t("createNewPrescription")}
                     </button>
                     
                     {/* Generate eMediplan PDF and Send to Email Buttons - Only for medicine tab */}
@@ -479,14 +481,14 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                     </svg>
-                                    Generating...
+                                    {t("generating")}
                                 </>
                             ) : (
                                 <>
                                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
-                                    Generate PDF
+                                    {t("generatePdf")}
                                 </>
                             )}
                         </button>
@@ -502,14 +504,14 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                     </svg>
-                                    Sending...
+                                    {t("sending")}
                                 </>
                             ) : (
                                 <>
                                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                     </svg>
-                                    Send to Email
+                                    {t("sendToEmail")}
                                 </>
                             )}
                         </button>
@@ -520,7 +522,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
 
             {/* Content */}
             {loading ? (
-                <div className="py-8 text-center text-sm text-slate-500">Loading...</div>
+                <div className="py-8 text-center text-sm text-slate-500">{t("loading")}</div>
             ) : (
                 <div className="space-y-3">
                     {subTab === "prescription" ? (
@@ -565,11 +567,11 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                                                 </button>
                                                 <div className="flex flex-col">
                                                     <span className="text-xs font-semibold text-slate-700">
-                                                        {prescriptionDate.toUpperCase()} ORDONNANCE
+                                                        {prescriptionDate.toUpperCase()} {t("ordonnance")}
                                                     </span>
                                                     {lastEmailedDisplay && (
                                                         <span className="text-[10px] text-emerald-600">
-                                                            Last sent: {lastEmailedDisplay}
+                                                            {t("lastSent")} {lastEmailedDisplay}
                                                         </span>
                                                     )}
                                                 </div>
@@ -584,7 +586,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                                                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                     </svg>
-                                                    PDF
+                                                    {t("pdf")}
                                                 </button>
                                                 <button
                                                     onClick={() => handleSendEmediplanEmail("prescription", sheetId)}
@@ -595,7 +597,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                                                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                                     </svg>
-                                                    Email
+                                                    {t("email")}
                                                 </button>
                                                 <button className="ml-1 text-slate-400 hover:text-slate-600">
                                                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -613,14 +615,14 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                                 );
                             })
                         ) : (
-                            <div className="py-8 text-center text-sm text-slate-500">No prescriptions found</div>
+                            <div className="py-8 text-center text-sm text-slate-500">{t("noPrescriptions")}</div>
                         )
                     ) : (
                         // Medicine table view
                         filteredMedications.length > 0 ? (
                             <MedicationTable medications={filteredMedications} />
                         ) : (
-                            <div className="py-8 text-center text-sm text-slate-500">No medicine found</div>
+                            <div className="py-8 text-center text-sm text-slate-500">{t("noMedicine")}</div>
                         )
                     )}
                 </div>
@@ -640,7 +642,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                 <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 backdrop-blur-sm py-6">
                     <div className="w-full max-w-3xl max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 shadow-[0_24px_60px_rgba(15,23,42,0.65)]">
                         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
-                            <h3 className="text-sm font-semibold text-slate-900">New Medication</h3>
+                            <h3 className="text-sm font-semibold text-slate-900">{t("newMedication")}</h3>
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={addNewPrescriptionProduct}
@@ -649,7 +651,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                     </svg>
-                                    Add Product
+                                    {t("addProduct")}
                                 </button>
                                 <button
                                     onClick={() => setCreatePrescriptionModalOpen(false)}
@@ -872,7 +874,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                                 disabled={creatingPrescription}
                                 className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                             >
-                                Cancel
+                                {t("cancel")}
                             </button>
                             <button
                                 type="button"
@@ -880,7 +882,7 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
                                 disabled={creatingPrescription}
                                 className="rounded-lg bg-sky-600 px-4 py-2 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-50"
                             >
-                                {creatingPrescription ? "Creating..." : "Create"}
+                                {creatingPrescription ? t("creating") : t("createPrescription")}
                             </button>
                         </div>
                     </div>

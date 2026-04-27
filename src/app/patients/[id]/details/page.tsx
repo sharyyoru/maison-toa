@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import CollapseSidebarOnMount from "@/components/CollapseSidebarOnMount";
 import PatientDetailsWizard from "./PatientDetailsWizard";
 
@@ -8,6 +9,7 @@ export default async function PatientDetailsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const tPatient = await getTranslations("patient");
 
   return (
     <div className="space-y-6">
@@ -15,17 +17,17 @@ export default async function PatientDetailsPage({
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">
-            Patient details
+            {tPatient("details.title")}
           </h1>
           <p className="text-sm text-slate-500">
-            Add secondary details and insurance information for this patient.
+            {tPatient("details.subtitle")}
           </p>
         </div>
         <Link
           href="/patients"
           className="inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
         >
-          Back to all contacts
+          {tPatient("details.backToContacts")}
         </Link>
       </div>
 

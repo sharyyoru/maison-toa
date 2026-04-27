@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 interface EditingUserInfo {
@@ -16,6 +17,7 @@ export default function PatientEditingPresence({
 }: {
   patientId: string;
 }) {
+  const t = useTranslations("patient.presence");
   const [editingUser, setEditingUser] = useState<EditingUserInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -161,7 +163,7 @@ export default function PatientEditingPresence({
     return (
       <div className="flex items-center gap-1 text-[11px] text-slate-500">
         <span className="text-[10px] uppercase tracking-wide text-slate-400">
-          Currently editing
+          {t("currentlyEditing")}
         </span>
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[11px] font-medium text-slate-500">
           --
@@ -177,7 +179,7 @@ export default function PatientEditingPresence({
   return (
     <div className="flex items-center gap-1 text-[11px] text-slate-600">
       <span className="text-[10px] uppercase tracking-wide text-slate-500">
-        Currently editing
+        {t("currentlyEditing")}
       </span>
       <div
         className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-sky-500 text-[11px] font-medium text-white shadow-sm"

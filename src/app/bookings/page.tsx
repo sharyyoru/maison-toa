@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type BookingPatient = {
@@ -55,11 +56,11 @@ function formatDateTime(dateStr: string): string {
   });
 }
 
-function extractSource(reason: string | null): string {
-  if (!reason) return "Unknown";
-  if (reason.includes("[Online Booking]")) return "Online Booking";
-  if (reason.includes("[Intake Form]")) return "Intake Form";
-  return "Manual";
+function extractSourceKey(reason: string | null): string {
+  if (!reason) return "unknownPatient";
+  if (reason.includes("[Online Booking]")) return "sourceOnline";
+  if (reason.includes("[Intake Form]")) return "sourceIntake";
+  return "sourceManual";
 }
 
 function extractDoctor(reason: string | null): string | null {
@@ -69,6 +70,7 @@ function extractDoctor(reason: string | null): string | null {
 }
 
 export default function BookingsPage() {
+  const t = useTranslations("bookingsPage");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +124,7 @@ export default function BookingsPage() {
         setBookings((data as unknown as Booking[]) || []);
       } catch (err) {
         console.error("Error fetching bookings:", err);
-        setError(err instanceof Error ? err.message : "Failed to load bookings");
+        setError(err instanceof Error ? err.message : t("errorLoadFailed"));
       } finally {
         setLoading(false);
       }
@@ -164,9 +166,9 @@ export default function BookingsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Online Bookings</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{t("title")}</h1>
             <p className="text-slate-600 mt-1">
-              Appointments booked through the intake form and online booking system
+              {t("subtitle")}
             </p>
           </div>
           <Link
@@ -176,7 +178,7 @@ export default function BookingsPage() {
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            Full Calendar
+            {t("fullCalendar")}
           </Link>
         </div>
 
@@ -184,23 +186,23 @@ export default function BookingsPage() {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-8">
           <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
             <div className="text-2xl font-bold text-slate-900">{stats.total}</div>
-            <div className="text-sm text-slate-600">Total Bookings</div>
+            <div className="text-sm text-slate-600">{t("totalBookings")}</div>
           </div>
           <div className="bg-white rounded-xl p-4 shadow-sm border border-sky-200">
             <div className="text-2xl font-bold text-sky-600">{stats.scheduled}</div>
-            <div className="text-sm text-slate-600">Scheduled</div>
+            <div className="text-sm text-slate-600">{t("scheduled")}</div>
           </div>
           <div className="bg-white rounded-xl p-4 shadow-sm border border-emerald-200">
             <div className="text-2xl font-bold text-emerald-600">{stats.confirmed}</div>
-            <div className="text-sm text-slate-600">Confirmed</div>
+            <div className="text-sm text-slate-600">{t("confirmed")}</div>
           </div>
           <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
             <div className="text-2xl font-bold text-slate-600">{stats.completed}</div>
-            <div className="text-sm text-slate-600">Completed</div>
+            <div className="text-sm text-slate-600">{t("completed")}</div>
           </div>
           <div className="bg-white rounded-xl p-4 shadow-sm border border-rose-200">
             <div className="text-2xl font-bold text-rose-600">{stats.cancelled}</div>
-            <div className="text-sm text-slate-600">Cancelled</div>
+            <div className="text-sm text-slate-600">{t("cancelled")}</div>
           </div>
         </div>
 
@@ -225,7 +227,7 @@ export default function BookingsPage() {
                 </svg>
                 <input
                   type="text"
-                  placeholder="Search by name, email, phone..."
+                  placeholder={t("searchPlaceholder")}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-200"
@@ -239,10 +241,10 @@ export default function BookingsPage() {
               onChange={(e) => setDateRange(e.target.value as typeof dateRange)}
               className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-200"
             >
-              <option value="all">All Time</option>
-              <option value="today">Today</option>
-              <option value="week">Last 7 Days</option>
-              <option value="month">Last 30 Days</option>
+              <option value="all">{t("allTime")}</option>
+              <option value="today">{t("today")}</option>
+              <option value="week">{t("last7Days")}</option>
+              <option value="month">{t("last30Days")}</option>
             </select>
 
             {/* Status Filter */}
@@ -251,12 +253,12 @@ export default function BookingsPage() {
               onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
               className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-200"
             >
-              <option value="all">All Statuses</option>
-              <option value="scheduled">Scheduled</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="no_show">No Show</option>
+              <option value="all">{t("allStatuses")}</option>
+              <option value="scheduled">{t("scheduled")}</option>
+              <option value="confirmed">{t("confirmed")}</option>
+              <option value="completed">{t("completed")}</option>
+              <option value="cancelled">{t("cancelled")}</option>
+              <option value="no_show">{t("noShow")}</option>
             </select>
           </div>
         </div>
@@ -272,7 +274,7 @@ export default function BookingsPage() {
         {loading ? (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
             <div className="animate-spin w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full mx-auto mb-4"></div>
-            <p className="text-slate-600">Loading bookings...</p>
+            <p className="text-slate-600">{t("loading")}</p>
           </div>
         ) : filteredBookings.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
@@ -289,11 +291,11 @@ export default function BookingsPage() {
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            <p className="text-slate-600 mb-2">No bookings found</p>
+            <p className="text-slate-600 mb-2">{t("noBookings")}</p>
             <p className="text-sm text-slate-500">
               {searchQuery
-                ? "Try adjusting your search query"
-                : "Online bookings will appear here when patients book appointments through the intake form or booking page"}
+                ? t("noBookingsSearchHint")
+                : t("noBookingsHint")}
             </p>
           </div>
         ) : (
@@ -304,35 +306,36 @@ export default function BookingsPage() {
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="text-left px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Patient
+                      {t("columns.patient")}
                     </th>
                     <th className="text-left px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Appointment
+                      {t("columns.appointment")}
                     </th>
                     <th className="text-left px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Doctor
+                      {t("columns.doctor")}
                     </th>
                     <th className="text-left px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Source
+                      {t("columns.source")}
                     </th>
                     <th className="text-left px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Status
+                      {t("columns.status")}
                     </th>
                     <th className="text-left px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Booked On
+                      {t("columns.bookedOn")}
                     </th>
                     <th className="text-right px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Actions
+                      {t("columns.actions")}
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {filteredBookings.map((booking) => {
                     const patientName = booking.patient
-                      ? `${booking.patient.first_name || ""} ${booking.patient.last_name || ""}`.trim() || "Unknown"
-                      : "Unknown";
+                      ? `${booking.patient.first_name || ""} ${booking.patient.last_name || ""}`.trim() || t("unknownPatient")
+                      : t("unknownPatient");
                     const doctor = extractDoctor(booking.reason);
-                    const source = extractSource(booking.reason);
+                    const sourceKey = extractSourceKey(booking.reason);
+                    const source = t(sourceKey);
 
                     return (
                       <tr key={booking.id} className="hover:bg-slate-50 transition-colors">
@@ -344,24 +347,24 @@ export default function BookingsPage() {
                             <div>
                               <div className="font-medium text-slate-900">{patientName}</div>
                               <div className="text-sm text-slate-500">
-                                {booking.patient?.email || booking.patient?.phone || "No contact"}
+                                {booking.patient?.email || booking.patient?.phone || t("noContact")}
                               </div>
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-slate-900">{formatDateTime(booking.start_time)}</div>
-                          <div className="text-sm text-slate-500">{booking.location || "No location"}</div>
+                          <div className="text-sm text-slate-500">{booking.location || t("noLocation")}</div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-slate-900">{doctor || "Not specified"}</div>
+                          <div className="text-slate-900">{doctor || t("notSpecified")}</div>
                         </td>
                         <td className="px-6 py-4">
                           <span
                             className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              source === "Online Booking"
+                              sourceKey === "sourceOnline"
                                 ? "bg-blue-100 text-blue-800"
-                                : source === "Intake Form"
+                                : sourceKey === "sourceIntake"
                                 ? "bg-purple-100 text-purple-800"
                                 : "bg-slate-100 text-slate-800"
                             }`}
@@ -386,7 +389,7 @@ export default function BookingsPage() {
                             href={`/patients/${booking.patient_id}`}
                             className="text-slate-600 hover:text-slate-900 font-medium text-sm"
                           >
-                            View Patient
+                            {t("viewPatient")}
                           </Link>
                         </td>
                       </tr>

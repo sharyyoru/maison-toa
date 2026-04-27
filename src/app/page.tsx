@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { useCommentsUnread } from "@/components/CommentsUnreadContext";
 
@@ -28,6 +29,7 @@ function renderTextWithMentions(text: string) {
 }
 
 export default function Home() {
+  const t = useTranslations("dashboard");
   const [appointments, setAppointments] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [mentions, setMentions] = useState<any[]>([]);
@@ -327,7 +329,7 @@ export default function Home() {
     if (!task) return;
 
     if (!trimmed) {
-      setTaskCommentError("Comment cannot be empty.");
+      setTaskCommentError(t("commentEmpty"));
       return;
     }
 
@@ -338,7 +340,7 @@ export default function Home() {
       const { data: authData } = await supabaseClient.auth.getUser();
       const authUser = authData?.user;
       if (!authUser) {
-        setTaskCommentError("You must be logged in to comment.");
+        setTaskCommentError(t("commentLoginRequired"));
         setTaskCommentSaving(false);
         return;
       }
@@ -361,7 +363,7 @@ export default function Home() {
         .single();
 
       if (insertError || !inserted) {
-        setTaskCommentError(insertError?.message ?? "Failed to save comment.");
+        setTaskCommentError(insertError?.message ?? t("commentFailed"));
         setTaskCommentSaving(false);
         return;
       }
@@ -388,7 +390,7 @@ export default function Home() {
       setActiveMentionQuery("");
       setTaskCommentSaving(false);
     } catch {
-      setTaskCommentError("Failed to save comment.");
+      setTaskCommentError(t("commentFailed"));
       setTaskCommentSaving(false);
     }
   }
@@ -398,10 +400,10 @@ export default function Home() {
       <header className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">
-            Hi{userFirstName ? ` ${userFirstName}` : ""}
+            {t("greeting")}{userFirstName ? ` ${userFirstName}` : ""}
           </h1>
           <p className="text-sm text-slate-500">
-            Let&apos;s get you on a productive routine today!
+            {t("subtitle")}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs sm:text-sm">
@@ -412,7 +414,7 @@ export default function Home() {
             <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-500 text-[12px] font-semibold text-white shadow-sm">
               +
             </span>
-            <span>Add patient</span>
+            <span>{t("addPatient")}</span>
           </Link>
           <Link
             href="/appointments"
@@ -433,7 +435,7 @@ export default function Home() {
                 <path d="M16 3v4M8 3v4M3 11h18" />
               </svg>
             </span>
-            <span>Schedule appointment</span>
+            <span>{t("scheduleAppointment")}</span>
           </Link>
         </div>
       </header>
@@ -443,26 +445,26 @@ export default function Home() {
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
               <h2 className="text-sm font-semibold text-slate-900">
-                Today&apos;s appointments
+                {t("todaysAppointments")}
               </h2>
               <p className="text-xs text-slate-500">
-                Quick view of your upcoming consultations and surgeries.
+                {t("todaysAppointmentsDesc")}
               </p>
             </div>
             <Link
               href="/appointments"
               className="inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              View all
+              {t("viewAll")}
             </Link>
           </div>
           {loading ? (
             <p className="text-xs text-slate-500">
-              Loading today&apos;s appointments...
+              {t("loadingAppointments")}
             </p>
           ) : appointments.length === 0 ? (
             <p className="text-xs text-slate-500">
-              No appointments scheduled for today.
+              {t("noAppointments")}
             </p>
           ) : (
             <div className="divide-y divide-slate-100 text-sm">
@@ -481,21 +483,21 @@ export default function Home() {
                     }`
                       .trim()
                       .replace(/\s+/g, " ")
-                  : "Unknown patient";
+                  : t("unknownPatient");
                 const rawService = (appt.reason as string | null) ?? null;
                 const service = rawService
-                  ? (rawService.split("[")[0] || "Appointment").trim()
-                  : "Appointment";
+                  ? (rawService.split("[")[0] || t("appointment")).trim()
+                  : t("appointment");
 
-                let badgeLabel = "Scheduled";
+                let badgeLabel = t("statusScheduled");
                 let badgeClasses =
                   "rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700";
                 if (appt.status === "confirmed") {
-                  badgeLabel = "Confirmed";
+                  badgeLabel = t("statusConfirmed");
                   badgeClasses =
                     "rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700";
                 } else if (appt.status === "completed") {
-                  badgeLabel = "Completed";
+                  badgeLabel = t("statusCompleted");
                   badgeClasses =
                     "rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700";
                 }
@@ -507,7 +509,7 @@ export default function Home() {
                   >
                     <div>
                       <p className="font-medium text-slate-800">
-                        {timeLabel} · {service || "Appointment"}
+                        {timeLabel} · {service || t("appointment")}
                       </p>
                       <p className="text-xs text-slate-500">{patientName}</p>
                     </div>
@@ -522,23 +524,23 @@ export default function Home() {
         <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Tasks</h2>
+              <h2 className="text-sm font-semibold text-slate-900">{t("tasks")}</h2>
               <p className="text-xs text-slate-500">
-                Your most important follow-ups and admin items.
+                {t("tasksDesc")}
               </p>
             </div>
             <Link
               href="/tasks"
               className="inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              View all tasks
+              {t("viewAllTasks")}
             </Link>
           </div>
           {loading ? (
-            <p className="text-xs text-slate-500">Loading your tasks...</p>
+            <p className="text-xs text-slate-500">{t("loadingTasks")}</p>
           ) : tasks.length === 0 ? (
             <p className="text-xs text-slate-500">
-              No open tasks assigned to you.
+              {t("noOpenTasks")}
             </p>
           ) : (
             <div className="space-y-2 text-sm">
@@ -552,7 +554,7 @@ export default function Home() {
 
                 const rawDate =
                   (task.activity_date as string | null) ?? (task.created_at as string);
-                let badgeLabel = "Pending";
+                let badgeLabel = t("badgePending");
                 let badgeClasses =
                   "rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700";
                 if (rawDate) {
@@ -568,15 +570,15 @@ export default function Home() {
                     const diffMs = taskDate.getTime() - today.getTime();
                     const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
                     if (diffDays === 0) {
-                      badgeLabel = "Today";
+                      badgeLabel = t("badgeToday");
                       badgeClasses =
                         "rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700";
                     } else if (diffDays < 0) {
-                      badgeLabel = "Overdue";
+                      badgeLabel = t("badgeOverdue");
                       badgeClasses =
                         "rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700";
                     } else if (diffDays <= 7) {
-                      badgeLabel = "This week";
+                      badgeLabel = t("badgeThisWeek");
                       badgeClasses =
                         "rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700";
                     }
@@ -597,7 +599,7 @@ export default function Home() {
                       <p className="text-xs text-slate-500">
                         {task.content
                           ? (task.content as string)
-                          : patientName || "Task"}
+                          : patientName || t("task")}
                       </p>
                     </div>
                     <span className={badgeClasses}>{badgeLabel}</span>
@@ -611,22 +613,22 @@ export default function Home() {
         <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Mentions</h2>
+              <h2 className="text-sm font-semibold text-slate-900">{t("mentions")}</h2>
               <p className="text-xs text-slate-500">
-                Notes and comments where you were tagged.
+                {t("mentionsDesc")}
               </p>
             </div>
             <Link
               href="/comments"
               className="inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              View inbox
+              {t("viewInbox")}
             </Link>
           </div>
           {loading ? (
-            <p className="text-xs text-slate-500">Loading mentions...</p>
+            <p className="text-xs text-slate-500">{t("loadingMentions")}</p>
           ) : mentions.length === 0 ? (
-            <p className="text-xs text-slate-500">No new mentions.</p>
+            <p className="text-xs text-slate-500">{t("noMentions")}</p>
           ) : (
             <div className="space-y-2 text-sm">
               {mentions.map((mention) => {
@@ -639,7 +641,7 @@ export default function Home() {
                 const patient = mention.patient;
                 const patientName = patient
                   ? `${patient.first_name} ${patient.last_name}`.trim()
-                  : "Unknown patient";
+                  : t("unknownPatient");
                 const note = mention.note;
 
                 return (
@@ -659,7 +661,7 @@ export default function Home() {
                             {note.author_name}:{" "}
                           </span>
                         ) : null}
-                        <span>{note?.body ?? "(Note unavailable)"}</span>
+                        <span>{note?.body ?? t("noteUnavailable")}</span>
                       </p>
                     </div>
                     <span className="mt-1 inline-flex h-2 w-2 rounded-full bg-sky-500" />
@@ -680,7 +682,7 @@ export default function Home() {
                   {((taskDetails ?? selectedTask) as any).name as string}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Task details and comments.
+                  {t("taskDetailsDesc")}
                 </p>
               </div>
               <button
@@ -693,17 +695,17 @@ export default function Home() {
             </div>
 
             {taskDetailsLoading ? (
-              <p className="text-xs text-slate-500">Loading task details...</p>
+              <p className="text-xs text-slate-500">{t("loadingTaskDetails")}</p>
             ) : (
               <div className="space-y-2 text-xs text-slate-700">
                 {(() => {
                   const task = (taskDetails ?? selectedTask) as any;
                   const statusLabel = task?.status
                     ? (task.status === "completed"
-                        ? "Completed"
+                        ? t("statusCompleted2")
                         : task.status === "in_progress"
-                          ? "In progress"
-                          : "Not started")
+                          ? t("statusInProgress")
+                          : t("statusNotStarted"))
                     : null;
                   const priorityLabel = task?.priority ?? null;
 
@@ -741,12 +743,12 @@ export default function Home() {
                       <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
                         {statusLabel ? (
                           <span>
-                            Status: <span className="font-medium">{statusLabel}</span>
+                            {t("statusLabel")} <span className="font-medium">{statusLabel}</span>
                           </span>
                         ) : null}
                         {priorityLabel ? (
                           <span>
-                            Priority:{" "}
+                            {t("priorityLabel")}{" "}
                             <span className="font-medium capitalize">
                               {priorityLabel as string}
                             </span>
@@ -754,15 +756,15 @@ export default function Home() {
                         ) : null}
                         {whenLabel ? (
                           <span>
-                            When: <span className="font-medium">{whenLabel}</span>
+                            {t("whenLabel")} <span className="font-medium">{whenLabel}</span>
                           </span>
                         ) : null}
                       </div>
                       {patientName || patient?.email || patient?.phone ? (
                         <p className="text-[11px] text-slate-500">
-                          Patient:{" "}
+                          {t("patientLabel")}{" "}
                           <span className="font-medium">
-                            {patientName || "Unknown patient"}
+                            {patientName || t("unknownPatient")}
                           </span>
                           {patient?.email || patient?.phone ? (
                             <span className="text-slate-400">
@@ -780,7 +782,7 @@ export default function Home() {
                             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
-                            Edit Task
+                            {t("editTask")}
                           </Link>
                         </div>
                       ) : null}
@@ -792,12 +794,12 @@ export default function Home() {
 
             <div className="mt-3 border-t border-slate-200 pt-3">
               <p className="mb-1 text-[11px] font-semibold text-slate-600">
-                Comments
+                {t("comments")}
               </p>
               {taskCommentsLoading ? (
-                <p className="text-[11px] text-slate-500">Loading comments...</p>
+                <p className="text-[11px] text-slate-500">{t("loadingComments")}</p>
               ) : taskComments.length === 0 ? (
-                <p className="text-[11px] text-slate-400">No comments yet.</p>
+                <p className="text-[11px] text-slate-400">{t("noComments")}</p>
               ) : (
                 <div className="mb-2 max-h-48 space-y-1.5 overflow-y-auto">
                   {taskComments.map((comment) => {
@@ -817,7 +819,7 @@ export default function Home() {
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="font-medium">
-                              {(comment.author_name as string) || "Unknown"}
+                              {(comment.author_name as string) || t("unknownAuthor")}
                             </p>
                             <p className="mt-0.5 whitespace-pre-wrap">
                               {renderTextWithMentions(comment.body as string)}
@@ -848,7 +850,7 @@ export default function Home() {
                     onChange={(event) =>
                       handleTaskCommentInputChangeDashboard(event.target.value)
                     }
-                    placeholder="Add a comment... Use @ to mention."
+                    placeholder={t("commentPlaceholder")}
                     className="flex-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     disabled={taskCommentSaving}
                   />
@@ -870,7 +872,7 @@ export default function Home() {
                   <div className="mt-1 max-h-40 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white text-[10px] shadow">
                     {mentionOptions.map((user) => {
                       const display =
-                        user.full_name || user.email || "Unnamed user";
+                        user.full_name || user.email || t("unnamedUser");
                       return (
                         <button
                           key={user.id}

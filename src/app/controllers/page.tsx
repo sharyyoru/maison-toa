@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useTranslations } from "next-intl";
 
 type PlatformUser = {
   id: string;
@@ -63,6 +64,7 @@ function formatTime(time: string): string {
 }
 
 export default function ControllersPage() {
+  const t = useTranslations("controllersPage");
   const [users, setUsers] = useState<PlatformUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedLocation, setSelectedLocation] = useState<string>("Lausanne");
@@ -130,7 +132,7 @@ export default function ControllersPage() {
         setSchedule(newSchedule);
       } catch (err) {
         console.error("Error loading availability:", err);
-        setError("Failed to load availability schedule");
+        setError(t("failedLoad"));
       } finally {
         setLoading(false);
       }
@@ -168,7 +170,7 @@ export default function ControllersPage() {
 
   async function handleSaveSchedule() {
     if (!selectedUserId) {
-      setError("Please select a user first");
+      setError(t("selectUserFirst"));
       return;
     }
 
@@ -197,11 +199,11 @@ export default function ControllersPage() {
         }
       }
 
-      setSuccess("Schedule saved successfully!");
+      setSuccess(t("savedSuccess"));
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       console.error("Error saving schedule:", err);
-      setError(err instanceof Error ? err.message : "Failed to save schedule");
+      setError(err instanceof Error ? err.message : t("failedSave"));
     } finally {
       setSaving(false);
     }
@@ -230,9 +232,9 @@ export default function ControllersPage() {
           {/* Header */}
           <div className="flex items-baseline justify-between gap-3">
             <div>
-              <h1 className="text-xl font-semibold text-slate-900">Controllers</h1>
+              <h1 className="text-xl font-semibold text-slate-900">{t("title")}</h1>
               <p className="text-sm text-slate-500">
-                Manage user availability schedules and working hours for appointments.
+                {t("subtitle")}
               </p>
             </div>
           </div>
@@ -244,7 +246,7 @@ export default function ControllersPage() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-slate-300 mb-2">
-                    Select User / Doctor
+                    {t("selectUserLabel")}
                   </label>
                   <div className="relative">
                     <input
@@ -254,7 +256,7 @@ export default function ControllersPage() {
                         setUserSearch(e.target.value);
                         if (selectedUserId) setSelectedUserId("");
                       }}
-                      placeholder="Search for a user..."
+                      placeholder={t("searchPlaceholder")}
                       className="w-full rounded-xl border-0 bg-white/10 backdrop-blur px-4 py-3 text-white placeholder-slate-400 focus:bg-white/20 focus:outline-none focus:ring-2 focus:ring-sky-400/50 transition-all"
                     />
                     {!selectedUserId && userSearch && filteredUsers.length > 0 && (
@@ -269,7 +271,7 @@ export default function ControllersPage() {
                             }}
                             className="w-full px-4 py-3 text-left hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
                           >
-                            <div className="font-medium text-slate-900">{user.full_name || "Unnamed"}</div>
+                            <div className="font-medium text-slate-900">{user.full_name || t("unnamed")}</div>
                             <div className="text-xs text-slate-500">{user.email}</div>
                           </button>
                         ))}
@@ -293,7 +295,7 @@ export default function ControllersPage() {
                 </div>
                 <div className="sm:w-48">
                   <label className="block text-xs font-medium text-slate-300 mb-2">
-                    Location
+                    {t("locationLabel")}
                   </label>
                   <select
                     value={selectedLocation}
@@ -335,9 +337,9 @@ export default function ControllersPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-medium text-slate-900 mb-2">Select a User</h3>
+                  <h3 className="text-lg font-medium text-slate-900 mb-2">{t("selectUser")}</h3>
                   <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                    Choose a user from the dropdown above to view and edit their availability schedule.
+                    {t("selectUserHint")}
                   </p>
                 </div>
               ) : loading ? (
@@ -348,7 +350,7 @@ export default function ControllersPage() {
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
                   </div>
-                  <p className="mt-3 text-sm text-slate-500">Loading schedule...</p>
+                  <p className="mt-3 text-sm text-slate-500">{t("loadingSchedule")}</p>
                 </div>
               ) : (
                 <>
@@ -362,7 +364,7 @@ export default function ControllersPage() {
                       <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
-                      Reset to Default (8 AM - 7 PM)
+                      {t("resetDefault")}
                     </button>
                   </div>
 
@@ -371,11 +373,11 @@ export default function ControllersPage() {
                     <table className="w-full">
                       <thead>
                         <tr className="bg-slate-50">
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Day</th>
-                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Available</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Start Time</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">End Time</th>
-                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{t("columns.day")}</th>
+                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">{t("columns.available")}</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{t("columns.startTime")}</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{t("columns.endTime")}</th>
+                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">{t("columns.actions")}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -406,7 +408,7 @@ export default function ControllersPage() {
                                       {dayInfo.label}
                                     </div>
                                     {isWeekend && (
-                                      <div className="text-xs text-slate-400">Weekend</div>
+                                      <div className="text-xs text-slate-400">{t("weekend")}</div>
                                     )}
                                   </div>
                                 </div>
@@ -469,7 +471,7 @@ export default function ControllersPage() {
                                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                     </svg>
-                                    Copy to All
+                                    {t("copyToAll")}
                                   </button>
                                 )}
                               </td>
@@ -483,26 +485,26 @@ export default function ControllersPage() {
                   {/* Summary */}
                   <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200/50 p-4">
-                      <div className="text-xs font-medium text-emerald-600 mb-1">Working Days</div>
+                      <div className="text-xs font-medium text-emerald-600 mb-1">{t("workingDays")}</div>
                       <div className="text-2xl font-bold text-emerald-700">
                         {schedule.filter(d => d.isAvailable).length}
                       </div>
-                      <div className="text-xs text-emerald-600/70">days per week</div>
+                      <div className="text-xs text-emerald-600/70">{t("daysPerWeek")}</div>
                     </div>
                     <div className="rounded-xl bg-gradient-to-br from-sky-50 to-sky-100/50 border border-sky-200/50 p-4">
-                      <div className="text-xs font-medium text-sky-600 mb-1">Typical Hours</div>
+                      <div className="text-xs font-medium text-sky-600 mb-1">{t("typicalHours")}</div>
                       <div className="text-2xl font-bold text-sky-700">
                         {schedule.filter(d => d.isAvailable).length > 0 
                           ? `${formatTime(schedule.find(d => d.isAvailable)?.startTime || "08:00")} - ${formatTime(schedule.find(d => d.isAvailable)?.endTime || "19:00")}`
                           : "N/A"
                         }
                       </div>
-                      <div className="text-xs text-sky-600/70">working hours</div>
+                      <div className="text-xs text-sky-600/70">{t("workingHours")}</div>
                     </div>
                     <div className="rounded-xl bg-gradient-to-br from-violet-50 to-violet-100/50 border border-violet-200/50 p-4">
-                      <div className="text-xs font-medium text-violet-600 mb-1">Location</div>
+                      <div className="text-xs font-medium text-violet-600 mb-1">{t("location")}</div>
                       <div className="text-2xl font-bold text-violet-700">{selectedLocation}</div>
-                      <div className="text-xs text-violet-600/70">clinic branch</div>
+                      <div className="text-xs text-violet-600/70">{t("clinicBranch")}</div>
                     </div>
                   </div>
 
@@ -516,7 +518,7 @@ export default function ControllersPage() {
                       }}
                       className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
                     >
-                      Cancel
+                      {t("cancel")}
                     </button>
                     <button
                       type="button"
@@ -530,14 +532,14 @@ export default function ControllersPage() {
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                           </svg>
-                          Saving...
+                          {t("saving")}
                         </>
                       ) : (
                         <>
                           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
-                          Save Schedule
+                          {t("saveSchedule")}
                         </>
                       )}
                     </button>
@@ -553,21 +555,20 @@ export default function ControllersPage() {
               <svg className="h-5 w-5 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              About User Availability
+              {t("aboutTitle")}
             </h3>
             <div className="text-sm text-slate-600 space-y-2">
               <p>
-                This controller allows you to set the working hours for each user/doctor per day of the week.
-                The availability schedule is used to:
+                {t("aboutDesc")}
               </p>
               <ul className="list-disc list-inside space-y-1 text-slate-500">
-                <li>Show available time slots when booking appointments</li>
-                <li>Validate appointment times against user schedules</li>
-                <li>Display availability warnings in the appointment modal</li>
-                <li>Filter calendar views by doctor availability</li>
+                <li>{t("aboutItem1")}</li>
+                <li>{t("aboutItem2")}</li>
+                <li>{t("aboutItem3")}</li>
+                <li>{t("aboutItem4")}</li>
               </ul>
               <p className="text-xs text-slate-400 mt-3">
-                Note: Changes take effect immediately after saving.
+                {t("aboutNote")}
               </p>
             </div>
           </div>

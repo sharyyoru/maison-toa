@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { stripEmailSignature } from "@/utils/emailCleaner";
+import { useTranslations } from "next-intl";
 import AppointmentModal, { type AppointmentData } from "@/components/AppointmentModal";
 import RichTextEditor from "@/components/RichTextEditor";
 import WhatsAppWebConversation from "@/components/WhatsAppWebConversation";
@@ -209,6 +210,8 @@ export default function PatientActivityCard({
   const [internalTab, setInternalTab] = useState<ActivityTab>(defaultTab ?? "activity");
   
   // Use controlled tab if provided, otherwise use internal state
+  const t = useTranslations("patient.activityCard");
+
   const activeTab = controlledTab ?? internalTab;
   
   const setActiveTab = (tab: ActivityTab) => {
@@ -1519,7 +1522,7 @@ export default function PatientActivityCard({
 
   function handleTaskAssignedUserSelect(user: PlatformUser) {
     setTaskAssignedUserId(user.id);
-    setTaskAssignedUserSearch(user.full_name || user.email || "Unnamed user");
+    setTaskAssignedUserSearch(user.full_name || user.email || t("unnamed"));
     setTaskAssignedUserDropdownOpen(false);
   }
 
@@ -2584,12 +2587,12 @@ export default function PatientActivityCard({
       : null;
 
   const tabs: { key: ActivityTab; label: string }[] = [
-    { key: "activity", label: "Activity" },
-    { key: "notes", label: "Notes" },
-    { key: "emails", label: "Emails" },
-    { key: "whatsapp", label: "Whatsapp" },
-    { key: "tasks", label: "Tasks" },
-    { key: "deals", label: "Deals" },
+    { key: "activity", label: t("activity") },
+    { key: "notes", label: t("notes") },
+    { key: "emails", label: t("emails") },
+    { key: "whatsapp", label: t("whatsapp") },
+    { key: "tasks", label: t("tasks") },
+    { key: "deals", label: t("deals") },
   ];
 
   return (
@@ -2599,7 +2602,7 @@ export default function PatientActivityCard({
         <div className="relative flex-1">
           <input
             type="text"
-            placeholder="Search activity..."
+            placeholder={t("searchActivity")}
             className="w-full rounded-full border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
           />
         </div>
@@ -2646,7 +2649,7 @@ export default function PatientActivityCard({
                   <path d="M4 10h12" />
                 </svg>
               </span>
-              <span>Create note</span>
+              <span>{t("createNote")}</span>
             </button>
           )}
           <button
@@ -2669,13 +2672,13 @@ export default function PatientActivityCard({
                 <path d="M4 8a6 6 0 1 1 6 6 5.8 5.8 0 0 1-4.24-1.76" />
               </svg>
             </span>
-            <span>{notesLoading ? "Refreshing..." : "Refresh"}</span>
+            <span>{notesLoading ? t("refreshing") : t("refresh")}</span>
           </button>
         </div>
       </div>
 
       <div className="mt-2 flex items-center justify-end gap-2 text-[11px] text-slate-500">
-        <span className="hidden sm:inline">Sort</span>
+        <span className="hidden sm:inline">{t("sort")}</span>
         <div className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50/80 px-1 py-0.5">
           <button
             type="button"
@@ -2687,7 +2690,7 @@ export default function PatientActivityCard({
                 : "text-slate-600 hover:text-slate-900")
             }
           >
-            Newest
+            {t("newest")}
           </button>
           <button
             type="button"
@@ -2699,7 +2702,7 @@ export default function PatientActivityCard({
                 : "text-slate-600 hover:text-slate-900")
             }
           >
-            Oldest
+            {t("oldest")}
           </button>
         </div>
       </div>
@@ -2712,8 +2715,8 @@ export default function PatientActivityCard({
               <div>
                 <p className="font-medium">
                   {createdBy
-                    ? `Patient record created by ${createdBy}`
-                    : "Patient record created"}
+                    ? t("recordCreatedBy", { name: createdBy })
+                    : t("recordCreated")}
                 </p>
                 {createdLabel ? (
                   <p className="mt-0.5 text-[10px] text-emerald-700">
@@ -2721,7 +2724,7 @@ export default function PatientActivityCard({
                   </p>
                 ) : null}
                 <p className="mt-1 text-[10px] text-emerald-800/80">
-                  Patient ID: <span className="font-mono">{patientId}</span>
+                  {t("patientId")} <span className="font-mono">{patientId}</span>
                 </p>
               </div>
             </div>
@@ -2762,7 +2765,7 @@ export default function PatientActivityCard({
                   return (
                     <div className="mt-2 rounded-lg border border-emerald-400/40 bg-emerald-50/40 p-2 text-[11px] text-emerald-900 shadow-[0_16px_30px_rgba(16,185,129,0.35)] backdrop-blur-sm">
                       <div className="mb-1 flex items-center justify-between">
-                        <span className="font-medium">Data is loading…</span>
+                        <span className="font-medium">{t("dataLoading")}</span>
                       </div>
                       <div className="h-1.5 w-full overflow-hidden rounded-full bg-emerald-100/70">
                         <div className="h-full w-1/2 animate-pulse rounded-full bg-gradient-to-r from-emerald-400/90 via-emerald-300 to-emerald-500/95 shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
@@ -2773,7 +2776,7 @@ export default function PatientActivityCard({
 
                 return (
                   <p className="text-[11px] text-slate-500">
-                    No activity yet for this patient.
+                    {t("noActivity")}
                   </p>
                 );
               }
@@ -2801,7 +2804,7 @@ export default function PatientActivityCard({
                           <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-slate-400" />
                           <div>
                             <p className="font-medium">
-                              Note from {note.author_name || "Unknown"}
+                              {t("noteFrom", { name: note.author_name || t("unknown") })}
                             </p>
                             <p className="mt-0.5 whitespace-pre-wrap text-[11px] text-slate-700">
                               {note.body}
@@ -2813,7 +2816,7 @@ export default function PatientActivityCard({
                             ) : null}
                             {mentions.length > 0 ? (
                               <p className="mt-0.5 text-[10px] text-slate-500">
-                                Mentions:{" "}
+                                {t("mentions")}{" "}
                                 {mentions.map((m, index) => (
                                   <span
                                     key={`${m.mentioned_user_id}-${m.read_at ?? ""}`}
@@ -2828,7 +2831,7 @@ export default function PatientActivityCard({
                                           ? "bg-emerald-500"
                                           : "bg-sky-500")
                                       }
-                                      title={m.read_at ? "Read" : "Unread"}
+                                      title={m.read_at ? t("read") : t("unread")}
                                     />
                                     {index < mentions.length - 1 ? (
                                       <span className="text-slate-400">, </span>
@@ -2884,17 +2887,17 @@ export default function PatientActivityCard({
                                     : "bg-emerald-100 text-emerald-700")
                                 }
                               >
-                                {isOutbound ? "Outbox" : "Inbox"}
+                                {isOutbound ? t("outbox") : t("inbox")}
                               </span>
                               <span className="max-w-[220px] truncate text-[11px] font-medium text-slate-900 sm:max-w-xs">
                                 {email.subject}
                               </span>
                             </div>
                             <p className="text-[10px] text-slate-500">
-                              To <span className="font-medium">{email.to_address}</span>
+                              {t("to")} <span className="font-medium">{email.to_address}</span>
                               {email.from_address ? (
                                 <>
-                                  {" "}• From {""}
+                                  {" "}• {t("from")} {""}
                                   <span className="font-medium">{email.from_address}</span>
                                 </>
                               ) : null}
@@ -2941,7 +2944,7 @@ export default function PatientActivityCard({
                       const service = serviceOptions.find(
                         (candidate) => candidate.id === (deal.service_id ?? ""),
                       );
-                      const serviceLabel = service?.name ?? "Not set";
+                      const serviceLabel = service?.name ?? null;
 
                       return (
                         <div
@@ -2951,24 +2954,24 @@ export default function PatientActivityCard({
                           <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-sky-500" />
                           <div>
                             <p className="font-medium">
-                              Deal created: {deal.title || "Untitled deal"}
+                              {t("dealCreated", { title: deal.title || t("untitledDeal") })}
                             </p>
                             <p className="mt-0.5 text-[10px] text-slate-600">
-                              Pipeline: <span className="font-medium">{pipelineLabel}</span>
-                              {" "}| Stage: {" "}
+                              {t("pipeline")}: <span className="font-medium">{pipelineLabel}</span>
+                              {" "}| {t("stage")}: {" "}
                               <span className="font-medium">
-                                {stage ? stage.name : "Unknown"}
+                                {stage ? stage.name : t("unknown")}
                               </span>
                             </p>
                             <p className="mt-0.5 text-[10px] text-slate-600">
-                              Service: {" "}
+                              {t("service")}: {" "}
                               <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">
-                                {serviceLabel}
+                                {serviceLabel || t("notSet")}
                               </span>
                             </p>
                             <p className="mt-0.5 text-[10px] text-slate-600">
-                              Contact label: <span className="font-medium">{contactLabel}</span>
-                              {" "}| Location: {" "}
+                              {t("contactLabel")}: <span className="font-medium">{contactLabel}</span>
+                              {" "}| {t("location")}: {" "}
                               <span className="font-medium">{locationLabel}</span>
                             </p>
                             {dealLabel ? (
@@ -2994,20 +2997,20 @@ export default function PatientActivityCard({
 
                     const statusLabel =
                       task.status === "completed"
-                        ? "Completed"
+                        ? t("completed")
                         : task.status === "in_progress"
-                          ? "In Progress"
-                          : "Not Started";
+                          ? t("inProgress")
+                          : t("notStarted");
 
                     const priorityLabel =
                       task.priority === "high"
-                        ? "High"
+                        ? t("high")
                         : task.priority === "low"
-                          ? "Low"
-                          : "Medium";
+                          ? t("low")
+                          : t("medium");
 
                     const assignedLabel =
-                      task.assigned_user_name || "Unassigned";
+                      task.assigned_user_name || t("unassigned");
 
                     return (
                       <div
@@ -3017,31 +3020,31 @@ export default function PatientActivityCard({
                         <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500" />
                         <div className="space-y-0.5">
                           <p className="font-semibold">
-                            Task: {task.name}
+                            {t("taskLabel")} {task.name}
                           </p>
                           <p className="text-[10px] text-emerald-800">
-                            Status {" "}
+                            {t("status")} {" "}
                             <span className="font-medium">{statusLabel}</span>
-                            {" "}• Type {" "}
+                            {" "}• {t("type")} {" "}
                             <span className="font-medium capitalize">
                               {task.type}
                             </span>
-                            {" "}• Priority {" "}
+                            {" "}• {t("priority")} {" "}
                             <span className="font-medium capitalize">
                               {priorityLabel}
                             </span>
                           </p>
                           <p className="text-[10px] text-emerald-800">
-                            Created by {" "}
+                            {t("createdBy")} {" "}
                             <span className="font-medium">
-                              {task.created_by_name || "Unknown"}
+                              {task.created_by_name || t("unknown")}
                             </span>
-                            {" "}• Assigned to {" "}
+                            {" "}• {t("assignedTo")} {" "}
                             <span className="font-medium">{assignedLabel}</span>
                           </p>
                           {taskLabel ? (
                             <p className="text-[10px] text-emerald-700">
-                              Activity Date {" "}
+                              {t("activityDate")} {" "}
                               <span className="font-medium">{taskLabel}</span>
                             </p>
                           ) : null}
@@ -3058,17 +3061,17 @@ export default function PatientActivityCard({
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[11px] text-slate-500">
-                Internal notes about this patient. Use the @ button to mention teammates.
+                {t("notesDesc")}
               </p>
             </div>
 
             {notesLoading ? (
-              <p className="text-[11px] text-slate-500">Loading notes...</p>
+              <p className="text-[11px] text-slate-500">{t("loadingNotes")}</p>
             ) : notesError ? (
               <p className="text-[11px] text-red-600">{notesError}</p>
             ) : sortedNotes.length === 0 ? (
               <p className="text-[11px] text-slate-500">
-                No notes yet. Create the first note for this patient.
+                {t("noNotes")}
               </p>
             ) : (
               <div className="space-y-2">
@@ -3091,7 +3094,7 @@ export default function PatientActivityCard({
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
                           <p className="font-medium">
-                            {note.author_name || "Unknown"}
+                            {note.author_name || t("unknown")}
                           </p>
                           <p className="mt-0.5 whitespace-pre-wrap text-slate-700">
                             {note.body}
@@ -3102,12 +3105,12 @@ export default function PatientActivityCard({
                             type="button"
                             onClick={() => handleEditNote(note)}
                             className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-                            title="Edit note"
+                            title={t("editNote")}
                           >
                             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
-                            Edit
+                            {t("edit")}
                           </button>
                           {noteLabel ? (
                             <span className="text-[10px] text-slate-400">
@@ -3119,7 +3122,7 @@ export default function PatientActivityCard({
                       {mentions.length > 0 ? (
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <p className="text-[10px] text-slate-500">
-                            Mentions:{" "}
+                            {t("mentions")}{" "}
                             {mentions.map((m, index) => (
                               <span
                                 key={`${m.mentioned_user_id}-${m.read_at ?? ""}`}
@@ -3134,7 +3137,7 @@ export default function PatientActivityCard({
                                       ? "bg-emerald-500"
                                       : "bg-sky-500")
                                   }
-                                  title={m.read_at ? "Read" : "Unread"}
+                                  title={m.read_at ? t("read") : t("unread")}
                                 />
                                 {index < mentions.length - 1 ? (
                                   <span className="text-slate-400">, </span>
@@ -3152,7 +3155,7 @@ export default function PatientActivityCard({
                               <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                               </svg>
-                              Mark as Read
+                              {t("markAsRead")}
                             </button>
                           ) : null}
                         </div>
@@ -3168,7 +3171,7 @@ export default function PatientActivityCard({
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[11px] text-slate-500">
-                Emails associated with this patient. Compose emails here.
+                {t("emailsDesc")}
               </p>
               <button
                 type="button"
@@ -3193,12 +3196,12 @@ export default function PatientActivityCard({
                     <path d="M5 7l5 4 5-4" />
                   </svg>
                 </span>
-                <span>Compose email</span>
+                <span>{t("composeEmail")}</span>
               </button>
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2 text-[11px] text-slate-500">
-              <span className="hidden sm:inline">Filter</span>
+              <span className="hidden sm:inline">{t("filter")}</span>
               <div className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50/80 px-1 py-0.5">
                 <button
                   type="button"
@@ -3210,7 +3213,7 @@ export default function PatientActivityCard({
                       : "text-slate-600 hover:text-slate-900")
                   }
                 >
-                  All
+                  {t("all")}
                 </button>
                 <button
                   type="button"
@@ -3222,7 +3225,7 @@ export default function PatientActivityCard({
                       : "text-slate-600 hover:text-emerald-700")
                   }
                 >
-                  📥 Received
+                  {t("received")}
                 </button>
                 <button
                   type="button"
@@ -3234,7 +3237,7 @@ export default function PatientActivityCard({
                       : "text-slate-600 hover:text-sky-700")
                   }
                 >
-                  📤 Sent
+                  {t("sent")}
                 </button>
                 <button
                   type="button"
@@ -3246,18 +3249,18 @@ export default function PatientActivityCard({
                       : "text-slate-600 hover:text-amber-700")
                   }
                 >
-                  ⏱ Scheduled
+                  {t("scheduled")}
                 </button>
               </div>
             </div>
 
             {emailsLoading ? (
-              <p className="text-[11px] text-slate-500">Loading emails...</p>
+              <p className="text-[11px] text-slate-500">{t("loadingEmails")}</p>
             ) : emailsError ? (
               <p className="text-[11px] text-red-600">{emailsError}</p>
             ) : sortedEmails.length === 0 ? (
               <p className="text-[11px] text-slate-500">
-                No emails yet. Compose the first email for this patient.
+                {t("noEmails")}
               </p>
             ) : (
               <div className="space-y-2">
@@ -3316,14 +3319,14 @@ export default function PatientActivityCard({
                                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                   </svg>
-                                  SENT
+                                  {t("sentLabel")}
                                 </>
                               ) : (
                                 <>
                                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                   </svg>
-                                  RECEIVED
+                                  {t("receivedLabel")}
                                 </>
                               )}
                             </span>
@@ -3335,17 +3338,17 @@ export default function PatientActivityCard({
                           <p className="text-[10px] text-slate-600">
                             {isOutbound ? (
                               <>
-                                <span className="font-medium text-sky-700">To:</span>{" "}
+                                <span className="font-medium text-sky-700">{t("toLabel")}</span>{" "}
                                 <span className="font-medium">{email.to_address}</span>
                                 {email.from_address && (
-                                  <span className="text-slate-400"> • From: {email.from_address}</span>
+                                  <span className="text-slate-400"> • {t("fromLabel")} {email.from_address}</span>
                                 )}
                               </>
                             ) : (
                               <>
-                                <span className="font-medium text-emerald-700">From:</span>{" "}
-                                <span className="font-medium">{email.from_address || "Unknown"}</span>
-                                <span className="text-slate-400"> • To: {email.to_address}</span>
+                                <span className="font-medium text-emerald-700">{t("fromLabel")}</span>{" "}
+                                <span className="font-medium">{email.from_address || t("unknown")}</span>
+                                <span className="text-slate-400"> • {t("toLabel")} {email.to_address}</span>
                               </>
                             )}
                           </p>
@@ -3372,14 +3375,14 @@ export default function PatientActivityCard({
                           email.status === "queued" ? "bg-amber-100 text-amber-700" :
                           "bg-slate-100 text-slate-600"
                         }`}>
-                          {email.status === "read" ? "✓ Read" :
-                           email.status === "failed" ? "✗ Failed" :
-                           email.status === "queued" ? "⏱ Scheduled" :
-                           "● Sent"}
+                          {email.status === "read" ? t("readStatus") :
+                           email.status === "failed" ? t("failedStatus") :
+                           email.status === "queued" ? t("scheduledStatus") :
+                           t("sentStatus")}
                         </span>
                         {email.read_at && (
                           <span className="text-[9px] text-emerald-600">
-                            Opened {formatSwissDate(email.read_at)}
+                            {t("opened")} {formatSwissDate(email.read_at)}
                           </span>
                         )}
                       </div>
@@ -3400,7 +3403,7 @@ export default function PatientActivityCard({
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11px] text-slate-500">
-                Tasks and follow-ups related to this patient.
+                {t("tasksDesc")}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50/80 px-1 py-0.5 text-[11px] text-slate-500">
@@ -3414,7 +3417,7 @@ export default function PatientActivityCard({
                         : "text-slate-600 hover:text-slate-900")
                     }
                   >
-                    Not Started
+                    {t("notStarted")}
                   </button>
                   <button
                     type="button"
@@ -3426,7 +3429,7 @@ export default function PatientActivityCard({
                         : "text-slate-600 hover:text-slate-900")
                     }
                   >
-                    Completed
+                    {t("completed")}
                   </button>
                 </div>
                 <button
@@ -3458,13 +3461,13 @@ export default function PatientActivityCard({
                       <path d="M4 10h12" />
                     </svg>
                   </span>
-                  <span>Create Task</span>
+                  <span>{t("createTask")}</span>
                 </button>
               </div>
             </div>
 
             {tasksLoading ? (
-              <p className="text-[11px] text-slate-500">Loading tasks...</p>
+              <p className="text-[11px] text-slate-500">{t("loadingTasks")}</p>
             ) : tasksError ? (
               <p className="text-[11px] text-red-600">{tasksError}</p>
             ) : (() => {
@@ -3491,7 +3494,7 @@ export default function PatientActivityCard({
               if (sortedTasks.length === 0) {
                 return (
                   <p className="text-[11px] text-slate-500">
-                    No tasks in this view. Create the first task for this patient.
+                    {t("noTasks")}
                   </p>
                 );
               }
@@ -3509,17 +3512,17 @@ export default function PatientActivityCard({
 
                     const statusLabel =
                       task.status === "completed"
-                        ? "Completed"
+                        ? t("completed")
                         : task.status === "in_progress"
-                          ? "In Progress"
-                          : "Not Started";
+                          ? t("inProgress")
+                          : t("notStarted");
 
                     const priorityLabel =
                       task.priority === "high"
-                        ? "high"
+                        ? t("high")
                         : task.priority === "low"
-                          ? "low"
-                          : "medium";
+                          ? t("low")
+                          : t("medium");
 
                     const priorityClasses =
                       task.priority === "high"
@@ -3564,11 +3567,11 @@ export default function PatientActivityCard({
                               {task.name}
                             </p>
                             <p className="text-[10px] text-slate-500">
-                              Status: <span className="font-medium">{statusLabel}</span>
+                              {t("status")}: <span className="font-medium">{statusLabel}</span>
                             </p>
                             <p className="mt-0.5 text-[10px] text-slate-500">
-                              Type: <span className="font-medium capitalize">{task.type}</span>
-                              {" "}| Priority:{" "}
+                              {t("type")}: <span className="font-medium capitalize">{task.type}</span>
+                              {" "}| {t("priority")}:{" "}
                               <span
                                 className={
                                   "ml-1 inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold capitalize " +
@@ -3580,17 +3583,17 @@ export default function PatientActivityCard({
                             </p>
                             {activityLabel ? (
                               <p className="mt-0.5 text-[10px] text-slate-500">
-                                Activity Date: <span className="font-medium">{activityLabel}</span>
+                                {t("activityDate")}: <span className="font-medium">{activityLabel}</span>
                               </p>
                             ) : null}
                             <p className="mt-0.5 text-[10px] text-slate-500">
-                              Created by{" "}
+                              {t("createdBy")}{" "}
                               <span className="font-medium">
-                                {task.created_by_name || "Unknown"}
+                                {task.created_by_name || t("unknown")}
                               </span>
-                              {" "}• Assigned to{" "}
+                              {" "}• {t("assignedTo")}{" "}
                               <span className="font-medium">
-                                {task.assigned_user_name || "Unassigned"}
+                                {task.assigned_user_name || t("unassigned")}
                               </span>
                             </p>
                           </div>
@@ -3603,10 +3606,10 @@ export default function PatientActivityCard({
                                   onChange={(e) => setTaskNavDateFilter(e.target.value as "today" | "past" | "future" | "all")}
                                   className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] text-slate-600 focus:border-sky-500 focus:outline-none"
                                 >
-                                  <option value="today">Today</option>
-                                  <option value="past">Past</option>
-                                  <option value="future">Future</option>
-                                  <option value="all">All</option>
+                                  <option value="today">{t("today")}</option>
+                                  <option value="past">{t("past")}</option>
+                                  <option value="future">{t("future")}</option>
+                                  <option value="all">{t("all")}</option>
                                 </select>
                                 <button
                                   type="button"
@@ -3651,7 +3654,7 @@ export default function PatientActivityCard({
                                     task.assigned_user_id ?? "",
                                   );
                                   setTaskAssignedUserSearch(
-                                    assignedUser ? (assignedUser.full_name || assignedUser.email || "Unnamed user") : "",
+                                    assignedUser ? (assignedUser.full_name || assignedUser.email || t("unnamed")) : "",
                                   );
                                   setTaskActivityDate(
                                     task.activity_date
@@ -3665,7 +3668,7 @@ export default function PatientActivityCard({
                                 }}
                                 className="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-500 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm hover:bg-emerald-600"
                               >
-                                <span>Edit</span>
+                                <span>{t("edit")}</span>
                               </button>
                               <button
                                 type="button"
@@ -3680,7 +3683,7 @@ export default function PatientActivityCard({
                                 className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-800 shadow-sm hover:bg-slate-300"
                               >
                                 <span>
-                                  {task.status === "completed" ? "Reopen" : "Set Complete"}
+                                  {task.status === "completed" ? t("reopen") : t("setComplete")}
                                 </span>
                               </button>
                             </div>
@@ -3689,11 +3692,11 @@ export default function PatientActivityCard({
 
                         <div className="mt-2 border-t border-slate-200 pt-2">
                           <p className="mb-1 text-[10px] font-semibold text-slate-600">
-                            Comments
+                            {t("comments")}
                           </p>
                           {comments.length === 0 ? (
                             <p className="text-[10px] text-slate-400">
-                              No comments yet.
+                              {t("noComments")}
                             </p>
                           ) : (
                             <div className="space-y-1.5">
@@ -3750,7 +3753,7 @@ export default function PatientActivityCard({
                                       event.target.value,
                                     )
                                   }
-                                  placeholder="Add a comment... Use @ to mention."
+                                  placeholder={t("addComment")}
                                   className="flex-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                   disabled={isSavingComment}
                                 />
@@ -3774,7 +3777,7 @@ export default function PatientActivityCard({
                                     const display =
                                       user.full_name ||
                                       user.email ||
-                                      "Unnamed user";
+                                      t("unnamed");
                                     return (
                                       <button
                                         key={user.id}
@@ -3805,7 +3808,7 @@ export default function PatientActivityCard({
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11px] text-slate-500">
-                Deals and opportunities related to this patient.
+                {t("dealsDesc")}
               </p>
               <button
                 type="button"
@@ -3826,17 +3829,17 @@ export default function PatientActivityCard({
                     <path d="M4 10h12" />
                   </svg>
                 </span>
-                <span>Create Deal</span>
+                <span>{t("createDeal")}</span>
               </button>
             </div>
 
             {dealsLoading ? (
-              <p className="text-[11px] text-slate-500">Loading deals...</p>
+              <p className="text-[11px] text-slate-500">{t("loadingDeals")}</p>
             ) : dealsError ? (
               <p className="text-[11px] text-red-600">{dealsError}</p>
             ) : deals.length === 0 ? (
               <p className="text-[11px] text-slate-500">
-                No deals yet. Create the first deal for this patient.
+                {t("noDeals")}
               </p>
             ) : (
               <div className="space-y-3">
@@ -3852,7 +3855,7 @@ export default function PatientActivityCard({
                   const service = serviceOptions.find(
                     (candidate) => candidate.id === (deal.service_id ?? ""),
                   );
-                  const serviceLabel = service?.name ?? "Not set";
+                  const serviceLabel = service?.name ?? null;
 
                   const created = deal.created_at
                     ? new Date(deal.created_at)
@@ -3874,20 +3877,20 @@ export default function PatientActivityCard({
                     >
                       <div className="space-y-1">
                         <p className="text-[12px] font-semibold text-slate-900">
-                          {deal.title || "Untitled deal"}
+                          {deal.title || t("untitledDeal")}
                         </p>
                         <p className="text-[11px] text-slate-600">
-                          <span className="font-semibold">Pipeline:</span> {" "}
+                          <span className="font-semibold">{t("pipeline")}:</span> {" "}
                           {pipelineLabel}
                         </p>
                         <p className="text-[11px] text-slate-600">
-                          <span className="font-semibold">Stage:</span> {" "}
-                          {stage ? stage.name : "Unknown"}
+                          <span className="font-semibold">{t("stage")}:</span> {" "}
+                          {stage ? stage.name : t("unknown")}
                         </p>
                         <p className="text-[11px] text-slate-600">
-                          <span className="font-semibold">Services:</span>{" "}
-                          {serviceLabel === "Not set" ? (
-                            <span className="text-slate-400">Not set</span>
+                          <span className="font-semibold">{t("services")}:</span>{" "}
+                          {!serviceLabel ? (
+                            <span className="text-slate-400">{t("notSet")}</span>
                           ) : (
                             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                               {serviceLabel}
@@ -3895,23 +3898,23 @@ export default function PatientActivityCard({
                           )}
                         </p>
                         <p className="text-[11px] text-slate-600">
-                          <span className="font-semibold">Contact Label:</span> {" "}
+                          <span className="font-semibold">{t("contactLabel")}:</span> {" "}
                           {contactLabel}
                         </p>
                         <p className="text-[11px] text-slate-600">
-                          <span className="font-semibold">Contact Owner:</span> {" "}
+                          <span className="font-semibold">{t("contactOwner")}:</span> {" "}
                           <span className="font-medium text-emerald-700">{contactOwnerName || "—"}</span>
                         </p>
                         <p className="text-[11px] text-slate-600">
-                          <span className="font-semibold">Deal Owner:</span> {" "}
+                          <span className="font-semibold">{t("dealOwner")}:</span> {" "}
                           <span className="font-medium text-sky-700">{deal.owner_name || "—"}</span>
                         </p>
                         <p className="text-[11px] text-slate-600">
-                          <span className="font-semibold">Location:</span> {" "}
+                          <span className="font-semibold">{t("location")}:</span> {" "}
                           {locationLabel}
                         </p>
                         <p className="text-[11px] text-slate-600">
-                          <span className="font-semibold">Created Date:</span> {" "}
+                          <span className="font-semibold">{t("createdDate")}:</span> {" "}
                           {createdLabelForDeal || "—"}
                         </p>
                         {/* Show appointment details for "Appointment Set" stage */}
@@ -3921,11 +3924,11 @@ export default function PatientActivityCard({
                               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
-                              <span className="text-[10px] font-semibold">Appointment Scheduled</span>
+                              <span className="text-[10px] font-semibold">{t("appointmentScheduled")}</span>
                             </div>
                             <p className="mt-1 text-[10px] text-emerald-600">
                               {formatSwissShortDate(deal.appointment.start_time)}{" "}
-                              at{" "}
+                              {t("at")}{" "}
                               {formatSwissTime(deal.appointment.start_time)}
                             </p>
                             {deal.appointment.location && (
@@ -4022,9 +4025,9 @@ export default function PatientActivityCard({
       {noteModalOpen ? (
         <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/40 backdrop-blur-sm py-6 sm:py-8">
           <div className="w-full max-w-md max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.65)]">
-            <h2 className="text-sm font-semibold text-slate-900">{editingNote ? "Edit note" : "New note"}</h2>
+            <h2 className="text-sm font-semibold text-slate-900">{editingNote ? t("editNote") : t("newNote")}</h2>
             <p className="mt-1 text-[11px] text-slate-500">
-              {editingNote ? "Update this note." : "Write an internal note about this patient. Use the @ button to mention teammates."}
+              {editingNote ? t("updateNote") : t("newNoteDesc")}
             </p>
             <form onSubmit={handleNoteSubmit} className="mt-3 space-y-3">
               <div className="relative">
@@ -4033,7 +4036,7 @@ export default function PatientActivityCard({
                   onChange={(event) => handleNoteBodyChange(event.target.value)}
                   rows={4}
                   className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  placeholder="Write a note... Use @ to mention."
+                  placeholder={t("notePlaceholder")}
                 />
                 {noteMentionActive && (() => {
                   const mentionQuery = noteMentionQuery.trim();
@@ -4049,7 +4052,7 @@ export default function PatientActivityCard({
                   return (
                     <div className="mt-1 max-h-40 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white text-[10px] shadow">
                       {mentionOptions.map((user) => {
-                        const display = user.full_name || user.email || "Unnamed user";
+                        const display = user.full_name || user.email || t("unnamed");
                         return (
                           <button
                             key={user.id}
@@ -4080,14 +4083,14 @@ export default function PatientActivityCard({
                   }}
                   className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={noteSaving}
                   className="inline-flex items-center rounded-full border border-emerald-200/80 bg-emerald-500 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {noteSaving ? "Saving..." : editingNote ? "Update note" : "Save note"}
+                  {noteSaving ? t("saving") : editingNote ? t("updateNoteBtn") : t("saveNote")}
                 </button>
               </div>
             </form>
@@ -4099,25 +4102,25 @@ export default function PatientActivityCard({
         <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/40 backdrop-blur-sm py-6 sm:py-8">
           <div className="w-full max-w-md max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.65)]">
             <h2 className="text-sm font-semibold text-slate-900">
-              {editTask ? "Edit Task" : "Create Task"}
+              {editTask ? t("editTask") : t("createTask")}
             </h2>
             <form onSubmit={handleTaskSubmit} className="mt-3 space-y-3">
               <div className="space-y-1">
                 <label className="block text-[11px] font-medium text-slate-700">
-                  Name
+                  {t("name")}
                 </label>
                 <input
                   type="text"
                   value={taskName}
                   onChange={(event) => setTaskName(event.target.value)}
                   className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  placeholder="Enter task name"
+                  placeholder={t("enterTaskName")}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="block text-[11px] font-medium text-slate-700">
-                    Type
+                    {t("taskType")}
                   </label>
                   <select
                     value={taskType}
@@ -4126,15 +4129,15 @@ export default function PatientActivityCard({
                     }
                     className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   >
-                    <option value="todo">Todo</option>
-                    <option value="call">Call</option>
-                    <option value="email">Email</option>
-                    <option value="other">Other</option>
+                    <option value="todo">{t("todo")}</option>
+                    <option value="call">{t("call")}</option>
+                    <option value="email">{t("email")}</option>
+                    <option value="other">{t("other")}</option>
                   </select>
                 </div>
                 <div className="space-y-1">
                   <label className="block text-[11px] font-medium text-slate-700">
-                    Priority
+                    {t("priority")}
                   </label>
                   <select
                     value={taskPriority}
@@ -4143,23 +4146,23 @@ export default function PatientActivityCard({
                     }
                     className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
+                    <option value="low">{t("low")}</option>
+                    <option value="medium">{t("medium")}</option>
+                    <option value="high">{t("high")}</option>
                   </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="block text-[11px] font-medium text-slate-700">
-                    User
+                    {t("user")}
                   </label>
                   <div className="relative">
                     <input
                       type="text"
                       value={taskAssignedUserSearch}
                       onChange={(event) => handleTaskAssignedUserSearchChange(event.target.value)}
-                      placeholder="Search users..."
+                      placeholder={t("searchUsers")}
                       className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 pr-7 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                     {taskAssignedUserId && (
@@ -4185,7 +4188,7 @@ export default function PatientActivityCard({
                       return (
                         <div className="absolute top-full left-0 right-0 mt-1 max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white text-[10px] shadow-lg z-10">
                           {filteredUsers.map((user) => {
-                            const display = user.full_name || user.email || "Unnamed user";
+                            const display = user.full_name || user.email || t("unnamed");
                             return (
                               <button
                                 key={user.id}
@@ -4204,7 +4207,7 @@ export default function PatientActivityCard({
                 </div>
                 <div className="space-y-1">
                   <label className="block text-[11px] font-medium text-slate-700">
-                    Activity Date
+                    {t("activityDate")}
                   </label>
                   <input
                     type="datetime-local"
@@ -4216,14 +4219,14 @@ export default function PatientActivityCard({
               </div>
               <div className="space-y-1">
                 <label className="block text-[11px] font-medium text-slate-700">
-                  Content
+                  {t("content")}
                 </label>
                 <textarea
                   value={taskContent}
                   onChange={(event) => setTaskContent(event.target.value)}
                   rows={3}
                   className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  placeholder="Enter task details..."
+                  placeholder={t("enterTaskDetails")}
                 />
               </div>
               {taskSaveError ? (
@@ -4241,14 +4244,14 @@ export default function PatientActivityCard({
                   }}
                   className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={taskSaving}
                   className="inline-flex items-center rounded-full border border-emerald-200/80 bg-emerald-500 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {taskSaving ? "Saving..." : editTask ? "Update Task" : "Confirm"}
+                  {taskSaving ? t("saving") : editTask ? t("updateTask") : t("confirm")}
                 </button>
               </div>
             </form>
@@ -4261,7 +4264,7 @@ export default function PatientActivityCard({
           <div className="w-full max-w-2xl max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.65)]">
             <div className="flex items-start justify-between gap-2">
               <h2 className="text-sm font-semibold text-slate-900">
-                {editingDeal ? "Edit Deal" : "Create Deal"}
+                {editingDeal ? t("editDeal") : t("createDeal")}
               </h2>
               <button
                 type="button"
@@ -4293,33 +4296,33 @@ export default function PatientActivityCard({
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-700">
-                      Deal Name
+                      {t("dealName")}
                     </label>
                     <input
                       type="text"
                       value={dealTitle}
                       onChange={(event) => setDealTitle(event.target.value)}
                       className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                      placeholder="Describe the deal"
+                      placeholder={t("describeDeal")}
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-700">
-                      Description
+                      {t("description")}
                     </label>
                     <textarea
                       value={dealNotes}
                       onChange={(event) => setDealNotes(event.target.value)}
                       rows={4}
                       className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                      placeholder="Internal notes about this deal"
+                      placeholder={t("internalNotes")}
                     />
                   </div>
                 </div>
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-700">
-                      Pipeline
+                      {t("pipeline")}
                     </label>
                     <select
                       value={dealPipeline}
@@ -4332,14 +4335,14 @@ export default function PatientActivityCard({
                   </div>
                   <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-700">
-                      Stage
+                      {t("stage")}
                     </label>
                     <select
                       value={dealStageId}
                       onChange={(event) => setDealStageId(event.target.value)}
                       className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     >
-                      <option value="">Select stage</option>
+                      <option value="">{t("selectStage")}</option>
                       {dealStages
                         .slice()
                         .sort((a, b) => a.sort_order - b.sort_order)
@@ -4352,14 +4355,14 @@ export default function PatientActivityCard({
                   </div>
                   <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-700">
-                      Services
+                      {t("services")}
                     </label>
                     <div className="relative">
                       <input
                         type="text"
                         value={dealServiceSearch}
                         onChange={(event) => handleDealServiceSearchChange(event.target.value)}
-                        placeholder="Search services..."
+                        placeholder={t("searchServices")}
                         className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 pr-7 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                       />
                       {dealServiceId && (
@@ -4401,7 +4404,7 @@ export default function PatientActivityCard({
                   </div>
                   <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-700">
-                      Contact Label
+                      {t("contactLabel")}
                     </label>
                     <input
                       type="text"
@@ -4412,7 +4415,7 @@ export default function PatientActivityCard({
                   </div>
                   <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-700">
-                      Location
+                      {t("location")}
                     </label>
                     <select
                       value={dealLocation}
@@ -4427,14 +4430,14 @@ export default function PatientActivityCard({
                   </div>
                   <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-700">
-                      Deal Owner
+                      {t("dealOwner")}
                     </label>
                     <div className="relative">
                       <input
                         type="text"
                         value={dealOwnerSearch}
                         onChange={(event) => handleDealOwnerSearchChange(event.target.value)}
-                        placeholder="Search users..."
+                        placeholder={t("searchUsers")}
                         className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 pr-7 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                       />
                       {dealOwnerId && (
@@ -4464,10 +4467,10 @@ export default function PatientActivityCard({
                               <button
                                 key={user.id}
                                 type="button"
-                                onClick={() => handleDealOwnerSelect(user.id, user.full_name || user.email || "Unnamed")}
+                                onClick={() => handleDealOwnerSelect(user.id, user.full_name || user.email || t("unnamed"))}
                                 className="block w-full cursor-pointer px-2 py-1 text-left text-slate-700 hover:bg-slate-50"
                               >
-                                {user.full_name || user.email || "Unnamed user"}
+                                {user.full_name || user.email || t("unnamed")}
                               </button>
                             ))}
                           </div>
@@ -4477,7 +4480,7 @@ export default function PatientActivityCard({
                   </div>
                   <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-700">
-                      Create Date
+                      {t("createDate")}
                     </label>
                     <input
                       type="text"
@@ -4504,7 +4507,7 @@ export default function PatientActivityCard({
                   }}
                   className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
@@ -4512,12 +4515,10 @@ export default function PatientActivityCard({
                   className="inline-flex items-center rounded-full border border-sky-200/80 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {dealSaving
-                    ? editingDeal
-                      ? "Updating..."
-                      : "Creating..."
+                    ? t("saving")
                     : editingDeal
-                      ? "Update Deal"
-                      : "Save Deal"}
+                      ? t("editDeal")
+                      : t("createDeal")}
                 </button>
               </div>
             </form>
@@ -4547,14 +4548,14 @@ export default function PatientActivityCard({
                         <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                         </svg>
-                        SENT BY CLINIC
+                        {t("sentByClinic")}
                       </>
                     ) : (
                       <>
                         <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
-                        RECEIVED FROM PATIENT
+                        {t("receivedFromPatient")}
                       </>
                     )}
                   </span>
@@ -4565,32 +4566,32 @@ export default function PatientActivityCard({
                 <p className="text-[10px] text-slate-600">
                   {viewEmail.direction === "outbound" ? (
                     <>
-                      <span className="font-medium text-sky-700">To:</span>{" "}
+                      <span className="font-medium text-sky-700">{t("toLabel")}</span>{" "}
                       <span className="font-medium">{viewEmail.to_address}</span>
                       {viewEmail.from_address && (
-                        <span className="text-slate-400"> • From: {viewEmail.from_address}</span>
+                        <span className="text-slate-400"> • {t("fromLabel")} {viewEmail.from_address}</span>
                       )}
                     </>
                   ) : (
                     <>
-                      <span className="font-medium text-emerald-700">From:</span>{" "}
-                      <span className="font-medium">{viewEmail.from_address || "Unknown"}</span>
-                      <span className="text-slate-400"> • To: {viewEmail.to_address}</span>
+                      <span className="font-medium text-emerald-700">{t("fromLabel")}</span>{" "}
+                      <span className="font-medium">{viewEmail.from_address || t("unknown")}</span>
+                      <span className="text-slate-400"> • {t("toLabel")} {viewEmail.to_address}</span>
                     </>
                   )}
                 </p>
                 <p className="text-[10px] text-slate-500">
                   {viewEmailTimestampLabel ? (
                     <>
-                      Sent at {" "}
+                      {t("sentAt")} {" "}
                       <span className="font-medium">{viewEmailTimestampLabel}</span>
                     </>
                   ) : null}
-                  {" "}• Status {" "}
+                  {" "}• {t("status")} {" "}
                   <span className={`font-medium capitalize ${viewEmail.status === "read" ? "text-emerald-600" : viewEmail.status === "failed" ? "text-red-600" : ""}`}>{viewEmail.status}</span>
                   {viewEmail.read_at && (
                     <span className="ml-1 text-emerald-500">
-                      (opened {formatSwissDateTime(viewEmail.read_at)})
+                      ({t("opened_at", { date: formatSwissDateTime(viewEmail.read_at) })})
                     </span>
                   )}
                 </p>
@@ -4617,7 +4618,7 @@ export default function PatientActivityCard({
             </div>
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-[11px] text-slate-800">
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                Message
+                {t("message")}
               </p>
               <div
                 className="prose prose-xs max-w-none text-slate-800 [&_*]:text-[11px]"
@@ -4630,14 +4631,14 @@ export default function PatientActivityCard({
             </div>
             <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-[11px] text-slate-800">
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                Attachments
+                {t("attachments")}
               </p>
               {viewEmailAttachmentsLoading ? (
-                <p className="text-[10px] text-slate-500">Loading attachments...</p>
+                <p className="text-[10px] text-slate-500">{t("loadingAttachments")}</p>
               ) : viewEmailAttachmentsError ? (
                 <p className="text-[10px] text-red-600">{viewEmailAttachmentsError}</p>
               ) : viewEmailAttachments.length === 0 ? (
-                <p className="text-[10px] text-slate-400">No attachments.</p>
+                <p className="text-[10px] text-slate-400">{t("noAttachments")}</p>
               ) : (
                 <ul className="space-y-1 text-[10px] text-slate-700">
                   {viewEmailAttachments.map((att) => {
@@ -4698,7 +4699,7 @@ export default function PatientActivityCard({
                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                 </svg>
-                Reply
+                {t("reply")}
               </button>
               <button
                 type="button"
@@ -4718,14 +4719,14 @@ export default function PatientActivityCard({
                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
-                Create Follow-up Task
+                {t("createFollowUpTask")}
               </button>
               <button
                 type="button"
                 onClick={() => setViewEmail(null)}
                 className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
               >
-                Close
+                {t("close")}
               </button>
             </div>
           </div>
@@ -4754,9 +4755,9 @@ export default function PatientActivityCard({
           <div className={`w-full ${emailFullscreen ? "max-w-none m-0 h-full rounded-none" : "max-w-2xl mx-4"} max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl border border-slate-200/80 bg-white p-5 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.65)]`}>
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">Compose email</h2>
+                <h2 className="text-sm font-semibold text-slate-900">{t("composeEmailTitle")}</h2>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  This will be recorded on the patient timeline.
+                  {t("emailTimelineNote")}
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
@@ -4804,7 +4805,7 @@ export default function PatientActivityCard({
             <form onSubmit={handleEmailSubmit} className="mt-3 space-y-3">
               <div className="space-y-1">
                 <label htmlFor="email_to" className="block text-[11px] font-medium text-slate-700">
-                  To
+                  {t("to")}
                 </label>
                 <input
                   id="email_to"
@@ -4817,7 +4818,7 @@ export default function PatientActivityCard({
               </div>
               <div className="space-y-1">
                 <label htmlFor="email_subject" className="block text-[11px] font-medium text-slate-700">
-                  Subject
+                  {t("subject")}
                 </label>
                 <input
                   id="email_subject"
@@ -4825,32 +4826,32 @@ export default function PatientActivityCard({
                   value={emailSubject}
                   onChange={(event) => setEmailSubject(event.target.value)}
                   className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  placeholder="Subject line"
+                  placeholder={t("subjectPlaceholder")}
                 />
               </div>
               <div className="space-y-1">
                 <label htmlFor="email_body" className="block text-[11px] font-medium text-slate-700">
-                  Message
+                  {t("message")}
                 </label>
                 <RichTextEditor
                   value={emailBody}
                   onChange={setEmailBody}
-                  placeholder="Write your email..."
+                  placeholder={t("emailPlaceholder")}
                   className="shadow-sm"
                 />
               </div>
               <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/80 p-2 text-[11px] text-slate-700">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium text-slate-800">Generate with AI</span>
+                  <span className="font-medium text-slate-800">{t("generateWithAi")}</span>
                   <span className="text-[10px] text-slate-400">
-                    Describe the email you want to send. The patient's details are included automatically.
+                    {t("aiDescription")}
                   </span>
                 </div>
                 <textarea
                   value={emailAiDescription}
                   onChange={(event) => setEmailAiDescription(event.target.value)}
                   rows={3}
-                  placeholder="Describe the goal, key points, and context for this email..."
+                  placeholder={t("aiPromptPlaceholder")}
                   className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                 />
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -4859,9 +4860,9 @@ export default function PatientActivityCard({
                     onChange={(event) => setEmailAiTone(event.target.value)}
                     className="h-7 rounded-md border border-slate-200 bg-white px-2 text-[11px] text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   >
-                    <option value="professional and reassuring">Professional & reassuring</option>
-                    <option value="friendly and informal">Friendly & informal</option>
-                    <option value="concise and to the point">Concise & to the point</option>
+                    <option value="professional and reassuring">{t("professionalTone")}</option>
+                    <option value="friendly and informal">{t("friendlyTone")}</option>
+                    <option value="concise and to the point">{t("conciseTone")}</option>
                   </select>
                   <button
                     type="button"
@@ -4869,7 +4870,7 @@ export default function PatientActivityCard({
                     disabled={emailAiLoading}
                     className="inline-flex items-center rounded-full border border-sky-500 bg-sky-600 px-3 py-1 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {emailAiLoading ? "Generating…" : "Generate with AI"}
+                    {emailAiLoading ? t("generating") : t("generateBtn")}
                   </button>
                 </div>
                 {emailAiError ? (
@@ -4880,7 +4881,7 @@ export default function PatientActivityCard({
                 <div className="flex items-center gap-2">
                   <label className="inline-flex items-center">
                     <span className="rounded-full border border-slate-300/80 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 cursor-pointer">
-                      Attach files
+                      {t("attachFiles")}
                       <input
                         type="file"
                         multiple
@@ -4914,12 +4915,11 @@ export default function PatientActivityCard({
                     onClick={() => setInvoiceModalOpen(true)}
                     className="rounded-full border border-emerald-300/80 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 shadow-sm hover:bg-emerald-100"
                   >
-                    Attach Invoice
+                    {t("attachInvoice")}
                   </button>
                   {emailAttachments.length > 0 ? (
                     <span className="text-[10px] text-slate-500">
-                      {emailAttachments.length} file
-                      {emailAttachments.length > 1 ? "s" : ""} selected
+                      {t("filesSelected", { count: emailAttachments.length })}
                     </span>
                   ) : null}
                 </div>
@@ -4944,7 +4944,7 @@ export default function PatientActivityCard({
                     checked={useSignature}
                     onChange={(event) => setUseSignature(event.target.checked)}
                   />
-                  <span>Use signature</span>
+                  <span>{t("useSignature")}</span>
                 </label>
                 <label className="inline-flex items-center gap-2">
                   <input
@@ -4953,7 +4953,7 @@ export default function PatientActivityCard({
                     checked={emailScheduleEnabled}
                     onChange={(event) => setEmailScheduleEnabled(event.target.checked)}
                   />
-                  <span>Schedule send</span>
+                  <span>{t("scheduleSend")}</span>
                   {emailScheduleEnabled && (
                     <input
                       type="datetime-local"
@@ -4974,13 +4974,13 @@ export default function PatientActivityCard({
                     checked={emailCreateFollowUpTask}
                     onChange={(event) => setEmailCreateFollowUpTask(event.target.checked)}
                   />
-                  <span className="font-medium text-emerald-800">Create Follow-up Task</span>
+                  <span className="font-medium text-emerald-800">{t("createFollowUpTask")}</span>
                 </label>
                 
                 {emailCreateFollowUpTask && (
                   <div className="mt-2 space-y-2">
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-medium text-emerald-700">Follow-up Date</label>
+                      <label className="block text-[10px] font-medium text-emerald-700">{t("followUpDate")}</label>
                       <div className="space-y-1">
                         <label className="inline-flex items-center gap-2">
                           <input
@@ -4991,7 +4991,7 @@ export default function PatientActivityCard({
                             onChange={() => setEmailFollowUpDate("3days")}
                             className="h-3 w-3 border-slate-300 text-emerald-600 focus:ring-emerald-500"
                           />
-                          <span className="text-slate-700">3 Days</span>
+                          <span className="text-slate-700">{t("threeDays")}</span>
                         </label>
                         <label className="inline-flex items-center gap-2 ml-4">
                           <input
@@ -5002,7 +5002,7 @@ export default function PatientActivityCard({
                             onChange={() => setEmailFollowUpDate("1week")}
                             className="h-3 w-3 border-slate-300 text-emerald-600 focus:ring-emerald-500"
                           />
-                          <span className="text-slate-700">1 Week</span>
+                          <span className="text-slate-700">{t("oneWeek")}</span>
                         </label>
                         <label className="inline-flex items-center gap-2 ml-4">
                           <input
@@ -5013,7 +5013,7 @@ export default function PatientActivityCard({
                             onChange={() => setEmailFollowUpDate("custom")}
                             className="h-3 w-3 border-slate-300 text-emerald-600 focus:ring-emerald-500"
                           />
-                          <span className="text-slate-700">Custom Date</span>
+                          <span className="text-slate-700">{t("customDate")}</span>
                         </label>
                       </div>
                       {emailFollowUpDate === "custom" && (
@@ -5027,7 +5027,7 @@ export default function PatientActivityCard({
                     </div>
                     
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-medium text-emerald-700">Assign To</label>
+                      <label className="block text-[10px] font-medium text-emerald-700">{t("assignTo")}</label>
                       <div className="relative">
                         <input
                           type="text"
@@ -5040,7 +5040,7 @@ export default function PatientActivityCard({
                             }
                           }}
                           onFocus={() => setEmailFollowUpUserDropdownOpen(true)}
-                          placeholder="Search user..."
+                          placeholder={t("searchUser")}
                           className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                         />
                         {emailFollowUpAssignedUserId && (
@@ -5081,7 +5081,7 @@ export default function PatientActivityCard({
                                     emailFollowUpAssignedUserId === user.id ? "bg-emerald-50 text-emerald-700" : "text-slate-700"
                                   }`}
                                 >
-                                  <div className="font-medium">{user.full_name || "Unnamed"}</div>
+                                  <div className="font-medium">{user.full_name || t("unnamed")}</div>
                                   {user.email && <div className="text-[10px] text-slate-500">{user.email}</div>}
                                 </button>
                               ))}
@@ -5115,14 +5115,14 @@ export default function PatientActivityCard({
                   }}
                   className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={emailSaving}
                   className="inline-flex items-center rounded-full border border-sky-200/80 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {emailSaving ? "Sending..." : "Send email"}
+                  {emailSaving ? t("sending") : t("sendEmail")}
                 </button>
               </div>
             </form>
@@ -5136,7 +5136,7 @@ export default function PatientActivityCard({
         <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/40 p-4">
           <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 p-4">
-              <h3 className="text-sm font-semibold text-slate-800">Attach Invoice</h3>
+              <h3 className="text-sm font-semibold text-slate-800">{t("attachInvoiceTitle")}</h3>
               <button
                 type="button"
                 onClick={() => {
@@ -5153,17 +5153,17 @@ export default function PatientActivityCard({
             <div className="p-4">
               <input
                 type="text"
-                placeholder="Search invoices..."
+                placeholder={t("searchInvoices")}
                 value={invoiceSearchQuery}
                 onChange={(e) => setInvoiceSearchQuery(e.target.value)}
                 className="mb-3 w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-[12px] text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
               />
               {invoiceListLoading ? (
-                <p className="py-4 text-center text-[11px] text-slate-500">Loading invoices...</p>
+                <p className="py-4 text-center text-[11px] text-slate-500">{t("loadingInvoices")}</p>
               ) : invoiceListError ? (
                 <p className="py-4 text-center text-[11px] text-red-600">{invoiceListError}</p>
               ) : invoiceList.length === 0 ? (
-                <p className="py-4 text-center text-[11px] text-slate-500">No invoices found for this patient.</p>
+                <p className="py-4 text-center text-[11px] text-slate-500">{t("noInvoices")}</p>
               ) : (
                 <ul className="max-h-64 space-y-1 overflow-y-auto">
                   {invoiceList
@@ -5182,7 +5182,7 @@ export default function PatientActivityCard({
                         >
                           <span className="truncate">{inv.name}</span>
                           {invoiceAttaching === inv.path ? (
-                            <span className="text-[10px] text-slate-400">Attaching...</span>
+                            <span className="text-[10px] text-slate-400">{t("attaching")}</span>
                           ) : (
                             <svg className="h-4 w-4 flex-shrink-0 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

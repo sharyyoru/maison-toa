@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 type Mode = "crm" | "medical";
 
@@ -13,6 +14,7 @@ export default function PatientModeToggle({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations("patient.modeToggle");
 
   function handleModeChange(nextMode: Mode) {
     if (nextMode === mode) return;
@@ -44,7 +46,7 @@ export default function PatientModeToggle({
             : "bg-transparent text-slate-800/80 hover:bg-white/20 border border-transparent")
         }
       >
-        CRM
+        {t("crm")}
       </button>
       <button
         type="button"
@@ -56,7 +58,7 @@ export default function PatientModeToggle({
             : "bg-transparent text-slate-800/80 hover:bg-white/20 border border-transparent")
         }
       >
-        Medical
+        {t("medical")}
       </button>
     </div>
   );

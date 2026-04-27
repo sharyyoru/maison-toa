@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 const SignatureEditor = dynamic(() => import("@/components/SignatureEditor"), {
@@ -25,6 +26,7 @@ interface ProfileState {
 }
 
 export default function ProfileSettingsForm() {
+  const t = useTranslations("profilePage");
   const [profile, setProfile] = useState<ProfileState | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
@@ -100,7 +102,7 @@ export default function ProfileSettingsForm() {
         data: { user },
       } = await supabaseClient.auth.getUser();
       if (!user) {
-        setError("You must be logged in to update your profile.");
+        setError(t("photo.mustBeLoggedIn"));
         return;
       }
 
@@ -114,7 +116,7 @@ export default function ProfileSettingsForm() {
       if (uploadError) {
         setAvatarError(
           uploadError.message ||
-            "Failed to upload avatar. Ensure an 'avatars' bucket exists in Supabase Storage."
+            t("photo.uploadFailed")
         );
         return;
       }
@@ -135,9 +137,9 @@ export default function ProfileSettingsForm() {
       }
 
       setProfile({ ...profile, avatarUrl: publicUrl });
-      setAvatarSuccess("Profile photo updated.");
+      setAvatarSuccess(t("photo.updated"));
     } catch (err) {
-      setAvatarError("Unexpected error uploading avatar.");
+      setAvatarError(t("photo.uploadError"));
     } finally {
       setAvatarUploading(false);
     }
@@ -170,9 +172,9 @@ export default function ProfileSettingsForm() {
         .join(" ") || profile.email;
 
       setProfile({ ...profile, fullName: newFullName });
-      setNameSuccess("Name updated successfully.");
+      setNameSuccess(t("name.success"));
     } catch (err) {
-      setNameError("Unexpected error saving name.");
+      setNameError(t("name.error"));
     } finally {
       setNameSaving(false);
     }
@@ -200,9 +202,9 @@ export default function ProfileSettingsForm() {
       }
 
       setProfile({ ...profile, signatureHtml: profile.signatureHtml });
-      setSuccess("Settings saved.");
+      setSuccess(t("signature.success"));
     } catch (err) {
-      setError("Unexpected error saving signature.");
+      setError(t("signature.error"));
     } finally {
       setSaving(false);
     }
@@ -219,13 +221,13 @@ export default function ProfileSettingsForm() {
 
       // Validation
       if (!newPassword || newPassword.length < 6) {
-        setPasswordError("New password must be at least 6 characters.");
+        setPasswordError(t("password.tooShort"));
         setPasswordSaving(false);
         return;
       }
 
       if (newPassword !== confirmPassword) {
-        setPasswordError("Passwords do not match.");
+        setPasswordError(t("password.mismatch"));
         setPasswordSaving(false);
         return;
       }
@@ -245,9 +247,9 @@ export default function ProfileSettingsForm() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setPasswordSuccess("Password updated successfully.");
+      setPasswordSuccess(t("password.success"));
     } catch (err) {
-      setPasswordError("Unexpected error updating password.");
+      setPasswordError(t("password.error"));
     } finally {
       setPasswordSaving(false);
     }
@@ -273,7 +275,7 @@ export default function ProfileSettingsForm() {
         return;
       }
     } catch {
-      setError("Unexpected error saving priority.");
+      setError(t("priority.error"));
     } finally {
       setSaving(false);
     }
@@ -282,7 +284,7 @@ export default function ProfileSettingsForm() {
   if (!profile) {
     return (
       <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-xs text-slate-500 shadow-sm">
-        Loading profile...
+        {t("loading")}
       </div>
     );
   }
@@ -290,9 +292,9 @@ export default function ProfileSettingsForm() {
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
-        <h2 className="text-sm font-medium text-slate-900">Profile photo</h2>
+        <h2 className="text-sm font-medium text-slate-900">{t("photo.title")}</h2>
         <p className="mt-1 text-xs text-slate-500">
-          Upload an optional profile photo used in parts of the app.
+          {t("photo.description")}
         </p>
         <div className="mt-4 flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-50 text-xs font-medium text-slate-600">
@@ -314,7 +316,7 @@ export default function ProfileSettingsForm() {
                 avatarUploading ? "cursor-not-allowed opacity-60 hover:bg-white" : "cursor-pointer"
               }`}
             >
-              <span>{avatarUploading ? "Uploading..." : "Choose photo"}</span>
+              <span>{avatarUploading ? t("photo.uploading") : t("photo.choosePhoto")}</span>
               <input
                 type="file"
                 accept="image/*"
@@ -324,8 +326,7 @@ export default function ProfileSettingsForm() {
               />
             </label>
             <p className="text-[11px] text-slate-400">
-              Recommended square image, at least 128x128px. Stored in Supabase
-              Storage bucket <span className="font-mono">avatars</span>.
+              {t("photo.recommendation")} <span className="font-mono">avatars</span>.
             </p>
             {avatarError ? (
               <p className="text-[11px] text-red-600">{avatarError}</p>
@@ -338,15 +339,15 @@ export default function ProfileSettingsForm() {
       </section>
 
       <section className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
-        <h2 className="text-sm font-medium text-slate-900">Your name</h2>
+        <h2 className="text-sm font-medium text-slate-900">{t("name.title")}</h2>
         <p className="mt-1 text-xs text-slate-500">
-          Update your first and last name displayed throughout the app.
+          {t("name.description")}
         </p>
         <form onSubmit={handleNameSubmit} className="mt-3 space-y-3">
           <div className="flex gap-3">
             <div className="flex-1">
               <label htmlFor="first_name" className="block text-[11px] font-medium text-slate-600 mb-1">
-                First name
+                {t("name.firstName")}
               </label>
               <input
                 id="first_name"
@@ -358,13 +359,13 @@ export default function ProfileSettingsForm() {
                     prev ? { ...prev, firstName: event.target.value } : prev
                   )
                 }
-                placeholder="First name"
+                placeholder={t("name.firstName")}
                 className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
               />
             </div>
             <div className="flex-1">
               <label htmlFor="last_name" className="block text-[11px] font-medium text-slate-600 mb-1">
-                Last name
+                {t("name.lastName")}
               </label>
               <input
                 id="last_name"
@@ -376,7 +377,7 @@ export default function ProfileSettingsForm() {
                     prev ? { ...prev, lastName: event.target.value } : prev
                   )
                 }
-                placeholder="Last name"
+                placeholder={t("name.lastName")}
                 className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
               />
             </div>
@@ -389,21 +390,21 @@ export default function ProfileSettingsForm() {
             disabled={nameSaving}
             className="inline-flex items-center rounded-full border border-sky-200/80 bg-sky-600 px-4 py-1.5 text-xs font-medium text-white shadow-[0_10px_25px_rgba(15,23,42,0.22)] backdrop-blur hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {nameSaving ? "Saving..." : "Save name"}
+            {nameSaving ? t("name.saving") : t("name.save")}
           </button>
         </form>
       </section>
 
       <section className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
-        <h2 className="text-sm font-medium text-slate-900">Change password</h2>
+        <h2 className="text-sm font-medium text-slate-900">{t("password.title")}</h2>
         <p className="mt-1 text-xs text-slate-500">
-          Update your account password. Password must be at least 6 characters.
+          {t("password.description")}
         </p>
         <form onSubmit={handlePasswordSubmit} className="mt-3 space-y-3">
           <div className="space-y-3">
             <div>
               <label htmlFor="new_password" className="block text-[11px] font-medium text-slate-600 mb-1">
-                New password
+                {t("password.newPassword")}
               </label>
               <div className="relative">
                 <input
@@ -412,7 +413,7 @@ export default function ProfileSettingsForm() {
                   type={showNewPassword ? "text" : "password"}
                   value={newPassword}
                   onChange={(event) => setNewPassword(event.target.value)}
-                  placeholder="Enter new password"
+                  placeholder={t("password.newPasswordPlaceholder")}
                   className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 pr-10 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                 />
                 <button
@@ -435,7 +436,7 @@ export default function ProfileSettingsForm() {
             </div>
             <div>
               <label htmlFor="confirm_password" className="block text-[11px] font-medium text-slate-600 mb-1">
-                Confirm password
+                {t("password.confirmPassword")}
               </label>
               <div className="relative">
                 <input
@@ -444,7 +445,7 @@ export default function ProfileSettingsForm() {
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
-                  placeholder="Confirm new password"
+                  placeholder={t("password.confirmPasswordPlaceholder")}
                   className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 pr-10 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                 />
                 <button
@@ -474,15 +475,15 @@ export default function ProfileSettingsForm() {
             disabled={passwordSaving}
             className="inline-flex items-center rounded-full border border-sky-200/80 bg-sky-600 px-4 py-1.5 text-xs font-medium text-white shadow-[0_10px_25px_rgba(15,23,42,0.22)] backdrop-blur hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {passwordSaving ? "Updating..." : "Update password"}
+            {passwordSaving ? t("password.updating") : t("password.update")}
           </button>
         </form>
       </section>
 
       <section className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
-        <h2 className="text-sm font-medium text-slate-900">Email signature</h2>
+        <h2 className="text-sm font-medium text-slate-900">{t("signature.title")}</h2>
         <p className="mt-1 text-xs text-slate-500">
-          HTML signature appended to emails sent from this account.
+          {t("signature.description")}
         </p>
         <form onSubmit={handleSignatureSubmit} className="mt-3 space-y-3">
           <SignatureEditor
@@ -501,12 +502,12 @@ export default function ProfileSettingsForm() {
             disabled={saving}
             className="inline-flex items-center rounded-full border border-sky-200/80 bg-sky-600 px-4 py-1.5 text-xs font-medium text-white shadow-[0_10px_25px_rgba(15,23,42,0.22)] backdrop-blur hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {saving ? "Saving..." : "Save signature"}
+            {saving ? t("signature.saving") : t("signature.save")}
           </button>
         </form>
         <div className="mt-4 rounded-lg border border-slate-200/70 bg-slate-50/80 px-3 py-2 text-xs">
           <h3 className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-            Preview
+            {t("signature.preview")}
           </h3>
           {profile.signatureHtml.trim() ? (
             <div
@@ -515,17 +516,16 @@ export default function ProfileSettingsForm() {
             />
           ) : (
             <p className="mt-2 text-[11px] text-slate-400">
-              Your saved HTML signature will appear here.
+              {t("signature.previewEmpty")}
             </p>
           )}
         </div>
       </section>
 
       <section className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
-        <h2 className="text-sm font-medium text-slate-900">Priority</h2>
+        <h2 className="text-sm font-medium text-slate-900">{t("priority.title")}</h2>
         <p className="mt-1 text-xs text-slate-500">
-          Choose which view opens by default when you open a patient. Changes are saved
-          automatically when you switch.
+          {t("priority.description")}
         </p>
         <div className="mt-3 inline-flex rounded-full border border-slate-200 bg-slate-50/80 p-0.5 text-[11px] text-slate-600">
           <button
@@ -540,7 +540,7 @@ export default function ProfileSettingsForm() {
                 : "text-slate-600 hover:text-slate-900")
             }
           >
-            CRM
+            {t("priority.crm")}
           </button>
           <button
             type="button"
@@ -554,7 +554,7 @@ export default function ProfileSettingsForm() {
                 : "text-slate-600 hover:text-slate-900")
             }
           >
-            Medical
+            {t("priority.medical")}
           </button>
         </div>
       </section>

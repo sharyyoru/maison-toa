@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type InvoiceRow = {
@@ -90,6 +91,7 @@ function formatShortDate(iso: string | null | undefined): string {
 }
 
 export default function FinancialsPage() {
+  const t = useTranslations("financialsPage");
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [patientsById, setPatientsById] = useState<PatientsById>({});
   const [providersById, setProvidersById] = useState<ProvidersById>({});
@@ -234,7 +236,7 @@ export default function FinancialsPage() {
         patient?.last_name ? patient.last_name.trim() : "",
       ].filter(Boolean);
       const patientName =
-        nameParts.join(" ") || row.patient_id || "Unknown patient";
+        nameParts.join(" ") || row.patient_id || t("unknownPatient");
 
       const amount = Number(row.total_amount) || 0;
       const isPaid = row.status === "PAID" || row.status === "OVERPAID";
@@ -249,17 +251,17 @@ export default function FinancialsPage() {
         row.provider_name ||
         row.doctor_name ||
         row.created_by_name ||
-        (ownerKey === "unknown" ? "Unassigned" : ownerKey);
+        (ownerKey === "unknown" ? t("unassigned") : ownerKey);
 
       const statusLabel = row.is_complimentary
-        ? "Complimentary"
+        ? t("statusComplimentary")
         : isPaid
-        ? "Paid"
+        ? t("statusPaid")
         : row.status === "PARTIAL_PAID"
-        ? "Partial"
+        ? t("statusPartial")
         : row.status === "CANCELLED"
-        ? "Cancelled"
-        : "Unpaid";
+        ? t("statusCancelled")
+        : t("statusUnpaid");
 
       return {
         ...row,
@@ -453,10 +455,9 @@ export default function FinancialsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 financials-hide-on-print">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Financials</h1>
+          <h1 className="text-xl font-semibold text-slate-900">{t("title")}</h1>
           <p className="text-sm text-slate-500">
-            Overview of revenue, invoices, and outstanding balances across all
-            patients.
+            {t("subtitle")}
           </p>
         </div>
         {activeTab === "overview" && (
@@ -465,7 +466,7 @@ export default function FinancialsPage() {
             onClick={handleExportPdf}
             className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
           >
-            Export current view (PDF)
+            {t("exportPdf")}
           </button>
         )}
       </div>
@@ -481,7 +482,7 @@ export default function FinancialsPage() {
               : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
           }`}
         >
-          Overview
+          {t("tabOverview")}
         </button>
         <button
           type="button"
@@ -492,7 +493,7 @@ export default function FinancialsPage() {
               : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
           }`}
         >
-          Bank Payment Receipts
+          {t("tabReceipts")}
         </button>
         <button
           type="button"
@@ -503,7 +504,7 @@ export default function FinancialsPage() {
               : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
           }`}
         >
-          Payment Import History
+          {t("tabImportHistory")}
         </button>
       </div>
 
@@ -514,7 +515,7 @@ export default function FinancialsPage() {
           onChange={(event) => setPatientFilter(event.target.value)}
           className="min-w-[180px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
         >
-          <option value="all">All patients</option>
+          <option value="all">{t("allPatients")}</option>
           {patientOptions.map(([id, name]) => (
             <option key={id} value={id}>
               {name}
@@ -527,7 +528,7 @@ export default function FinancialsPage() {
           onChange={(event) => setOwnerFilter(event.target.value)}
           className="min-w-[180px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
         >
-          <option value="all">All invoice owners</option>
+          <option value="all">{t("allOwners")}</option>
           {ownerOptions.map(([key, label]) => (
             <option key={key} value={key}>
               {label}
@@ -542,13 +543,13 @@ export default function FinancialsPage() {
             onChange={(event) => setShowOnlyUnpaid(event.target.checked)}
             className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
           />
-          <span>Show only unpaid invoices</span>
+          <span>{t("showOnlyUnpaid")}</span>
         </label>
       </div>
 
       <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-xs shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
         {loading ? (
-          <p className="text-[11px] text-slate-500">Loading financial data...</p>
+          <p className="text-[11px] text-slate-500">{t("loadingData")}</p>
         ) : error ? (
           <p className="text-[11px] text-red-600">{error}</p>
         ) : (
@@ -556,7 +557,7 @@ export default function FinancialsPage() {
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 financials-hide-on-print">
               <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
                 <p className="text-[11px] font-medium text-slate-500">
-                  Total billed (non-complimentary)
+                  {t("totalBilled")}
                 </p>
                 <p className="mt-1 text-base font-semibold text-slate-900">
                   {formatCurrency(summary.totalAmount)}
@@ -564,7 +565,7 @@ export default function FinancialsPage() {
               </div>
               <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
                 <p className="text-[11px] font-medium text-slate-500">
-                  Total paid
+                  {t("totalPaid")}
                 </p>
                 <p className="mt-1 text-base font-semibold text-slate-900">
                   {formatCurrency(summary.totalPaid)}
@@ -572,7 +573,7 @@ export default function FinancialsPage() {
               </div>
               <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
                 <p className="text-[11px] font-medium text-slate-500">
-                  Outstanding (unpaid)
+                  {t("outstanding")}
                 </p>
                 <p className="mt-1 text-base font-semibold text-slate-900">
                   {formatCurrency(summary.totalUnpaid)}
@@ -580,7 +581,7 @@ export default function FinancialsPage() {
               </div>
               <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
                 <p className="text-[11px] font-medium text-slate-500">
-                  Complimentary value
+                  {t("complimentaryValue")}
                 </p>
                 <p className="mt-1 text-base font-semibold text-slate-900">
                   {formatCurrency(summary.totalComplimentary)}
@@ -592,17 +593,17 @@ export default function FinancialsPage() {
               <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h2 className="text-xs font-semibold text-slate-900">
-                    Patients
+                    {t("patientsHeader")}
                   </h2>
                   <p className="text-[10px] text-slate-500">
                     {patientSummaryRows.length > 0
-                      ? `${patientPage * ROWS_PER_PAGE + 1}\u2013${Math.min((patientPage + 1) * ROWS_PER_PAGE, patientSummaryRows.length)} of ${patientSummaryRows.length} patients`
-                      : "Financial summary per patient."}
+                      ? t("patientsOfTotal", { start: patientPage * ROWS_PER_PAGE + 1, end: Math.min((patientPage + 1) * ROWS_PER_PAGE, patientSummaryRows.length), total: patientSummaryRows.length })
+                      : t("patientSummaryDesc")}
                   </p>
                 </div>
                 {patientSummaryRows.length === 0 ? (
                   <p className="text-[11px] text-slate-500">
-                    No invoices for the current filters.
+                    {t("noInvoicesForFilters")}
                   </p>
                 ) : (
                   <>
@@ -610,11 +611,11 @@ export default function FinancialsPage() {
                       <table className="min-w-full text-left text-[11px]">
                         <thead className="border-b text-[10px] uppercase tracking-wide text-slate-500">
                           <tr>
-                            <th className="py-1.5 pr-3 font-medium">Patient</th>
-                            <th className="py-1.5 pr-3 font-medium">Invoices</th>
-                            <th className="py-1.5 pr-3 font-medium">Billed</th>
-                            <th className="py-1.5 pr-3 font-medium">Paid</th>
-                            <th className="py-1.5 pr-0 font-medium">Unpaid</th>
+                            <th className="py-1.5 pr-3 font-medium">{t("patientCol")}</th>
+                            <th className="py-1.5 pr-3 font-medium">{t("invoicesCol")}</th>
+                            <th className="py-1.5 pr-3 font-medium">{t("billedCol")}</th>
+                            <th className="py-1.5 pr-3 font-medium">{t("paidCol")}</th>
+                            <th className="py-1.5 pr-0 font-medium">{t("unpaidCol")}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -648,10 +649,10 @@ export default function FinancialsPage() {
                           onClick={() => setPatientPage((p) => Math.max(0, p - 1))}
                           className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          Previous
+                          {t("previous")}
                         </button>
                         <span className="text-[11px] text-slate-500">
-                          Page {patientPage + 1} of {totalPatientPages}
+                          {t("pageOf", { current: patientPage + 1, total: totalPatientPages })}
                         </span>
                         <button
                           type="button"
@@ -659,7 +660,7 @@ export default function FinancialsPage() {
                           onClick={() => setPatientPage((p) => Math.min(totalPatientPages - 1, p + 1))}
                           className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          Next
+                          {t("next")}
                         </button>
                       </div>
                     )}
@@ -670,25 +671,25 @@ export default function FinancialsPage() {
               <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h2 className="text-xs font-semibold text-slate-900">
-                    Invoice owners
+                    {t("invoiceOwnersHeader")}
                   </h2>
                   <p className="text-[10px] text-slate-500">
-                    Who is generating the most revenue.
+                    {t("ownerSummaryDesc")}
                   </p>
                 </div>
                 {ownerSummaryRows.length === 0 ? (
                   <p className="text-[11px] text-slate-500">
-                    No invoices for the current filters.
+                    {t("noInvoicesForFilters")}
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-left text-[11px]">
                       <thead className="border-b text-[10px] uppercase tracking-wide text-slate-500">
                         <tr>
-                          <th className="py-1.5 pr-3 font-medium">Owner</th>
-                          <th className="py-1.5 pr-3 font-medium">Invoices</th>
-                          <th className="py-1.5 pr-3 font-medium">Billed</th>
-                          <th className="py-1.5 pr-0 font-medium">Paid %</th>
+                          <th className="py-1.5 pr-3 font-medium">{t("ownerCol")}</th>
+                          <th className="py-1.5 pr-3 font-medium">{t("invoicesCol")}</th>
+                          <th className="py-1.5 pr-3 font-medium">{t("billedCol")}</th>
+                          <th className="py-1.5 pr-0 font-medium">{t("paidPercentCol")}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -725,15 +726,14 @@ export default function FinancialsPage() {
 
             <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <h2 className="text-xs font-semibold text-slate-900">Invoices</h2>
+                <h2 className="text-xs font-semibold text-slate-900">{t("invoicesHeader")}</h2>
                 <p className="text-[10px] text-slate-500">
-                  Showing {invoicePage * ROWS_PER_PAGE + 1}&ndash;{Math.min((invoicePage + 1) * ROWS_PER_PAGE, filteredInvoices.length)} of {filteredInvoices.length}
-                  {" "}invoices.
+                  {t("showingInvoices", { start: invoicePage * ROWS_PER_PAGE + 1, end: Math.min((invoicePage + 1) * ROWS_PER_PAGE, filteredInvoices.length), total: filteredInvoices.length })}
                 </p>
               </div>
               {filteredInvoices.length === 0 ? (
                 <p className="text-[11px] text-slate-500">
-                  No invoices match the current filters.
+                  {t("noInvoicesMatch")}
                 </p>
               ) : (
                 <>
@@ -741,13 +741,13 @@ export default function FinancialsPage() {
                     <table className="min-w-full text-left text-[11px]">
                       <thead className="border-b text-[10px] uppercase tracking-wide text-slate-500">
                         <tr>
-                          <th className="py-1.5 pr-3 font-medium">Date</th>
-                          <th className="py-1.5 pr-3 font-medium">Patient</th>
-                          <th className="py-1.5 pr-3 font-medium">Owner</th>
-                          <th className="py-1.5 pr-3 font-medium">Title</th>
-                          <th className="py-1.5 pr-3 font-medium">Payment</th>
-                          <th className="py-1.5 pr-3 font-medium">Amount</th>
-                          <th className="py-1.5 pr-0 font-medium">Status</th>
+                          <th className="py-1.5 pr-3 font-medium">{t("dateCol")}</th>
+                          <th className="py-1.5 pr-3 font-medium">{t("patientCol")}</th>
+                          <th className="py-1.5 pr-3 font-medium">{t("ownerCol")}</th>
+                          <th className="py-1.5 pr-3 font-medium">{t("titleCol")}</th>
+                          <th className="py-1.5 pr-3 font-medium">{t("paymentCol")}</th>
+                          <th className="py-1.5 pr-3 font-medium">{t("amountCol")}</th>
+                          <th className="py-1.5 pr-0 font-medium">{t("statusCol")}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -763,7 +763,7 @@ export default function FinancialsPage() {
                               {invoice.ownerLabel}
                             </td>
                             <td className="py-1.5 pr-3 text-slate-700">
-                              {invoice.invoice_number || "Invoice"}
+                              {invoice.invoice_number || t("invoice")}
                             </td>
                             <td className="py-1.5 pr-3 text-slate-700">
                               {invoice.payment_method || "-"}
@@ -799,10 +799,10 @@ export default function FinancialsPage() {
                         onClick={() => setInvoicePage((p) => Math.max(0, p - 1))}
                         className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        Previous
+                        {t("previous")}
                       </button>
                       <span className="text-[11px] text-slate-500">
-                        Page {invoicePage + 1} of {totalInvoicePages}
+                        {t("pageOf", { current: invoicePage + 1, total: totalInvoicePages })}
                       </span>
                       <button
                         type="button"
@@ -810,7 +810,7 @@ export default function FinancialsPage() {
                         onClick={() => setInvoicePage((p) => Math.min(totalInvoicePages - 1, p + 1))}
                         className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        Next
+                        {t("next")}
                       </button>
                     </div>
                   )}
@@ -924,6 +924,7 @@ function parseCamt054Xml(xmlText: string): ParsedTransaction[] {
 }
 
 function BankPaymentReceipts() {
+  const t = useTranslations("financialsPage.receipts");
   const [files, setFiles] = useState<ReceiptFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -1089,8 +1090,8 @@ function BankPaymentReceipts() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-6 py-4">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Bank Payment Receipts</h2>
-          <p className="mt-0.5 text-sm text-slate-500">Upload and manage bank payment receipt documents.</p>
+          <h2 className="text-base font-semibold text-slate-900">{t("title")}</h2>
+          <p className="mt-0.5 text-sm text-slate-500">{t("subtitle")}</p>
         </div>
         <label
           className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 shadow-sm hover:bg-sky-100 transition-colors ${
@@ -1100,7 +1101,7 @@ function BankPaymentReceipts() {
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
-          {uploading ? "Uploading..." : "Upload File"}
+          {uploading ? t("uploading") : t("uploadFile")}
           <input
             ref={fileInputRef}
             type="file"
@@ -1124,24 +1125,24 @@ function BankPaymentReceipts() {
         <div className={`flex flex-col ${preview ? "w-2/5 border-r border-slate-100" : "w-full"} transition-all`}>
           {loading ? (
             <div className="flex flex-1 items-center justify-center py-16">
-              <p className="text-sm text-slate-400">Loading files...</p>
+              <p className="text-sm text-slate-400">{t("loadingFiles")}</p>
             </div>
           ) : files.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center py-16 text-center">
               <svg className="h-14 w-14 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
               </svg>
-              <p className="mt-3 text-sm font-medium text-slate-500">No receipts uploaded yet</p>
-              <p className="mt-1 text-xs text-slate-400">Click &ldquo;Upload File&rdquo; to get started.</p>
+              <p className="mt-3 text-sm font-medium text-slate-500">{t("noReceipts")}</p>
+              <p className="mt-1 text-xs text-slate-400">{t("getStarted")}</p>
             </div>
           ) : (
             <table className="w-full text-left">
               <thead className="border-b border-slate-100 bg-slate-50">
                 <tr>
-                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">File Name</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Uploaded</th>
-                  {!preview && <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Size</th>}
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</th>
+                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("fileNameCol")}</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("uploadedCol")}</th>
+                  {!preview && <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("sizeCol")}</th>}
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{t("actionsCol")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -1190,14 +1191,14 @@ function BankPaymentReceipts() {
                             rel="noopener noreferrer"
                             className="rounded-md px-2.5 py-1 text-xs font-medium text-sky-600 hover:bg-sky-50 hover:text-sky-800"
                           >
-                            Open
+                            {t("open")}
                           </a>
                           <button
                             type="button"
                             onClick={() => handleDelete(file)}
                             className="rounded-md px-2.5 py-1 text-xs font-medium text-red-500 hover:bg-red-50 hover:text-red-700"
                           >
-                            Delete
+                            {t("delete")}
                           </button>
                         </div>
                       </td>
@@ -1225,14 +1226,14 @@ function BankPaymentReceipts() {
                   rel="noopener noreferrer"
                   className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
                 >
-                  Open in new tab ↗
+                  {t("openNewTab")}
                 </a>
                 <button
                   type="button"
                   onClick={() => setPreview(null)}
                   className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50"
                 >
-                  ✕ Close
+                  {t("close")}
                 </button>
               </div>
             </div>
@@ -1258,8 +1259,8 @@ function BankPaymentReceipts() {
                 <div className="flex-1 rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
                   <div className="border-b border-slate-100 bg-slate-50 px-4 py-3 flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-semibold text-slate-800">Bank Transactions</h3>
-                      <p className="text-xs text-slate-500">{xmlTransactions.length} transaction{xmlTransactions.length !== 1 ? "s" : ""} found</p>
+                      <h3 className="text-sm font-semibold text-slate-800">{t("bankTransactions")}</h3>
+                      <p className="text-xs text-slate-500">{t("transactionsFound", { count: xmlTransactions.length })}</p>
                     </div>
                     <button
                       type="button"
@@ -1271,7 +1272,7 @@ function BankPaymentReceipts() {
                           : "bg-emerald-600 hover:bg-emerald-700"
                       }`}
                     >
-                      {processing ? "Processing..." : "Match & Tag Payments"}
+                      {processing ? t("processing") : t("matchTag")}
                     </button>
                   </div>
 
@@ -1280,35 +1281,35 @@ function BankPaymentReceipts() {
                     <div className="border-b border-slate-100 px-4 py-3 space-y-3">
                       <div className="flex flex-wrap gap-2">
                         <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
-                          Matched: {processResult.summary.matched}
+                          {t("matchedLabel")} {processResult.summary.matched}
                         </span>
                         {processResult.summary.underpaid > 0 && (
                           <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 border border-amber-200">
-                            Underpaid: {processResult.summary.underpaid}
+                            {t("underpaidLabel")} {processResult.summary.underpaid}
                           </span>
                         )}
                         {processResult.summary.overpaid > 0 && (
                           <span className="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-semibold text-orange-700 border border-orange-200">
-                            Overpaid: {processResult.summary.overpaid}
+                            {t("overpaidLabel")} {processResult.summary.overpaid}
                           </span>
                         )}
                         {processResult.summary.alreadyPaid > 0 && (
                           <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700 border border-sky-200">
-                            Already Paid: {processResult.summary.alreadyPaid}
+                            {t("alreadyPaidLabel")} {processResult.summary.alreadyPaid}
                           </span>
                         )}
                         {processResult.summary.unmatched > 0 && (
                           <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-semibold text-red-700 border border-red-200">
-                            Unmatched: {processResult.summary.unmatched}
+                            {t("unmatchedLabel")} {processResult.summary.unmatched}
                           </span>
                         )}
                         <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-medium text-slate-600 border border-slate-200">
-                          Total: CHF {processResult.summary.totalAmount?.toFixed(2)}
+                          {t("totalLabel")} CHF {processResult.summary.totalAmount?.toFixed(2)}
                         </span>
                       </div>
                       {processResult.summary.bankName && (
                         <p className="text-[10px] text-slate-500">
-                          Bank: {processResult.summary.bankName} | IBAN: {processResult.summary.iban}
+                          {t("bankIban", { bank: processResult.summary.bankName, iban: processResult.summary.iban })}
                         </p>
                       )}
                       {/* Per-transaction results */}
@@ -1330,7 +1331,7 @@ function BankPaymentReceipts() {
                                 <span className="uppercase text-[9px] font-bold tracking-wider">{r.matchStatus.replace("_", " ")}</span>
                               </div>
                               <p className="mt-0.5">{r.matchNotes}</p>
-                              {r.debtorName && <p className="text-[10px] opacity-70">From: {r.debtorName}</p>}
+                              {r.debtorName && <p className="text-[10px] opacity-70">{t("fromLabel")} {r.debtorName}</p>}
                             </div>
                           );
                         })}
@@ -1342,11 +1343,11 @@ function BankPaymentReceipts() {
                     <table className="w-full text-left text-xs">
                       <thead className="sticky top-0 border-b border-slate-100 bg-slate-50">
                         <tr>
-                          <th className="px-4 py-2.5 font-semibold text-slate-600">Date</th>
-                          <th className="px-4 py-2.5 font-semibold text-slate-600">Amount</th>
-                          <th className="px-4 py-2.5 font-semibold text-slate-600">Debtor</th>
-                          <th className="px-4 py-2.5 font-semibold text-slate-600">Reference</th>
-                          <th className="px-4 py-2.5 font-semibold text-slate-600">Description</th>
+                          <th className="px-4 py-2.5 font-semibold text-slate-600">{t("dateCol")}</th>
+                          <th className="px-4 py-2.5 font-semibold text-slate-600">{t("amountCol")}</th>
+                          <th className="px-4 py-2.5 font-semibold text-slate-600">{t("debtorCol")}</th>
+                          <th className="px-4 py-2.5 font-semibold text-slate-600">{t("referenceCol")}</th>
+                          <th className="px-4 py-2.5 font-semibold text-slate-600">{t("descriptionCol")}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -1382,14 +1383,14 @@ function BankPaymentReceipts() {
                   <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-200 text-lg font-bold uppercase text-slate-500">
                     {fileExt(preview.name)}
                   </div>
-                  <p className="text-sm text-slate-500">Preview not available for this file type.</p>
+                  <p className="text-sm text-slate-500">{t("previewNotAvailable")}</p>
                   <a
                     href={preview.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700"
                   >
-                    Download / Open
+                    {t("downloadOpen")}
                   </a>
                 </div>
               )}
@@ -1450,6 +1451,7 @@ type ImportItem = {
 };
 
 function PaymentImportHistory() {
+  const t = useTranslations("financialsPage.importHistory");
   const [imports, setImports] = useState<ImportRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedImport, setSelectedImport] = useState<ImportRecord | null>(null);
@@ -1504,21 +1506,21 @@ function PaymentImportHistory() {
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white/90 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur overflow-hidden">
       <div className="border-b border-slate-100 px-6 py-4">
-        <h2 className="text-base font-semibold text-slate-900">Payment Import History</h2>
-        <p className="mt-0.5 text-sm text-slate-500">History of bank XML payment file imports and matching results.</p>
+        <h2 className="text-base font-semibold text-slate-900">{t("title")}</h2>
+        <p className="mt-0.5 text-sm text-slate-500">{t("subtitle")}</p>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <p className="text-sm text-slate-400">Loading import history...</p>
+          <p className="text-sm text-slate-400">{t("loading")}</p>
         </div>
       ) : imports.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <svg className="h-14 w-14 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <p className="mt-3 text-sm font-medium text-slate-500">No payment imports yet</p>
-          <p className="mt-1 text-xs text-slate-400">Upload and process a bank XML file from the Bank Payment Receipts tab.</p>
+          <p className="mt-3 text-sm font-medium text-slate-500">{t("noImports")}</p>
+          <p className="mt-1 text-xs text-slate-400">{t("noImportsDesc")}</p>
         </div>
       ) : (
         <div className="divide-y divide-slate-100">
@@ -1544,45 +1546,45 @@ function PaymentImportHistory() {
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
                         <span>{new Date(rec.imported_at).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                        {rec.imported_by_name && <span>by {rec.imported_by_name}</span>}
+                        {rec.imported_by_name && <span>{t("by")} {rec.imported_by_name}</span>}
                         {rec.bank_name && <span>{rec.bank_name}</span>}
                         {rec.iban && <span className="font-mono text-[10px]">{rec.iban}</span>}
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-1.5 shrink-0">
                       <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
-                        {rec.total_transactions} txns
+                        {rec.total_transactions} {t("txns")}
                       </span>
                       <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
-                        {rec.matched_count} matched
+                        {rec.matched_count} {t("matched")}
                       </span>
                       {rec.unmatched_count > 0 && (
                         <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700">
-                          {rec.unmatched_count} unmatched
+                          {rec.unmatched_count} {t("unmatched")}
                         </span>
                       )}
                       {rec.underpaid_count > 0 && (
                         <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">
-                          {rec.underpaid_count} underpaid
+                          {rec.underpaid_count} {t("underpaid")}
                         </span>
                       )}
                       {rec.overpaid_count > 0 && (
                         <span className="inline-flex items-center rounded-md bg-orange-50 px-2 py-1 text-[10px] font-semibold text-orange-700">
-                          {rec.overpaid_count} overpaid
+                          {rec.overpaid_count} {t("overpaid")}
                         </span>
                       )}
                       {rec.already_paid_count > 0 && (
                         <span className="inline-flex items-center rounded-md bg-sky-50 px-2 py-1 text-[10px] font-semibold text-sky-700">
-                          {rec.already_paid_count} already paid
+                          {rec.already_paid_count} {t("alreadyPaid")}
                         </span>
                       )}
                     </div>
                   </div>
                   <div className="mt-2 flex gap-4 text-xs text-slate-500">
-                    <span>Total: <strong className="text-slate-700">CHF {Number(rec.total_amount).toFixed(2)}</strong></span>
-                    <span>Matched: <strong className="text-emerald-700">CHF {Number(rec.matched_amount).toFixed(2)}</strong></span>
+                    <span>{t("totalLabel")} <strong className="text-slate-700">CHF {Number(rec.total_amount).toFixed(2)}</strong></span>
+                    <span>{t("matchedAmountLabel")} <strong className="text-emerald-700">CHF {Number(rec.matched_amount).toFixed(2)}</strong></span>
                     {rec.statement_date_from && rec.statement_date_to && (
-                      <span>Period: {rec.statement_date_from.split("T")[0]} → {rec.statement_date_to.split("T")[0]}</span>
+                      <span>{t("periodLabel")} {rec.statement_date_from.split("T")[0]} → {rec.statement_date_to.split("T")[0]}</span>
                     )}
                   </div>
                 </button>
@@ -1596,21 +1598,21 @@ function PaymentImportHistory() {
                       </div>
                     )}
                     {itemsLoading ? (
-                      <p className="text-xs text-slate-400 py-4 text-center">Loading transactions...</p>
+                      <p className="text-xs text-slate-400 py-4 text-center">{t("loadingTransactions")}</p>
                     ) : items.length === 0 ? (
-                      <p className="text-xs text-slate-400 py-4 text-center">No transaction details available.</p>
+                      <p className="text-xs text-slate-400 py-4 text-center">{t("noTransactions")}</p>
                     ) : (
                       <div className="overflow-auto rounded-lg border border-slate-200 bg-white" style={{ maxHeight: "400px" }}>
                         <table className="w-full text-left text-xs">
                           <thead className="sticky top-0 border-b border-slate-100 bg-slate-50">
                             <tr>
-                              <th className="px-3 py-2 font-semibold text-slate-600">Status</th>
-                              <th className="px-3 py-2 font-semibold text-slate-600">Date</th>
-                              <th className="px-3 py-2 font-semibold text-slate-600">Amount</th>
-                              <th className="px-3 py-2 font-semibold text-slate-600">Debtor</th>
-                              <th className="px-3 py-2 font-semibold text-slate-600">Reference</th>
-                              <th className="px-3 py-2 font-semibold text-slate-600">Invoice</th>
-                              <th className="px-3 py-2 font-semibold text-slate-600">Notes</th>
+                              <th className="px-3 py-2 font-semibold text-slate-600">{t("statusCol")}</th>
+                              <th className="px-3 py-2 font-semibold text-slate-600">{t("dateCol")}</th>
+                              <th className="px-3 py-2 font-semibold text-slate-600">{t("amountCol")}</th>
+                              <th className="px-3 py-2 font-semibold text-slate-600">{t("debtorCol")}</th>
+                              <th className="px-3 py-2 font-semibold text-slate-600">{t("referenceCol")}</th>
+                              <th className="px-3 py-2 font-semibold text-slate-600">{t("invoiceCol")}</th>
+                              <th className="px-3 py-2 font-semibold text-slate-600">{t("notesCol")}</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-50">

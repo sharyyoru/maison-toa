@@ -7,6 +7,7 @@ import PdfAnnotationEditor from "@/components/PdfAnnotationEditor";
 import DocumentTemplatesPanel from "@/components/DocumentTemplatesPanel";
 import EmailShareModal from "./EmailShareModal";
 import { formatSwissTime, formatSwissDateTime, SWISS_TIMEZONE } from "@/lib/swissTimezone";
+import { useTranslations } from "next-intl";
 import dynamic from 'next/dynamic';
 import { useDocumentPreviewTabs } from "./DocumentPreviewTabsWrapper";
 
@@ -125,6 +126,7 @@ export default function PatientDocumentsTab({
   patientName = "Patient",
 }: PatientDocumentsTabProps) {
   // Try to use document preview tabs context (may not be available if not wrapped)
+  const t = useTranslations("patient.documentsTab");
   let documentPreviewTabs: ReturnType<typeof useDocumentPreviewTabs> | null = null;
   try {
     documentPreviewTabs = useDocumentPreviewTabs();
@@ -961,9 +963,9 @@ export default function PatientDocumentsTab({
         {/* Files View Header */}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">File Storage</h3>
+            <h3 className="text-sm font-semibold text-slate-900">{t("fileStorage")}</h3>
             <p className="mt-1 text-xs text-slate-500">
-              Store, organise, and preview files for this patient.
+              {t("fileStorageDesc")}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -972,7 +974,7 @@ export default function PatientDocumentsTab({
                 type="text"
                 value={newFolderName}
                 onChange={(event) => setNewFolderName(event.target.value)}
-                placeholder="New folder"
+                placeholder={t("newFolder")}
                 className="h-7 rounded-full border border-slate-200 px-2 text-[11px] focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
               />
               <button
@@ -980,7 +982,7 @@ export default function PatientDocumentsTab({
                 className="inline-flex h-7 items-center rounded-full border border-slate-200 bg-slate-50 px-2 text-[11px] font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={creatingFolder || !newFolderName.trim()}
               >
-                New folder
+                {t("newFolder")}
               </button>
             </form>
             <label className="inline-flex h-8 cursor-pointer items-center rounded-full border border-sky-500 bg-sky-500 px-3 text-[11px] font-semibold text-white shadow-[0_6px_16px_rgba(37,99,235,0.35)] hover:bg-sky-600">
@@ -990,21 +992,21 @@ export default function PatientDocumentsTab({
                 className="hidden"
                 onChange={handleFilesSelected}
               />
-              {uploading ? "Uploading…" : "Upload"}
+              {uploading ? t("uploading") : t("upload")}
             </label>
             <button
               type="button"
               onClick={() => setShowBeforeAfterEditor(true)}
               className="inline-flex h-8 items-center rounded-full border border-slate-300 bg-white px-3 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
             >
-              Before / After
+              {t("beforeAfter")}
             </button>
             <button
               type="button"
               onClick={() => setShowTemplateModal(true)}
               className="inline-flex h-8 items-center rounded-full border border-emerald-500 bg-emerald-500 px-3 text-[11px] font-semibold text-white hover:bg-emerald-600"
             >
-              Create from Template
+              {t("createFromTemplate")}
             </button>
           </div>
         </div>
@@ -1023,7 +1025,7 @@ export default function PatientDocumentsTab({
                 setSelectedFile(null);
               }}
             >
-              Root
+              {t("root")}
             </button>
             {breadcrumbSegments.map((segment, index) => (
               <div key={segment.path} className="flex items-center gap-1">
@@ -1056,7 +1058,7 @@ export default function PatientDocumentsTab({
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                {downloadingFiles ? 'Downloading...' : `Download (${selectedFilesForEmail.size})`}
+                {downloadingFiles ? t("downloading") : `${t("download")} (${selectedFilesForEmail.size})`}
               </button>
               <button
                 type="button"
@@ -1066,7 +1068,7 @@ export default function PatientDocumentsTab({
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                Share by Email ({selectedFilesForEmail.size})
+                {t("shareByEmail")} ({selectedFilesForEmail.size})
               </button>
             </div>
           )}
@@ -1086,7 +1088,7 @@ export default function PatientDocumentsTab({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search files..."
+              placeholder={t("searchFiles")}
               className="h-7 w-full rounded-full border border-slate-200 pl-8 pr-3 text-[11px] focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
             />
             <svg
@@ -1101,7 +1103,7 @@ export default function PatientDocumentsTab({
 
           {/* Sort By */}
           <div className="flex items-center gap-1 text-[11px]">
-            <span className="text-slate-500">Sort:</span>
+            <span className="text-slate-500">{t("sort")}:</span>
             <button
               type="button"
               onClick={() => setSortBy("name")}
@@ -1111,7 +1113,7 @@ export default function PatientDocumentsTab({
                   : "border border-slate-200 text-slate-600 hover:bg-slate-100"
               }`}
             >
-              Name
+              {t("sortName")}
             </button>
             <button
               type="button"
@@ -1122,7 +1124,7 @@ export default function PatientDocumentsTab({
                   : "border border-slate-200 text-slate-600 hover:bg-slate-100"
               }`}
             >
-              Date
+              {t("sortDate")}
             </button>
             <button
               type="button"
@@ -1136,16 +1138,16 @@ export default function PatientDocumentsTab({
 
           {/* Filter by Type */}
           <div className="flex items-center gap-1 text-[11px]">
-            <span className="text-slate-500">Type:</span>
+            <span className="text-slate-500">{t("filterType")}:</span>
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
               className="h-7 rounded-full border border-slate-200 px-2 text-[11px] focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
             >
-              <option value="all">All</option>
-              <option value="images">Images</option>
-              <option value="documents">Documents</option>
-              <option value="videos">Videos</option>
+              <option value="all">{t("filterAll")}</option>
+              <option value="images">{t("filterImages")}</option>
+              <option value="documents">{t("filterDocuments")}</option>
+              <option value="videos">{t("filterVideos")}</option>
             </select>
           </div>
         </div>
@@ -1162,7 +1164,7 @@ export default function PatientDocumentsTab({
                       onClick={selectAllFilesForEmail}
                       className="text-[10px] text-sky-600 hover:text-sky-700 font-medium underline"
                     >
-                      Select All
+                      {t("selectAll")}
                     </button>
                     <span className="text-slate-300">|</span>
                     <button
@@ -1170,17 +1172,17 @@ export default function PatientDocumentsTab({
                       onClick={deselectAllFilesForEmail}
                       className="text-[10px] text-slate-500 hover:text-slate-700 font-medium underline"
                     >
-                      Clear
+                      {t("clear")}
                     </button>
                   </div>
                 )}
               </div>
-              {loading ? <span className="text-slate-400">Loading…</span> : null}
+              {loading ? <span className="text-slate-400">{t("loading")}</span> : null}
             </div>
             <div className="max-h-[420px] overflow-auto rounded-lg border border-slate-100 bg-slate-50/60 p-2">
               {filteredItems.length === 0 ? (
                 <div className="flex h-24 items-center justify-center text-[11px] text-slate-500">
-                  No documents yet. Use the Upload button to add files.
+                  {t("noDocuments")}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1324,7 +1326,7 @@ export default function PatientDocumentsTab({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                           </svg>
-                          Preview
+                          {t("preview")}
                         </button>
                         {/* Preview in Tab button - only show if context is available */}
                         {documentPreviewTabs && (
@@ -1344,7 +1346,7 @@ export default function PatientDocumentsTab({
                             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                             </svg>
-                            Preview in Tab
+                            {t("previewInTab")}
                           </button>
                         )}
                         {/* Action buttons - show on hover (only for patient_document bucket files) */}
@@ -1429,7 +1431,7 @@ export default function PatientDocumentsTab({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[11px] text-slate-500">
-              <span>Preview</span>
+              <span>{t("preview")}</span>
               {selectedFile && selectedFile.kind === "file" ? (
                 <span className="truncate text-[10px] text-slate-400">
                   {selectedFile.name}
@@ -1440,11 +1442,11 @@ export default function PatientDocumentsTab({
             <div className="flex min-h-[220px] items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50/70 p-3">
               {!selectedFile || selectedFile.kind !== "file" ? (
                 <p className="text-[11px] text-slate-500">
-                  Select a file from the list to see a larger preview.
+                  {t("selectFilePreview")}
                 </p>
               ) : !selectedFilePreviewUrl ? (
                 <p className="text-[11px] text-slate-500">
-                  Unable to generate a preview URL for this file.
+                  {t("noPreviewUrl")}
                 </p>
               ) : isTiff ? (
                 <div className="relative group">
@@ -1461,7 +1463,7 @@ export default function PatientDocumentsTab({
                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
                     </svg>
-                    Enlarge
+                    {t("enlarge")}
                   </button>
                 </div>
               ) : isHeic ? (
@@ -1479,7 +1481,7 @@ export default function PatientDocumentsTab({
                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
                     </svg>
-                    Enlarge
+                    {t("enlarge")}
                   </button>
                 </div>
               ) : isImage ? (
@@ -1499,7 +1501,7 @@ export default function PatientDocumentsTab({
                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
                     </svg>
-                    Enlarge
+                    {t("enlarge")}
                   </button>
                 </div>
               ) : isPdf ? (
@@ -1517,7 +1519,7 @@ export default function PatientDocumentsTab({
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
-                    Edit PDF
+                    {t("editPdf")}
                   </button>
                 </div>
               ) : isVideo ? (
@@ -1532,8 +1534,7 @@ export default function PatientDocumentsTab({
                     {getExtension(selectedFile.name).toUpperCase() || "FILE"}
                   </div>
                   <p className="max-w-xs text-center">
-                    Preview is not available for this file type. You can download it to
-                    view it.
+                    {t("previewNotAvailable")}
                   </p>
                   <a
                     href={selectedFilePreviewUrl}
@@ -1541,7 +1542,7 @@ export default function PatientDocumentsTab({
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
                   >
-                    Open in new tab
+                    {t("openInNewTab")}
                   </a>
                 </div>
               )}
@@ -1601,14 +1602,14 @@ export default function PatientDocumentsTab({
       {renamingFile ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
-            <h3 className="mb-4 text-sm font-semibold text-slate-900">Rename File</h3>
+            <h3 className="mb-4 text-sm font-semibold text-slate-900">{t("renameFile")}</h3>
             <form onSubmit={handleRename}>
               <input
                 type="text"
                 value={newFileName}
                 onChange={(e) => setNewFileName(e.target.value)}
                 className="mb-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                placeholder="Enter new file name..."
+                placeholder={t("enterNewName")}
                 autoFocus
               />
               <div className="flex justify-end gap-2">
@@ -1621,14 +1622,14 @@ export default function PatientDocumentsTab({
                   className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   disabled={renaming}
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={renaming || !newFileName.trim()}
                   className="rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50"
                 >
-                  {renaming ? "Renaming..." : "Rename"}
+                  {renaming ? t("renaming") : t("rename")}
                 </button>
               </div>
             </form>
@@ -1650,7 +1651,7 @@ export default function PatientDocumentsTab({
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-              Close
+              {t("close")}
             </button>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -1679,7 +1680,7 @@ export default function PatientDocumentsTab({
                 <h3 className="truncate text-base font-semibold text-slate-900">{previewModal.name}</h3>
                 {previewModal.uploadedAt && (
                   <p className="mt-0.5 text-[11px] text-slate-500">
-                    Uploaded {formatUploadDate(previewModal.uploadedAt)}
+                    {t("uploaded")} {formatUploadDate(previewModal.uploadedAt)}
                   </p>
                 )}
               </div>
@@ -1711,7 +1712,7 @@ export default function PatientDocumentsTab({
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  Download
+                  {t("download")}
                 </button>
                 <button
                   type="button"
@@ -1721,7 +1722,7 @@ export default function PatientDocumentsTab({
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                  Close
+                  {t("close")}
                 </button>
               </div>
             </div>
@@ -1774,8 +1775,8 @@ export default function PatientDocumentsTab({
                       {getExtension(previewModal.name).toUpperCase() || "FILE"}
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-medium text-slate-700">Preview not available</p>
-                      <p className="mt-1 text-[11px] text-slate-500">Download the file to view its contents</p>
+                      <p className="text-sm font-medium text-slate-700">{t("noPreviewAvailable")}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">{t("noPreviewHint")}</p>
                     </div>
                     <button
                       type="button"
@@ -1803,7 +1804,7 @@ export default function PatientDocumentsTab({
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      Download File
+                      {t("downloadFile")}
                     </button>
                   </div>
                 )}
@@ -1819,14 +1820,14 @@ export default function PatientDocumentsTab({
             {/* Header */}
             <div className="bg-gradient-to-r from-sky-500 to-sky-600 px-6 py-4">
               <h3 className="text-lg font-semibold text-white">
-                {uploadStatus === "uploading" && "Uploading Files..."}
-                {uploadStatus === "success" && "Upload Complete!"}
-                {uploadStatus === "error" && "Upload Failed"}
+                {uploadStatus === "uploading" && t("uploadingFiles")}
+                {uploadStatus === "success" && t("uploadComplete")}
+                {uploadStatus === "error" && t("uploadFailed")}
               </h3>
               <p className="text-sm text-sky-100 mt-0.5">
-                {uploadStatus === "uploading" && `${currentUploadIndex + 1} of ${uploadingFiles.length} file${uploadingFiles.length > 1 ? 's' : ''}`}
-                {uploadStatus === "success" && `${uploadingFiles.length} file${uploadingFiles.length > 1 ? 's' : ''} uploaded successfully`}
-                {uploadStatus === "error" && "An error occurred during upload"}
+                {uploadStatus === "uploading" && `${currentUploadIndex + 1} ${t("fileOf")} ${uploadingFiles.length}`}
+                {uploadStatus === "success" && `${uploadingFiles.length} ${t("filesUploaded")}`}
+                {uploadStatus === "error" && t("uploadError")}
               </p>
             </div>
 
@@ -1878,7 +1879,7 @@ export default function PatientDocumentsTab({
               {/* Progress Bar */}
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-slate-600">Progress</span>
+                  <span className="text-xs font-medium text-slate-600">{t("progress")}</span>
                   <span className="text-xs font-semibold text-slate-800">{Math.round(uploadProgress)}%</span>
                 </div>
                 <div className="h-3 w-full rounded-full bg-slate-200 overflow-hidden">
@@ -1901,7 +1902,7 @@ export default function PatientDocumentsTab({
                   <svg className="h-5 w-5 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <p className="text-sm text-emerald-700">All files have been uploaded successfully!</p>
+                  <p className="text-sm text-emerald-700">{t("allUploaded")}</p>
                 </div>
               )}
 
@@ -1919,7 +1920,7 @@ export default function PatientDocumentsTab({
                   <svg className="h-5 w-5 text-sky-600 flex-shrink-0 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
-                  <p className="text-sm text-sky-700">Please wait while your files are being uploaded...</p>
+                  <p className="text-sm text-sky-700">{t("pleaseWait")}</p>
                 </div>
               )}
             </div>
@@ -1938,7 +1939,7 @@ export default function PatientDocumentsTab({
                     : "bg-slate-800 text-white hover:bg-slate-700"
                 }`}
               >
-                {uploadStatus === "uploading" ? "Uploading..." : "Close"}
+                {uploadStatus === "uploading" ? t("uploading") : t("close")}
               </button>
             </div>
           </div>

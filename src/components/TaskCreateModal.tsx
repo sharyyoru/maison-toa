@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type TaskStatus = "not_started" | "in_progress" | "completed";
@@ -32,6 +33,8 @@ export default function TaskCreateModal({
   onClose,
   onTaskCreated,
 }: TaskCreateModalProps) {
+  const t = useTranslations("taskModal");
+  const tCommon = useTranslations("common");
   const [taskName, setTaskName] = useState("");
   const [taskType, setTaskType] = useState<TaskType>("todo");
   const [taskPriority, setTaskPriority] = useState<TaskPriority>("medium");
@@ -202,7 +205,7 @@ export default function TaskCreateModal({
       const { data: authData } = await supabaseClient.auth.getUser();
       const authUser = authData?.user;
       if (!authUser) {
-        setError("You must be logged in to create a task.");
+        setError(t("errorMustLogin"));
         setSaving(false);
         return;
       }
@@ -216,7 +219,7 @@ export default function TaskCreateModal({
         .from("tasks")
         .insert({
           patient_id: selectedPatientId,
-          name: taskName.trim() || "Untitled task",
+          name: taskName.trim() || t("untitledTask"),
           type: taskType,
           priority: taskPriority,
           content: taskContent.trim() || null,
@@ -232,7 +235,7 @@ export default function TaskCreateModal({
         .single();
 
       if (insertError || !data) {
-        setError(insertError?.message ?? "Failed to create task.");
+        setError(insertError?.message ?? t("errorFailedCreate"));
         setSaving(false);
         return;
       }
@@ -243,7 +246,7 @@ export default function TaskCreateModal({
 
       onClose();
     } catch {
-      setError("Failed to create task.");
+      setError(t("errorFailedCreate"));
     } finally {
       setSaving(false);
     }
@@ -256,8 +259,8 @@ export default function TaskCreateModal({
       <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Create New Task</h2>
-            <p className="text-sm text-slate-500">Create a task for a patient</p>
+            <h2 className="text-lg font-semibold text-slate-900">{t("createTitle")}</h2>
+            <p className="text-sm text-slate-500">{t("createSubtitle")}</p>
           </div>
           <button
             type="button"
@@ -280,7 +283,7 @@ export default function TaskCreateModal({
 
           {/* Patient Selection */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">Patient *</label>
+            <label className="block text-sm font-medium text-slate-700">{t("patientRequired")}</label>
             <div className="relative">
               <input
                 type="text"
@@ -289,7 +292,7 @@ export default function TaskCreateModal({
                 onBlur={() => {
                   setTimeout(() => setShowPatientDropdown(false), 200);
                 }}
-                placeholder="Search patient..."
+                placeholder={t("searchPatient")}
                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
               {selectedPatientId && (
@@ -310,12 +313,12 @@ export default function TaskCreateModal({
               {showPatientDropdown && patientSearch.trim() && (
                 <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
                   {isSearching ? (
-                    <div className="px-4 py-3 text-sm text-slate-500">Searching...</div>
+                    <div className="px-4 py-3 text-sm text-slate-500">{t("searching")}</div>
                   ) : searchResults.length === 0 ? (
-                    <div className="px-4 py-3 text-sm text-slate-500">No patients found</div>
+                    <div className="px-4 py-3 text-sm text-slate-500">{t("noPatientsFound")}</div>
                   ) : (
                     searchResults.map((patient) => {
-                      const name = `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim() || "Unnamed patient";
+                      const name = `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim() || t("unnamedPatient");
                       return (
                         <button
                           key={patient.id}
@@ -327,7 +330,7 @@ export default function TaskCreateModal({
                         >
                           <div className="font-medium">{name}</div>
                           <div className="text-xs text-slate-500">
-                            {patient.email || patient.phone || "No contact details"}
+                            {patient.email || patient.phone || t("noContactDetails")}
                           </div>
                         </button>
                       );
@@ -339,7 +342,7 @@ export default function TaskCreateModal({
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">Name</label>
+            <label className="block text-sm font-medium text-slate-700">{t("name")}</label>
             <input
               type="text"
               value={taskName}
@@ -350,35 +353,35 @@ export default function TaskCreateModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">Type</label>
+              <label className="block text-sm font-medium text-slate-700">{t("type")}</label>
               <select
                 value={taskType}
                 onChange={(e) => setTaskType(e.target.value as TaskType)}
                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               >
-                <option value="todo">Todo</option>
-                <option value="call">Call</option>
-                <option value="email">Email</option>
-                <option value="other">Other</option>
+                <option value="todo">{t("typeTodo")}</option>
+                <option value="call">{t("typeCall")}</option>
+                <option value="email">{t("typeEmail")}</option>
+                <option value="other">{t("typeOther")}</option>
               </select>
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">Priority</label>
+              <label className="block text-sm font-medium text-slate-700">{t("priority")}</label>
               <select
                 value={taskPriority}
                 onChange={(e) => setTaskPriority(e.target.value as TaskPriority)}
                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="low">{t("priorityLow")}</option>
+                <option value="medium">{t("priorityMedium")}</option>
+                <option value="high">{t("priorityHigh")}</option>
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">Assigned User</label>
+              <label className="block text-sm font-medium text-slate-700">{t("assignedUser")}</label>
               <div className="relative">
                 <input
                   type="text"
@@ -394,7 +397,7 @@ export default function TaskCreateModal({
                   onBlur={() => {
                     setTimeout(() => setTaskAssignedUserDropdownOpen(false), 200);
                   }}
-                  placeholder="Search user..."
+                  placeholder={t("searchUser")}
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
                 {taskAssignedUserId && (
@@ -422,7 +425,7 @@ export default function TaskCreateModal({
                           taskAssignedUserId === user.id ? "bg-emerald-50 text-emerald-700" : "text-slate-700"
                         }`}
                       >
-                        <div className="font-medium">{user.full_name || "Unnamed"}</div>
+                        <div className="font-medium">{user.full_name || t("unnamed")}</div>
                         {user.email && <div className="text-xs text-slate-500">{user.email}</div>}
                       </button>
                     ))}
@@ -431,7 +434,7 @@ export default function TaskCreateModal({
               </div>
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">Activity Date</label>
+              <label className="block text-sm font-medium text-slate-700">{t("activityDate")}</label>
               <input
                 type="datetime-local"
                 value={taskActivityDate}
@@ -442,7 +445,7 @@ export default function TaskCreateModal({
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">Content</label>
+            <label className="block text-sm font-medium text-slate-700">{t("content")}</label>
             <textarea
               value={taskContent}
               onChange={(e) => setTaskContent(e.target.value)}
@@ -459,7 +462,7 @@ export default function TaskCreateModal({
             disabled={saving}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            Cancel
+            {tCommon("cancel")}
           </button>
           <button
             type="button"
@@ -467,7 +470,7 @@ export default function TaskCreateModal({
             disabled={saving}
             className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {saving ? "Creating..." : "Create Task"}
+            {saving ? t("creating") : t("createBtn")}
           </button>
         </div>
       </div>

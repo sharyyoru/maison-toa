@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getAppointmentNotes, getAppointmentTitle, getAppointmentDisplayName } from "@/lib/appointmentUtils";
 import {
@@ -667,6 +668,8 @@ async function sendAppointmentConfirmationEmail(
 
 export default function CalendarPage() {
   const searchParams = useSearchParams();
+  const t = useTranslations("calendar");
+  const tCommon = useTranslations("common");
 
   // Initialize to date from ?date=YYYY-MM-DD param, or today
   // Parse URL date as Swiss timezone to avoid day shift
@@ -3145,7 +3148,7 @@ export default function CalendarPage() {
             type="text"
             value={patientSearch}
             onChange={(event) => setPatientSearch(event.target.value)}
-            placeholder="Search patient"
+            placeholder={t("searchPatient")}
             className="w-full rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
           />
         </div>
@@ -3153,15 +3156,15 @@ export default function CalendarPage() {
         {/* Doctor calendars */}
         <div className="space-y-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            Doctor calendars
+            {t("sidebar.doctorCalendars")}
           </p>
           <div className="max-h-[280px] space-y-1 overflow-y-auto pr-1">
             {providersLoading ? (
-              <p className="text-[10px] text-slate-400">Loading providers...</p>
+              <p className="text-[10px] text-slate-400">{t("sidebar.loadingProviders")}</p>
             ) : providersError ? (
               <p className="text-[10px] text-red-600">{providersError}</p>
             ) : doctorCalendars.length === 0 ? (
-              <p className="text-[10px] text-slate-400">No provider calendars yet.</p>
+              <p className="text-[10px] text-slate-400">{t("sidebar.noProviderCalendars")}</p>
             ) : (() => {
               const activeCalendars = doctorCalendars.filter(
                 (calendar) => !calendar.name.toLowerCase().includes("(deactivated")
@@ -3217,7 +3220,7 @@ export default function CalendarPage() {
                       onClick={() => setShowAllDoctors(!showAllDoctors)}
                       className="mt-1 text-[10px] font-medium text-sky-600 hover:text-sky-700"
                     >
-                      {showAllDoctors ? `Hide ${otherCalendars.length} doctors` : `Show ${otherCalendars.length} more doctors`}
+                      {showAllDoctors ? t("sidebar.hideDoctors", { n: otherCalendars.length }) : t("sidebar.showMoreDoctors", { n: otherCalendars.length })}
                     </button>
                   )}
                 </>
@@ -3232,7 +3235,7 @@ export default function CalendarPage() {
                   onChange={(event) => setNewCalendarProviderId(event.target.value)}
                   className="w-full rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                 >
-                  <option value="">Select doctor</option>
+                  <option value="">{t("sidebar.selectDoctor")}</option>
                   {providers
                     .filter((provider) =>
                       !doctorCalendars.some(
@@ -3240,8 +3243,8 @@ export default function CalendarPage() {
                       ),
                     )
                     .map((provider) => {
-                      const rawName = provider.name ?? "Unnamed doctor";
-                      const trimmedName = rawName.trim() || "Unnamed doctor";
+                      const rawName = provider.name ?? t("sidebar.unnamedDoctor");
+                      const trimmedName = rawName.trim() || t("sidebar.unnamedDoctor");
                       return (
                         <option key={provider.id} value={provider.id}>
                           {trimmedName}
@@ -3256,7 +3259,7 @@ export default function CalendarPage() {
                     className="inline-flex flex-1 items-center justify-center rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={!newCalendarProviderId}
                   >
-                    Add
+                    {t("sidebar.add")}
                   </button>
                   <button
                     type="button"
@@ -3266,7 +3269,7 @@ export default function CalendarPage() {
                     }}
                     className="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                   >
-                    Cancel
+                    {tCommon("cancel")}
                   </button>
                 </div>
               </div>
@@ -3285,7 +3288,7 @@ export default function CalendarPage() {
                 }}
                 className="inline-flex items-center rounded-full border border-dashed border-sky-300 bg-sky-50 px-3 py-1.5 text-[11px] font-medium text-sky-700 hover:bg-sky-100"
               >
-                + New calendar
+                {t("sidebar.newCalendar")}
               </button>
             )}
           </div>
@@ -3293,12 +3296,12 @@ export default function CalendarPage() {
 
         {/* Booking pages / Other calendars placeholders */}
         <div className="mt-4 space-y-2 text-[10px] text-slate-500">
-          <p className="font-semibold">Booking pages</p>
-          <p className="text-slate-400">Coming soon</p>
+          <p className="font-semibold">{t("sidebar.bookingPages")}</p>
+          <p className="text-slate-400">{t("sidebar.comingSoon")}</p>
         </div>
         <div className="mt-4 space-y-2 text-[10px] text-slate-500">
-          <p className="font-semibold">Other calendars</p>
-          <p className="text-slate-400">Coming soon</p>
+          <p className="font-semibold">{t("sidebar.otherCalendars")}</p>
+          <p className="text-slate-400">{t("sidebar.comingSoon")}</p>
         </div>
       </aside>
 
@@ -3307,20 +3310,20 @@ export default function CalendarPage() {
         {/* Calendar header controls */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-lg font-semibold text-slate-900">Calendar</h1>
+            <h1 className="text-lg font-semibold text-slate-900">{t("title")}</h1>
             <button
               type="button"
               onClick={goToToday}
               className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              Today
+              {t("today")}
             </button>
             <div className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-1 py-0.5 text-slate-600 shadow-sm">
               <button
                 type="button"
                 onClick={goPrevMonth}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-50"
-                aria-label="Previous month"
+                aria-label={t("previousMonth")}
               >
                 <svg
                   className="h-3 w-3"
@@ -3338,7 +3341,7 @@ export default function CalendarPage() {
                 type="button"
                 onClick={goNextMonth}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-50"
-                aria-label="Next month"
+                aria-label={t("nextMonth")}
               >
                 <svg
                   className="h-3 w-3"
@@ -3393,10 +3396,10 @@ export default function CalendarPage() {
                 className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
               >
                 {view === "month"
-                  ? "Month"
+                  ? t("view.month")
                   : activeRangeDates.length === 1
-                    ? "Day"
-                    : "Week"}
+                    ? t("view.day")
+                    : t("view.week")}
                 <svg
                   className="h-3 w-3 text-slate-500"
                   viewBox="0 0 20 20"
@@ -3416,21 +3419,21 @@ export default function CalendarPage() {
                     onClick={handleSelectDayView}
                     className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
                   >
-                    Day
+                    {t("view.day")}
                   </button>
                   <button
                     type="button"
                     onClick={handleSelectWeekView}
                     className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
                   >
-                    Week
+                    {t("view.week")}
                   </button>
                   <button
                     type="button"
                     onClick={handleSelectMonthView}
                     className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
                   >
-                    Month
+                    {t("view.month")}
                   </button>
                 </div>
               ) : null}
@@ -3439,16 +3442,16 @@ export default function CalendarPage() {
               href="/appointments/cancelled"
               className="inline-flex items-center rounded-full border border-rose-200/80 bg-white px-3 py-1.5 text-xs font-medium text-rose-600 shadow-sm hover:bg-rose-50"
             >
-              Cancelled
+              {t("cancelled")}
             </Link>
           </div>
         </div>
         {view === "month" ? (
           <div className="flex-1 flex flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
             <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/80 text-[11px] font-medium uppercase tracking-wide text-slate-500 sticky top-0 z-10">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
-                <div key={label} className="px-3 py-2">
-                  {label}
+              {(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((key) => (
+                <div key={key} className="px-3 py-2">
+                  {t(`weekdayShort.${key}`)}
                 </div>
               ))}
             </div>
@@ -3529,19 +3532,19 @@ export default function CalendarPage() {
                                 {statusIcon && <span className="flex-shrink-0">{statusIcon}</span>}
                                 {appt.patient?.is_vip ? (
                                   <span
-                                    title="VIP patient"
+                                    title={t("badges.vipTooltip")}
                                     className="flex-shrink-0 rounded-full bg-amber-400/90 px-1.5 text-[8px] font-bold leading-tight text-white"
                                   >
-                                    VIP
+                                    {t("badges.vip")}
                                   </span>
                                 ) : null}
                                 {appt.patient_id &&
                                 firstAppointmentByPatient[appt.patient_id] === appt.start_time ? (
                                   <span
-                                    title="New patient (first appointment)"
+                                    title={t("badges.newPatientTooltip")}
                                     className="flex-shrink-0 rounded-full bg-emerald-500/90 px-1.5 text-[8px] font-bold leading-tight text-white"
                                   >
-                                    NEW
+                                    {t("badges.newPatient")}
                                   </span>
                                 ) : null}
                                 <span className="truncate">{patientName || serviceLabel}</span>
@@ -3822,19 +3825,19 @@ export default function CalendarPage() {
                                             {dayStatusIcon && <span className="flex-shrink-0">{dayStatusIcon}</span>}
                                             {appt.patient?.is_vip ? (
                                               <span
-                                                title="VIP patient"
+                                                title={t("badges.vipTooltip")}
                                                 className="flex-shrink-0 rounded-full bg-amber-400/90 px-1.5 text-[8px] font-bold leading-tight text-white"
                                               >
-                                                VIP
+                                                {t("badges.vip")}
                                               </span>
                                             ) : null}
                                             {appt.patient_id &&
                                             firstAppointmentByPatient[appt.patient_id] === appt.start_time ? (
                                               <span
-                                                title="New patient (first appointment)"
+                                                title={t("badges.newPatientTooltip")}
                                                 className="flex-shrink-0 rounded-full bg-emerald-500/90 px-1.5 text-[8px] font-bold leading-tight text-white"
                                               >
-                                                NEW
+                                                {t("badges.newPatient")}
                                               </span>
                                             ) : null}
                                             <span className="truncate">{patientName || serviceLabel}</span>
@@ -3897,13 +3900,13 @@ export default function CalendarPage() {
           >
             <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.75)]" style={{ touchAction: 'auto' } as React.CSSProperties}>
               <div className="flex items-start justify-between gap-2">
-                <h2 className="text-sm font-semibold text-slate-900">Edit appointment</h2>
+                <h2 className="text-sm font-semibold text-slate-900">{t("modal.editTitle")}</h2>
                 <button
                   type="button"
                   onClick={closeEditModal}
                   className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                 >
-                  <span className="sr-only">Close</span>
+                  <span className="sr-only">{tCommon("close")}</span>
                   <svg
                     className="h-3 w-3"
                     viewBox="0 0 20 20"
@@ -3950,10 +3953,10 @@ export default function CalendarPage() {
 
                 {/* Appointment Details */}
                 <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
-                  <p className="text-[11px] font-semibold text-slate-700">Appointment Details</p>
+                  <p className="text-[11px] font-semibold text-slate-700">{t("modal.appointmentDetails")}</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="relative col-span-2 sm:col-span-1">
-                      <p className="text-[10px] text-slate-500 mb-1">Service</p>
+                      <p className="text-[10px] text-slate-500 mb-1">{t("modal.fields.service")}</p>
                       <input
                         type="text"
                         value={editServiceSearch}
@@ -3966,7 +3969,7 @@ export default function CalendarPage() {
                           setEditServiceDropdownOpen(true);
                           setEditProviderDropdownOpen(false);
                         }}
-                        placeholder="Search service..."
+                        placeholder={t("modal.searchService")}
                         className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                       />
                       {editServiceSearch && (
@@ -4004,7 +4007,7 @@ export default function CalendarPage() {
                       )}
                     </div>
                     <div className="relative col-span-2 sm:col-span-1">
-                      <p className="text-[10px] text-slate-500 mb-1">Doctor</p>
+                      <p className="text-[10px] text-slate-500 mb-1">{t("modal.fields.doctor")}</p>
                       <input
                         type="text"
                         value={editProviderSearch}
@@ -4017,7 +4020,7 @@ export default function CalendarPage() {
                           setEditProviderDropdownOpen(true);
                           setEditServiceDropdownOpen(false);
                         }}
-                        placeholder="Search doctor..."
+                        placeholder={t("modal.searchDoctor")}
                         className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                       />
                       {editProviderSearch && (
@@ -4052,7 +4055,7 @@ export default function CalendarPage() {
                       )}
                     </div>
                     <div className="relative col-span-2">
-                      <p className="text-[10px] text-slate-500 mb-1">Category</p>
+                      <p className="text-[10px] text-slate-500 mb-1">{t("modal.fields.category")}</p>
                       <input
                         type="text"
                         value={editCategorySearch}
@@ -4145,19 +4148,19 @@ export default function CalendarPage() {
                     </div>
                   </div>
                   <div className="mt-2 pt-2 border-t border-slate-200">
-                    <p className="text-[10px] text-slate-500 mb-1">Notes</p>
+                    <p className="text-[10px] text-slate-500 mb-1">{t("modal.fields.notes")}</p>
                     <textarea
                       value={editNotes}
                       onChange={(e) => setEditNotes(e.target.value)}
                       rows={3}
                       className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                      placeholder="Add notes for this appointment"
+                      placeholder={t("modal.addNotes")}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Workflow status</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.workflowStatus")}</p>
                   <div className="inline-flex flex-wrap gap-1">
                     {(["pending", "approved", "rescheduled", "cancelled"] as WorkflowStatus[]).map(
                       (status) => (
@@ -4171,14 +4174,14 @@ export default function CalendarPage() {
                               : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                           }`}
                         >
-                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                          {t(`workflow.${status}`)}
                         </button>
                       ),
                     )}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Date &amp; time</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.dateTime")}</p>
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="date"
@@ -4196,7 +4199,7 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Consultation duration</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.consultationDuration")}</p>
                   <div className="relative">
                     <input
                       type="text"
@@ -4206,7 +4209,7 @@ export default function CalendarPage() {
                         setEditDurationDropdownOpen(true);
                       }}
                       onFocus={() => setEditDurationDropdownOpen(true)}
-                      placeholder="Search duration..."
+                      placeholder={t("modal.searchDuration")}
                       className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                     {editConsultationDuration > 0 && editDurationSearch && (
@@ -4239,7 +4242,7 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Location</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.location")}</p>
                   <select
                     value={editLocation}
                     onChange={(event) => setEditLocation(event.target.value)}
@@ -4266,7 +4269,7 @@ export default function CalendarPage() {
               {showDeleteConfirm && (
                 <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
                   <p className="text-[11px] font-medium text-red-800 mb-2">
-                    Are you sure you want to delete this appointment? This action cannot be undone.
+                    {t("modal.deleteConfirm")}
                   </p>
                   <div className="flex items-center gap-2">
                     <button
@@ -4275,7 +4278,7 @@ export default function CalendarPage() {
                       disabled={deletingAppointment}
                       className="inline-flex items-center rounded-full border border-red-500/80 bg-red-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {deletingAppointment ? "Deleting..." : "Yes, delete"}
+                      {deletingAppointment ? t("modal.deleting") : t("modal.yesDelete")}
                     </button>
                     <button
                       type="button"
@@ -4283,7 +4286,7 @@ export default function CalendarPage() {
                       disabled={deletingAppointment}
                       className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
                     >
-                      Cancel
+                      {tCommon("cancel")}
                     </button>
                   </div>
                 </div>
@@ -4300,7 +4303,7 @@ export default function CalendarPage() {
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
-                  Delete
+                  {t("modal.delete")}
                 </button>
                 
                 {/* Other buttons on right */}
@@ -4318,14 +4321,14 @@ export default function CalendarPage() {
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
-                    Copy
+                    {t("modal.copy")}
                   </button>
                   <button
                     type="button"
                     onClick={closeEditModal}
                     className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                   >
-                    Close
+                    {tCommon("close")}
                   </button>
                   <button
                     type="button"
@@ -4333,7 +4336,7 @@ export default function CalendarPage() {
                     disabled={savingEdit}
                     className="inline-flex items-center rounded-full border border-sky-500/80 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Save changes
+                    {tCommon("saveChanges")}
                   </button>
                 </div>
               </div>
@@ -4364,7 +4367,7 @@ export default function CalendarPage() {
               }}
             >
               <div className="flex items-start justify-between gap-2">
-                <h2 className="text-sm font-semibold text-slate-900">Add appointment</h2>
+                <h2 className="text-sm font-semibold text-slate-900">{t("modal.createTitle")}</h2>
                 <button
                   type="button"
                   onClick={() => {
@@ -4373,7 +4376,7 @@ export default function CalendarPage() {
                   }}
                   className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                 >
-                  <span className="sr-only">Close</span>
+                  <span className="sr-only">{tCommon("close")}</span>
                   <svg
                     className="h-3 w-3"
                     viewBox="0 0 20 20"
@@ -4391,7 +4394,7 @@ export default function CalendarPage() {
               <div className="mt-3 space-y-3">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-medium text-slate-600">Patient</p>
+                    <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.patient")}</p>
                     <button
                       type="button"
                       onClick={() => {
@@ -4432,25 +4435,25 @@ export default function CalendarPage() {
                         setCreatePatientName("");
                       }}
                       onFocus={() => { closeAllCreateDropdowns("patient"); setShowCreatePatientSuggestions(true); }}
-                      placeholder="Select patient"
+                      placeholder={t("modal.selectPatient")}
                       className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                     {showCreatePatientSuggestions ? (
                       <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-xs shadow-lg">
                         {patientOptionsLoading ? (
                           <div className="px-3 py-1.5 text-[11px] text-slate-500">
-                            Loading patients...
+                            {t("modal.loadingPatients")}
                           </div>
                         ) : filteredCreatePatientSuggestions.length === 0 ? (
                           <div className="px-3 py-1.5 text-[11px] text-slate-500">
-                            No patients found
+                            {t("modal.noPatientsFound")}
                           </div>
                         ) : (
                           filteredCreatePatientSuggestions.map((p) => {
                             const name = `${p.first_name ?? ""} ${p.last_name ?? ""}`
-                              .trim() || "Unnamed patient";
+                              .trim() || t("modal.unnamedPatient");
                             const details =
-                              p.email || p.phone || "No contact details";
+                              p.email || p.phone || t("modal.noContactDetails");
                             return (
                               <button
                                 key={p.id}
@@ -4461,7 +4464,7 @@ export default function CalendarPage() {
                                   setCreatePatientName(name);
                                   setCreatePatientSearch(name);
                                   setShowCreatePatientSuggestions(false);
-                                  setDraftTitle(`Consultation for ${name}`);
+                                  setDraftTitle(t("modal.consultationFor", { name }));
                                 }}
                               >
                                 <span className="text-[11px] font-medium text-slate-800">
@@ -4489,11 +4492,11 @@ export default function CalendarPage() {
                     value={draftTitle}
                     onChange={(event) => setDraftTitle(event.target.value)}
                     className="w-full border-b border-slate-200 bg-transparent px-0 pb-1 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none"
-                    placeholder="Add title"
+                    placeholder={t("modal.addTitle")}
                   />
                 </div>
                 <div className="space-y-1" data-doctor-dropdown>
-                  <p className="text-[11px] font-medium text-slate-600">Doctors *</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.doctorsRequired")}</p>
                   <div className="relative">
                     <div
                       className="min-h-[32px] w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs hover:border-sky-500 cursor-pointer"
@@ -4534,7 +4537,7 @@ export default function CalendarPage() {
                           );
                         })}
                         {selectedDoctorIds.length === 0 && (
-                          <span className="text-slate-400">Select doctors...</span>
+                          <span className="text-slate-400">{t("modal.selectDoctors")}</span>
                         )}
                       </div>
                     </div>
@@ -4574,7 +4577,7 @@ export default function CalendarPage() {
                                       <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                       </svg>
-                                      CONFLICT
+                                      {t("modal.conflict")}
                                     </span>
                                   )}
                                 </div>
@@ -4595,11 +4598,11 @@ export default function CalendarPage() {
                     )}
                   </div>
                   {selectedDoctorIds.length === 0 && (
-                    <p className="text-[10px] text-rose-600">Please select at least one doctor</p>
+                    <p className="text-[10px] text-rose-600">{t("modal.selectAtLeastOneDoctor")}</p>
                   )}
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Date &amp; time</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.dateTime")}</p>
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="date"
@@ -4624,7 +4627,7 @@ export default function CalendarPage() {
                           }
                         }}
                         onFocus={() => { closeAllCreateDropdowns("time"); setTimeDropdownOpen(true); }}
-                        placeholder={!draftDate ? "Select date first" : "Search time..."}
+                        placeholder={!draftDate ? t("modal.selectDateFirst") : t("modal.searchTime")}
                         disabled={!draftDate}
                         className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100"
                       />
@@ -4659,7 +4662,7 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Services</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.services")}</p>
                   <div className="relative">
                     <div className="min-h-[32px] w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500">
                       <div className="flex flex-wrap gap-1">
@@ -4704,7 +4707,7 @@ export default function CalendarPage() {
                               }
                             }, 200);
                           }}
-                          placeholder={selectedServiceIds.length === 0 ? (serviceOptionsLoading ? "Loading..." : "Select services...") : ""}
+                          placeholder={selectedServiceIds.length === 0 ? (serviceOptionsLoading ? tCommon("loading") : t("modal.selectServices")) : ""}
                           className="flex-1 min-w-[120px] bg-transparent outline-none placeholder:text-slate-400"
                         />
                       </div>
@@ -4744,7 +4747,7 @@ export default function CalendarPage() {
                                   </div>
                                   {isSelected && (
                                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                      <label className="text-[10px] text-slate-600">Qty:</label>
+                                      <label className="text-[10px] text-slate-600">{t("modal.qty")}</label>
                                       <input
                                         type="number"
                                         min="1"
@@ -4769,14 +4772,14 @@ export default function CalendarPage() {
                   </div>
                   {selectedServiceIds.length > 0 && (
                     <div className="rounded-md bg-slate-50 px-2 py-1 text-[10px]">
-                      <span className="font-medium text-slate-700">Total Duration:</span>
+                      <span className="font-medium text-slate-700">{t("modal.totalDuration")}</span>
                       <span className="ml-1.5 text-slate-900">{calculateTotalDuration(selectedServiceIds, serviceQuantities, serviceOptions)} min</span>
                     </div>
                   )}
                   {serviceOptionsError && <p className="text-[10px] text-rose-600">{serviceOptionsError}</p>}
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Status</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.status")}</p>
                   <div className="relative">
                     <div className="flex items-center">
                       {bookingStatus && getStatusIcon(bookingStatus) && (
@@ -4828,7 +4831,7 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Category</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.category")}</p>
                   <div className="relative">
                     <div className="flex items-center">
                       {appointmentCategory && (
@@ -4893,7 +4896,7 @@ export default function CalendarPage() {
                         }
                       }}
                       onFocus={() => { closeAllCreateDropdowns("location"); setLocationDropdownOpen(true); }}
-                      placeholder="Search location..."
+                      placeholder={t("modal.searchLocation")}
                       className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                     {draftLocation && (
@@ -4926,7 +4929,7 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Consultation duration</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.consultationDuration")}</p>
                   <div className="relative">
                     <input
                       type="text"
@@ -4936,7 +4939,7 @@ export default function CalendarPage() {
                         setDurationDropdownOpen(true);
                       }}
                       onFocus={() => { closeAllCreateDropdowns("duration"); setDurationDropdownOpen(true); }}
-                      placeholder="Search duration..."
+                      placeholder={t("modal.searchDuration")}
                       className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                     {consultationDuration > 0 && durationSearch && (
@@ -4969,13 +4972,13 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Description</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.description")}</p>
                   <textarea
                     value={draftDescription}
                     onChange={(event) => setDraftDescription(event.target.value)}
                     rows={3}
                     className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    placeholder="Add notes for this appointment"
+                    placeholder={t("modal.addNotes")}
                   />
                 </div>
               </div>
@@ -4987,7 +4990,7 @@ export default function CalendarPage() {
                   type="button"
                   className="text-[11px] font-medium text-sky-600 hover:underline hover:underline-offset-2"
                 >
-                  More options
+                  {t("modal.moreOptions")}
                 </button>
                 <div className="flex gap-2">
                   <button
@@ -4998,7 +5001,7 @@ export default function CalendarPage() {
                     }}
                     className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                   >
-                    Cancel
+                    {tCommon("cancel")}
                   </button>
                   <button
                     type="button"
@@ -5006,7 +5009,7 @@ export default function CalendarPage() {
                     disabled={savingCreate}
                     className="inline-flex items-center rounded-full border border-sky-500/80 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Save
+                    {tCommon("save")}
                   </button>
                 </div>
               </div>
@@ -5025,7 +5028,7 @@ export default function CalendarPage() {
           >
             <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.75)]" style={{ touchAction: 'auto' } as React.CSSProperties}>
               <div className="flex items-start justify-between gap-2">
-                <h2 className="text-sm font-semibold text-slate-900">New patient</h2>
+                <h2 className="text-sm font-semibold text-slate-900">{t("modal.newPatientTitle")}</h2>
                 <button
                   type="button"
                   onClick={() => {
@@ -5034,7 +5037,7 @@ export default function CalendarPage() {
                   }}
                   className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                 >
-                  <span className="sr-only">Close</span>
+                  <span className="sr-only">{tCommon("close")}</span>
                   <svg
                     className="h-3 w-3"
                     viewBox="0 0 20 20"
@@ -5052,7 +5055,7 @@ export default function CalendarPage() {
               <div className="mt-3 space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-slate-600">First name</p>
+                    <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.firstName")}</p>
                     <input
                       type="text"
                       value={newPatientFirstName}
@@ -5061,7 +5064,7 @@ export default function CalendarPage() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-slate-600">Last name</p>
+                    <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.lastName")}</p>
                     <input
                       type="text"
                       value={newPatientLastName}
@@ -5071,7 +5074,7 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Email</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.email")}</p>
                   <input
                     type="email"
                     value={newPatientEmail}
@@ -5080,7 +5083,7 @@ export default function CalendarPage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-slate-600">Phone</p>
+                  <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.phone")}</p>
                   <div className="flex gap-2">
                     <select
                       defaultValue="+41"
@@ -5103,29 +5106,29 @@ export default function CalendarPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-slate-600">Gender</p>
+                    <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.gender")}</p>
                     <select
                       value={newPatientGender}
                       onChange={(event) => setNewPatientGender(event.target.value)}
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     >
-                      <option value="">Select</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
+                      <option value="">{t("newPatient.selectGender")}</option>
+                      <option value="male">{t("newPatient.male")}</option>
+                      <option value="female">{t("newPatient.female")}</option>
+                      <option value="other">{t("newPatient.other")}</option>
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-slate-600">Source</p>
+                    <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.source")}</p>
                     <select
                       value={newPatientSource}
                       onChange={(event) => setNewPatientSource(event.target.value)}
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     >
-                      <option value="manual">Manual</option>
-                      <option value="event">Event</option>
-                      <option value="meta">Meta</option>
-                      <option value="google">Google</option>
+                      <option value="manual">{t("newPatient.sourceManual")}</option>
+                      <option value="event">{t("newPatient.sourceEvent")}</option>
+                      <option value="meta">{t("newPatient.sourceMeta")}</option>
+                      <option value="google">{t("newPatient.sourceGoogle")}</option>
                     </select>
                   </div>
                 </div>
@@ -5142,7 +5145,7 @@ export default function CalendarPage() {
                   }}
                   className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                 >
-                  Cancel
+                  {tCommon("cancel")}
                 </button>
                 <button
                   type="button"
@@ -5150,7 +5153,7 @@ export default function CalendarPage() {
                   disabled={savingNewPatient}
                   className="inline-flex items-center rounded-full border border-emerald-500/80 bg-emerald-500 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {savingNewPatient ? "Saving..." : "Save patient"}
+                  {savingNewPatient ? t("modal.savingPatient") : t("modal.savePatient")}
                 </button>
               </div>
             </div>

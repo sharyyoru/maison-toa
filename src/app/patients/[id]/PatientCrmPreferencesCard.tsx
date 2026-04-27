@@ -2,6 +2,7 @@
 
 import { useEffect, useState, ChangeEvent } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type PatientRecord = {
@@ -60,6 +61,7 @@ export default function PatientCrmPreferencesCard({
   patient: any;
 }) {
   const basePatient = patient as PatientRecord;
+  const t = useTranslations("patient.crmPrefs");
 
   const [avatarUrl, setAvatarUrl] = useState<string | null>(
     basePatient.avatar_url ?? null,
@@ -232,9 +234,9 @@ export default function PatientCrmPreferencesCard({
       }
 
       setAvatarUrl(publicUrl);
-      setAvatarSuccess("Patient photo updated.");
+      setAvatarSuccess(t("photoUpdated"));
     } catch {
-      setAvatarError("Unexpected error uploading photo.");
+      setAvatarError(t("uploadError"));
     } finally {
       setAvatarUploading(false);
     }
@@ -257,7 +259,7 @@ export default function PatientCrmPreferencesCard({
     }
 
     setSavingPrefs(false);
-    setPrefsStatus("Saved");
+    setPrefsStatus(t("saved"));
     setTimeout(() => setPrefsStatus(null), 2000);
   }
 
@@ -309,7 +311,7 @@ export default function PatientCrmPreferencesCard({
     } as Partial<PatientRecord>);
   }
 
-  const ownerDisplay = ownerName || ownerEmail || "Unassigned";
+  const ownerDisplay = ownerName || ownerEmail || t("unassigned");
 
    function handleOwnerChange(value: string) {
     const trimmed = value.trim();
@@ -362,13 +364,13 @@ export default function PatientCrmPreferencesCard({
               )}
             </div>
             <div className="space-y-1">
-              <p className="text-xs font-medium text-slate-900">Profile photo</p>
+              <p className="text-xs font-medium text-slate-900">{t("profilePhoto")}</p>
               <label
                 className={`inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 ${
                   avatarUploading ? "cursor-not-allowed opacity-60 hover:bg-white" : "cursor-pointer"
                 }`}
               >
-                <span>{avatarUploading ? "Uploading..." : "Upload"}</span>
+                <span>{avatarUploading ? t("uploading") : t("upload")}</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -381,13 +383,13 @@ export default function PatientCrmPreferencesCard({
           </div>
 
           <div className="w-full border-t border-slate-100 pt-3">
-            <p className="font-medium text-slate-500">Contact owner</p>
+            <p className="font-medium text-slate-500">{t("contactOwner")}</p>
             <select
               value={ownerEmail ?? ""}
               onChange={(event) => handleOwnerChange(event.target.value)}
               className="mt-1 block w-full rounded-lg border border-slate-200 bg-white/90 px-2.5 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             >
-              <option value="">Unassigned</option>
+              <option value="">{t("unassigned")}</option>
               {(Array.isArray(userOptions) ? userOptions : []).map((user) => {
                 const display = user.full_name || user.email || "Unnamed user";
                 const value = user.email ?? "";
@@ -400,7 +402,7 @@ export default function PatientCrmPreferencesCard({
               })}
             </select>
             <p className="mt-0.5 text-[10px] text-slate-400">
-              Currently: {ownerDisplay}
+              {t("currently")} {ownerDisplay}
             </p>
             {prefsError ? (
               <p className="mt-1 text-[11px] text-red-600">{prefsError}</p>
@@ -413,13 +415,13 @@ export default function PatientCrmPreferencesCard({
 
         <div className="flex-1 space-y-2 sm:max-w-[260px]">
           <div className="space-y-1">
-            <p className="font-medium text-slate-500">Language preference:</p>
+            <p className="font-medium text-slate-500">{t("languagePreference")}</p>
             <select
               value={language}
               onChange={(event) => handleLanguageChange(event.target.value)}
               className="block w-full rounded-lg border border-slate-200 bg-white/90 px-2.5 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             >
-              <option value="">Select</option>
+              <option value="">{t("select")}</option>
               {(Array.isArray(LANGUAGE_OPTIONS) ? LANGUAGE_OPTIONS : []).map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -429,13 +431,13 @@ export default function PatientCrmPreferencesCard({
           </div>
 
           <div className="space-y-1">
-            <p className="font-medium text-slate-500">Clinic preference:</p>
+            <p className="font-medium text-slate-500">{t("clinicPreference")}</p>
             <select
               value={clinic}
               onChange={(event) => handleClinicChange(event.target.value)}
               className="block w-full rounded-lg border border-slate-200 bg-white/90 px-2.5 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             >
-              <option value="">Select</option>
+              <option value="">{t("select")}</option>
               {(Array.isArray(CLINIC_OPTIONS) ? CLINIC_OPTIONS : []).map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -445,13 +447,13 @@ export default function PatientCrmPreferencesCard({
           </div>
 
           <div className="space-y-1">
-            <p className="font-medium text-slate-500">Service interest:</p>
+            <p className="font-medium text-slate-500">{t("serviceInterest")}</p>
             <div className="relative">
               <input
                 type="text"
                 value={serviceSearch || (lifecycle && lifecycle !== "request for information" ? lifecycle : "")}
                 onChange={(event) => handleServiceSearchChange(event.target.value)}
-                placeholder={lifecycle && lifecycle !== "request for information" ? lifecycle : "Search for a Service"}
+                placeholder={lifecycle && lifecycle !== "request for information" ? lifecycle : t("searchService")}
                 className="block w-full rounded-lg border border-slate-200 bg-white/90 px-2.5 py-1.5 pr-8 text-[11px] text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
               {(serviceSearch || lifecycle) && (
@@ -504,7 +506,7 @@ export default function PatientCrmPreferencesCard({
         <div className="flex items-center justify-between gap-2">
           <div className="space-y-0.5">
             <p className="text-[10px] font-medium uppercase tracking-wide opacity-80">
-              Patient ID
+              {t("patientId")}
             </p>
             <p className="font-medium break-all">{basePatient.id}</p>
           </div>

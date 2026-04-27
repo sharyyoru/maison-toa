@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type AgeBadgeProps = {
@@ -12,6 +13,7 @@ type AgeBadgeProps = {
 
 export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
   const router = useRouter();
+  const t = useTranslations("patient.age");
   const [isOpen, setIsOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editDob, setEditDob] = useState(dob || "");
@@ -27,7 +29,7 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
         month: "2-digit",
         year: "numeric",
       })
-    : "Not set";
+    : t("notSet");
 
   // Close popover when clicking outside
   useEffect(() => {
@@ -52,7 +54,7 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
 
   const handleSave = async () => {
     if (!editDob) {
-      setError("Please enter a valid date");
+      setError(t("invalidDate"));
       return;
     }
 
@@ -72,7 +74,7 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
       router.refresh();
     } catch (err) {
       console.error("Error updating DOB:", err);
-      setError("Failed to save. Please try again.");
+      setError(t("saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -90,9 +92,9 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
           setError(null);
         }}
         className="inline-flex items-center rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-medium text-slate-50 hover:bg-slate-800 transition-colors cursor-pointer"
-        title="Click to view/edit date of birth"
+        title={t("tooltip")}
       >
-        <span className="opacity-80">Age</span>
+        <span className="opacity-80">{t("label")}</span>
         <span className="ml-1 font-semibold">{age ?? "?"}</span>
       </button>
 
@@ -103,14 +105,14 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
         >
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h4 className="text-xs font-semibold text-slate-700">Date of Birth</h4>
+              <h4 className="text-xs font-semibold text-slate-700">{t("dateOfBirth")}</h4>
               {!isEditing && (
                 <button
                   type="button"
                   onClick={() => setIsEditing(true)}
                   className="text-[10px] font-medium text-emerald-600 hover:text-emerald-700"
                 >
-                  Edit
+                  {t("edit")}
                 </button>
               )}
             </div>
@@ -137,7 +139,7 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
                     className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                     disabled={saving}
                   >
-                    Cancel
+                    {t("cancel")}
                   </button>
                   <button
                     type="button"
@@ -145,7 +147,7 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
                     disabled={saving}
                     className="flex-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    {saving ? "Saving..." : "Save"}
+                    {saving ? t("saving") : t("save")}
                   </button>
                 </div>
               </div>
@@ -153,7 +155,7 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
               <div className="space-y-1">
                 <p className="text-sm font-medium text-slate-900">{formattedDob}</p>
                 {age !== null && (
-                  <p className="text-xs text-slate-500">{age} years old</p>
+                  <p className="text-xs text-slate-500">{t("yearsOld", { age })}</p>
                 )}
               </div>
             )}

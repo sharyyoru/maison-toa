@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Manrope, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import Image from "next/image";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import "./globals.css";
 import RequireAuth from "@/components/RequireAuth";
 import { ShellSidebar, ShellHeader, ShellFrame } from "@/components/ShellVisibility";
@@ -11,6 +13,7 @@ import HeaderNotificationsButton from "@/components/HeaderNotificationsButton";
 import HeaderTasksButton from "@/components/HeaderTasksButton";
 import HeaderWhatsAppButton from "@/components/HeaderWhatsAppButton";
 import GlobalPatientSearch from "@/components/GlobalPatientSearch";
+import CrmLanguageToggle from "@/components/CrmLanguageToggle";
 import { CommentsUnreadProvider } from "@/components/CommentsUnreadContext";
 import { TasksNotificationsProvider } from "@/components/TasksNotificationsContext";
 import { EmailNotificationsProvider } from "@/components/EmailNotificationsContext";
@@ -35,18 +38,23 @@ export const metadata: Metadata = {
   description: "Medical CRM and ERP for clinics",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+  const tNav = await getTranslations("nav");
+  const tHeader = await getTranslations("header");
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body
         className={`${manrope.variable} ${geistMono.variable} antialiased`}
       >
         <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef2ff,_#e0f2fe_40%,_#fdf2ff_80%)] px-4 py-6 sm:px-6 lg:px-8">
           <GlobalLoader />
+          <NextIntlClientProvider locale={locale} messages={messages}>
           <AuthProvider>
           <CommentsUnreadProvider>
           <TasksNotificationsProvider>
@@ -91,7 +99,7 @@ export default function RootLayout({
                         <path d="M5 10.5V20h4v-5h6v5h4v-9.5" />
                       </svg>
                     </span>
-                    <span>Dashboard</span>
+                    <span>{tNav("dashboard")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -114,7 +122,7 @@ export default function RootLayout({
                         <path d="M4 20a6 6 0 0 1 8-5.29A6 6 0 0 1 20 20" />
                       </svg>
                     </span>
-                    <span>Patients</span>
+                    <span>{tNav("patients")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -137,7 +145,7 @@ export default function RootLayout({
                         <path d="M16 3v4M8 3v4M3 11h18" />
                       </svg>
                     </span>
-                    <span>Calendar</span>
+                    <span>{tNav("calendar")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -162,7 +170,7 @@ export default function RootLayout({
                         <path d="M3 12h18" />
                       </svg>
                     </span>
-                    <span>Online Bookings</span>
+                    <span>{tNav("onlineBookings")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -184,7 +192,7 @@ export default function RootLayout({
                         <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
                       </svg>
                     </span>
-                    <span>Book Appointment CMS</span>
+                    <span>{tNav("bookAppointmentCms")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -206,7 +214,7 @@ export default function RootLayout({
                         <path d="M3 6h4v12H3zM10 10h4v8h-4zM17 8h4v10h-4z" />
                       </svg>
                     </span>
-                    <span>Deals &amp; Pipeline</span>
+                    <span>{tNav("dealsAndPipeline")}</span>
                   </Link>
                 </div>
                 <SidebarLeadImportDropdown />
@@ -230,7 +238,7 @@ export default function RootLayout({
                         <path d="M7 10h4M7 14h2" />
                       </svg>
                     </span>
-                    <span>Financials</span>
+                    <span>{tNav("financials")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -253,7 +261,7 @@ export default function RootLayout({
                         <path d="M12 3c7.2 0 9 1.8 9 9s-1.8 9-9 9-9-1.8-9-9 1.8-9 9-9z" />
                       </svg>
                     </span>
-                    <span>MediData</span>
+                    <span>{tNav("medidata")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -276,7 +284,7 @@ export default function RootLayout({
                         <path d="M7 9h10M7 13h6M7 17h3" />
                       </svg>
                     </span>
-                    <span>Services</span>
+                    <span>{tNav("services")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -299,7 +307,7 @@ export default function RootLayout({
                         <path d="M8 9h8M8 13h5M8 17h3" />
                       </svg>
                     </span>
-                    <span>Tasks</span>
+                    <span>{tNav("tasks")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -324,7 +332,7 @@ export default function RootLayout({
                         <path d="M13 20a4 4 0 0 1 8 0" />
                       </svg>
                     </span>
-                    <span>User Management</span>
+                    <span>{tNav("userManagement")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -347,13 +355,13 @@ export default function RootLayout({
                         <path d="M6 9v3a3 3 0 0 0 3 3h3M12 15v3a3 3 0 0 0 3 3h3" />
                       </svg>
                     </span>
-                    <span>Workflows</span>
+                    <span>{tNav("workflows")}</span>
                   </Link>
                   <Link
                     href="/workflows/templates"
                     className="group flex items-center gap-3 px-3 py-2 text-xs font-medium text-slate-500 hover:bg-sky-50/80 hover:text-slate-900 sm:text-sm pl-[52px]"
                   >
-                    <span>Templates</span>
+                    <span>{tNav("templates")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -375,7 +383,7 @@ export default function RootLayout({
                         <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
                       </svg>
                     </span>
-                    <span>Controllers</span>
+                    <span>{tNav("controllers")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -400,7 +408,7 @@ export default function RootLayout({
                         <path d="M22 20l-7-7" />
                       </svg>
                     </span>
-                    <span>Email Reports</span>
+                    <span>{tNav("emailReports")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -424,7 +432,7 @@ export default function RootLayout({
                         <path d="M8 13h5" />
                       </svg>
                     </span>
-                    <span>Chat with Aliice</span>
+                    <span>{tNav("chatWithAliice")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -447,7 +455,7 @@ export default function RootLayout({
                         <path d="M10.172 13.828a4 4 0 0 0 5.656 0l4-4a4 4 0 1 0-5.656-5.656l-1.1 1.1" />
                       </svg>
                     </span>
-                    <span>Client Onboarding</span>
+                    <span>{tNav("clientOnboarding")}</span>
                   </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
@@ -470,7 +478,7 @@ export default function RootLayout({
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                       </svg>
                     </span>
-                    <span>Settings</span>
+                    <span>{tNav("settings")}</span>
                   </Link>
                 </div>
               </nav>
@@ -486,7 +494,7 @@ export default function RootLayout({
                         htmlFor="sidebar-toggle"
                         className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-slate-200/80 bg-white/80 text-slate-500 shadow-sm hover:bg-slate-50 sm:h-9 sm:w-9"
                       >
-                        <span className="sr-only">Toggle sidebar</span>
+                        <span className="sr-only">{tHeader("toggleSidebar")}</span>
                         <svg
                           className="h-4 w-4"
                           viewBox="0 0 24 24"
@@ -500,7 +508,7 @@ export default function RootLayout({
                         </svg>
                       </label>
                       <div className="flex items-center gap-3">
-                        <Link href="/" aria-label="Go to dashboard" className="inline-flex items-center">
+                        <Link href="/" aria-label={tHeader("goToDashboard")} className="inline-flex items-center">
                           <Image
                             src="/logos/maisontoa-logo.png"
                             alt="Maison Toa logo"
@@ -513,6 +521,7 @@ export default function RootLayout({
                     </div>
                     <GlobalPatientSearch />
                     <div className="flex items-center gap-2 text-slate-500">
+                      <CrmLanguageToggle />
                       <HeaderTasksButton />
                       <HeaderNotificationsButton />
                       <HeaderCommentsButton />
@@ -533,6 +542,7 @@ export default function RootLayout({
           </TasksNotificationsProvider>
           </CommentsUnreadProvider>
           </AuthProvider>
+          </NextIntlClientProvider>
         </div>
       </body>
     </html>

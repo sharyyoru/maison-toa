@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import TardocGroupsTab from "@/components/TardocGroupsTab";
 import MedicationTemplatesTab from "@/components/MedicationTemplatesTab";
@@ -71,6 +72,7 @@ function formatDuration(minutes: number): string {
 }
 
 export default function ServicesPage() {
+  const t = useTranslations("services");
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [serviceGroups, setServiceGroups] = useState<ServiceGroup[]>([]);
@@ -805,9 +807,9 @@ export default function ServicesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Services</h1>
+        <h1 className="text-xl font-semibold text-slate-900">{t("title")}</h1>
         <p className="text-sm text-slate-500">
-          Define service categories and services offered by the clinic. Prices are in CHF.
+          {t("subtitle")}
         </p>
       </div>
 
@@ -922,9 +924,9 @@ export default function ServicesPage() {
           </div>
 
           <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
-            <h2 className="text-sm font-medium text-slate-800">Categories</h2>
+            <h2 className="text-sm font-medium text-slate-800">{t("categories")}</h2>
             <p className="mt-1 text-xs text-slate-500">
-              Existing service categories.
+              {t("categoriesSubtitle")}
             </p>
             <div className="mt-2">
               <input
@@ -981,12 +983,12 @@ export default function ServicesPage() {
                                 className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
                               />
                               <div>
-                                <label className="block text-[11px] font-medium text-slate-700 mb-1">Color</label>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-1">{t("color")}</label>
                                 <div className="flex flex-wrap items-center gap-1">
                                   <button
                                     type="button"
                                     onClick={() => setEditCategoryColor("")}
-                                    title="No color"
+                                    title={t("noColor")}
                                     className={`h-5 w-5 rounded-sm border ${editCategoryColor === "" ? "border-emerald-500 ring-2 ring-emerald-200" : "border-slate-300"} bg-white flex items-center justify-center`}
                                   >
                                     <span className="text-[10px] text-slate-400">ø</span>
@@ -1095,9 +1097,9 @@ export default function ServicesPage() {
         <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
-              <h2 className="text-sm font-medium text-slate-800">Services</h2>
+              <h2 className="text-sm font-medium text-slate-800">{t("servicesHeading")}</h2>
               <p className="text-xs text-slate-500">
-                Manage individual services under categories. Prices are stored in CHF.
+                {t("servicesSubtitle")}
               </p>
             </div>
             {!showCreateService && (

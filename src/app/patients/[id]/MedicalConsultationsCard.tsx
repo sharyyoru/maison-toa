@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import {
   TARDOC_MEDICINES,
@@ -330,6 +331,8 @@ export default function MedicalConsultationsCard({
   patientEmail?: string | null;
 }) {
   const router = useRouter();
+  const tc = useTranslations("patient.consultationsCard");
+  const tf = useTranslations("patient.form");
 
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [taskName, setTaskName] = useState("");
@@ -708,15 +711,15 @@ export default function MedicalConsultationsCard({
     value: ConsultationRecordType;
     label: string;
   }[] = [
-      { value: "notes", label: "Notes" },
-      { value: "invoice", label: "Invoice" },
-      { value: "file", label: "File" },
-      { value: "photo", label: "Photo" },
-      { value: "3d", label: "3D" },
-      { value: "patient_information", label: "Patient Information" },
-      { value: "documents", label: "Documents" },
-      { value: "form_photos", label: "Form Photos" },
-      { value: "medication", label: "Medication" },
+      { value: "notes", label: tf("recordNotes") },
+      { value: "invoice", label: tf("recordInvoice") },
+      { value: "file", label: tf("recordFile") },
+      { value: "photo", label: tf("recordPhoto") },
+      { value: "3d", label: tf("record3d") },
+      { value: "patient_information", label: tf("recordPatientInfo") },
+      { value: "documents", label: tf("recordDocuments") },
+      { value: "form_photos", label: tf("recordFormPhotos") },
+      { value: "medication", label: tf("recordMedication") },
     ];
 
   const filteredSortedConsultations = useMemo(() => {
@@ -2658,7 +2661,7 @@ export default function MedicalConsultationsCard({
       setSendConsultationsEmailSuccess(true);
       setTimeout(() => setSendConsultationsEmailSuccess(false), 4000);
     } catch (err: any) {
-      setSendConsultationsEmailError((err as any)?.message ?? "Failed to send email.");
+      setSendConsultationsEmailError((err as any)?.message ?? tc("failedSendEmail"));
     } finally {
       setSendingConsultationsEmail(false);
     }
@@ -2669,7 +2672,7 @@ export default function MedicalConsultationsCard({
       <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-900">
-            {showArchived ? "Archived consultations" : "Consultations"}
+            {showArchived ? tc("archivedTitle") : tc("title")}
           </h3>
           <div className="flex items-center gap-3 text-sky-700">
             {!showArchived ? (
@@ -2931,20 +2934,20 @@ export default function MedicalConsultationsCard({
                 <path d="M2.5 11.5v1.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-1.5" />
                 <path d="M8 2v8M5 7.5l3 3 3-3" />
               </svg>
-              {exportingConsultationsPdf ? "Exporting..." : "Export to PDF"}
+              {exportingConsultationsPdf ? tc("exportingPdf") : tc("exportToPdf")}
             </button>
             <button
               type="button"
               onClick={() => void sendConsultationsToEmail()}
               disabled={sendingConsultationsEmail || !patientEmail}
-              title={!patientEmail ? "No email address on file for this patient" : "Send consultation records to patient email"}
+              title={!patientEmail ? tc("noEmailTitle") : tc("sendEmailTitle")}
               className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
             >
               <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="1.5" y="3.5" width="13" height="9" rx="1" />
                 <path d="M1.5 4.5l6.5 4.5 6.5-4.5" />
               </svg>
-              {sendingConsultationsEmail ? "Sending..." : sendConsultationsEmailSuccess ? "Sent!" : "Send to Email"}
+              {sendingConsultationsEmail ? tc("sending") : sendConsultationsEmailSuccess ? tc("sent") : tc("sendToEmail")}
             </button>
             {sendConsultationsEmailError && (
               <span className="text-[10px] text-red-500">{sendConsultationsEmailError}</span>
@@ -2954,13 +2957,13 @@ export default function MedicalConsultationsCard({
               onClick={() => setShowArchived((prev) => !prev)}
               className="inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              {showArchived ? "Back to active" : "View archive"}
+              {showArchived ? tc("backToActive") : tc("viewArchive")}
             </button>
           </div>
         </div>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
           <div className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50/80 px-1 py-0.5">
-            <span className="hidden sm:inline px-2 text-slate-500">Sort</span>
+            <span className="hidden sm:inline px-2 text-slate-500">{tc("sort")}</span>
             <button
               type="button"
               onClick={() => setSortOrder("desc")}
@@ -2971,7 +2974,7 @@ export default function MedicalConsultationsCard({
                   : "text-slate-600 hover:text-slate-900")
               }
             >
-              Newest
+              {tc("newest")}
             </button>
             <button
               type="button"
@@ -2983,12 +2986,12 @@ export default function MedicalConsultationsCard({
                   : "text-slate-600 hover:text-slate-900")
               }
             >
-              Oldest
+              {tc("oldest")}
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1">
-              <span>From</span>
+              <span>{tc("from")}</span>
               <input
                 type="date"
                 value={dateFrom}
@@ -2997,7 +3000,7 @@ export default function MedicalConsultationsCard({
               />
             </div>
             <div className="flex items-center gap-1">
-              <span>To</span>
+              <span>{tc("to")}</span>
               <input
                 type="date"
                 value={dateTo}
@@ -3013,7 +3016,7 @@ export default function MedicalConsultationsCard({
               }}
               className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600 shadow-sm hover:bg-slate-50"
             >
-              Clear
+              {tc("clear")}
             </button>
           </div>
         </div>
@@ -3026,7 +3029,7 @@ export default function MedicalConsultationsCard({
                 const minute = consultationMinute.trim();
                 if (!consultationDate || !hour || !minute || !consultationDoctorId) {
                   setConsultationError(
-                    "Please select date, time, and doctor before creating a consultation.",
+                    tf("errSelectDateTimeDoctor"),
                   );
                   return;
                 }
@@ -3041,7 +3044,7 @@ export default function MedicalConsultationsCard({
                   minuteNumber < 0 ||
                   minuteNumber > 59
                 ) {
-                  setConsultationError("Please enter a valid time.");
+                  setConsultationError(tf("errValidTime"));
                   return;
                 }
 
@@ -3053,7 +3056,7 @@ export default function MedicalConsultationsCard({
                       .padStart(2, "0")}:00`,
                 );
                 if (Number.isNaN(scheduledAtLocal.getTime())) {
-                  setConsultationError("Please enter a valid date and time.");
+                  setConsultationError(tf("errValidDateTime"));
                   return;
                 }
 
@@ -3065,7 +3068,7 @@ export default function MedicalConsultationsCard({
                     consultationContentHtml.replace(/<[^>]+>/g, "").trim() === "")
                 ) {
                   setConsultationError(
-                    "Please enter note content before creating a consultation.",
+                    tf("errNoteContent"),
                   );
                   return;
                 }
@@ -3076,7 +3079,7 @@ export default function MedicalConsultationsCard({
                   );
                   if (!hasValidLine) {
                     setConsultationError(
-                      "Please add at least one medicine and dosage before creating a prescription.",
+                      tf("errPrescriptionLine"),
                     );
                     return;
                   }
@@ -3085,7 +3088,7 @@ export default function MedicalConsultationsCard({
                 if (consultationRecordType === "invoice") {
                   if (!invoicePaymentMethod.trim()) {
                     setConsultationError(
-                      "Please select a payment method before creating an invoice.",
+                      tf("errPaymentMethod"),
                     );
                     return;
                   }
@@ -3095,7 +3098,7 @@ export default function MedicalConsultationsCard({
                   );
                   if (!hasService) {
                     setConsultationError(
-                      "Please add at least one service to the invoice.",
+                      tf("errAddService"),
                     );
                     return;
                   }
@@ -3109,14 +3112,14 @@ export default function MedicalConsultationsCard({
 
                     if (validInstallments.length === 0) {
                       setConsultationError(
-                        "Please add at least one installment for the invoice.",
+                        tf("errAddInstallment"),
                       );
                       return;
                     }
 
                     if (!invoiceInstallmentsPlanComplete) {
                       setConsultationError(
-                        "Installment percentages must total 100% before saving the invoice.",
+                        tf("errInstallmentTotal"),
                       );
                       return;
                     }
@@ -3127,7 +3130,7 @@ export default function MedicalConsultationsCard({
                   const validProducts = medProducts.filter((p) => p.productName.trim());
                   if (validProducts.length === 0) {
                     setConsultationError(
-                      "Please enter at least one product name for the medication.",
+                      tf("errMedicationProduct"),
                     );
                     return;
                   }
@@ -3147,7 +3150,7 @@ export default function MedicalConsultationsCard({
                         .rpc('generate_invoice_number');
                       
                       if (invoiceNumberError || !invoiceNumberData) {
-                        setConsultationError('Failed to generate invoice number');
+                        setConsultationError(tf('errGenerateInvoice'));
                         setConsultationSaving(false);
                         return;
                       }
@@ -4240,7 +4243,7 @@ export default function MedicalConsultationsCard({
                     setConsultationRefIcd10("");
                     setInvoiceFromConsultationId(null);
                   } catch {
-                    setConsultationError("Unexpected error creating consultation.");
+                    setConsultationError(tf("errUnexpected"));
                     setConsultationSaving(false);
                   }
                 })();
@@ -4251,7 +4254,7 @@ export default function MedicalConsultationsCard({
                 <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 flex items-center gap-2">
                   <svg className="h-4 w-4 text-sky-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                   <p className="text-[11px] text-sky-800">
-                    <strong>Editing Invoice #{editingInvoiceNumber}</strong> — Modify any field and save to update the existing invoice.
+                    <strong>{tf("editingInvoice", { number: editingInvoiceNumber ?? "" })}</strong> — {tf("editingInvoiceDesc")}
                   </p>
                 </div>
               )}
@@ -4259,7 +4262,7 @@ export default function MedicalConsultationsCard({
               <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1.4fr)] gap-2">
                 <div className="space-y-1">
                   <label className="block text-[11px] font-medium text-slate-700">
-                    Date
+                    {tf("date")}
                   </label>
                   <input
                     type="date"
@@ -4270,7 +4273,7 @@ export default function MedicalConsultationsCard({
                 </div>
                 <div className="space-y-1">
                   <label className="block text-[11px] font-medium text-slate-700">
-                    Time
+                    {tf("time")}
                   </label>
                   <div className="flex items-center gap-1">
                     <input
@@ -4302,14 +4305,14 @@ export default function MedicalConsultationsCard({
                 </div>
                 <div className="space-y-1">
                   <label className="block text-[11px] font-medium text-slate-700">
-                    {consultationRecordType === "invoice" ? "Medical Staff (Doctor/Nurse)" : "Doctor"}
+                    {consultationRecordType === "invoice" ? tf("medicalStaff") : tf("doctor")}
                   </label>
                   <select
                     value={consultationDoctorId}
                     onChange={(event) => setConsultationDoctorId(event.target.value)}
                     className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   >
-                    <option value="">Select {consultationRecordType === "invoice" ? "staff" : "doctor"}</option>
+                    <option value="">{consultationRecordType === "invoice" ? tf("selectStaff") : tf("selectDoctor")}</option>
                     {consultationRecordType === "invoice" 
                       ? medicalStaffOptions.map((staff) => (
                           <option key={staff.id} value={staff.id}>
@@ -4329,14 +4332,14 @@ export default function MedicalConsultationsCard({
               {consultationRecordType === "invoice" && (
                 <div className="space-y-1">
                   <label className="block text-[11px] font-medium text-slate-700">
-                    Billing Entity (Clinic)
+                    {tf("billingEntity")}
                   </label>
                   <select
                     value={invoiceProviderId}
                     onChange={(event) => setInvoiceProviderId(event.target.value)}
                     className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   >
-                    <option value="">Select billing entity</option>
+                    <option value="">{tf("selectBillingEntity")}</option>
                     {billingEntityOptions.map((entity) => (
                       <option key={entity.id} value={entity.id}>
                         {entity.name}{entity.gln ? ` (GLN: ${entity.gln})` : ""}
@@ -4363,7 +4366,7 @@ export default function MedicalConsultationsCard({
               <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)] gap-2">
                 <div className="space-y-1">
                   <label className="block text-[11px] font-medium text-slate-700">
-                    Title
+                    {tf("title")}
                   </label>
                   <input
                     type="text"
@@ -4375,7 +4378,7 @@ export default function MedicalConsultationsCard({
                 </div>
                 <div className="space-y-1">
                   <label className="block text-[11px] font-medium text-slate-700">
-                    Record type
+                    {tf("recordType")}
                   </label>
                   <select
                     value={consultationRecordType}
@@ -4413,7 +4416,7 @@ export default function MedicalConsultationsCard({
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-700">
-                      Diagnosis Code
+                      {tf("diagnosisCode")}
                     </label>
                     <input
                       type="text"
@@ -4425,7 +4428,7 @@ export default function MedicalConsultationsCard({
                   </div>
                   <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-700">
-                      Ref ICD-10
+                      {tf("refIcd10")}
                     </label>
                     <input
                       type="text"
@@ -4441,7 +4444,7 @@ export default function MedicalConsultationsCard({
               {consultationRecordType === "notes" ? (
                 <div className="space-y-1">
                   <label className="block text-[11px] font-medium text-slate-700">
-                    Notes
+                    {tf("notesLabel")}
                   </label>
                   <div className="rounded-lg border border-slate-200 bg-white">
                     <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500">
@@ -4557,7 +4560,7 @@ export default function MedicalConsultationsCard({
               {consultationRecordType === "prescription" ? (
                 <div className="space-y-2">
                   <label className="block text-[11px] font-medium text-slate-700">
-                    Prescription
+                    {tf("prescription")}
                   </label>
                   <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-2">
                     {prescriptionLines.map((line, index) => {
@@ -4577,7 +4580,7 @@ export default function MedicalConsultationsCard({
                         >
                           <div className="space-y-1">
                             <span className="block text-[10px] font-medium text-slate-600">
-                              Medicine
+                              {tf("medicine")}
                             </span>
                             <select
                               value={line.medicineId}
@@ -4594,7 +4597,7 @@ export default function MedicalConsultationsCard({
                               }}
                               className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                             >
-                              <option value="">Select medicine</option>
+                              <option value="">{tf("selectMedicine")}</option>
                               {TEST_MEDICINES.map((med) => (
                                 <option key={med.id} value={med.id}>
                                   {med.name}
@@ -4604,7 +4607,7 @@ export default function MedicalConsultationsCard({
                           </div>
                           <div className="space-y-1">
                             <span className="block text-[10px] font-medium text-slate-600">
-                              Dosage
+                              {tf("dosage")}
                             </span>
                             <select
                               value={line.dosageId}
@@ -4622,7 +4625,7 @@ export default function MedicalConsultationsCard({
                               disabled={!medicine}
                               className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50"
                             >
-                              <option value="">Select dosage</option>
+                              <option value="">{tf("selectDosage")}</option>
                               {dosageOptions.map((dosage) => (
                                 <option key={dosage.id} value={dosage.id}>
                                   {dosage.label}
@@ -4646,7 +4649,7 @@ export default function MedicalConsultationsCard({
                               }}
                               className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-500 shadow-sm hover:bg-slate-50"
                             >
-                              Remove
+                              {tf("remove")}
                             </button>
                           </div>
                         </div>
@@ -4663,11 +4666,11 @@ export default function MedicalConsultationsCard({
                       }
                       className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                     >
-                      + Add medicine
+                      {tf("addMedicine")}
                     </button>
 
                     <div className="mt-1 text-[11px] text-slate-600">
-                      Estimated total:
+                      {tf("estimatedTotal")}
                       <span className="ml-1 font-semibold">
                         CHF
                         {" "}
@@ -4692,7 +4695,7 @@ export default function MedicalConsultationsCard({
                 <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-[13px] font-semibold text-slate-900">
-                      Create Invoice
+                      {tf("createInvoice")}
                     </h4>
                     {invoiceTotal > 0 ? (
                       <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-mono text-white">
@@ -4704,7 +4707,7 @@ export default function MedicalConsultationsCard({
                   <div className="space-y-3">
                     <div className="space-y-1">
                       <label className="block text-[11px] font-medium text-slate-700">
-                        Payment Method
+                        {tf("paymentMethod")}
                       </label>
                       <select
                         value={invoicePaymentMethod}
@@ -4713,12 +4716,12 @@ export default function MedicalConsultationsCard({
                         }
                         className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                       >
-                        <option value="">Select payment method</option>
-                        <option value="Cash">Cash</option>
-                        <option value="Card">Card</option>
-                        <option value="Online Payment">Online Payment</option>
-                        <option value="Bank transfer">Bank transfer</option>
-                        <option value="Insurance">Insurance</option>
+                        <option value="">{tf("selectPaymentMethod")}</option>
+                        <option value="Cash">{tf("cash")}</option>
+                        <option value="Card">{tf("card")}</option>
+                        <option value="Online Payment">{tf("onlinePayment")}</option>
+                        <option value="Bank transfer">{tf("bankTransfer")}</option>
+                        <option value="Insurance">{tf("insurance")}</option>
                       </select>
                     </div>
 
@@ -4736,7 +4739,7 @@ export default function MedicalConsultationsCard({
                                   : "bg-transparent text-slate-600")
                               }
                             >
-                              Services
+                              {tf("services")}
                             </button>
                             <button
                               type="button"
@@ -4748,7 +4751,7 @@ export default function MedicalConsultationsCard({
                                   : "bg-transparent text-slate-600")
                               }
                             >
-                              Groups
+                              {tf("groups")}
                             </button>
                             <button
                               type="button"
@@ -4760,7 +4763,7 @@ export default function MedicalConsultationsCard({
                                   : "bg-transparent text-slate-600")
                               }
                             >
-                              TARDOC
+                              {tf("tardoc")}
                             </button>
                             <button
                               type="button"
@@ -4772,7 +4775,7 @@ export default function MedicalConsultationsCard({
                                   : "bg-transparent text-slate-600")
                               }
                             >
-                              Flat Rate
+                              {tf("flatRate")}
                             </button>
                           </div>
 
@@ -4780,7 +4783,7 @@ export default function MedicalConsultationsCard({
                             <div className="space-y-2 px-3 py-3">
                               <div className="space-y-1">
                                 <span className="block text-[10px] font-medium text-slate-600">
-                                  Service Category
+                                  {tf("serviceCategory")}
                                 </span>
                                 <select
                                   value={invoiceSelectedCategoryId}
@@ -4791,7 +4794,7 @@ export default function MedicalConsultationsCard({
                                   }
                                   className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                 >
-                                  <option value="">All categories</option>
+                                  <option value="">{tf("allCategories")}</option>
                                   {invoiceServiceCategories.map((category) => (
                                     <option key={category.id} value={category.id}>
                                       {category.name}
@@ -4802,7 +4805,7 @@ export default function MedicalConsultationsCard({
 
                               <div className="space-y-1">
                                 <span className="block text-[10px] font-medium text-slate-600">
-                                  Service
+                                  {tf("service")}
                                 </span>
                                 <select
                                   value={invoiceSelectedServiceId}
@@ -4811,7 +4814,7 @@ export default function MedicalConsultationsCard({
                                   }
                                   className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                 >
-                                  <option value="">Select service</option>
+                                  <option value="">{tf("selectService")}</option>
                                   {invoiceServices
                                     .filter(
                                       (service) =>
@@ -4860,7 +4863,7 @@ export default function MedicalConsultationsCard({
                                 disabled={!invoiceSelectedServiceId}
                                 className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                + Add service
+                                {tf("addService")}
                               </button>
                             </div>
                           ) : invoiceMode === "group" ? (
@@ -5688,8 +5691,7 @@ export default function MedicalConsultationsCard({
 
                         {invoiceServiceLines.length === 0 ? (
                           <p className="text-[10px] text-slate-500">
-                            No services added yet. Use the controls on the left to
-                            add services or groups.
+                            {tf("noServicesYet")}
                           </p>
                         ) : (
                           <div className="space-y-2">
@@ -5739,7 +5741,7 @@ export default function MedicalConsultationsCard({
                                 >
                                   <div className="space-y-0.5">
                                     <span className="block text-[10px] font-medium text-slate-600">
-                                      Item {(tardocCode || flatRateCode || service?.code) && <span className="font-bold">({tardocCode || flatRateCode || service?.code})</span>}
+                                      {tf("item")} {(tardocCode || flatRateCode || service?.code) && <span className="font-bold">({tardocCode || flatRateCode || service?.code})</span>}
                                     </span>
                                     <input
                                       type="text"
@@ -5766,7 +5768,7 @@ export default function MedicalConsultationsCard({
                                   </div>
                                   <div className="space-y-0.5">
                                     <span className="block text-[10px] font-medium text-slate-600">
-                                      Price (CHF)
+                                      {tf("priceCHF")}
                                     </span>
                                     <input
                                       type="number"
@@ -5801,7 +5803,7 @@ export default function MedicalConsultationsCard({
                                   </div>
                                   <div className="space-y-0.5">
                                     <span className="block text-[10px] font-medium text-slate-600">
-                                      Qty
+                                      {tf("qty")}
                                     </span>
                                     <input
                                       type="number"
@@ -5843,7 +5845,7 @@ export default function MedicalConsultationsCard({
                                       }}
                                       className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-500 shadow-sm hover:bg-slate-50"
                                     >
-                                      Remove
+                                      {tf("remove")}
                                     </button>
                                   </div>
                                   {/* TARDOC detail row: Side, TP MT, TP TT, Point Value */}
@@ -5922,7 +5924,7 @@ export default function MedicalConsultationsCard({
                 <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-[13px] font-semibold text-slate-900">
-                      New Medication
+                      {tf("newMedication")}
                     </h4>
                     <button
                       type="button"
@@ -5930,7 +5932,7 @@ export default function MedicalConsultationsCard({
                       className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-1 text-[11px] font-medium text-sky-700 hover:bg-sky-100"
                     >
                       <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                      Add Product
+                      {tf("addProduct")}
                     </button>
                   </div>
 
@@ -5938,21 +5940,21 @@ export default function MedicalConsultationsCard({
                   {medTemplatesLoaded && medTemplates.length > 0 && (
                     <div className="rounded-md border border-emerald-200 bg-emerald-50/50 p-2.5 space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-medium text-emerald-800">Load from template:</span>
+                        <span className="text-[11px] font-medium text-emerald-800">{tf("loadFromTemplate")}</span>
                         <div className="flex items-center gap-1 rounded-full bg-white border border-emerald-200 px-0.5 py-0.5">
                           <button
                             type="button"
                             onClick={() => { setMedTemplateFilter("all"); setMedTemplateServiceFilter(""); setMedSelectedTemplateId(""); }}
                             className={"rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors " + (medTemplateFilter === "all" ? "bg-emerald-600 text-white" : "text-emerald-700 hover:bg-emerald-100")}
                           >
-                            By Name
+                            {tf("byName")}
                           </button>
                           <button
                             type="button"
                             onClick={() => { setMedTemplateFilter("service"); setMedSelectedTemplateId(""); }}
                             className={"rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors " + (medTemplateFilter === "service" ? "bg-emerald-600 text-white" : "text-emerald-700 hover:bg-emerald-100")}
                           >
-                            By Service
+                            {tf("byService")}
                           </button>
                         </div>
                       </div>
@@ -5963,7 +5965,7 @@ export default function MedicalConsultationsCard({
                             onChange={(e) => { setMedTemplateServiceFilter(e.target.value); setMedSelectedTemplateId(""); }}
                             className="flex-1 rounded-lg border border-emerald-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                           >
-                            <option value="">— Select a service —</option>
+                            <option value="">{tf("selectService2")}</option>
                             {(() => {
                               const serviceIds = new Set(medTemplates.filter((t) => t.service_id).map((t) => t.service_id!));
                               const uniqueServices = Array.from(serviceIds).map((sid) => {
@@ -6006,7 +6008,7 @@ export default function MedicalConsultationsCard({
                           className={"flex-1 rounded-lg border border-emerald-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500" + (medTemplateFilter === "service" && !medTemplateServiceFilter ? " opacity-50" : "")}
                           disabled={medTemplateFilter === "service" && !medTemplateServiceFilter}
                         >
-                          <option value="">— Select a template —</option>
+                          <option value="">{tf("selectTemplate")}</option>
                           {medTemplates
                             .filter((t) => {
                               if (medTemplateFilter === "service") {
@@ -6215,7 +6217,7 @@ export default function MedicalConsultationsCard({
 
                   <div className="space-y-1">
                     <label className="block text-[11px] font-medium text-slate-700">
-                      Decision Summary / Reason
+                      {tf("decisionSummary")}
                     </label>
                     <input
                       type="text"
@@ -6234,7 +6236,7 @@ export default function MedicalConsultationsCard({
                         onChange={(e) => setMedIsPrescription(e.target.checked)}
                         className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                       />
-                      Save as Prescription
+                      {tf("saveAsPrescription")}
                     </label>
                     <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-700">
                       <input
@@ -6243,7 +6245,7 @@ export default function MedicalConsultationsCard({
                         onChange={(e) => setMedShowInMediplan(e.target.checked)}
                         className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                       />
-                      Show in eMediplan
+                      {tf("showInMediplan")}
                     </label>
                   </div>
                 </div>
@@ -6254,7 +6256,7 @@ export default function MedicalConsultationsCard({
               ) : null}
 
               <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-slate-600">
-                <span>Time spent</span>
+                <span>{tf("timeSpent")}</span>
                 <div className="flex items-center gap-1">
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-mono text-slate-700">
                     {formDisplayDuration}
@@ -6282,7 +6284,7 @@ export default function MedicalConsultationsCard({
                     }}
                     className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                   >
-                    {formStopwatchRunning ? "Stop" : "Start"}
+                    {formStopwatchRunning ? tf("stop") : tf("start")}
                   </button>
                   {formRunningSeconds > 0 ? (
                     <button
@@ -6294,7 +6296,7 @@ export default function MedicalConsultationsCard({
                       }}
                       className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-500 shadow-sm hover:bg-slate-50"
                     >
-                      Reset
+                      {tf("reset")}
                     </button>
                   ) : null}
                 </div>
@@ -6336,14 +6338,14 @@ export default function MedicalConsultationsCard({
                   }}
                   className="inline-flex items-center rounded-full border border-slate-200/80 bg-slate-100 px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-200"
                 >
-                  Cancel
+                  {tf("cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={consultationSaving}
                   className="inline-flex items-center rounded-full border border-sky-500/80 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {consultationSaving ? "Saving..." : editingInvoiceId ? "Update Invoice" : "Create"}
+                  {consultationSaving ? tf("saving") : editingInvoiceId ? tf("updateInvoice") : tf("create")}
                 </button>
               </div>
             </form>
@@ -6354,7 +6356,7 @@ export default function MedicalConsultationsCard({
         {axenitaPdfDocs.length > 0 && (!recordTypeFilter || recordTypeFilter === "notes") && (
           <div className="mt-3 space-y-2">
             <div className="flex items-center gap-2">
-              <h4 className="text-[11px] font-semibold text-slate-700">Axenita Medical Records</h4>
+              <h4 className="text-[11px] font-semibold text-slate-700">{tc("axenitaTitle")}</h4>
               <span className="text-[10px] text-slate-400">({axenitaPdfDocs.length} document{axenitaPdfDocs.length !== 1 ? 's' : ''})</span>
             </div>
             {axenitaPdfDocs.map((doc, index) => (
@@ -6389,7 +6391,7 @@ export default function MedicalConsultationsCard({
 
         {axenitaPdfLoading && (!recordTypeFilter || recordTypeFilter === "notes") && (
           <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-            Loading Axenita medical records...
+            {tc("loadingAxenita")}
           </div>
         )}
 
@@ -6400,7 +6402,7 @@ export default function MedicalConsultationsCard({
               <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <span>No Axenita medical records found for this patient.</span>
+              <span>{tc("noAxenita")}</span>
             </div>
           </div>
         )}
@@ -6437,11 +6439,11 @@ export default function MedicalConsultationsCard({
             </div>
           ) : consultationsLoading ? (
             <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-              Loading consultations...
+              {tc("loading")}
             </div>
           ) : filteredSortedConsultations.length === 0 ? (
             <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-              No consultations found.
+              {tc("noConsultations")}
             </div>
           ) : (
             <div className="space-y-3">

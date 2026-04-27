@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getAllForms, getFormById, FormDefinition } from "@/lib/formDefinitions";
 import { FileText, Send, Eye, Clock, CheckCircle, AlertCircle, Copy, ExternalLink, ChevronDown, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type FormSubmission = {
   id: string;
@@ -28,6 +29,7 @@ type SendFormModalProps = {
 };
 
 function SendFormModal({ patientId, patientEmail, patientName, onClose, onSuccess }: SendFormModalProps) {
+  const t = useTranslations("patient.formsTab");
   const [forms] = useState<FormDefinition[]>(getAllForms());
   const [selectedFormId, setSelectedFormId] = useState<string>("");
   const [sending, setSending] = useState(false);
@@ -154,16 +156,16 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
   }, {} as Record<string, FormDefinition[]>);
 
   const categoryLabels: Record<string, string> = {
-    consent: "Consent Forms",
-    questionnaire: "Questionnaires",
-    instructions: "Instructions",
+    consent: t("consentForms"),
+    questionnaire: t("questionnaires"),
+    instructions: t("instructions"),
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50" onClick={onClose}>
       <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Send Form to Patient</h2>
+          <h2 className="text-lg font-semibold text-slate-900">{t("sendFormTitle")}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -182,14 +184,14 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
         {!generatedUrl ? (
           <>
             <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium text-slate-700">Select Form</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">{t("selectForm")}</label>
               <div className="relative">
                 <select
                   value={selectedFormId}
                   onChange={(e) => setSelectedFormId(e.target.value)}
                   className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-4 py-2.5 pr-10 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
                 >
-                  <option value="">Select a form...</option>
+                  <option value="">{t("selectFormPlaceholder")}</option>
                   {Object.entries(groupedForms).map(([category, categoryForms]) => (
                     <optgroup key={category} label={categoryLabels[category] || category}>
                       {categoryForms.map((form) => (
@@ -233,7 +235,7 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
                 onClick={onClose}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 type="button"
@@ -244,12 +246,12 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
                 {sending ? (
                   <>
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
-                    Generating...
+                    {t("generating")}
                   </>
                 ) : (
                   <>
                     <FileText className="h-4 w-4" />
-                    Generate Link
+                    {t("generateLink")}
                   </>
                 )}
               </button>
@@ -258,7 +260,7 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
         ) : (
           <>
             <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium text-slate-700">Form Link Generated</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">{t("formLinkGenerated")}</label>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -272,14 +274,14 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
                   className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
                   <Copy className="h-3.5 w-3.5" />
-                  {copied ? "Copied!" : "Copy"}
+                  {copied ? t("copied") : t("copy")}
                 </button>
               </div>
             </div>
 
             <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-3">
               <p className="text-sm text-sky-800">
-                <strong>Send via email to:</strong> {patientEmail || "No email on file"}
+                <strong>{t("sendViaEmail")}</strong> {patientEmail || t("noEmailOnFile")}
               </p>
             </div>
 
@@ -292,7 +294,7 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
                 }}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Done
+                {t("done")}
               </button>
               {patientEmail && (
                 <button
@@ -304,12 +306,12 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
                   {sending ? (
                     <>
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
-                      Sending...
+                      {t("sendingEmail")}
                     </>
                   ) : (
                     <>
                       <Send className="h-4 w-4" />
-                      Send Email
+                      {t("sendEmail")}
                     </>
                   )}
                 </button>
@@ -328,6 +330,7 @@ type ViewSubmissionModalProps = {
 };
 
 function ViewSubmissionModal({ submission, onClose }: ViewSubmissionModalProps) {
+  const t = useTranslations("patient.formsTab");
   const form = getFormById(submission.form_id);
   const data = submission.submission_data;
 
@@ -404,7 +407,7 @@ function ViewSubmissionModal({ submission, onClose }: ViewSubmissionModalProps) 
             onClick={onClose}
             className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            Close
+            {t("close")}
           </button>
         </div>
       </div>
@@ -421,6 +424,7 @@ export default function PatientFormsTab({
   patientEmail: string | null;
   patientName: string;
 }) {
+  const t = useTranslations("patient.formsTab");
   const [submissions, setSubmissions] = useState<FormSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -472,11 +476,11 @@ export default function PatientFormsTab({
   const getStatusLabel = (status: string) => {
     switch (status) {
       case "pending":
-        return "Pending";
+        return t("pending");
       case "submitted":
-        return "Submitted";
+        return t("submitted");
       case "reviewed":
-        return "Reviewed";
+        return t("reviewed");
       default:
         return status;
     }
@@ -502,21 +506,21 @@ export default function PatientFormsTab({
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-900">Patient Forms</h3>
+        <h3 className="text-sm font-semibold text-slate-900">{t("title")}</h3>
         <button
           type="button"
           onClick={() => setShowSendModal(true)}
           className="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-600"
         >
           <Send className="h-3.5 w-3.5" />
-          Send Form
+          {t("sendForm")}
         </button>
       </div>
 
       {loading && (
         <div className="flex items-center justify-center py-12">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-sky-500"></div>
-          <span className="ml-2 text-xs text-slate-500">Loading forms...</span>
+          <span className="ml-2 text-xs text-slate-500">{t("loadingForms")}</span>
         </div>
       )}
 
@@ -529,9 +533,9 @@ export default function PatientFormsTab({
       {!loading && !error && submissions.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <FileText className="mb-3 h-12 w-12 text-slate-300" />
-          <p className="text-sm font-medium text-slate-600">No forms yet</p>
+          <p className="text-sm font-medium text-slate-600">{t("noForms")}</p>
           <p className="mt-1 text-xs text-slate-500">
-            Send a form to this patient to get started.
+            {t("noFormsHint")}
           </p>
         </div>
       )}
@@ -554,13 +558,13 @@ export default function PatientFormsTab({
                     </span>
                   </div>
                   <div className="mt-1 flex items-center gap-3 text-xs text-slate-500">
-                    <span>Created {new Date(submission.created_at).toLocaleDateString()}</span>
+                    <span>{t("created")} {new Date(submission.created_at).toLocaleDateString()}</span>
                     {submission.submitted_at && (
-                      <span>• Submitted {new Date(submission.submitted_at).toLocaleDateString()}</span>
+                      <span>• {t("submitted")} {new Date(submission.submitted_at).toLocaleDateString()}</span>
                     )}
                     {submission.status === "pending" && (
                       <span className="text-amber-600">
-                        Expires {new Date(submission.expires_at).toLocaleDateString()}
+                        {t("expires")} {new Date(submission.expires_at).toLocaleDateString()}
                       </span>
                     )}
                   </div>
@@ -575,7 +579,7 @@ export default function PatientFormsTab({
                         title="Copy link"
                       >
                         <Copy className="h-3 w-3" />
-                        Copy Link
+                        {t("copyLink")}
                       </button>
                       <a
                         href={submission.formUrl}
@@ -585,7 +589,7 @@ export default function PatientFormsTab({
                         title="Open form"
                       >
                         <ExternalLink className="h-3 w-3" />
-                        Open
+                        {t("open")}
                       </a>
                     </>
                   )}
@@ -596,7 +600,7 @@ export default function PatientFormsTab({
                       className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
                     >
                       <Eye className="h-3 w-3" />
-                      View Response
+                      {t("viewResponse")}
                     </button>
                   )}
                 </div>

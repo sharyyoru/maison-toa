@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import CollapseSidebarOnMount from "@/components/CollapseSidebarOnMount";
 
@@ -211,13 +212,14 @@ export default async function PatientPage({
 }: PatientDetailsProps) {
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const tPatient = await getTranslations("patient");
 
   const { patient, insurance } = await getPatientWithDetails(id);
 
   if (!patient) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50/80 p-4 text-sm text-red-700 shadow-sm">
-        Patient not found.
+        {tPatient("notFound")}
       </div>
     );
   }
@@ -344,9 +346,11 @@ export default async function PatientPage({
                 <span
                   className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${genderClasses}`}
                 >
-                  {(gender === "male" || gender === "female")
-                    ? gender.charAt(0).toUpperCase() + gender.slice(1)
-                    : genderRaw}
+                  {gender === "male"
+                    ? tPatient("genderMale")
+                    : gender === "female"
+                      ? tPatient("genderFemale")
+                      : genderRaw}
                 </span>
               ) : null}
               <AgeBadge patientId={patient.id} dob={rawDob || null} age={age} />
@@ -367,7 +371,7 @@ export default async function PatientPage({
                   <path d="M3 17L17 10L3 3L5.2 9.2L11 10L5.2 10.8L3 17Z" />
                 </svg>
               </span>
-              <span>Send an email</span>
+              <span>{tPatient("sendEmail")}</span>
             </Link>
             <EditPatientDetailsButton patientId={patient.id} />
             <Link
@@ -389,7 +393,7 @@ export default async function PatientPage({
                   <path d="M4 20a6 6 0 0 1 8-5.29A6 6 0 0 1 20 20" />
                 </svg>
               </span>
-              <span>All Contacts</span>
+              <span>{tPatient("allContacts")}</span>
             </Link>
           </div>
         </div>
@@ -405,7 +409,7 @@ export default async function PatientPage({
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-medium text-slate-500">
-                    Consultations for:
+                    {tPatient("consultationsFor")}
                   </p>
                   <p className="text-base font-semibold text-slate-900">
                     {patient.first_name} {patient.last_name}
@@ -419,10 +423,10 @@ export default async function PatientPage({
                   <div className="flex items-center gap-2">
                     <div className="inline-flex items-center rounded-full bg-slate-100 px-0.5 py-0.5 text-[11px] font-semibold text-slate-700">
                       <span className="rounded-full bg-slate-800 px-3 py-1 text-[11px] font-semibold text-white">
-                        Financial
+                        {tPatient("financial")}
                       </span>
                       <span className="ml-1 rounded-full bg-sky-500 px-3 py-1 text-[11px] font-semibold text-white">
-                        Medical
+                        {tPatient("medical")}
                       </span>
                     </div>
                     <Link
@@ -468,7 +472,7 @@ export default async function PatientPage({
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
                   <p className="text-[11px] font-medium text-slate-500">
-                    Total Amount
+                    {tPatient("invoice.totalAmount")}
                   </p>
                   <p className="mt-1 text-base font-semibold text-slate-900">
                     {invoiceSummary.totalAmount.toFixed(2)} CHF
@@ -476,7 +480,7 @@ export default async function PatientPage({
                 </div>
                 <div className="rounded-lg border border-emerald-100 bg-emerald-50/80 p-3">
                   <p className="text-[11px] font-medium text-emerald-600">
-                    Total Paid
+                    {tPatient("invoice.totalPaid")}
                   </p>
                   <p className="mt-1 text-base font-semibold text-emerald-700">
                     {invoiceSummary.totalPaid.toFixed(2)} CHF
@@ -484,7 +488,7 @@ export default async function PatientPage({
                 </div>
                 <div className="rounded-lg border border-amber-100 bg-amber-50/80 p-3">
                   <p className="text-[11px] font-medium text-amber-600">
-                    Total Open
+                    {tPatient("invoice.totalOpen")}
                   </p>
                   <p className="mt-1 text-base font-semibold text-amber-700">
                     {invoiceSummary.totalUnpaid.toFixed(2)} CHF
@@ -492,7 +496,7 @@ export default async function PatientPage({
                 </div>
                 <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
                   <p className="text-[11px] font-medium text-slate-500">
-                    Total Complimentary
+                    {tPatient("invoice.totalComplimentary")}
                   </p>
                   <p className="mt-1 text-base font-semibold text-slate-900">
                     {invoiceSummary.totalComplimentary.toFixed(2)} CHF
@@ -503,7 +507,7 @@ export default async function PatientPage({
               <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border border-blue-100 bg-blue-50/80 p-3">
                   <p className="text-[11px] font-medium text-blue-600">
-                    Overpaid
+                    {tPatient("invoice.overpaid")}
                   </p>
                   <p className="mt-1 text-base font-semibold text-blue-700">
                     {invoiceSummary.totalOverpaid.toFixed(2)} CHF
@@ -511,7 +515,7 @@ export default async function PatientPage({
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-100/80 p-3">
                   <p className="text-[11px] font-medium text-slate-500">
-                    Cancelled
+                    {tPatient("invoice.cancelled")}
                   </p>
                   <p className="mt-1 text-base font-semibold text-slate-600">
                     {invoiceSummary.totalCancelled.toFixed(2)} CHF
@@ -519,7 +523,7 @@ export default async function PatientPage({
                 </div>
                 <div className="rounded-lg border border-red-100 bg-red-50/80 p-3">
                   <p className="text-[11px] font-medium text-red-600">
-                    Partial Loss
+                    {tPatient("invoice.partialLoss")}
                   </p>
                   <p className="mt-1 text-base font-semibold text-red-700">
                     {invoiceSummary.totalPartialLoss.toFixed(2)} CHF
@@ -527,7 +531,7 @@ export default async function PatientPage({
                 </div>
                 <div className="rounded-lg border border-cyan-100 bg-cyan-50/80 p-3">
                   <p className="text-[11px] font-medium text-cyan-600">
-                    Partial Paid
+                    {tPatient("invoice.partialPaid")}
                   </p>
                   <p className="mt-1 text-base font-semibold text-cyan-700">
                     {invoiceSummary.totalPartialPaid.toFixed(2)} CHF
@@ -567,7 +571,7 @@ export default async function PatientPage({
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-medium text-slate-500">
-                    Consultations for:
+                    {tPatient("consultationsFor")}
                   </p>
                   <p className="text-base font-semibold text-slate-900">
                     {patient.first_name} {patient.last_name}
@@ -584,7 +588,7 @@ export default async function PatientPage({
               <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
                 <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
                   <p className="text-[11px] font-medium text-slate-500">
-                    Total Amount
+                    {tPatient("invoice.totalAmount")}
                   </p>
                   <p className="mt-1 text-base font-semibold text-slate-900">
                     {invoiceSummary.totalAmount.toFixed(2)} CHF
@@ -593,7 +597,7 @@ export default async function PatientPage({
                 <div className="rounded-lg border border-emerald-100 bg-emerald-50/80 p-3">
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] font-medium text-emerald-600">
-                      Total Paid
+                      {tPatient("invoice.totalPaid")}
                     </p>
                     {invoiceSummary.countByStatus.PAID > 0 && (
                       <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">
@@ -608,7 +612,7 @@ export default async function PatientPage({
                 <div className="rounded-lg border border-red-100 bg-red-50/80 p-3">
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] font-medium text-red-600">
-                      Total Unpaid
+                      {tPatient("invoice.totalUnpaid")}
                     </p>
                     {invoiceSummary.countByStatus.OPEN > 0 && (
                       <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-semibold text-red-700">
@@ -623,7 +627,7 @@ export default async function PatientPage({
                 <div className="rounded-lg border border-amber-100 bg-amber-50/80 p-3">
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] font-medium text-amber-600">
-                      Partial Paid
+                      {tPatient("invoice.partialPaid")}
                     </p>
                     {invoiceSummary.countByStatus.PARTIAL_PAID > 0 && (
                       <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">
@@ -638,7 +642,7 @@ export default async function PatientPage({
                 <div className="rounded-lg border border-orange-100 bg-orange-50/80 p-3">
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] font-medium text-orange-600">
-                      Partial Loss
+                      {tPatient("invoice.partialLoss")}
                     </p>
                     {invoiceSummary.countByStatus.PARTIAL_LOSS > 0 && (
                       <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-semibold text-orange-700">
@@ -652,7 +656,7 @@ export default async function PatientPage({
                 </div>
                 <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
                   <p className="text-[11px] font-medium text-slate-500">
-                    Complimentary
+                    {tPatient("invoice.complimentary")}
                   </p>
                   <p className="mt-1 text-base font-semibold text-slate-900">
                     {invoiceSummary.totalComplimentary.toFixed(2)} CHF
@@ -671,18 +675,18 @@ export default async function PatientPage({
 
         {medicalTab === "file" ? (
           <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
-            <h3 className="text-sm font-semibold text-slate-900">File</h3>
+            <h3 className="text-sm font-semibold text-slate-900">{tPatient("tabs.file")}</h3>
             <p className="mt-2 text-xs text-slate-500">
-              The patient file and related clinical information will appear here.
+              {tPatient("tabs.fileDesc")}
             </p>
           </div>
         ) : null}
 
         {medicalTab === "photo" ? (
           <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
-            <h3 className="text-sm font-semibold text-slate-900">Photo</h3>
+            <h3 className="text-sm font-semibold text-slate-900">{tPatient("tabs.photo")}</h3>
             <p className="mt-2 text-xs text-slate-500">
-              Clinical photos for this patient will appear here.
+              {tPatient("tabs.photoDesc")}
             </p>
           </div>
         ) : null}
@@ -729,9 +733,9 @@ export default async function PatientPage({
 
         {medicalTab === "form_photos" ? (
           <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
-            <h3 className="text-sm font-semibold text-slate-900">Form Photos</h3>
+            <h3 className="text-sm font-semibold text-slate-900">{tPatient("tabs.formPhotos")}</h3>
             <p className="mt-2 text-xs text-slate-500">
-              Photos submitted from patient forms will appear here.
+              {tPatient("tabs.formPhotosDesc")}
             </p>
           </div>
         ) : null}

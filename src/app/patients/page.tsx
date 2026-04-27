@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import PatientMergeModal from "@/components/PatientMergeModal";
 import { useAuth } from "@/components/AuthContext";
@@ -28,6 +29,7 @@ type DealStatusByPatient = Record<string, string | null>;
 const PAGE_SIZE = 50;
 
 export default function PatientsPage() {
+  const t = useTranslations("patients");
   const { user } = useAuth();
   const [patients, setPatients] = useState<PatientRow[]>([]);
   const [dealStatusByPatient, setDealStatusByPatient] = useState<DealStatusByPatient>({});
@@ -116,7 +118,7 @@ export default function PatientsPage() {
         const { data: patientsData, error: patientsError, count } = patientsResult;
 
         if (patientsError || !patientsData) {
-          setError(patientsError?.message ?? "Failed to load patients.");
+          setError(patientsError?.message ?? t("loadFailed"));
           setPatients([]);
           setDealStatusByPatient({});
           setTotalCount(0);
@@ -152,7 +154,7 @@ export default function PatientsPage() {
         setLoading(false);
       } catch {
         if (!isMounted) return;
-        setError("Failed to load patients.");
+        setError(t("loadFailed"));
         setPatients([]);
         setDealStatusByPatient({});
         setTotalCount(0);
@@ -256,12 +258,12 @@ export default function PatientsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Contacts</h1>
+          <h1 className="text-lg font-semibold text-slate-900">{t("title")}</h1>
           <p className="text-xs text-slate-500">
-            Patient contacts for all pipelines. Use filters to narrow down the list.
+            {t("subtitle")}
           </p>
           <p className="mt-1 text-xs font-medium text-sky-600">
-            Total Records: {totalCount.toLocaleString()}
+            {t("totalRecords", { n: totalCount.toLocaleString() })}
           </p>
         </div>
       </div>
@@ -283,7 +285,7 @@ export default function PatientsPage() {
           }}
           className="min-w-[160px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
         >
-          <option value="all">Filter by Owner...</option>
+          <option value="all">{t("filterOwner")}</option>
           {ownerOptions.map((owner) => (
             <option key={owner} value={owner}>
               {owner}
@@ -299,10 +301,10 @@ export default function PatientsPage() {
           }
           className="min-w-[160px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
         >
-          <option value="all">Filter by Create Date...</option>
-          <option value="today">Created Today</option>
-          <option value="last_7_days">Created in Last 7 Days</option>
-          <option value="last_30_days">Created in Last 30 Days</option>
+          <option value="all">{t("filterCreateDate")}</option>
+          <option value="today">{t("createdToday")}</option>
+          <option value="last_7_days">{t("createdLast7")}</option>
+          <option value="last_30_days">{t("createdLast30")}</option>
         </select>
 
         {/* Placeholder Last Activity filter (aliases created_at for now) */}
@@ -313,10 +315,10 @@ export default function PatientsPage() {
           }
           className="min-w-[160px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
         >
-          <option value="all">Filter by Last Activity Date...</option>
-          <option value="today">Activity Today</option>
-          <option value="last_7_days">Activity in Last 7 Days</option>
-          <option value="last_30_days">Activity in Last 30 Days</option>
+          <option value="all">{t("filterLastActivity")}</option>
+          <option value="today">{t("activityToday")}</option>
+          <option value="last_7_days">{t("activityLast7")}</option>
+          <option value="last_30_days">{t("activityLast30")}</option>
         </select>
 
         {/* Filter by Status (deal presence) */}
@@ -327,9 +329,9 @@ export default function PatientsPage() {
           }
           className="min-w-[160px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
         >
-          <option value="all">Filter by Status...</option>
-          <option value="has_deal">With deals</option>
-          <option value="no_deal">No deals</option>
+          <option value="all">{t("filterStatus")}</option>
+          <option value="has_deal">{t("withDeals")}</option>
+          <option value="no_deal">{t("noDeals")}</option>
         </select>
       </div>
 
@@ -341,7 +343,7 @@ export default function PatientsPage() {
               type="text"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Type a keyword..."
+              placeholder={t("searchPlaceholder")}
               className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
             />
           </div>
@@ -350,17 +352,17 @@ export default function PatientsPage() {
               onClick={() => setShowMergeModal(true)}
               className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-sky-700"
             >
-              Merge {selectedIds.length} Patients
+              {t("mergeBtn", { n: selectedIds.length })}
             </button>
           )}
         </div>
 
         {loading ? (
-          <p className="text-[11px] text-slate-500">Loading contacts...</p>
+          <p className="text-[11px] text-slate-500">{t("loading")}</p>
         ) : error ? (
           <p className="text-[11px] text-red-600">{error}</p>
         ) : filteredPatients.length === 0 ? (
-          <p className="text-[11px] text-slate-500">No contacts found.</p>
+          <p className="text-[11px] text-slate-500">{t("noResults")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-[11px]">
@@ -379,13 +381,13 @@ export default function PatientsPage() {
                       onChange={(event) => handleToggleAll(event.target.checked)}
                     />
                   </th>
-                  <th className="py-2 pr-3 font-medium">Name</th>
-                  <th className="py-2 pr-3 font-medium">DOB</th>
-                  <th className="py-2 pr-3 font-medium">Mobile Number</th>
-                  <th className="py-2 pr-3 font-medium">Email</th>
-                  <th className="py-2 pr-3 font-medium">Contact Owner</th>
-                  <th className="py-2 pr-3 font-medium">Deal Status</th>
-                  <th className="py-2 pr-3 font-medium">Action</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.name")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.dob")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.phone")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.email")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.owner")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.dealStatus")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.action")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -411,7 +413,7 @@ export default function PatientsPage() {
                           href={buildPatientHref(patient.id)}
                           className="hover:underline"
                         >
-                          {fullName || "Unnamed patient"}
+                          {fullName || t("unnamed")}
                         </Link>
                       </td>
                       <td className="py-2 pr-3 align-top text-slate-700">
@@ -435,13 +437,13 @@ export default function PatientsPage() {
                             href={buildPatientHref(patient.id)}
                             className="inline-flex items-center rounded-full border border-emerald-200/80 bg-emerald-500 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm hover:bg-emerald-600"
                           >
-                            Edit
+                            {t("edit")}
                           </Link>
                           <Link
                             href={buildPatientHref(patient.id)}
                             className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                           >
-                            View
+                            {t("view")}
                           </Link>
                         </div>
                       </td>
@@ -457,10 +459,10 @@ export default function PatientsPage() {
                 disabled={currentPage === 1}
                 className="rounded-full border border-slate-200/80 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-60 hover:bg-slate-50"
               >
-                Previous
+                {t("previous")}
               </button>
               <span>
-                Page {currentPage} of {totalPages} ({filteredPatients.length.toLocaleString()} results)
+                {t("pageInfo", { current: currentPage, total: totalPages, n: filteredPatients.length.toLocaleString() })}
               </span>
               <button
                 type="button"
@@ -472,7 +474,7 @@ export default function PatientsPage() {
                 disabled={currentPage === totalPages}
                 className="rounded-full border border-slate-200/80 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-60 hover:bg-slate-50"
               >
-                Next
+                {t("next")}
               </button>
             </div>
           </div>

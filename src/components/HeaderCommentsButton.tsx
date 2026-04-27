@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useCommentsUnread } from "@/components/CommentsUnreadContext";
 
 export default function HeaderCommentsButton() {
   const router = useRouter();
+  const t = useTranslations("header");
   const { unreadCount } = useCommentsUnread();
 
   const displayCount = unreadCount && unreadCount > 9 ? "9+" : unreadCount ?? 0;
@@ -16,7 +18,7 @@ export default function HeaderCommentsButton() {
       onClick={() => router.push("/comments")}
       className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 bg-white/80 text-slate-500 shadow-sm hover:bg-slate-50"
     >
-      <span className="sr-only">Comments</span>
+      <span className="sr-only">{t("comments")}</span>
       <svg
         className="h-4 w-4"
         viewBox="0 0 24 24"

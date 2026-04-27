@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import DocumentPreviewTabsWrapper from "./DocumentPreviewTabsWrapper";
 import CrmTabDropdown from "./CrmTabDropdown";
 
@@ -32,17 +33,19 @@ export default function PatientPageClientWrapper({
   medicalTab,
   children,
 }: PatientPageClientWrapperProps) {
+  const t = useTranslations("patient.tabs");
+
   const medicalTabs: { id: MedicalTab; label: string }[] = [
-    { id: "cockpit", label: "Cockpit" },
-    { id: "notes", label: "Consultations" },
-    { id: "invoice", label: "Invoice" },
-    { id: "medication", label: "Medication" },
-    { id: "3d", label: "3D" },
-    { id: "patient_information", label: "Patient Information" },
-    { id: "documents", label: "Documents" },
-    { id: "rendezvous", label: "Rendezvous" },
-    { id: "forms", label: "Forms" },
-    { id: "crm", label: "CRM" },
+    { id: "cockpit", label: t("cockpit") },
+    { id: "notes", label: t("consultations") },
+    { id: "invoice", label: t("invoiceTab") },
+    { id: "medication", label: t("medication") },
+    { id: "3d", label: t("threeD") },
+    { id: "patient_information", label: t("patientInformation") },
+    { id: "documents", label: t("documents") },
+    { id: "rendezvous", label: t("rendezvous") },
+    { id: "forms", label: t("forms") },
+    { id: "crm", label: t("crm") },
   ];
 
   return (

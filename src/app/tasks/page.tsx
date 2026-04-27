@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import TaskEditModal from "@/components/TaskEditModal";
 import TaskCreateModal from "@/components/TaskCreateModal";
@@ -52,6 +53,7 @@ type PriorityFilter = "all" | "high" | "medium" | "low";
 type StatusFilter = "open" | "completed";
 
 export default function TasksPage() {
+  const t = useTranslations("tasksPage");
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +113,7 @@ export default function TasksPage() {
         const user = authData?.user;
         if (!user) {
           if (!isMounted) return;
-          setError("You must be logged in to view tasks.");
+          setError(t("errorMustLogin"));
           setTasks([]);
           setLoading(false);
           return;
@@ -136,7 +138,7 @@ export default function TasksPage() {
         if (!isMounted) return;
 
         if (error || !data) {
-          setError(error?.message ?? "Failed to load tasks.");
+          setError(error?.message ?? t("errorFailedLoad"));
           setTasks([]);
           setLoading(false);
           return;
@@ -151,7 +153,7 @@ export default function TasksPage() {
         }
       } catch {
         if (!isMounted) return;
-        setError("Failed to load tasks.");
+        setError(t("errorFailedLoad"));
         setTasks([]);
         setLoading(false);
       }
@@ -202,7 +204,7 @@ export default function TasksPage() {
     if (u.fullName) return u.fullName;
     const parts = [u.firstName, u.lastName].filter(Boolean);
     if (parts.length > 0) return parts.join(" ");
-    return u.email || "Unnamed";
+    return u.email || t("unnamed");
   }
 
   // Filter users based on search query
@@ -219,10 +221,10 @@ export default function TasksPage() {
 
   // Get selected user display name
   const selectedUserDisplay = useMemo(() => {
-    if (!selectedUserId) return "My Tasks";
+    if (!selectedUserId) return t("myTasks");
     const safeUsers = Array.isArray(allUsers) ? allUsers : [];
     const user = safeUsers.find((u) => u.id === selectedUserId);
-    if (!user) return "My Tasks";
+    if (!user) return t("myTasks");
     return getUserDisplayName(user);
   }, [selectedUserId, allUsers]);
 
@@ -347,11 +349,11 @@ export default function TasksPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Tasks</h1>
+          <h1 className="text-lg font-semibold text-slate-900">{t("title")}</h1>
           <p className="text-xs text-slate-500">
             {selectedUserId && selectedUserId !== currentUserId
-              ? `Viewing tasks for ${selectedUserDisplay}`
-              : "Tasks assigned to you across all patients."}
+              ? t("viewingFor", { name: selectedUserDisplay })
+              : t("subtitle")}
           </p>
         </div>
         {/* Admin user selector */}
@@ -377,7 +379,7 @@ export default function TasksPage() {
                   type="text"
                   value={userSearchQuery}
                   onChange={(e) => setUserSearchQuery(e.target.value)}
-                  placeholder="Search users..."
+                  placeholder={t("searchUsers")}
                   className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-900 focus:border-sky-500 focus:outline-none"
                   autoFocus
                 />
@@ -394,12 +396,12 @@ export default function TasksPage() {
                     !selectedUserId ? "bg-sky-50 text-sky-700" : "text-slate-700"
                   }`}
                 >
-                  <span className="font-medium">My Tasks</span>
+                  <span className="font-medium">{t("myTasks")}</span>
                 </button>
                 {usersLoading ? (
-                  <p className="px-3 py-2 text-slate-500">Loading users...</p>
+                  <p className="px-3 py-2 text-slate-500">{t("loadingUsers")}</p>
                 ) : !Array.isArray(filteredUsers) || filteredUsers.length === 0 ? (
-                  <p className="px-3 py-2 text-slate-500">No users found</p>
+                  <p className="px-3 py-2 text-slate-500">{t("noUsersFound")}</p>
                 ) : (
                   (Array.isArray(filteredUsers) ? filteredUsers : []).map((user) => (
                     <button
@@ -438,7 +440,7 @@ export default function TasksPage() {
               setPatientFilterId(null);
             }}
             onFocus={() => setShowPatientSuggestions(true)}
-            placeholder="Search patient"
+            placeholder={t("searchPatient")}
             className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
           />
           {showPatientSuggestions && filteredPatientSuggestions.length > 0 ? (
@@ -452,11 +454,11 @@ export default function TasksPage() {
                   setShowPatientSuggestions(false);
                 }}
               >
-                All patients
+                {t("allPatients")}
               </button>
               {filteredPatientSuggestions.map((p) => {
                 const name = `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() ||
-                  "Unnamed patient";
+                  t("unnamedPatient");
                 return (
                   <button
                     key={p.id}
@@ -472,7 +474,7 @@ export default function TasksPage() {
                       {name}
                     </span>
                     <span className="text-[10px] text-slate-500">
-                      {p.email || p.phone || "No contact details"}
+                      {p.email || p.phone || t("noContactDetails")}
                     </span>
                   </button>
                 );
@@ -488,10 +490,10 @@ export default function TasksPage() {
             onChange={(event) => setDateFilter(event.target.value as DateFilter)}
             className="min-w-[120px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
           >
-            <option value="today">Today</option>
-            <option value="all">All</option>
-            <option value="past">Past</option>
-            <option value="future">Future</option>
+            <option value="today">{t("dateFilter.today")}</option>
+            <option value="all">{t("dateFilter.all")}</option>
+            <option value="past">{t("dateFilter.past")}</option>
+            <option value="future">{t("dateFilter.future")}</option>
           </select>
         </div>
 
@@ -504,10 +506,10 @@ export default function TasksPage() {
             }
             className="min-w-[120px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
           >
-            <option value="all">Show All</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
+            <option value="all">{t("priorityFilter.all")}</option>
+            <option value="high">{t("priorityFilter.high")}</option>
+            <option value="medium">{t("priorityFilter.medium")}</option>
+            <option value="low">{t("priorityFilter.low")}</option>
           </select>
         </div>
       </div>
@@ -520,7 +522,7 @@ export default function TasksPage() {
               type="text"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Type a name, email, mobile"
+              placeholder={t("searchPlaceholder")}
               className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
             />
           </div>
@@ -544,7 +546,7 @@ export default function TasksPage() {
                   <path d="M4 10h12" />
                 </svg>
               </span>
-              <span>Create Task</span>
+              <span>{t("createTask")}</span>
             </button>
             <div className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50/80 p-0.5 text-[11px] text-slate-600">
               <button
@@ -557,7 +559,7 @@ export default function TasksPage() {
                     : "hover:text-slate-900")
                 }
               >
-                Not Started
+                {t("statusFilter.open")}
               </button>
               <button
                 type="button"
@@ -569,29 +571,29 @@ export default function TasksPage() {
                     : "hover:text-slate-900")
                 }
               >
-                Completed
+                {t("statusFilter.completed")}
               </button>
             </div>
           </div>
         </div>
 
         {loading ? (
-          <p className="text-[11px] text-slate-500">Loading tasks...</p>
+          <p className="text-[11px] text-slate-500">{t("loadingTasks")}</p>
         ) : error ? (
           <p className="text-[11px] text-red-600">{error}</p>
         ) : filteredTasks.length === 0 ? (
-          <p className="text-[11px] text-slate-500">No matching records found.</p>
+          <p className="text-[11px] text-slate-500">{t("noMatching")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-[11px]">
               <thead className="border-b text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="py-2 pr-3 font-medium">Associated Contact</th>
-                  <th className="py-2 pr-3 font-medium">Date</th>
-                  <th className="py-2 pr-3 font-medium">Content</th>
-                  <th className="py-2 pr-3 font-medium">Priority</th>
-                  <th className="py-2 pr-3 font-medium">Status</th>
-                  <th className="py-2 pr-3 font-medium">Action</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.contact")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.date")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.content")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.priority")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.status")}</th>
+                  <th className="py-2 pr-3 font-medium">{t("columns.action")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -599,8 +601,8 @@ export default function TasksPage() {
                   const patient = task.patient;
                   const patientName = patient
                     ? `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim() ||
-                      "Unknown patient"
-                    : "Unknown patient";
+                      t("unknownPatient")
+                    : t("unknownPatient");
                   const dateLabel = formatDateLabel(task.activity_date ?? task.created_at);
 
                   const isUpdating = updatingTaskIds.includes(task.id);
@@ -636,13 +638,13 @@ export default function TasksPage() {
                           </div>
                         ) : null}
                         <div className="mt-0.5 text-[10px] text-slate-500">
-                          Created by{" "}
+                          {t("createdBy")}{" "}
                           <span className="font-medium">
-                            {task.created_by_name || "Unknown"}
+                            {task.created_by_name || t("unknown")}
                           </span>
-                          {" "}• Assigned to{" "}
+                          {" "}• {t("assignedTo")}{" "}
                           <span className="font-medium">
-                            {task.assigned_user_name || "Unassigned"}
+                            {task.assigned_user_name || t("unassigned")}
                           </span>
                         </div>
                       </td>
@@ -662,7 +664,7 @@ export default function TasksPage() {
                             }}
                             className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                           >
-                            View
+                            {t("view")}
                           </button>
                           {task.status !== "completed" ? (
                             <button
@@ -671,7 +673,7 @@ export default function TasksPage() {
                               disabled={isUpdating}
                               className="inline-flex items-center rounded-full border border-slate-300 bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-800 shadow-sm hover:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-70"
                             >
-                              {isUpdating ? "Updating..." : "Set complete"}
+                              {isUpdating ? t("updating") : t("setComplete")}
                             </button>
                           ) : null}
                         </div>

@@ -2,9 +2,11 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 export default function LoginForm() {
+  const t = useTranslations("loginPage");
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +21,7 @@ export default function LoginForm() {
     const password = (formData.get("password") as string | null)?.trim();
 
     if (!email || !password) {
-      setError("Email and password are required.");
+      setError(t("errorRequired"));
       return;
     }
 
@@ -32,7 +34,7 @@ export default function LoginForm() {
     });
 
     if (signInError || !data.session) {
-      setError(signInError?.message ?? "Invalid email or password.");
+      setError(signInError?.message ?? t("errorInvalid"));
       setLoading(false);
       return;
     }
@@ -51,7 +53,7 @@ export default function LoginForm() {
           htmlFor="email"
           className="block text-xs font-medium text-slate-700"
         >
-          Email
+          {t("email")}
         </label>
         <input
           id="email"
@@ -66,7 +68,7 @@ export default function LoginForm() {
           htmlFor="password"
           className="block text-xs font-medium text-slate-700"
         >
-          Password
+          {t("password")}
         </label>
         <div className="relative">
           <input
@@ -82,7 +84,7 @@ export default function LoginForm() {
             className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
           >
             <span className="sr-only">
-              {showPassword ? "Hide password" : "Show password"}
+              {showPassword ? t("hidePassword") : t("showPassword")}
             </span>
             {showPassword ? (
               <svg
@@ -123,7 +125,7 @@ export default function LoginForm() {
         disabled={loading}
         className="inline-flex w-full items-center justify-center rounded-full border border-sky-200/80 bg-sky-600 px-4 py-2 text-xs font-medium text-white shadow-[0_10px_25px_rgba(15,23,42,0.22)] backdrop-blur hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loading ? "Signing in..." : "Sign in"}
+        {loading ? t("signingIn") : t("signIn")}
       </button>
     </form>
   );

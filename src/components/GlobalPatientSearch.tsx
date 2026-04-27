@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { usePatientTabs } from "./PatientTabsContext";
 
@@ -16,6 +17,7 @@ type PatientResult = {
 
 export default function GlobalPatientSearch() {
   const router = useRouter();
+  const t = useTranslations("header");
   const { addTab } = usePatientTabs();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PatientResult[]>([]);
@@ -251,7 +253,7 @@ export default function GlobalPatientSearch() {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => results.length > 0 && setIsOpen(true)}
           onKeyDown={handleKeyDown}
-          placeholder="Search patients..."
+          placeholder={t("searchPatients")}
           className="w-full rounded-full border border-slate-300/60 bg-slate-200/70 px-4 py-2 pl-4 pr-10 text-sm text-slate-900 placeholder-slate-500 shadow-inner backdrop-blur-sm transition-all focus:border-slate-400/80 focus:bg-slate-100/90 focus:outline-none focus:ring-1 focus:ring-slate-300/60"
         />
         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
@@ -272,7 +274,7 @@ export default function GlobalPatientSearch() {
       {isOpen && results.length > 0 && (
         <div className="absolute top-full left-0 right-0 z-50 mt-2 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
           {results.map((patient) => {
-            const name = `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim() || "Unnamed";
+            const name = `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim() || t("unnamed");
             return (
               <button
                 key={patient.id}
@@ -291,7 +293,7 @@ export default function GlobalPatientSearch() {
                     )}
                     {patient.dob && (
                       <p className="text-xs text-slate-400">
-                        DOB: {new Date(patient.dob).toLocaleDateString()}
+                        {t("dob")}: {new Date(patient.dob).toLocaleDateString()}
                       </p>
                     )}
                   </div>
