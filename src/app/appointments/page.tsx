@@ -17,6 +17,7 @@ import {
   getSwissHourMinute,
   getSwissMonthRange,
   getSwissDayRange,
+  createSwissDateTime,
 } from "@/lib/swissTimezone";
 
 type AppointmentStatus =
@@ -2376,19 +2377,9 @@ export default function CalendarPage() {
 
     setCreateError(null);
 
-    if (!createPatientId) {
-      setCreateError("Please select a patient.");
-      return;
-    }
-
     // Check if at least one service is selected (either old single select or new multi-select)
     if (!selectedServiceId && selectedServiceIds.length === 0) {
       setCreateError("Please select a service.");
-      return;
-    }
-
-    if (!bookingStatus) {
-      setCreateError("Please select a status.");
       return;
     }
 
@@ -2402,7 +2393,11 @@ export default function CalendarPage() {
       return;
     }
 
-    const startLocal = new Date(`${draftDate}T${draftTime}:00`);
+    // Parse time as Swiss timezone (not browser local time)
+    const [hourStr, minuteStr] = draftTime.split(":");
+    const hour = parseInt(hourStr, 10);
+    const minute = parseInt(minuteStr, 10);
+    const startLocal = createSwissDateTime(draftDate, hour, minute);
     if (Number.isNaN(startLocal.getTime())) {
       setCreateError("Invalid date or time.");
       return;

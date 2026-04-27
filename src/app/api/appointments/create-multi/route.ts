@@ -18,13 +18,6 @@ export async function POST(request: Request) {
     } = await request.json();
     
     // Input validation
-    if (!patientId) {
-      return NextResponse.json(
-        { error: 'patientId is required' },
-        { status: 400 }
-      );
-    }
-    
     if (!providerIds || !Array.isArray(providerIds) || providerIds.length === 0) {
       return NextResponse.json(
         { error: 'At least one doctor must be selected' },
@@ -126,7 +119,7 @@ export async function POST(request: Request) {
       }
       
       return {
-        patient_id: patientId,
+        patient_id: patientId || null,
         provider_id: providerId,
         appointment_group_id: providerIds.length > 1 ? appointmentGroupId : null,
         start_time: startTime,
