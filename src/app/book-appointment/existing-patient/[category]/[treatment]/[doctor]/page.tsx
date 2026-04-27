@@ -197,21 +197,49 @@ function DoctorBookingContent() {
   }, [treatmentId]);
 
   useEffect(() => {
-    if (locationId && doctorSlug) {
+    if (locationId && doctorSlug && doctor) {
       setIsLoadingDates(true);
       const dates = getAvailableDates(doctorSlug, locationId, 90);
       setAvailableDatesSet(new Set(dates));
       
-      const nearest = findNearestAvailableDate(doctorSlug, locationId, 90);
-      if (nearest) {
-        setNearestAvailableDate(nearest);
-        setSelectedDate(nearest);
-      } else {
+      // Find the first date that actually has open slots (not just doctor schedule)
+      const findFirstAvailableDate = async () => {
+        const doctorName = doctor.name;
+        for (const dateStr of dates) {
+          try {
+            const { start, end } = getSwissDayRange(dateStr);
+            const res = await fetch(
+              `/api/appointments/check-availability?start=${start}&end=${end}&doctor=${encodeURIComponent(doctorName)}&slug=${doctorSlug}`
+            );
+            const data = await res.json();
+            
+            const blockedSlots: string[] = data.fullSlots
+              ? data.fullSlots.map((isoTime: string) => getSwissSlotString(new Date(isoTime)))
+              : [];
+            
+            const allSlots = generateTimeSlots(doctorSlug, locationId, dateStr);
+            const openSlots = allSlots.filter(time => !blockedSlots.includes(time));
+            
+            if (openSlots.length > 0) {
+              setNearestAvailableDate(dateStr);
+              setNearestAvailableTime(openSlots[0]);
+              setSelectedDate(dateStr);
+              setIsLoadingDates(false);
+              return;
+            }
+          } catch (err) {
+            console.error("Error checking availability for", dateStr, err);
+          }
+        }
+        // No available dates found
         setNearestAvailableDate(null);
-      }
-      setIsLoadingDates(false);
+        setNearestAvailableTime(null);
+        setIsLoadingDates(false);
+      };
+
+      findFirstAvailableDate();
     }
-  }, [locationId, doctorSlug]);
+  }, [locationId, doctorSlug, doctor]);
 
   useEffect(() => {
     if (selectedDate && locationId && doctor) {
@@ -606,18 +634,30 @@ function DoctorBookingContent() {
                   {t("booking.selectDateDesc").replace("{doctor}", doctor.name).replace("{location}", locationLabel)}
                 </p>
 
-                {nearestAvailableDate && (
+                {isLoadingDates ? (
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-600"></div>
+                    <p className="text-sm text-slate-600">Checking availability...</p>
+                  </div>
+                ) : nearestAvailableDate && nearestAvailableTime ? (
                   <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
                     <svg className="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     <p className="text-sm text-emerald-700">
                       <span className="font-medium">Earliest availability:</span>{" "}
-                      {new Date(nearestAvailableDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-                      {nearestAvailableTime ? ` at ${nearestAvailableTime}` : isLoadingDates ? " — checking times…" : ""}
+                      {new Date(nearestAvailableDate + "T12:00:00").toLocaleDateString("en-US", { timeZone: SWISS_TIMEZONE, weekday: "long", month: "long", day: "numeric" })}
+                      {` at ${nearestAvailableTime}`}
                     </p>
                   </div>
-                )}
+                ) : nearestAvailableDate === null && !isLoadingDates ? (
+                  <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                    <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <p className="text-sm text-amber-700">No available slots in the next 3 months</p>
+                  </div>
+                ) : null}
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">{t("booking.date")} *</label>
