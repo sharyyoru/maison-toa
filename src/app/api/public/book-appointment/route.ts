@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { formatSwissDateWithWeekday, formatSwissTimeAmPm, parseSwissDateTimeLocal } from "@/lib/swissTimezone";
+import { formatSwissDateWithWeekday, formatSwissTimeAmPm } from "@/lib/swissTimezone";
 import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -260,8 +260,9 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const patientName = `${firstName} ${lastName}`;
-    // Parse the datetime-local string as Swiss timezone to ensure correct UTC time
-    const appointmentDateObj = parseSwissDateTimeLocal(appointmentDate);
+    // The booking page already sends the correct UTC ISO string via createSwissDateTime().toISOString()
+    // So we just parse it directly - no need for additional timezone conversion
+    const appointmentDateObj = new Date(appointmentDate);
 
     // Look up the provider ID for this doctor to filter appointments correctly
     let providerId: string | null = null;
