@@ -6,8 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
-import { getSwissDayOfWeek, formatSwissYmd, getSwissToday, parseSwissDate } from "@/lib/swissTimezone";
-import { generateTimeSlots, hasAvailabilityOnDay } from "@/lib/doctorAvailability";
+import { formatSwissYmd, getSwissToday, parseSwissDate } from "@/lib/swissTimezone";
 
 const LOGO_URL = "https://cdn.jsdelivr.net/gh/sharyyoru/maison-toa@main/public/logos/maisontoa-logo.png";
 
@@ -78,6 +77,9 @@ function ManageContent() {
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedTime, setSelectedTime] = useState("");
+  // Map of date → whether it has any open slots (for disabling fully-booked days)
+  const [weekSlotAvailability, setWeekSlotAvailability] = useState<Record<string, boolean>>({});
+  const [weekChecking, setWeekChecking] = useState(false);
 
   const today = formatSwissYmd(getSwissToday());
 
@@ -99,6 +101,31 @@ function ManageContent() {
       .catch(() => setLoadError(fr ? "Impossible de charger le rendez-vous." : "Unable to load appointment."))
       .finally(() => setLoading(false));
   }, [appointmentId]);
+
+  // Pre-fetch slot availability for all visible week dates so fully-booked days can be grayed out
+  useEffect(() => {
+    if (!appt || action !== "reschedule") return;
+    const pivotDate = appt.rawDate ?? today;
+    const allWeekDates = getWeekDates(pivotDate, weeksOffset);
+    const futureDates = allWeekDates.filter(d => d > today);
+    if (futureDates.length === 0) return;
+
+    setWeekChecking(true);
+    Promise.all(
+      futureDates.map(dateStr =>
+        fetch(`/api/public/appointment/slots?doctorSlug=${appt.doctorSlug}&date=${dateStr}&excludeId=${appt.id}`)
+          .then(r => r.json())
+          .then(data => ({ dateStr, hasSlots: (data.availableSlots ?? []).length > 0 }))
+          .catch(() => ({ dateStr, hasSlots: false }))
+      )
+    ).then(results => {
+      const map: Record<string, boolean> = {};
+      for (const { dateStr, hasSlots } of results) {
+        map[dateStr] = hasSlots;
+      }
+      setWeekSlotAvailability(prev => ({ ...prev, ...map }));
+    }).finally(() => setWeekChecking(false));
+  }, [appt, weeksOffset, action, today]);
 
   // Fetch slots when date is selected
   useEffect(() => {
@@ -162,8 +189,10 @@ function ManageContent() {
 
   const isDateAvailable = (dateStr: string) => {
     if (!appt) return false;
-    const dow = getSwissDayOfWeek(parseSwissDate(dateStr));
-    return hasAvailabilityOnDay(appt.doctorSlug, "lausanne", dow);
+    // If we've already checked this date, use the cached result
+    if (dateStr in weekSlotAvailability) return weekSlotAvailability[dateStr];
+    // While checking, treat as unavailable to avoid false positives
+    return false;
   };
 
   // --- Shared: appointment summary card ---
@@ -346,7 +375,7 @@ function ManageContent() {
             {/* Week navigator */}
             <div className="flex items-center justify-between mb-3">
               <button
-                onClick={() => setWeeksOffset(w => Math.max(0, w - 1))}
+                onClick={() => { setWeeksOffset(w => Math.max(0, w - 1)); setSelectedDate(""); }}
                 disabled={!canGoPrev}
                 className="w-8 h-8 flex items-center justify-center rounded-full border border-[#e8e3db] text-[#1a1a18] disabled:opacity-30"
               >
@@ -358,7 +387,7 @@ function ManageContent() {
                 {formatShortDate(allWeekDates[0], language)} – {formatShortDate(allWeekDates[6], language)}
               </span>
               <button
-                onClick={() => setWeeksOffset(w => w + 1)}
+                onClick={() => { setWeeksOffset(w => w + 1); setSelectedDate(""); }}
                 className="w-8 h-8 flex items-center justify-center rounded-full border border-[#e8e3db] text-[#1a1a18]"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -367,9 +396,14 @@ function ManageContent() {
               </button>
             </div>
 
+            {weekChecking && (
+              <div className="flex justify-center py-2">
+                <div className="w-4 h-4 border-2 border-[#1a1a18] border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
             <div className="grid grid-cols-7 gap-1">
               {allWeekDates.map(dateStr => {
-                const isPast = dateStr < todayStr;
+                const isPast = dateStr <= todayStr;
                 const isAvail = !isPast && isDateAvailable(dateStr);
                 const isSelected = selectedDate === dateStr;
                 return (
