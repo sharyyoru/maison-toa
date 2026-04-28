@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
   const parsedDate = parseSwissDate(date);
   const dayOfWeek = getSwissDayOfWeek(parsedDate);
-  
+
   // Look up the provider by slug to get their name
   const { data: providers } = await supabase
     .from("providers")
@@ -47,16 +47,16 @@ export async function GET(request: Request) {
   const provider = providers?.find(p => nameToSlug(p.name) === doctorSlug);
   const providerId = provider?.id ?? null;
   const providerName = provider?.name || doctorName;
-  
+
   // Fetch availability from database (always Lausanne)
   let allSlots: string[] = [];
-  
+
   if (providerName) {
     try {
       const availRes = await fetch(
         `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/public/doctor-availability?doctorName=${encodeURIComponent(providerName)}`
       );
-      
+
       if (availRes.ok) {
         const availData = await availRes.json();
         if (availData.availability && availData.availability[dayOfWeek] && availData.availability[dayOfWeek].available !== false) {
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
       console.error("[Slots API] Error fetching doctor availability:", err);
     }
   }
-  
+
   // Fallback to hardcoded availability if database query fails
   if (allSlots.length === 0) {
     const { generateTimeSlots } = await import("@/lib/doctorAvailability");
@@ -83,40 +83,64 @@ export async function GET(request: Request) {
     return NextResponse.json({ bookedSlots: [], availableSlots: [] });
   }
 
-  // Fetch existing appointments for this doctor on this date
+  // Use overlap detection (same as check-availability) so multi-day blocking
+  // events (VACANCES, STOP with no_patient=true) are correctly caught.
   const { start, end } = getSwissDayRange(date);
-  const query = supabase
+  const { data: existingAppointments } = await supabase
     .from("appointments")
-    .select("id, start_time, provider_id, reason")
-    .gte("start_time", start)
-    .lte("start_time", end)
+    .select("id, start_time, end_time, provider_id, reason, no_patient")
+    .lt("start_time", end)
+    .gt("end_time", start)
     .neq("status", "cancelled");
 
-  const { data: existingAppointments } = await query;
-
   const maxCapacity = MULTI_CAPACITY_DOCTORS.includes(doctorSlug) ? 3 : 1;
+  const doctorSlugPattern = new RegExp(`\\[Doctor:\\s*${doctorSlug.replace(/-/g, "[ -]?")}`, "i");
 
-  // Count how many bookings exist per slot for this doctor
-  const slotCounts: Record<string, number> = {};
-  for (const apt of existingAppointments ?? []) {
-    if (excludeId && apt.id === excludeId) continue;
+  const isThisDoctor = (apt: { provider_id: string | null; reason: string | null }) =>
+    (providerId && apt.provider_id === providerId) ||
+    !!(apt.reason?.match(doctorSlugPattern));
 
-    const isThisDoctor =
-      (providerId && apt.provider_id === providerId) ||
-      apt.reason?.match(new RegExp(`\\[Doctor:\\s*${doctorSlug.replace(/-/g, "[ -]?")}`, "i"));
+  // Separate blocking (no_patient) from regular patient appointments
+  const patientApts = (existingAppointments ?? []).filter(
+    apt => !apt.no_patient && isThisDoctor(apt) && !(excludeId && apt.id === excludeId)
+  );
+  const blockingApts = (existingAppointments ?? []).filter(
+    apt => apt.no_patient && isThisDoctor(apt)
+  );
 
-    if (!isThisDoctor) continue;
+  // Build slot-level counts using overlap, then subtract blocked slots
+  const bookedSlotSet = new Set<string>();
 
-    const { hour, minute } = getSwissHourMinute(new Date(apt.start_time));
-    const slotKey = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
-    slotCounts[slotKey] = (slotCounts[slotKey] ?? 0) + 1;
+  for (const slot of allSlots) {
+    const slotStart = new Date(`${date}T${slot}:00`);
+    const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
+
+    // Block if any blocking appointment overlaps this slot
+    const isBlocked = blockingApts.some(apt => {
+      const aptStart = new Date(apt.start_time);
+      const aptEnd = new Date(apt.end_time);
+      return aptStart < slotEnd && aptEnd > slotStart;
+    });
+
+    if (isBlocked) {
+      bookedSlotSet.add(slot);
+      continue;
+    }
+
+    // Count patient appointments that overlap this slot
+    const count = patientApts.filter(apt => {
+      const aptStart = new Date(apt.start_time);
+      const aptEnd = new Date(apt.end_time);
+      return aptStart < slotEnd && aptEnd > slotStart;
+    }).length;
+
+    if (count >= maxCapacity) {
+      bookedSlotSet.add(slot);
+    }
   }
 
-  const bookedSlots = Object.entries(slotCounts)
-    .filter(([, count]) => count >= maxCapacity)
-    .map(([slot]) => slot);
-
-  const availableSlots = allSlots.filter(s => !bookedSlots.includes(s));
+  const bookedSlots = [...bookedSlotSet];
+  const availableSlots = allSlots.filter(s => !bookedSlotSet.has(s));
 
   return NextResponse.json({ availableSlots, bookedSlots });
 }
