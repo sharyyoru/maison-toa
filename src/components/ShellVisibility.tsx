@@ -4,7 +4,7 @@ import { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
 // Routes that should be completely standalone (no sidebar, header, or shell)
-const STANDALONE_ROUTES = ["/login", "/book-appointment", "/intake", "/onboarding", "/invoice/pay", "/consultations", "/embed", "/form", "/appointments/manage"];
+const STANDALONE_ROUTES = ["/login", "/book-appointment", "/intake", "/onboarding", "/invoice/pay", "/consultations", "/embed", "/form", "/appointments/manage", "/register"];
 
 function isStandaloneRoute(pathname: string): boolean {
   return STANDALONE_ROUTES.some(route => pathname === route || pathname.startsWith(route + "/"));
