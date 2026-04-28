@@ -80,8 +80,52 @@ function ManageContent() {
   // Map of date → whether it has any open slots (for disabling fully-booked days)
   const [weekSlotAvailability, setWeekSlotAvailability] = useState<Record<string, boolean>>({});
   const [weekChecking, setWeekChecking] = useState(false);
+  // Earliest available reschedule date/time (scanned on load)
+  const [earliestDate, setEarliestDate] = useState<string | null>(null);
+  const [earliestTime, setEarliestTime] = useState<string | null>(null);
+  const [earliestLoading, setEarliestLoading] = useState(false);
 
   const today = formatSwissYmd(getSwissToday());
+
+  // Scan forward to find the earliest available reschedule date
+  useEffect(() => {
+    if (!appt || action !== "reschedule") return;
+    setEarliestLoading(true);
+    setEarliestDate(null);
+    setEarliestTime(null);
+
+    let cancelled = false;
+    const scan = async () => {
+      const base = getSwissToday();
+      for (let i = 1; i <= 90; i++) {
+        if (cancelled) return;
+        const d = new Date(base);
+        d.setDate(base.getDate() + i);
+        const dateStr = formatSwissYmd(d);
+        try {
+          const res = await fetch(
+            `/api/public/appointment/slots?doctorSlug=${appt.doctorSlug}&date=${dateStr}&excludeId=${appt.id}`
+          );
+          const data = await res.json();
+          let slots: string[] = data.availableSlots ?? [];
+          if (dateStr === appt.rawDate) {
+            slots = slots.filter(s => s !== appt.rawTime);
+          }
+          if (slots.length > 0) {
+            if (!cancelled) {
+              setEarliestDate(dateStr);
+              setEarliestTime(slots[0]);
+            }
+            return;
+          }
+        } catch {
+          // ignore individual fetch errors
+        }
+      }
+    };
+    scan().finally(() => { if (!cancelled) setEarliestLoading(false); });
+    return () => { cancelled = true; };
+  }, [appt, action]);
 
   useEffect(() => {
     if (!appointmentId) {
@@ -105,8 +149,7 @@ function ManageContent() {
   // Pre-fetch slot availability for all visible week dates so fully-booked days can be grayed out
   useEffect(() => {
     if (!appt || action !== "reschedule") return;
-    const pivotDate = appt.rawDate ?? today;
-    const allWeekDates = getWeekDates(pivotDate, weeksOffset);
+    const allWeekDates = getWeekDates(today, weeksOffset);
     const futureDates = allWeekDates.filter(d => d > today);
     if (futureDates.length === 0) return;
 
@@ -197,7 +240,6 @@ function ManageContent() {
   }
 
   // --- Week dates for the reschedule date picker ---
-  const pivotDate = appt?.rawDate ?? today;
   const canGoPrev = weeksOffset > 0;
 
   const isDateAvailable = (dateStr: string) => {
@@ -357,7 +399,7 @@ function ManageContent() {
   }
 
   // --- Reschedule view ---
-  const allWeekDates = getWeekDates(pivotDate, weeksOffset);
+  const allWeekDates = getWeekDates(today, weeksOffset);
   const todayStr = today;
 
   return (
@@ -378,6 +420,43 @@ function ManageContent() {
           </p>
 
           <SummaryCard />
+
+          {/* Earliest availability banner */}
+          {(earliestLoading || earliestDate) && (
+            <div className={`mt-6 px-4 py-3 rounded-lg text-sm flex items-center gap-3 ${
+              earliestLoading
+                ? "bg-[#f5f3ef] text-[#8a8578]"
+                : "bg-[#f0faf4] border border-[#b6e8c8] text-[#1a6b3c]"
+            }`}>
+              {earliestLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-[#8a8578] border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span>{fr ? "Recherche des disponibilités…" : "Checking availability…"}</span>
+                </>
+              ) : earliestDate && earliestTime ? (
+                <>
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span>
+                    {fr ? "Première disponibilité : " : "Earliest availability: "}
+                    <strong>
+                      {(() => {
+                        const d = parseSwissDate(earliestDate);
+                        const dayName = fr
+                          ? ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"][d.getDay()]
+                          : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
+                        const month = fr ? MONTHS_FR[d.getMonth()] : MONTHS_EN[d.getMonth()];
+                        return fr
+                          ? `${dayName} ${d.getDate()} ${month} à ${earliestTime}`
+                          : `${dayName}, ${month} ${d.getDate()} at ${earliestTime}`;
+                      })()}
+                    </strong>
+                  </span>
+                </>
+              ) : null}
+            </div>
+          )}
 
           {/* Date picker */}
           <div className="mt-8">
