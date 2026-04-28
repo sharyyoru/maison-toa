@@ -69,6 +69,7 @@ export async function GET(request: Request) {
 
   // Fetch availability from database (always Lausanne)
   let allSlots: string[] = [];
+  let dbScheduleFound = false; // true when the DB has a saved schedule for this doctor
 
   if (providerName) {
     try {
@@ -78,12 +79,15 @@ export async function GET(request: Request) {
 
       if (availRes.ok) {
         const availData = await availRes.json();
-        if (availData.availability && availData.availability[dayOfWeek] && availData.availability[dayOfWeek].available !== false) {
-          const dayAvail = availData.availability[dayOfWeek];
-          allSlots = generateTimeSlotsFromAvailability(dayAvail.start, dayAvail.end);
-          console.log(`[Slots API] Using database availability for ${providerName} on day ${dayOfWeek}: ${allSlots.length} slots`);
-        } else {
-          console.log(`[Slots API] No availability in database for ${providerName} on day ${dayOfWeek}`);
+        if (availData.availability && Object.keys(availData.availability).length > 0) {
+          dbScheduleFound = true; // DB has a schedule — don't fall back to hardcoded
+          if (availData.availability[dayOfWeek] && availData.availability[dayOfWeek].available !== false) {
+            const dayAvail = availData.availability[dayOfWeek];
+            allSlots = generateTimeSlotsFromAvailability(dayAvail.start, dayAvail.end);
+            console.log(`[Slots API] Using database availability for ${providerName} on day ${dayOfWeek}: ${allSlots.length} slots`);
+          } else {
+            console.log(`[Slots API] Day ${dayOfWeek} disabled in DB for ${providerName} — no slots`);
+          }
         }
       }
     } catch (err) {
@@ -91,8 +95,9 @@ export async function GET(request: Request) {
     }
   }
 
-  // Fallback to hardcoded availability if database query fails
-  if (allSlots.length === 0) {
+  // Only fall back to hardcoded when the DB has NO schedule for this doctor at all.
+  // If the DB has a schedule but the day is disabled, allSlots stays [] intentionally.
+  if (!dbScheduleFound) {
     const { generateTimeSlots } = await import("@/lib/doctorAvailability");
     allSlots = generateTimeSlots(doctorSlug, "lausanne", dayOfWeek);
     console.log(`[Slots API] Using hardcoded availability fallback: ${allSlots.length} slots`);

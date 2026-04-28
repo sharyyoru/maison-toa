@@ -6,7 +6,6 @@ export const ALL_WEEK_SLOTS = {
   3: { start: "09:00", end: "18:00" },
   4: { start: "09:00", end: "18:00" },
   5: { start: "09:00", end: "18:00" },
-  6: { start: "09:00", end: "18:00" },
 };
 
 export const DOCTOR_AVAILABILITY: Record<string, Record<string, Record<number, { start: string; end: string }>>> = {
