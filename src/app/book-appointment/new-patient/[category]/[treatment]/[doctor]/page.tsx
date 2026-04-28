@@ -18,14 +18,13 @@ interface DoctorInfo {
   description: string;
 }
 
-// Default fallback availability: Mon–Sat 09:00–18:00
+// Default fallback availability: Mon–Fri 09:00–18:00 (Sat/Sun off by default)
 const ALL_WEEK_SLOTS = {
   1: { start: "09:00", end: "18:00" },
   2: { start: "09:00", end: "18:00" },
   3: { start: "09:00", end: "18:00" },
   4: { start: "09:00", end: "18:00" },
   5: { start: "09:00", end: "18:00" },
-  6: { start: "09:00", end: "18:00" },
 };
 
 const DOCTOR_AVAILABILITY: Record<string, Record<string, Record<number, { start: string; end: string }>>> = {

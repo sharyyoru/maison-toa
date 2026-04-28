@@ -18,43 +18,30 @@ interface DoctorInfo {
   description: string;
 }
 
-// Default slot window Mon–Sat for all doctors.
-// Day 0 = Sunday (no slots), 1 = Monday … 6 = Saturday.
-// Actual availability is determined by the real calendar: blocking appointments
-// (no_patient = true, e.g. VACANCES / STOP / PAUSE) remove overlapping slots,
-// and booked patient appointments remove their overlapping slots too.
-const ALL_WEEK_SLOTS = {
+// Default slot window Mon–Fri for all doctors (Sat/Sun off by default).
+// Actual availability is determined by the controllers schedule in the DB;
+// blocking appointments (no_patient = true) remove overlapping slots.
+const DEFAULT_WEEK_SLOTS = {
   1: { start: "09:00", end: "18:00" },
   2: { start: "09:00", end: "18:00" },
   3: { start: "09:00", end: "18:00" },
   4: { start: "09:00", end: "18:00" },
   5: { start: "09:00", end: "18:00" },
-  6: { start: "09:00", end: "18:00" },
 };
 
-const DOCTOR_AVAILABILITY: Record<string, Record<string, Record<number, { start: string; end: string }>>> = {
-  "sophie-nordback":   { lausanne: ALL_WEEK_SLOTS },
-  "alexandra-miles":   { lausanne: ALL_WEEK_SLOTS },
-  "reda-benani":       { lausanne: ALL_WEEK_SLOTS },
-  "adnan-plakalo":     { lausanne: ALL_WEEK_SLOTS },
-  "natalia-koltunova":    { lausanne: ALL_WEEK_SLOTS },
-  "laetitia-guarino":     { lausanne: ALL_WEEK_SLOTS },
-  "ophelie-perrin":       { lausanne: ALL_WEEK_SLOTS },
-  "claire-balbo":         { lausanne: ALL_WEEK_SLOTS },
-  "juliette-le-mentec":   { lausanne: ALL_WEEK_SLOTS },
-  "gwendoline-boursault": { lausanne: ALL_WEEK_SLOTS },
-};
+type DayAvailability = Record<number, { start: string; end: string }>;
 
 function parseLocalDate(dateStr: string): Date {
   return parseSwissDate(dateStr);
 }
 
-function generateTimeSlots(doctorSlug: string, locationId: string, dateStr: string): string[] {
+function generateTimeSlots(doctorSlug: string, locationId: string, dateStr: string, dbAvail?: DayAvailability | null): string[] {
   const date = parseLocalDate(dateStr);
   const dayOfWeek = date.getDay();
-  const availability = DOCTOR_AVAILABILITY[doctorSlug]?.[locationId]?.[dayOfWeek]
-    ?? ALL_WEEK_SLOTS[dayOfWeek as keyof typeof ALL_WEEK_SLOTS];
-  
+  const availability = dbAvail
+    ? dbAvail[dayOfWeek]
+    : DEFAULT_WEEK_SLOTS[dayOfWeek as keyof typeof DEFAULT_WEEK_SLOTS];
+
   if (!availability) {
     return [];
   }
@@ -62,10 +49,10 @@ function generateTimeSlots(doctorSlug: string, locationId: string, dateStr: stri
   const slots: string[] = [];
   const [startHour, startMin] = availability.start.split(":").map(Number);
   const [endHour, endMin] = availability.end.split(":").map(Number);
-  
+
   let currentHour = startHour;
   let currentMin = startMin;
-  
+
   while (currentHour < endHour || (currentHour === endHour && currentMin < endMin)) {
     const slotTime = `${currentHour.toString().padStart(2, "0")}:${currentMin.toString().padStart(2, "0")}`;
     slots.push(slotTime);
@@ -75,14 +62,15 @@ function generateTimeSlots(doctorSlug: string, locationId: string, dateStr: stri
       currentHour += 1;
     }
   }
-  
+
   return slots;
 }
 
-function hasAvailabilityOnDate(doctorSlug: string, locationId: string, date: Date): boolean {
+function hasAvailabilityOnDate(doctorSlug: string, locationId: string, date: Date, dbAvail?: DayAvailability | null): boolean {
   const dayOfWeek = getSwissDayOfWeek(date);
-  const availability = DOCTOR_AVAILABILITY[doctorSlug]?.[locationId]?.[dayOfWeek]
-    ?? ALL_WEEK_SLOTS[dayOfWeek as keyof typeof ALL_WEEK_SLOTS];
+  const availability = dbAvail
+    ? dbAvail[dayOfWeek]
+    : DEFAULT_WEEK_SLOTS[dayOfWeek as keyof typeof DEFAULT_WEEK_SLOTS];
   return !!availability;
 }
 
@@ -90,26 +78,13 @@ function formatDateLocal(date: Date): string {
   return formatSwissYmd(date);
 }
 
-function findNearestAvailableDate(doctorSlug: string, locationId: string, maxDaysAhead: number = 90): string | null {
-  const today = getSwissToday();
-  
-  for (let i = 1; i <= maxDaysAhead; i++) {
-    const checkDate = new Date(today);
-    checkDate.setDate(today.getDate() + i);
-    if (hasAvailabilityOnDate(doctorSlug, locationId, checkDate)) {
-      return formatDateLocal(checkDate);
-    }
-  }
-  return null;
-}
-
-function getAvailableDates(doctorSlug: string, locationId: string, maxDaysAhead: number = 90): string[] {
+function getAvailableDates(doctorSlug: string, locationId: string, maxDaysAhead: number = 90, dbAvail?: DayAvailability | null): string[] {
   const today = getSwissToday();
   const availableDates: string[] = [];
   for (let i = 1; i <= maxDaysAhead; i++) {
     const checkDate = new Date(today);
     checkDate.setDate(today.getDate() + i);
-    if (hasAvailabilityOnDate(doctorSlug, locationId, checkDate)) {
+    if (hasAvailabilityOnDate(doctorSlug, locationId, checkDate, dbAvail)) {
       availableDates.push(formatDateLocal(checkDate));
     }
   }
@@ -143,6 +118,7 @@ function DoctorBookingContent() {
   const [success, setSuccess] = useState(false);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [dbAvailability, setDbAvailability] = useState<DayAvailability | null>(null);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -181,6 +157,29 @@ function DoctorBookingContent() {
   }, [doctorSlug]);
 
   useEffect(() => {
+    if (!doctor) return;
+    const fetchDbAvailability = async () => {
+      try {
+        const res = await fetch(`/api/public/doctor-availability?doctorSlug=${encodeURIComponent(doctorSlug)}`);
+        const data = await res.json();
+        if (data.availability && Object.keys(data.availability).length > 0) {
+          const avail: DayAvailability = {};
+          Object.entries(data.availability).forEach(([day, val]) => {
+            const v = val as { start: string; end: string; available: boolean };
+            if (v.available !== false) {
+              avail[Number(day)] = { start: v.start, end: v.end };
+            }
+          });
+          setDbAvailability(avail);
+        }
+      } catch (err) {
+        console.error("Failed to fetch doctor availability:", err);
+      }
+    };
+    fetchDbAvailability();
+  }, [doctor, doctorSlug]);
+
+  useEffect(() => {
     const fetchTreatment = async () => {
       try {
         const res = await fetch(`/api/settings/booking-treatments`);
@@ -199,9 +198,9 @@ function DoctorBookingContent() {
   useEffect(() => {
     if (locationId && doctorSlug && doctor) {
       setIsLoadingDates(true);
-      const dates = getAvailableDates(doctorSlug, locationId, 90);
+      const dates = getAvailableDates(doctorSlug, locationId, 90, dbAvailability);
       setAvailableDatesSet(new Set(dates));
-      
+
       // Find the first date that actually has open slots (not just doctor schedule)
       const findFirstAvailableDate = async () => {
         const doctorName = doctor.name;
@@ -212,12 +211,12 @@ function DoctorBookingContent() {
               `/api/appointments/check-availability?start=${start}&end=${end}&doctor=${encodeURIComponent(doctorName)}&slug=${doctorSlug}`
             );
             const data = await res.json();
-            
+
             const blockedSlots: string[] = data.fullSlots
               ? data.fullSlots.map((isoTime: string) => getSwissSlotString(new Date(isoTime)))
               : [];
-            
-            const allSlots = generateTimeSlots(doctorSlug, locationId, dateStr);
+
+            const allSlots = generateTimeSlots(doctorSlug, locationId, dateStr, dbAvailability);
             const openSlots = allSlots.filter(time => !blockedSlots.includes(time));
             
             if (openSlots.length > 0) {
@@ -239,11 +238,11 @@ function DoctorBookingContent() {
 
       findFirstAvailableDate();
     }
-  }, [locationId, doctorSlug, doctor]);
+  }, [locationId, doctorSlug, dbAvailability, doctor]);
 
   useEffect(() => {
     if (selectedDate && locationId && doctor) {
-      const slots = generateTimeSlots(doctorSlug, locationId, selectedDate);
+      const slots = generateTimeSlots(doctorSlug, locationId, selectedDate, dbAvailability);
       setAvailableSlots(slots);
       setSelectedTime("");
       checkAvailability(selectedDate);
@@ -274,7 +273,7 @@ function DoctorBookingContent() {
         setBookedSlots([]);
       }
       
-      const currentSlots = generateTimeSlots(doctorSlug, locationId || "", date);
+      const currentSlots = generateTimeSlots(doctorSlug, locationId || "", date, dbAvailability);
       const openSlots = currentSlots.filter(time => !blockedSlots.includes(time));
       if (openSlots.length > 0) {
         setSelectedTime(openSlots[0]);

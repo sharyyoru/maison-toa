@@ -59,7 +59,7 @@ export async function GET(request: Request) {
       
       if (availRes.ok) {
         const availData = await availRes.json();
-        if (availData.availability && availData.availability[dayOfWeek]) {
+        if (availData.availability && availData.availability[dayOfWeek] && availData.availability[dayOfWeek].available !== false) {
           const dayAvail = availData.availability[dayOfWeek];
           allSlots = generateTimeSlotsFromAvailability(dayAvail.start, dayAvail.end);
           console.log(`[Slots API] Using database availability for ${providerName} on day ${dayOfWeek}: ${allSlots.length} slots`);
