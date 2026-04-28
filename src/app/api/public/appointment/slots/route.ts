@@ -24,6 +24,25 @@ function generateTimeSlotsFromAvailability(start: string, end: string): string[]
   return slots;
 }
 
+// Returns all 30-min Swiss-time slot keys an appointment occupies (e.g. ["09:00","09:30"])
+function getOccupiedSwissSlots(startTimeIso: string, endTimeIso: string): string[] {
+  const aptStart = new Date(startTimeIso);
+  const aptEnd = new Date(endTimeIso);
+  const { hour: startH, minute: startM } = getSwissHourMinute(aptStart);
+  const { hour: endH, minute: endM } = getSwissHourMinute(aptEnd);
+
+  const slots: string[] = [];
+  let h = startH;
+  let m = Math.floor(startM / 30) * 30;
+
+  while (h < endH || (h === endH && m < endM)) {
+    slots.push(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`);
+    m += 30;
+    if (m >= 60) { m = 0; h++; }
+  }
+  return slots;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const doctorSlug = searchParams.get("doctorSlug");
@@ -83,8 +102,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ bookedSlots: [], availableSlots: [] });
   }
 
-  // Use overlap detection (same as check-availability) so multi-day blocking
-  // events (VACANCES, STOP with no_patient=true) are correctly caught.
+  // Use overlap detection so multi-day blocking events (VACANCES/STOP) are caught
+  // regardless of whether they started before this specific day.
   const { start, end } = getSwissDayRange(date);
   const { data: existingAppointments } = await supabase
     .from("appointments")
@@ -100,7 +119,6 @@ export async function GET(request: Request) {
     (providerId && apt.provider_id === providerId) ||
     !!(apt.reason?.match(doctorSlugPattern));
 
-  // Separate blocking (no_patient) from regular patient appointments
   const patientApts = (existingAppointments ?? []).filter(
     apt => !apt.no_patient && isThisDoctor(apt) && !(excludeId && apt.id === excludeId)
   );
@@ -108,34 +126,26 @@ export async function GET(request: Request) {
     apt => apt.no_patient && isThisDoctor(apt)
   );
 
-  // Build slot-level counts using overlap, then subtract blocked slots
-  const bookedSlotSet = new Set<string>();
-
-  for (const slot of allSlots) {
-    const slotStart = new Date(`${date}T${slot}:00`);
-    const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
-
-    // Block if any blocking appointment overlaps this slot
-    const isBlocked = blockingApts.some(apt => {
-      const aptStart = new Date(apt.start_time);
-      const aptEnd = new Date(apt.end_time);
-      return aptStart < slotEnd && aptEnd > slotStart;
-    });
-
-    if (isBlocked) {
-      bookedSlotSet.add(slot);
-      continue;
+  // Count bookings per Swiss-time slot key using getSwissHourMinute so the
+  // comparison is always in Swiss time (no UTC offset confusion).
+  const slotCounts: Record<string, number> = {};
+  for (const apt of patientApts) {
+    const occupied = getOccupiedSwissSlots(apt.start_time, apt.end_time);
+    for (const slotKey of occupied) {
+      slotCounts[slotKey] = (slotCounts[slotKey] ?? 0) + 1;
     }
+  }
 
-    // Count patient appointments that overlap this slot
-    const count = patientApts.filter(apt => {
-      const aptStart = new Date(apt.start_time);
-      const aptEnd = new Date(apt.end_time);
-      return aptStart < slotEnd && aptEnd > slotStart;
-    }).length;
+  const bookedSlotSet = new Set<string>(
+    Object.entries(slotCounts)
+      .filter(([, count]) => count >= maxCapacity)
+      .map(([slot]) => slot)
+  );
 
-    if (count >= maxCapacity) {
-      bookedSlotSet.add(slot);
+  // Blocking appointments block every Swiss slot they cover
+  for (const apt of blockingApts) {
+    for (const slotKey of getOccupiedSwissSlots(apt.start_time, apt.end_time)) {
+      bookedSlotSet.add(slotKey);
     }
   }
 
