@@ -103,7 +103,7 @@ export async function GET(request: Request) {
 
     const isThisDoctor =
       (providerId && apt.provider_id === providerId) ||
-      (!providerId && apt.reason?.match(new RegExp(`\\[Doctor:\\s*${doctorSlug.replace(/-/g, "[ -]?")}`, "i")));
+      apt.reason?.match(new RegExp(`\\[Doctor:\\s*${doctorSlug.replace(/-/g, "[ -]?")}`, "i"));
 
     if (!isThisDoctor) continue;
 
