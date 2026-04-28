@@ -115,7 +115,14 @@ function ManageContent() {
       futureDates.map(dateStr =>
         fetch(`/api/public/appointment/slots?doctorSlug=${appt.doctorSlug}&date=${dateStr}&excludeId=${appt.id}`)
           .then(r => r.json())
-          .then(data => ({ dateStr, hasSlots: (data.availableSlots ?? []).length > 0 }))
+          .then(data => {
+            let slots: string[] = data.availableSlots ?? [];
+            // Exclude the original appointment slot so it doesn't count as "available"
+            if (dateStr === appt.rawDate) {
+              slots = slots.filter(s => s !== appt.rawTime);
+            }
+            return { dateStr, hasSlots: slots.length > 0 };
+          })
           .catch(() => ({ dateStr, hasSlots: false }))
       )
     ).then(results => {
@@ -134,7 +141,14 @@ function ManageContent() {
     setSelectedTime("");
     fetch(`/api/public/appointment/slots?doctorSlug=${appt.doctorSlug}&date=${selectedDate}&excludeId=${appt.id}`)
       .then(r => r.json())
-      .then(data => setAvailableSlots(data.availableSlots ?? []))
+      .then(data => {
+        let slots: string[] = data.availableSlots ?? [];
+        // Don't offer the patient their own original slot — they must pick a different time
+        if (selectedDate === appt.rawDate) {
+          slots = slots.filter(s => s !== appt.rawTime);
+        }
+        setAvailableSlots(slots);
+      })
       .catch(() => setAvailableSlots([]))
       .finally(() => setSlotsLoading(false));
   }, [selectedDate, appt]);
@@ -184,7 +198,6 @@ function ManageContent() {
 
   // --- Week dates for the reschedule date picker ---
   const pivotDate = appt?.rawDate ?? today;
-  const weekDates = getWeekDates(pivotDate, weeksOffset).filter(d => d >= today);
   const canGoPrev = weeksOffset > 0;
 
   const isDateAvailable = (dateStr: string) => {
