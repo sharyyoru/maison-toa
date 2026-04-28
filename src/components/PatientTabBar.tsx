@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { usePatientTabs } from "./PatientTabsContext";
 
 // Routes where the tab bar should be hidden
-const HIDDEN_ROUTES = ["/form", "/login", "/book-appointment", "/intake", "/onboarding", "/invoice"];
+const HIDDEN_ROUTES = ["/form", "/login", "/book-appointment", "/intake", "/onboarding", "/invoice", "/register"];
 
 export default function PatientTabBar() {
   const { tabs, activePatientId, removeTab, clearAllTabs } = usePatientTabs();
