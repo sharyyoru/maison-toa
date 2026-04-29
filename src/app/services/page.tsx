@@ -46,6 +46,8 @@ type Service = {
   is_active: boolean;
   base_price: number | null;
   duration_minutes: number | null;
+  vat_status: "voll" | "befreit" | null;
+  vat_rate_pct: number | null;
 };
 
 type ServiceGroup = {
@@ -91,6 +93,7 @@ export default function ServicesPage() {
   const [newServiceDescription, setNewServiceDescription] = useState("");
   const [newServicePrice, setNewServicePrice] = useState("");
   const [newServiceDuration, setNewServiceDuration] = useState("");
+  const [newServiceVatable, setNewServiceVatable] = useState(false);
   const [creatingService, setCreatingService] = useState(false);
   const [serviceMessage, setServiceMessage] = useState<string | null>(null);
 
@@ -140,6 +143,7 @@ export default function ServicesPage() {
   const [editServiceDescription, setEditServiceDescription] = useState("");
   const [editServicePrice, setEditServicePrice] = useState("");
   const [editServiceDuration, setEditServiceDuration] = useState("");
+  const [editServiceVatable, setEditServiceVatable] = useState(false);
   const [editServiceCategoryId, setEditServiceCategoryId] = useState<string>(
     "",
   );
@@ -190,7 +194,7 @@ export default function ServicesPage() {
         const { data: serviceData, error: serviceError } = await supabaseClient
           .from("services")
           .select(
-            "id, category_id, name, code, description, is_active, base_price, duration_minutes",
+            "id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct",
           )
           .order("created_at", { ascending: true });
 
@@ -217,6 +221,11 @@ export default function ServicesPage() {
           duration_minutes:
             row.duration_minutes !== null && row.duration_minutes !== undefined
               ? Number(row.duration_minutes)
+              : null,
+          vat_status: (row.vat_status as "voll" | "befreit" | null) ?? null,
+          vat_rate_pct:
+            row.vat_rate_pct !== null && row.vat_rate_pct !== undefined
+              ? Number(row.vat_rate_pct)
               : null,
         }));
 
@@ -366,9 +375,11 @@ export default function ServicesPage() {
           description: newServiceDescription.trim() || null,
           base_price: priceValue,
           duration_minutes: durationValue,
+          vat_status: newServiceVatable ? "voll" : "befreit",
+          vat_rate_pct: newServiceVatable ? 8.1 : 0,
           is_active: true,
         })
-        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes")
+        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct")
         .single();
 
       if (error || !data) {
@@ -392,6 +403,11 @@ export default function ServicesPage() {
           created.duration_minutes !== null && created.duration_minutes !== undefined
             ? Number(created.duration_minutes)
             : null,
+        vat_status: (created.vat_status as "voll" | "befreit" | null) ?? null,
+        vat_rate_pct:
+          created.vat_rate_pct !== null && created.vat_rate_pct !== undefined
+            ? Number(created.vat_rate_pct)
+            : null,
       };
 
       setServices((prev) => [...prev, newRow]);
@@ -399,6 +415,7 @@ export default function ServicesPage() {
       setNewServiceDescription("");
       setNewServicePrice("");
       setNewServiceDuration("");
+      setNewServiceVatable(false);
       setServiceMessage("Service created.");
     } catch {
       setServiceMessage("Failed to create service.");
@@ -651,6 +668,7 @@ export default function ServicesPage() {
         ? String(service.duration_minutes)
         : "",
     );
+    setEditServiceVatable(service.vat_status === "voll");
   }
 
   function handleCancelEditService() {
@@ -701,9 +719,11 @@ export default function ServicesPage() {
           category_id: editServiceCategoryId,
           base_price: priceValue,
           duration_minutes: durationValue,
+          vat_status: editServiceVatable ? "voll" : "befreit",
+          vat_rate_pct: editServiceVatable ? 8.1 : 0,
         })
         .eq("id", serviceId)
-        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes")
+        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct")
         .single();
 
       if (error || !data) {
@@ -726,6 +746,11 @@ export default function ServicesPage() {
         duration_minutes:
           updated.duration_minutes !== null && updated.duration_minutes !== undefined
             ? Number(updated.duration_minutes)
+            : null,
+        vat_status: (updated.vat_status as "voll" | "befreit" | null) ?? null,
+        vat_rate_pct:
+          updated.vat_rate_pct !== null && updated.vat_rate_pct !== undefined
+            ? Number(updated.vat_rate_pct)
             : null,
       };
 
@@ -1223,6 +1248,25 @@ export default function ServicesPage() {
                 </div>
               </div>
 
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <input
+                  type="checkbox"
+                  id="new-service-vatable"
+                  checked={newServiceVatable}
+                  onChange={(event) => setNewServiceVatable(event.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400"
+                />
+                <label
+                  htmlFor="new-service-vatable"
+                  className="cursor-pointer text-xs font-medium text-slate-700"
+                >
+                  VAT applicable (8.1%)
+                </label>
+                <span className="ml-auto text-[10px] text-slate-400">
+                  {newServiceVatable ? "voll — 8.1%" : "befreit — 0%"}
+                </span>
+              </div>
+
               {serviceMessage ? (
                 <p className="text-xs text-slate-500">{serviceMessage}</p>
               ) : null}
@@ -1434,6 +1478,20 @@ export default function ServicesPage() {
                                     placeholder="duration"
                                   />
                                 </div>
+                                <label className="mt-1 flex w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={editServiceVatable}
+                                    onChange={(event) =>
+                                      setEditServiceVatable(event.target.checked)
+                                    }
+                                    className="h-3 w-3 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400"
+                                  />
+                                  <span className="font-medium">VAT 8.1%</span>
+                                  <span className="ml-auto text-[10px] text-slate-400">
+                                    {editServiceVatable ? "voll" : "befreit"}
+                                  </span>
+                                </label>
                                 <div className="flex gap-1">
                                   <button
                                     type="button"
@@ -1494,6 +1552,22 @@ export default function ServicesPage() {
                             ) : (
                               <span className="text-slate-400">CHF —</span>
                             )}
+                            {service.vat_status ? (
+                              <span
+                                className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                                  service.vat_status === "voll"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-slate-100 text-slate-500"
+                                }`}
+                                title={
+                                  service.vat_status === "voll"
+                                    ? "VAT applicable (8.1%)"
+                                    : "VAT exempt"
+                                }
+                              >
+                                {service.vat_status === "voll" ? "VAT 8.1%" : "VAT free"}
+                              </span>
+                            ) : null}
                             {service.duration_minutes !== null ? (
                               <span className="text-slate-500">{formatDuration(service.duration_minutes)}</span>
                             ) : null}

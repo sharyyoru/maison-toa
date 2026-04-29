@@ -114,6 +114,12 @@ type Provider = {
   zsr: string | null;
   canton: string | null;
   iban: string | null;
+  role?: string | null;
+  billing_type?: "medical" | "aesthetic" | null;
+  invoice_method?: "tardoc_insurer" | "direct_patient" | null;
+  vat_enabled?: boolean | null;
+  vat_rate?: number | null;
+  doctor_id?: string | null;
 };
 
 type PrescriptionLine = {
@@ -149,6 +155,8 @@ type InvoiceService = {
   code: string | null;
   base_price: number | null;
   category_id: string | null;
+  vat_status: "voll" | "befreit" | null;
+  vat_rate_pct: number | null;
 };
 
 type InvoiceServiceGroup = {
@@ -377,6 +385,9 @@ export default function MedicalConsultationsCard({
   );
   const [invoicePaymentMethod, setInvoicePaymentMethod] = useState("");
   const [invoiceProviderId, setInvoiceProviderId] = useState<string>("");
+  // Tracks whether the user has manually picked a billing entity for this form session.
+  // Reset when the doctor changes so auto-prefill kicks in again.
+  const billingEntityManuallyOverridden = useRef(false);
   const [invoiceMode, setInvoiceMode] = useState<"group" | "individual" | "tardoc" | "flatrate">(
     "individual", // default to Individual Services
   );
@@ -776,7 +787,7 @@ export default function MedicalConsultationsCard({
       try {
         const { data } = await supabaseClient
           .from("providers")
-          .select("id, name, specialty, email, phone, gln, zsr, canton, role, iban")
+          .select("id, name, specialty, email, phone, gln, zsr, canton, role, iban, billing_type, invoice_method, vat_enabled, vat_rate, doctor_id")
           .order("name");
         if (!isMounted) return;
         if (data) {
@@ -833,6 +844,52 @@ export default function MedicalConsultationsCard({
       isMounted = false;
     };
   }, []);
+
+  // Reset override flag when opening a fresh "new" form (not editing an existing invoice).
+  // This ensures auto-prefill works again after a previous edit session locked the flag.
+  useEffect(() => {
+    if (newConsultationOpen && !editingInvoiceId) {
+      billingEntityManuallyOverridden.current = false;
+    }
+  }, [newConsultationOpen, editingInvoiceId]);
+
+  // Auto-prefill billing entity based on selected doctor + payment method + invoice mode.
+  // Rule:
+  //   - Payment Method = "Insurance" OR Invoice Mode = "tardoc"  -> medical entity (e.g. "Dr X")
+  //   - Anything else (Cash/Card/Online/Bank, Individual/Group/Flatrate) -> aesthetic entity (e.g. "Soins X")
+  // If the doctor has only one billing entity, use it regardless.
+  // User can manually override via the dropdown; override flag is reset when doctor changes.
+  useEffect(() => {
+    if (consultationRecordType !== "invoice") return;
+    if (billingEntityManuallyOverridden.current) return;
+    if (!consultationDoctorId) return;
+    if (billingEntityOptions.length === 0) return;
+
+    const doctorEntities = billingEntityOptions.filter(
+      (be) => be.doctor_id === consultationDoctorId,
+    );
+    if (doctorEntities.length === 0) return;
+
+    const isMedical =
+      invoicePaymentMethod === "Insurance" || invoiceMode === "tardoc";
+    const targetType: "medical" | "aesthetic" = isMedical
+      ? "medical"
+      : "aesthetic";
+
+    const match = doctorEntities.find((be) => be.billing_type === targetType);
+    const chosen = match ?? doctorEntities[0];
+
+    if (chosen && chosen.id !== invoiceProviderId) {
+      setInvoiceProviderId(chosen.id);
+    }
+  }, [
+    consultationRecordType,
+    consultationDoctorId,
+    invoicePaymentMethod,
+    invoiceMode,
+    billingEntityOptions,
+    invoiceProviderId,
+  ]);
 
   useEffect(() => {
     if (!consultationStopwatchStartedAt) return;
@@ -1230,7 +1287,7 @@ export default function MedicalConsultationsCard({
             .order("name", { ascending: true }),
           supabaseClient
             .from("services")
-            .select("id, name, code, base_price, category_id")
+            .select("id, name, code, base_price, category_id, vat_status, vat_rate_pct")
             .order("name", { ascending: true }),
           supabaseClient
             .from("service_categories")
@@ -1260,6 +1317,12 @@ export default function MedicalConsultationsCard({
                 : 0,
             category_id:
               (row.category_id as string | null | undefined) ?? null,
+            vat_status:
+              (row.vat_status as "voll" | "befreit" | null | undefined) ?? null,
+            vat_rate_pct:
+              row.vat_rate_pct !== null && row.vat_rate_pct !== undefined
+                ? Number(row.vat_rate_pct)
+                : null,
           }));
           setInvoiceServices(normalized as InvoiceService[]);
         } else {
@@ -1868,7 +1931,12 @@ export default function MedicalConsultationsCard({
         doctor_zsr: parentInvoice.doctor_zsr,
         doctor_canton: parentInvoice.doctor_canton,
         subtotal: inst.amount,
-        vat_amount: 0,
+        vat_amount: Math.round(
+          ((Number(parentInvoice.vat_amount) || 0) *
+            inst.amount) /
+            (Number(parentInvoice.total_amount) || 1) *
+            100,
+        ) / 100,
         total_amount: inst.amount,
         status: inst.status === "PAID" ? "PAID" : "OPEN",
         paid_amount: inst.status === "PAID" ? inst.amount : 0,
@@ -1912,6 +1980,9 @@ export default function MedicalConsultationsCard({
         quantity: item.quantity,
         unit_price: Math.round(Number(item.unit_price || 0) * ratio * 100) / 100,
         total_price: Math.round(Number(item.total_price || 0) * ratio * 100) / 100,
+        vat_rate: item.vat_rate ?? "FREE",
+        vat_rate_value: Number(item.vat_rate_value) || 0,
+        vat_amount: Math.round(Number(item.vat_amount || 0) * ratio * 100) / 100,
         sort_order: idx,
         tariff_code: item.tariff_code,
         catalog_name: item.catalog_name,
@@ -2262,6 +2333,8 @@ export default function MedicalConsultationsCard({
         setConsultationTitle(inv.title || "");
         setConsultationDoctorId(inv.doctor_user_id || "");
         setInvoiceProviderId(inv.provider_id || "");
+        // Preserve loaded billing entity — don't let auto-prefill override it.
+        billingEntityManuallyOverridden.current = true;
         setInvoicePaymentMethod(inv.payment_method || "");
         setInvoiceExtraOption(inv.is_complimentary ? "complimentary" : null);
         setInvoiceCanton((inv.treatment_canton as SwissCanton) || DEFAULT_CANTON);
@@ -2450,6 +2523,32 @@ export default function MedicalConsultationsCard({
 
     return sum + unit * quantity;
   }, 0);
+
+  // Total VAT (extracted from gross totals). TARDOC invoices and TARDOC/ACF lines are always VAT-free.
+  const invoiceVatTotal = (() => {
+    if (invoiceMode === "tardoc") return 0;
+    return invoiceServiceLines.reduce((sum, line) => {
+      if (!line.serviceId) return sum;
+      // TARDOC and ACF lines are always VAT-free
+      if (
+        line.serviceId.startsWith("tardoc-") ||
+        line.serviceId.startsWith("flatrate-") ||
+        line.serviceId.startsWith("tma-")
+      ) {
+        return sum;
+      }
+      const service = invoiceServices.find((s) => s.id === line.serviceId);
+      const ratePct = Number(service?.vat_rate_pct ?? 0);
+      if (!ratePct) return sum;
+      const quantity = line.quantity > 0 ? line.quantity : 1;
+      const unit = line.unitPrice !== null && Number.isFinite(line.unitPrice)
+        ? Math.max(0, line.unitPrice)
+        : Number(service?.base_price ?? 0) || 0;
+      const lineTotal = unit * quantity;
+      return sum + (lineTotal * ratePct) / (100 + ratePct);
+    }, 0);
+  })();
+  const invoiceNetTotal = invoiceTotal - invoiceVatTotal;
 
   const invoiceInstallmentsTotalPercent = invoiceInstallments.reduce(
     (sum, installment) =>
@@ -3669,6 +3768,23 @@ export default function MedicalConsultationsCard({
                             // Derive tariff type string from tariff code (zero-padded to 3 digits)
                             const tariffType = tariffCode != null ? String(tariffCode).padStart(3, "0") : null;
 
+                            // ── VAT computation (Rule 4: TARDOC/insurer invoices are always VAT-exempt) ──
+                            // Otherwise use the service's vat_status/vat_rate_pct.
+                            // Prices stored on services are GROSS (VAT-inclusive), so we extract VAT.
+                            const lineTotal = resolvedUnitPrice * quantity;
+                            const isInsurerInvoice = isTardocInvoice;
+                            const serviceVatPct = service?.vat_rate_pct ?? 0;
+                            const lineVatRatePct = isInsurerInvoice
+                              ? 0
+                              : isTardocLine || isAcfRelated
+                                ? 0 // TARDOC/ACF lines are always VAT-free
+                                : Number(serviceVatPct) || 0;
+                            const lineVatRateLabel: "FREE" | "NORMAL" =
+                              lineVatRatePct > 0 ? "NORMAL" : "FREE";
+                            const lineVatAmount = lineVatRatePct > 0
+                              ? Math.round((lineTotal * lineVatRatePct) / (100 + lineVatRatePct) * 100) / 100
+                              : 0;
+
                             return {
                               name: line.customName || service?.name || (tardocCode ? `TARDOC ${tardocCode}` : flatRateCode ? `Flat Rate ${flatRateCode}` : tmaCode ? `TMA ${tmaCode}` : "Service"),
                               code: isTardocLine ? tardocCode : isFlatRateLine ? flatRateCode : isTmaLine ? tmaCode : (service as any)?.code || String(idx + 1).padStart(3, '0'),
@@ -3676,6 +3792,9 @@ export default function MedicalConsultationsCard({
                               quantity,
                               unit_price: resolvedUnitPrice,
                               total_price: resolvedUnitPrice * quantity,
+                              vat_rate: lineVatRateLabel,
+                              vat_rate_value: lineVatRatePct,
+                              vat_amount: lineVatAmount,
                               tariff_code: tariffCode,
                               tariff_type: tariffType,
                               tardoc_code: tardocCode,
@@ -3827,7 +3946,10 @@ export default function MedicalConsultationsCard({
                             doctor_zsr: doctorZsr,
                             doctor_canton: doctorCanton,
                             subtotal: invoiceTotalAmountForInsert || 0,
-                            vat_amount: 0,
+                            vat_amount: invoiceLines.reduce(
+                              (sum, l) => sum + (Number(l.vat_amount) || 0),
+                              0,
+                            ),
                             total_amount: invoiceTotalAmountForInsert || 0,
                             is_complimentary: invoiceIsComplimentaryForInsert,
                             payment_method: paymentMethod,
@@ -3872,6 +3994,9 @@ export default function MedicalConsultationsCard({
                             quantity: line.quantity,
                             unit_price: line.unit_price,
                             total_price: line.total_price,
+                            vat_rate: line.vat_rate,
+                            vat_rate_value: line.vat_rate_value,
+                            vat_amount: line.vat_amount,
                             tariff_code: line.tariff_code,
                             tardoc_code: line.tardoc_code,
                             tp_al: line.tp_al,
@@ -4309,7 +4434,11 @@ export default function MedicalConsultationsCard({
                   </label>
                   <select
                     value={consultationDoctorId}
-                    onChange={(event) => setConsultationDoctorId(event.target.value)}
+                    onChange={(event) => {
+                      setConsultationDoctorId(event.target.value);
+                      // User changed doctor in the UI -> clear override so auto-prefill kicks in.
+                      billingEntityManuallyOverridden.current = false;
+                    }}
                     className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   >
                     <option value="">{consultationRecordType === "invoice" ? tf("selectStaff") : tf("selectDoctor")}</option>
@@ -4336,7 +4465,10 @@ export default function MedicalConsultationsCard({
                   </label>
                   <select
                     value={invoiceProviderId}
-                    onChange={(event) => setInvoiceProviderId(event.target.value)}
+                    onChange={(event) => {
+                      setInvoiceProviderId(event.target.value);
+                      billingEntityManuallyOverridden.current = true;
+                    }}
                     className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   >
                     <option value="">{tf("selectBillingEntity")}</option>
@@ -5574,6 +5706,26 @@ export default function MedicalConsultationsCard({
                           ) : null}
                         </div>
 
+                        {invoiceTotal > 0 && invoiceVatTotal > 0 ? (
+                          <div className="space-y-0.5 border-t border-slate-200 pt-2 text-[10px] text-slate-600">
+                            <div className="flex items-center justify-between">
+                              <span>Net (excl. VAT)</span>
+                              <span className="font-mono">CHF {invoiceNetTotal.toFixed(2)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>VAT 8.1% (incl.)</span>
+                              <span className="font-mono">CHF {invoiceVatTotal.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        ) : invoiceTotal > 0 && invoiceMode === "tardoc" ? (
+                          <div className="border-t border-slate-200 pt-2 text-[10px] text-slate-500">
+                            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-600">
+                              VAT exempt
+                            </span>{" "}
+                            <span>TARDOC insurer billing (Rule 4)</span>
+                          </div>
+                        ) : null}
+
                         {/* Skip Sumex Validation — visible for all invoice modes */}
                         <label className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 cursor-pointer">
                           <input
@@ -5715,6 +5867,20 @@ export default function MedicalConsultationsCard({
                               if (tardocCode) metaBits.push("TARDOC");
                               if (flatRateCode) metaBits.push("FLAT RATE");
                               if (group) metaBits.push(group.name);
+                              // VAT meta: TARDOC mode + TARDOC/ACF lines = always free.
+                              const isLineVatExempt =
+                                invoiceMode === "tardoc" ||
+                                line.serviceId.startsWith("tardoc-") ||
+                                line.serviceId.startsWith("flatrate-") ||
+                                line.serviceId.startsWith("tma-");
+                              const lineVatPct = isLineVatExempt
+                                ? 0
+                                : Number(service?.vat_rate_pct ?? 0);
+                              if (lineVatPct > 0) {
+                                metaBits.push(`VAT ${lineVatPct}%`);
+                              } else if (service && service.vat_status === "befreit") {
+                                metaBits.push("VAT free");
+                              }
                               if (
                                 line.discountPercent !== null &&
                                 Number.isFinite(line.discountPercent)

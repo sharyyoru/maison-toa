@@ -206,8 +206,9 @@ async function handleBuildFromConsultation(body: Record<string, unknown>) {
   const services: InvoiceServiceInput[] = [];
   if (invoiceItems?.line_items && Array.isArray(invoiceItems.line_items)) {
     for (const item of invoiceItems.line_items as Array<Record<string, unknown>>) {
+      const itemTariffType = (item.tariff_type as string) || (item.tariffType as string) || "007";
       services.push({
-        tariffType: (item.tariff_type as string) || (item.tariffType as string) || "007",
+        tariffType: itemTariffType,
         code: (item.code as string) || (item.service_code as string) || "",
         referenceCode: (item.reference_code as string) || "",
         quantity: (item.quantity as number) || 1,
@@ -221,7 +222,11 @@ async function handleBuildFromConsultation(body: Record<string, unknown>) {
         unitFactor: (item.unit_factor as number) || (item.tax_point_value as number) || 1,
         externalFactor: (item.external_factor as number) || 1,
         amount: (item.amount as number) || (item.total as number) || 0,
-        vatRate: (item.vat_rate as number) || 0,
+        // Rule 4: TARDOC (tariff_type=007) lines are always VAT-exempt for insurer billing.
+        // Other lines use the numeric rate stored on the line item (vat_rate_value).
+        vatRate: itemTariffType === "007"
+          ? 0
+          : (Number(item.vat_rate_value) || 0),
         ignoreValidate: YesNo.Yes,
       });
     }

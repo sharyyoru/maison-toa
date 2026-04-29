@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     if (invoiceData.provider_id) {
       const { data: providerRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role")
+        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid")
         .eq("id", invoiceData.provider_id)
         .single();
       if (providerRow) billingEntityData = providerRow as ProviderData;
@@ -187,14 +187,21 @@ export async function POST(request: NextRequest) {
       const provZip = billingEntityData?.zip_code || "1202";
       const provCity = billingEntityData?.city || "Genève";
       const provCanton = billingEntityData?.canton || invoiceData.treatment_canton || "GE";
-      // IBAN: strip spaces, validate Swiss format, fallback to QR-IBAN
-      const sanitizeIban = (raw: string | null | undefined): string | null => {
+      // IBAN: strip spaces, validate Swiss QR-IBAN (Sumex SetEsrQR requires IID 30000-31999).
+      // Regular IBANs are rejected by Sumex with code 638; fall back to the clinic's default QR-IBAN.
+      const sanitizeQrIban = (raw: string | null | undefined): string | null => {
         if (!raw) return null;
         const stripped = raw.replace(/\s+/g, "").toUpperCase();
-        if (/^CH[0-9A-Z]{19}$/.test(stripped)) return stripped;
-        return null;
+        if (!/^CH[0-9A-Z]{19}$/.test(stripped)) return null;
+        // QR-IBAN: positions 4-8 (0-indexed) must be 30000-31999
+        const iid = parseInt(stripped.slice(4, 9), 10);
+        if (Number.isNaN(iid) || iid < 30000 || iid > 31999) {
+          console.warn(`[GeneratePDF] IBAN ${stripped} is not a QR-IBAN (IID=${iid}); falling back to default QR-IBAN.`);
+          return null;
+        }
+        return stripped;
       };
-      const provIban = sanitizeIban(billingEntityData?.iban) || sanitizeIban(invoiceData.provider_iban) || "CH0930788000050249289";
+      const provIban = sanitizeQrIban(billingEntityData?.iban) || sanitizeQrIban(invoiceData.provider_iban) || "CH0930788000050249289";
 
       const treatmentDate = invoiceData.treatment_date || invoiceData.invoice_date || new Date().toISOString().split("T")[0];
 
@@ -222,7 +229,9 @@ export async function POST(request: NextRequest) {
           unitFactor: 1,
           externalFactor: item.tariff_code === 5 ? (item.external_factor_mt ?? 1) : 1,
           amount: item.total_price || 0,
-          vatRate: 0,
+          // Rule 4: TARDOC (tariff_type=007) lines are always VAT-exempt for insurer billing.
+          // Other lines use the rate stored on the line item (set from service vat_rate_pct).
+          vatRate: tariffType === "007" ? 0 : (Number(item.vat_rate_value) || 0),
           ignoreValidate: YesNo.Yes,
         };
       });
@@ -243,7 +252,7 @@ export async function POST(request: NextRequest) {
         requestType: RequestType.Invoice,
         requestSubtype: RequestSubtype.Normal,
         tiersMode: mapSumexTiers(invoiceData.billing_type || "TG"),
-        vatNumber: "",
+        vatNumber: (billingEntityData as any)?.vatuid || "",
         invoiceId: invoiceData.invoice_number || `INV-${invoiceId.slice(0, 8)}`,
         invoiceDate: invoiceData.invoice_date || new Date().toISOString().split("T")[0],
         lawType: mapSumexLaw(invoiceData.health_insurance_law || "KVG"),
@@ -426,13 +435,19 @@ export async function POST(request: NextRequest) {
       const provZip = billingEntityData?.zip_code || "1202";
       const provCity = billingEntityData?.city || "Genève";
       const provCanton = billingEntityData?.canton || invoiceData.treatment_canton || "GE";
-      const sanitizeIban2 = (raw: string | null | undefined): string | null => {
+      // QR-IBAN check: Sumex SetEsrQR requires IID 30000-31999.
+      const sanitizeQrIban2 = (raw: string | null | undefined): string | null => {
         if (!raw) return null;
         const stripped = raw.replace(/\s+/g, "").toUpperCase();
-        if (/^CH[0-9A-Z]{19}$/.test(stripped)) return stripped;
-        return null;
+        if (!/^CH[0-9A-Z]{19}$/.test(stripped)) return null;
+        const iid = parseInt(stripped.slice(4, 9), 10);
+        if (Number.isNaN(iid) || iid < 30000 || iid > 31999) {
+          console.warn(`[GeneratePDF] IBAN ${stripped} is not a QR-IBAN (IID=${iid}); falling back to default QR-IBAN.`);
+          return null;
+        }
+        return stripped;
       };
-      const provIbanSumex = sanitizeIban2(billingEntityData?.iban) || sanitizeIban2(invoiceData.provider_iban) || "CH0930788000050249289";
+      const provIbanSumex = sanitizeQrIban2(billingEntityData?.iban) || sanitizeQrIban2(invoiceData.provider_iban) || "CH0930788000050249289";
       const treatmentDate = invoiceData.treatment_date || invoiceData.invoice_date || new Date().toISOString().split("T")[0];
 
       // Map line items
@@ -454,7 +469,7 @@ export async function POST(request: NextRequest) {
           unitFactor: 1,
           externalFactor: 1,
           amount: item.total_price || 0,
-          vatRate: 0,
+          vatRate: Number(item.vat_rate_value) || 0,
           ignoreValidate: YesNo.Yes,
         };
       });
@@ -466,7 +481,7 @@ export async function POST(request: NextRequest) {
         requestType: RequestType.Invoice,
         requestSubtype: RequestSubtype.Normal,
         tiersMode: mapSumexTiers("TG"),
-        vatNumber: "",
+        vatNumber: (billingEntityData as any)?.vatuid || "",
         invoiceId: invoiceData.invoice_number || `INV-${invoiceId.slice(0, 8)}`,
         invoiceDate: invoiceData.invoice_date || new Date().toISOString().split("T")[0],
         lawType: mapSumexLaw(invoiceData.health_insurance_law || "VVG"),
