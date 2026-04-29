@@ -79,12 +79,17 @@ export default function PatientsPage() {
             { count: "exact" }
           );
 
-        // Apply server-side search filter
+        // Apply server-side search filter — chain one .or() per word so that
+        // "alexandra christodoulou" is treated as: (any field has "alexandra") AND
+        // (any field has "christodoulou"), instead of requiring the exact phrase.
         if (debouncedSearch.trim()) {
-          const searchTerm = `%${debouncedSearch.trim()}%`;
-          patientsQuery = patientsQuery.or(
-            `first_name.ilike.${searchTerm},last_name.ilike.${searchTerm},email.ilike.${searchTerm},phone.ilike.${searchTerm}`
-          );
+          const words = debouncedSearch.trim().split(/\s+/).filter(w => w.length > 0);
+          for (const word of words) {
+            const t = `%${word}%`;
+            patientsQuery = patientsQuery.or(
+              `first_name.ilike.${t},last_name.ilike.${t},email.ilike.${t},phone.ilike.${t}`
+            );
+          }
         }
 
         // Apply owner filter

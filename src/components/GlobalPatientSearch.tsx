@@ -47,29 +47,31 @@ export default function GlobalPatientSearch() {
     const debounce = setTimeout(async () => {
       setLoading(true);
       try {
-        const searchTerm = `%${trimmed}%`;
-        
         // Split search into words for multi-word name searches
         const words = trimmed.split(/\s+/).filter(w => w.length > 0);
-        
-        // Build OR conditions for individual fields
-        let orConditions = `first_name.ilike.${searchTerm},last_name.ilike.${searchTerm},email.ilike.${searchTerm},phone.ilike.${searchTerm}`;
-        
-        // For multi-word queries, also search each word individually
-        // This handles "art wilson" matching first_name="Art" AND last_name="Wilson"
+
+        // For multi-word queries (e.g. "alexandra christodoulou"), chain one .or()
+        // per word so PostgREST applies AND logic between words. This avoids passing
+        // the full phrase as a single ilike pattern which would never match split names.
+        let textQuery = supabaseClient
+          .from("patients")
+          .select("id, first_name, last_name, email, phone, dob");
+
         if (words.length > 1) {
           for (const word of words) {
-            const wordTerm = `%${word}%`;
-            orConditions += `,first_name.ilike.${wordTerm},last_name.ilike.${wordTerm}`;
+            const t = `%${word}%`;
+            textQuery = textQuery.or(
+              `first_name.ilike.${t},last_name.ilike.${t},email.ilike.${t},phone.ilike.${t}`
+            );
           }
+        } else {
+          const searchTerm = `%${trimmed}%`;
+          textQuery = textQuery.or(
+            `first_name.ilike.${searchTerm},last_name.ilike.${searchTerm},email.ilike.${searchTerm},phone.ilike.${searchTerm}`
+          );
         }
-        
-        // Run text search query
-        const textQuery = supabaseClient
-          .from("patients")
-          .select("id, first_name, last_name, email, phone, dob")
-          .or(orConditions)
-          .limit(20);
+
+        textQuery = textQuery.limit(20);
 
         // Run DOB query in parallel if search looks like a date pattern
         const hasDigits = /\d/.test(trimmed);
