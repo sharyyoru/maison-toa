@@ -1500,42 +1500,94 @@ export default function CalendarPage() {
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadPatientsForCreate() {
+    const trimmed = createPatientSearch.trim();
+    
+    // If search is empty, show recent patients
+    if (trimmed.length === 0) {
+      let isMounted = true;
+      setPatientOptionsLoading(true);
+      setPatientOptionsError(null);
+      
+      (async () => {
+        try {
+          const { data, error } = await supabaseClient
+            .from("patients")
+            .select("id, first_name, last_name, email, phone")
+            .order("created_at", { ascending: false })
+            .limit(20);
+          
+          if (!isMounted) return;
+          if (error || !data) {
+            setPatientOptions([]);
+            setPatientOptionsError(error?.message ?? "Failed to load patients.");
+          } else {
+            setPatientOptions(data as AppointmentPatientSuggestion[]);
+          }
+          setPatientOptionsLoading(false);
+        } catch {
+          if (!isMounted) return;
+          setPatientOptions([]);
+          setPatientOptionsError("Failed to load patients.");
+          setPatientOptionsLoading(false);
+        }
+      })();
+      
+      return () => { isMounted = false; };
+    }
+    
+    // Debounce server-side search for better performance
+    const debounce = setTimeout(async () => {
+      setPatientOptionsLoading(true);
+      setPatientOptionsError(null);
+      
       try {
-        setPatientOptionsLoading(true);
-        setPatientOptionsError(null);
-
-        const { data, error } = await supabaseClient
+        // Split search into words for multi-word name searches
+        const words = trimmed.split(/\s+/).filter(w => w.length > 0);
+        
+        let query = supabaseClient
           .from("patients")
-          .select("id, first_name, last_name, email, phone")
-          .order("created_at", { ascending: false });
-
-        if (!isMounted) return;
-
+          .select("id, first_name, last_name, email, phone");
+        
+        // Use server-side ilike filtering for each word
+        for (const word of words) {
+          const t = `%${word}%`;
+          query = query.or(
+            `first_name.ilike.${t},last_name.ilike.${t},email.ilike.${t},phone.ilike.${t}`
+          );
+        }
+        
+        query = query.order("created_at", { ascending: false }).limit(30);
+        
+        const { data, error } = await query;
+        
         if (error || !data) {
           setPatientOptions([]);
-          setPatientOptionsError(error?.message ?? "Failed to load patients.");
+          setPatientOptionsError(error?.message ?? "Failed to search patients.");
         } else {
-          setPatientOptions(data as AppointmentPatientSuggestion[]);
+          // For multi-word searches, ensure ALL words match somewhere
+          let filtered = data as AppointmentPatientSuggestion[];
+          if (words.length > 1) {
+            filtered = filtered.filter(p => {
+              const fullName = `${p.first_name ?? ""} ${p.last_name ?? ""}`.toLowerCase();
+              const email = (p.email ?? "").toLowerCase();
+              const phone = (p.phone ?? "").toLowerCase();
+              const combined = `${fullName} ${email} ${phone}`;
+              return words.every(word => combined.includes(word.toLowerCase()));
+            });
+          }
+          setPatientOptions(filtered);
         }
-
+        
         setPatientOptionsLoading(false);
       } catch {
-        if (!isMounted) return;
         setPatientOptions([]);
-        setPatientOptionsError("Failed to load patients.");
+        setPatientOptionsError("Failed to search patients.");
         setPatientOptionsLoading(false);
       }
-    }
-
-    void loadPatientsForCreate();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    }, 300);
+    
+    return () => clearTimeout(debounce);
+  }, [createPatientSearch]);
 
   useEffect(() => {
     if (!isDraggingRange) return;
@@ -2296,21 +2348,9 @@ export default function CalendarPage() {
     return `${displayHour}:${minutePadded} ${suffix}`;
   }
 
-  const filteredCreatePatientSuggestions = useMemo(() => {
-    const term = createPatientSearch.trim().toLowerCase();
-    if (!term) return patientOptions;
-
-    return patientOptions.filter((p) => {
-      const name = `${p.first_name ?? ""} ${p.last_name ?? ""}`
-        .trim()
-        .toLowerCase();
-      const email = (p.email ?? "").toLowerCase();
-      const phone = (p.phone ?? "").toLowerCase();
-      return (
-        name.includes(term) || email.includes(term) || phone.includes(term)
-      );
-    });
-  }, [createPatientSearch, patientOptions]);
+  // Patient search is now done server-side in the useEffect above
+  // This simply returns the server-filtered results
+  const filteredCreatePatientSuggestions = patientOptions;
 
   async function handleCreateNewPatient() {
     const firstName = newPatientFirstName.trim();
