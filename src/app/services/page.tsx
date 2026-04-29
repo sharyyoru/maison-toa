@@ -120,6 +120,9 @@ export default function ServicesPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [categoryFilterSearch, setCategoryFilterSearch] = useState("");
   const [categoryFilterDropdownOpen, setCategoryFilterDropdownOpen] = useState(false);
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(new Set());
+  const [bulkMoveCategoryId, setBulkMoveCategoryId] = useState<string>("");
 
   const [groupSearch, setGroupSearch] = useState("");
   const [groupServiceSearch, setGroupServiceSearch] = useState("");
@@ -190,6 +193,7 @@ export default function ServicesPage() {
           color: (row.color as string | null) ?? null,
         })) as ServiceCategory[];
         setCategories(categoryRows);
+        setCollapsedCategories(new Set(categoryRows.map((c) => c.id)));
 
         const { data: serviceData, error: serviceError } = await supabaseClient
           .from("services")
@@ -826,6 +830,33 @@ export default function ServicesPage() {
     }
   }
 
+  async function handleBulkMove(newCategoryId: string) {
+    if (!newCategoryId || selectedServiceIds.size === 0) return;
+    const ids = [...selectedServiceIds];
+    const { error } = await supabaseClient
+      .from("services")
+      .update({ category_id: newCategoryId })
+      .in("id", ids);
+    if (!error) {
+      setServices((prev) =>
+        prev.map((s) => ids.includes(s.id) ? { ...s, category_id: newCategoryId } : s)
+      );
+      setSelectedServiceIds(new Set());
+      setBulkMoveCategoryId("");
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedServiceIds.size === 0) return;
+    if (!confirm(`Delete ${selectedServiceIds.size} service${selectedServiceIds.size > 1 ? "s" : ""}?`)) return;
+    const ids = [...selectedServiceIds];
+    const { error } = await supabaseClient.from("services").delete().in("id", ids);
+    if (!error) {
+      setServices((prev) => prev.filter((s) => !ids.includes(s.id)));
+      setSelectedServiceIds(new Set());
+    }
+  }
+
   const categoriesById = new Map(categories.map((c) => [c.id, c] as const));
   const servicesById = new Map(services.map((s) => [s.id, s] as const));
 
@@ -1301,356 +1332,228 @@ export default function ServicesPage() {
               <input
                 type="text"
                 value={serviceSearch}
-                onChange={(event) => {
-                  setServiceSearch(event.target.value);
-                  setServicesPage(1);
-                }}
-                placeholder="Search services by name..."
-                className="flex-1 min-w-[200px] rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                onChange={(e) => { setServiceSearch(e.target.value); setServicesPage(1); }}
+                placeholder="Search services..."
+                className="flex-1 min-w-[160px] rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
               />
-              <div className="relative">
-                <input
-                  type="text"
-                  value={categoryFilterSearch}
-                  onChange={(event) => {
-                    setCategoryFilterSearch(event.target.value);
-                    setCategoryFilterDropdownOpen(event.target.value.trim().length > 0);
-                  }}
-                  onFocus={() => setCategoryFilterDropdownOpen(categoryFilterSearch.trim().length > 0)}
-                  placeholder="Filter by category..."
-                  className="w-48 rounded-full border border-slate-200 bg-white px-3 py-1.5 pr-7 text-[11px] text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                />
-                {categoryFilter !== "all" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCategoryFilter("all");
-                      setCategoryFilterSearch("");
-                      setCategoryFilterDropdownOpen(false);
-                      setServicesPage(1);
-                    }}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    ×
-                  </button>
-                )}
-                {categoryFilterDropdownOpen && (() => {
-                  const query = categoryFilterSearch.trim().toLowerCase();
-                  const filteredCategories = categories
-                    .filter((c) => {
-                      const hay = c.name.toLowerCase();
-                      return hay.includes(query);
-                    })
-                    .slice(0, 6);
-
-                  if (filteredCategories.length === 0) return null;
-
-                  return (
-                    <div className="absolute top-full left-0 right-0 mt-1 max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white text-[10px] shadow-lg z-10">
-                      {filteredCategories.map((category) => (
-                        <button
-                          key={category.id}
-                          type="button"
-                          onClick={() => {
-                            setCategoryFilter(category.id);
-                            setCategoryFilterSearch(category.name);
-                            setCategoryFilterDropdownOpen(false);
-                            setServicesPage(1);
-                          }}
-                          className="block w-full cursor-pointer px-2 py-1 text-left text-slate-700 hover:bg-slate-50"
-                        >
-                          {category.name}
-                        </button>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
+              <select
+                value={categoryFilter}
+                onChange={(e) => { setCategoryFilter(e.target.value); setServicesPage(1); }}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+              >
+                <option value="all">All categories</option>
+                {categories.slice().sort((a, b) => a.sort_order - b.sort_order).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
             </div>
+
+            {selectedServiceIds.size > 0 && (
+              <div className="mt-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px]">
+                <span className="font-medium text-slate-700">{selectedServiceIds.size} selected</span>
+                <span className="text-slate-300">|</span>
+                <select
+                  value={bulkMoveCategoryId}
+                  onChange={(e) => setBulkMoveCategoryId(e.target.value)}
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 focus:border-emerald-400 focus:outline-none"
+                >
+                  <option value="">Move to…</option>
+                  {categories.slice().sort((a, b) => a.sort_order - b.sort_order).map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <button type="button" disabled={!bulkMoveCategoryId} onClick={() => void handleBulkMove(bulkMoveCategoryId)} className="rounded-full bg-emerald-500 px-3 py-0.5 font-semibold text-white hover:bg-emerald-600 disabled:opacity-40">Move</button>
+                <button type="button" onClick={() => void handleBulkDelete()} className="rounded-full border border-red-100 bg-red-50 px-3 py-0.5 font-medium text-red-600 hover:bg-red-100">Delete</button>
+                <button type="button" onClick={() => setSelectedServiceIds(new Set())} className="ml-auto text-slate-400 hover:text-slate-600">Clear</button>
+              </div>
+            )}
             {loading ? (
               <p className="mt-2 text-xs text-slate-500">Loading services...</p>
             ) : services.length === 0 ? (
               <p className="mt-2 text-xs text-slate-500">No services yet.</p>
             ) : (() => {
-              const filteredServices = services
-                .filter((service) => {
-                  // Category filter
-                  if (categoryFilter !== "all" && service.category_id !== categoryFilter) {
-                    return false;
-                  }
-                  // Search filter
-                  const term = serviceSearch.trim().toLowerCase();
-                  if (!term) return true;
-                  const category = categoriesById.get(service.category_id);
-                  const haystack = `${service.name} ${service.description ?? ""
-                    } ${category ? category.name : ""}`.toLowerCase();
-                  return haystack.includes(term);
-                });
+              const term = serviceSearch.trim().toLowerCase();
+              const filteredServices = services.filter((service) => {
+                if (categoryFilter !== "all" && service.category_id !== categoryFilter) return false;
+                if (!term) return true;
+                const cat = categoriesById.get(service.category_id);
+                return `${service.name} ${service.description ?? ""} ${cat?.name ?? ""}`.toLowerCase().includes(term);
+              });
 
-              const totalPages = Math.ceil(filteredServices.length / ITEMS_PER_PAGE);
-              const startIndex = (servicesPage - 1) * ITEMS_PER_PAGE;
-              const endIndex = startIndex + ITEMS_PER_PAGE;
-              const paginatedServices = filteredServices.slice(startIndex, endIndex);
+              // Group by category, preserving category sort order
+              const grouped = categories
+                .slice()
+                .sort((a, b) => a.sort_order - b.sort_order)
+                .map((cat) => ({
+                  category: cat,
+                  services: filteredServices.filter((s) => s.category_id === cat.id),
+                }))
+                .filter((g) => g.services.length > 0);
+
+              // Services with unknown category
+              const knownCategoryIds = new Set(categories.map((c) => c.id));
+              const orphans = filteredServices.filter((s) => !knownCategoryIds.has(s.category_id));
+
+              const totalCount = filteredServices.length;
 
               return (
-                <>
-                  <div className="mt-2 space-y-1 text-xs">
-                    {paginatedServices.map((service) => {
-                      const category = categoriesById.get(service.category_id);
-                      const isEditing = editingServiceId === service.id;
-                      const isSaving = savingServiceId === service.id;
-                      const isDeleting = deletingServiceId === service.id;
+                <div className="mt-3 space-y-2 text-xs">
+                  <p className="text-[11px] text-slate-400">{totalCount} service{totalCount !== 1 ? "s" : ""}</p>
 
-                      if (isEditing) {
-                        return (
-                          <div
-                            key={service.id}
-                            className="space-y-2 rounded-md bg-slate-50/70 px-2 py-2"
+                  {[...grouped, ...(orphans.length > 0 ? [{ category: { id: "__orphan__", name: "Uncategorised", color: null, sort_order: 9999, description: null }, services: orphans }] : [])].map(({ category, services: catServices }) => {
+                    const isCollapsed = collapsedCategories.has(category.id);
+                    return (
+                      <div key={category.id} className="rounded-lg border border-slate-200/80 bg-white/90 overflow-hidden">
+                        {/* Category header */}
+                        <div className="flex items-center gap-1 px-2 py-2 hover:bg-slate-50">
+                          <input
+                            type="checkbox"
+                            checked={catServices.length > 0 && catServices.every((s) => selectedServiceIds.has(s.id))}
+                            onChange={(e) => {
+                              const next = new Set(selectedServiceIds);
+                              catServices.forEach((s) => e.target.checked ? next.add(s.id) : next.delete(s.id));
+                              setSelectedServiceIds(next);
+                            }}
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setCollapsedCategories((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(category.id)) next.delete(category.id);
+                              else next.add(category.id);
+                              return next;
+                            })}
+                            className="flex flex-1 items-center gap-2 text-left"
                           >
-                            <div className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                              <div className="space-y-1">
-                                <input
-                                  type="text"
-                                  value={editServiceName}
-                                  onChange={(event) =>
-                                    setEditServiceName(event.target.value)
-                                  }
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                                />
-                                <select
-                                  value={editServiceCategoryId}
-                                  onChange={(event) =>
-                                    setEditServiceCategoryId(event.target.value)
-                                  }
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                                >
-                                  {categories
-                                    .slice()
-                                    .sort((a, b) => a.sort_order - b.sort_order)
-                                    .map((category) => (
-                                      <option key={category.id} value={category.id}>
-                                        {category.name}
-                                      </option>
-                                    ))}
-                                </select>
-                                <textarea
-                                  value={editServiceDescription}
-                                  onChange={(event) =>
-                                    setEditServiceDescription(event.target.value)
-                                  }
-                                  rows={2}
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                                />
-                              </div>
-                              <div className="flex flex-col items-end gap-1 text-[11px]">
-                                <span className="text-slate-500">
-                                  {category ? category.name : "Unknown category"}
-                                </span>
-                                <div className="mt-1 flex w-full rounded-lg border border-slate-200 bg-white text-xs text-slate-900 shadow-sm focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-400">
-                                  <span className="inline-flex items-center px-2 text-[11px] text-slate-500">
-                                    CHF
-                                  </span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.05"
-                                    value={editServicePrice}
-                                    onChange={(event) =>
-                                      setEditServicePrice(event.target.value)
-                                    }
-                                    className="flex-1 rounded-r-lg border-0 bg-transparent px-2 py-1.5 text-right outline-none"
-                                    placeholder="0.00"
-                                  />
-                                </div>
-                                <div className="mt-1 flex w-full rounded-lg border border-slate-200 bg-white text-xs text-slate-900 shadow-sm focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-400">
-                                  <span className="inline-flex items-center px-2 text-[11px] text-slate-500">
-                                    min
-                                  </span>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={editServiceDuration}
-                                    onChange={(event) =>
-                                      setEditServiceDuration(event.target.value)
-                                    }
-                                    className="flex-1 rounded-r-lg border-0 bg-transparent px-2 py-1.5 text-right outline-none"
-                                    placeholder="duration"
-                                  />
-                                </div>
-                                <label className="mt-1 flex w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700">
+                            {category.color && <span className={`inline-block h-2.5 w-2.5 rounded-full ${category.color}`} />}
+                            <span className="flex-1 text-[11px] font-semibold text-slate-700">{category.name}</span>
+                            <span className="text-[10px] text-slate-400">{catServices.length}</span>
+                            <span className="mr-1 text-[10px] text-slate-400">{isCollapsed ? "▶" : "▼"}</span>
+                          </button>
+                        </div>
+
+                        {/* Services list */}
+                        {!isCollapsed && (
+                          <div className="divide-y divide-slate-100 border-t border-slate-100">
+                            {catServices.map((service) => {
+                              const isEditing = editingServiceId === service.id;
+                              const isSaving = savingServiceId === service.id;
+                              const isDeleting = deletingServiceId === service.id;
+
+                              if (isEditing) {
+                                return (
+                                  <div key={service.id} className="space-y-2 bg-slate-50/70 px-3 py-2">
+                                    <div className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                                      <div className="space-y-1">
+                                        <input
+                                          type="text"
+                                          value={editServiceName}
+                                          onChange={(e) => setEditServiceName(e.target.value)}
+                                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                        />
+                                        <select
+                                          value={editServiceCategoryId}
+                                          onChange={(e) => setEditServiceCategoryId(e.target.value)}
+                                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                        >
+                                          {categories.slice().sort((a, b) => a.sort_order - b.sort_order).map((c) => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                          ))}
+                                        </select>
+                                        <textarea
+                                          value={editServiceDescription}
+                                          onChange={(e) => setEditServiceDescription(e.target.value)}
+                                          rows={2}
+                                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                        />
+                                      </div>
+                                      <div className="flex flex-col items-end gap-1 text-[11px]">
+                                        <div className="mt-1 flex w-full rounded-lg border border-slate-200 bg-white text-xs text-slate-900 shadow-sm focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-400">
+                                          <span className="inline-flex items-center px-2 text-[11px] text-slate-500">CHF</span>
+                                          <input type="number" min="0" step="0.05" value={editServicePrice} onChange={(e) => setEditServicePrice(e.target.value)} className="flex-1 rounded-r-lg border-0 bg-transparent px-2 py-1.5 text-right outline-none" placeholder="0.00" />
+                                        </div>
+                                        <div className="mt-1 flex w-full rounded-lg border border-slate-200 bg-white text-xs text-slate-900 shadow-sm focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-400">
+                                          <span className="inline-flex items-center px-2 text-[11px] text-slate-500">min</span>
+                                          <input type="number" min="1" step="1" value={editServiceDuration} onChange={(e) => setEditServiceDuration(e.target.value)} className="flex-1 rounded-r-lg border-0 bg-transparent px-2 py-1.5 text-right outline-none" placeholder="duration" />
+                                        </div>
+                                        <label className="mt-1 flex w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700">
+                                          <input type="checkbox" checked={editServiceVatable} onChange={(e) => setEditServiceVatable(e.target.checked)} className="h-3 w-3 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400" />
+                                          <span className="font-medium">VAT 8.1%</span>
+                                          <span className="ml-auto text-[10px] text-slate-400">{editServiceVatable ? "voll" : "befreit"}</span>
+                                        </label>
+                                        <div className="flex gap-1">
+                                          <button type="button" onClick={() => void handleSaveService(service.id)} disabled={isSaving} className="inline-flex items-center rounded-full bg-emerald-500 px-3 py-0.5 font-semibold text-white shadow-sm hover:bg-emerald-600 disabled:opacity-60">
+                                            {isSaving ? "Saving..." : "Save"}
+                                          </button>
+                                          <button type="button" onClick={handleCancelEditService} disabled={isSaving} className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-0.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60">
+                                            Cancel
+                                          </button>
+                                        </div>
+                                        <button type="button" onClick={() => void handleDeleteService(service.id)} disabled={isDeleting || isSaving} className="mt-1 text-[11px] font-medium text-red-600 hover:text-red-700 disabled:opacity-60">
+                                          {isDeleting ? "Deleting..." : "Delete"}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div key={service.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50/60">
                                   <input
                                     type="checkbox"
-                                    checked={editServiceVatable}
-                                    onChange={(event) =>
-                                      setEditServiceVatable(event.target.checked)
-                                    }
-                                    className="h-3 w-3 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400"
+                                    checked={selectedServiceIds.has(service.id)}
+                                    onChange={(e) => {
+                                      const next = new Set(selectedServiceIds);
+                                      if (e.target.checked) next.add(service.id);
+                                      else next.delete(service.id);
+                                      setSelectedServiceIds(next);
+                                    }}
+                                    className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400"
                                   />
-                                  <span className="font-medium">VAT 8.1%</span>
-                                  <span className="ml-auto text-[10px] text-slate-400">
-                                    {editServiceVatable ? "voll" : "befreit"}
-                                  </span>
-                                </label>
-                                <div className="flex gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleSaveService(service.id)}
-                                    disabled={isSaving}
-                                    className="inline-flex items-center rounded-full bg-emerald-500 px-3 py-0.5 font-semibold text-white shadow-sm hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    {isSaving ? "Saving..." : "Save"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={handleCancelEditService}
-                                    disabled={isSaving}
-                                    className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-0.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    Cancel
-                                  </button>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-medium text-slate-900">
+                                      {service.code && <span className="mr-1 text-[10px] font-bold">{service.code} ·</span>}
+                                      {service.name}
+                                    </div>
+                                    {service.description && (
+                                      <div className="truncate text-[11px] text-slate-400">{service.description}</div>
+                                    )}
+                                  </div>
+                                  <div className="ml-3 flex shrink-0 items-center gap-2 text-[11px] text-slate-600">
+                                    {service.base_price !== null ? (
+                                      <span>CHF {service.base_price.toFixed(2)}</span>
+                                    ) : (
+                                      <span className="text-slate-300">—</span>
+                                    )}
+                                    {service.duration_minutes !== null && (
+                                      <span className="text-slate-400">{formatDuration(service.duration_minutes)}</span>
+                                    )}
+                                    {service.vat_status && (
+                                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${service.vat_status === "voll" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-500"}`}>
+                                        {service.vat_status === "voll" ? "VAT 8.1%" : "VAT free"}
+                                      </span>
+                                    )}
+
+                                    <button type="button" onClick={() => handleStartEditService(service)} className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+                                      Edit
+                                    </button>
+                                    <button type="button" onClick={() => void handleDeleteService(service.id)} disabled={isDeleting} className="inline-flex items-center rounded-full border border-red-100 bg-red-50 px-2 py-0.5 font-medium text-red-600 shadow-sm hover:bg-red-100 disabled:opacity-60">
+                                      {isDeleting ? "…" : "Delete"}
+                                    </button>
+                                  </div>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => void handleDeleteService(service.id)}
-                                  disabled={isDeleting || isSaving}
-                                  className="mt-1 inline-flex items-center text-[11px] font-medium text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {isDeleting ? "Deleting..." : "Delete"}
-                                </button>
-                              </div>
-                            </div>
+                              );
+                            })}
                           </div>
-                        );
-                      }
-
-                      return (
-                        <div
-                          key={service.id}
-                          className="flex items-center justify-between rounded-md bg-slate-50/70 px-2 py-1"
-                        >
-                          <div>
-                            <div className="font-medium text-slate-900">
-                              {service.code && (
-                                <>
-                                  <span className="font-bold text-[10px] mr-1">{service.code}</span>
-                                  <span className="text-slate-400 mr-1">-</span>
-                                </>
-                              )}
-                              {service.name}
-                            </div>
-                            <div className="text-[11px] text-slate-500">
-                              {category ? category.name : "Unknown category"}
-                              {service.description
-                                ? ` · ${service.description}`
-                                : ""}
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-1 text-[11px] text-slate-700">
-                            {service.base_price !== null ? (
-                              <span>CHF {service.base_price.toFixed(2)}</span>
-                            ) : (
-                              <span className="text-slate-400">CHF —</span>
-                            )}
-                            {service.vat_status ? (
-                              <span
-                                className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
-                                  service.vat_status === "voll"
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-slate-100 text-slate-500"
-                                }`}
-                                title={
-                                  service.vat_status === "voll"
-                                    ? "VAT applicable (8.1%)"
-                                    : "VAT exempt"
-                                }
-                              >
-                                {service.vat_status === "voll" ? "VAT 8.1%" : "VAT free"}
-                              </span>
-                            ) : null}
-                            {service.duration_minutes !== null ? (
-                              <span className="text-slate-500">{formatDuration(service.duration_minutes)}</span>
-                            ) : null}
-                            <div className="flex gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleStartEditService(service)}
-                                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void handleDeleteService(service.id)}
-                                disabled={deletingServiceId === service.id}
-                                className="inline-flex items-center rounded-full border border-red-100 bg-red-50 px-2 py-0.5 font-medium text-red-600 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {deletingServiceId === service.id
-                                  ? "Deleting..."
-                                  : "Delete"}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Pagination controls */}
-                  {totalPages > 1 && (
-                    <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-                      <p className="text-[11px] text-slate-500">
-                        Showing {startIndex + 1} to {Math.min(endIndex, filteredServices.length)} of {filteredServices.length} services
-                      </p>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setServicesPage((p) => Math.max(1, p - 1))}
-                          disabled={servicesPage === 1}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-[11px] text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          ←
-                        </button>
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                          let pageNum: number;
-                          if (totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (servicesPage <= 3) {
-                            pageNum = i + 1;
-                          } else if (servicesPage >= totalPages - 2) {
-                            pageNum = totalPages - 4 + i;
-                          } else {
-                            pageNum = servicesPage - 2 + i;
-                          }
-                          return (
-                            <button
-                              key={pageNum}
-                              type="button"
-                              onClick={() => setServicesPage(pageNum)}
-                              className={`inline-flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] ${servicesPage === pageNum
-                                ? "border-emerald-500 bg-emerald-500 text-white"
-                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                                }`}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        })}
-                        <button
-                          type="button"
-                          onClick={() => setServicesPage((p) => Math.min(totalPages, p + 1))}
-                          disabled={servicesPage === totalPages}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-[11px] text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          →
-                        </button>
+                        )}
                       </div>
-                    </div>
-                  )}
-                </>
+                    );
+                  })}
+                </div>
               );
             })()}
-
             {error ? (
               <p className="mt-2 text-xs text-red-600">{error}</p>
             ) : null}

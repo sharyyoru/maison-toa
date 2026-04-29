@@ -387,7 +387,7 @@ export default function MedicalConsultationsCard({
   const [invoiceProviderId, setInvoiceProviderId] = useState<string>("");
   // Tracks whether the user has manually picked a billing entity for this form session.
   // Reset when the doctor changes so auto-prefill kicks in again.
-  const billingEntityManuallyOverridden = useRef(false);
+  const [billingEntityOverride, setBillingEntityOverride] = useState(false);
   const [invoiceMode, setInvoiceMode] = useState<"group" | "individual" | "tardoc" | "flatrate">(
     "individual", // default to Individual Services
   );
@@ -849,7 +849,7 @@ export default function MedicalConsultationsCard({
   // This ensures auto-prefill works again after a previous edit session locked the flag.
   useEffect(() => {
     if (newConsultationOpen && !editingInvoiceId) {
-      billingEntityManuallyOverridden.current = false;
+      setBillingEntityOverride(false);
     }
   }, [newConsultationOpen, editingInvoiceId]);
 
@@ -861,7 +861,7 @@ export default function MedicalConsultationsCard({
   // User can manually override via the dropdown; override flag is reset when doctor changes.
   useEffect(() => {
     if (consultationRecordType !== "invoice") return;
-    if (billingEntityManuallyOverridden.current) return;
+    if (billingEntityOverride) return;
     if (!consultationDoctorId) return;
     if (billingEntityOptions.length === 0) return;
 
@@ -2334,7 +2334,7 @@ export default function MedicalConsultationsCard({
         setConsultationDoctorId(inv.doctor_user_id || "");
         setInvoiceProviderId(inv.provider_id || "");
         // Preserve loaded billing entity — don't let auto-prefill override it.
-        billingEntityManuallyOverridden.current = true;
+        setBillingEntityOverride(true);
         setInvoicePaymentMethod(inv.payment_method || "");
         setInvoiceExtraOption(inv.is_complimentary ? "complimentary" : null);
         setInvoiceCanton((inv.treatment_canton as SwissCanton) || DEFAULT_CANTON);
@@ -4437,7 +4437,7 @@ export default function MedicalConsultationsCard({
                     onChange={(event) => {
                       setConsultationDoctorId(event.target.value);
                       // User changed doctor in the UI -> clear override so auto-prefill kicks in.
-                      billingEntityManuallyOverridden.current = false;
+                      setBillingEntityOverride(false);
                     }}
                     className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   >
@@ -4458,42 +4458,6 @@ export default function MedicalConsultationsCard({
                 </div>
               </div>
 
-              {consultationRecordType === "invoice" && (
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-medium text-slate-700">
-                    {tf("billingEntity")}
-                  </label>
-                  <select
-                    value={invoiceProviderId}
-                    onChange={(event) => {
-                      setInvoiceProviderId(event.target.value);
-                      billingEntityManuallyOverridden.current = true;
-                    }}
-                    className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  >
-                    <option value="">{tf("selectBillingEntity")}</option>
-                    {billingEntityOptions.map((entity) => (
-                      <option key={entity.id} value={entity.id}>
-                        {entity.name}{entity.gln ? ` (GLN: ${entity.gln})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {invoiceProviderId && (() => {
-                    const selProv = billingEntityOptions.find(p => p.id === invoiceProviderId);
-                    if (!selProv) return null;
-                    const missing: string[] = [];
-                    if (!selProv.gln) missing.push("GLN");
-                    if (!selProv.zsr) missing.push("ZSR");
-                    if (!selProv.canton) missing.push("Canton");
-                    if (missing.length === 0) return null;
-                    return (
-                      <p className="text-[10px] text-amber-600">
-                        Missing: {missing.join(", ")} — required for TARDOC/insurance billing
-                      </p>
-                    );
-                  })()}
-                </div>
-              )}
 
               <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)] gap-2">
                 <div className="space-y-1">
@@ -4837,24 +4801,73 @@ export default function MedicalConsultationsCard({
                   </div>
 
                   <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-medium text-slate-700">
-                        {tf("paymentMethod")}
-                      </label>
-                      <select
-                        value={invoicePaymentMethod}
-                        onChange={(event) =>
-                          setInvoicePaymentMethod(event.target.value)
-                        }
-                        className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                      >
-                        <option value="">{tf("selectPaymentMethod")}</option>
-                        <option value="Cash">{tf("cash")}</option>
-                        <option value="Card">{tf("card")}</option>
-                        <option value="Online Payment">{tf("onlinePayment")}</option>
-                        <option value="Bank transfer">{tf("bankTransfer")}</option>
-                        <option value="Insurance">{tf("insurance")}</option>
-                      </select>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-medium text-slate-700">
+                          {tf("paymentMethod")}
+                        </label>
+                        <select
+                          value={invoicePaymentMethod}
+                          onChange={(event) => {
+                            setInvoicePaymentMethod(event.target.value);
+                          }}
+                          className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        >
+                          <option value="">{tf("selectPaymentMethod")}</option>
+                          <option value="Cash">{tf("cash")}</option>
+                          <option value="Card">{tf("card")}</option>
+                          <option value="Online Payment">{tf("onlinePayment")}</option>
+                          <option value="Bank transfer">{tf("bankTransfer")}</option>
+                          <option value="Insurance">{tf("insurance")}</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[11px] font-medium text-slate-700">
+                            {tf("billingEntity")}
+                          </label>
+                          <label className="flex items-center gap-1 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={billingEntityOverride}
+                              onChange={(e) => {
+                                setBillingEntityOverride(e.target.checked);
+                              }}
+                              className="h-3 w-3 rounded border-slate-300 text-sky-600"
+                            />
+                            <span className="text-[10px] text-slate-500">Override</span>
+                          </label>
+                        </div>
+                        <select
+                          value={invoiceProviderId}
+                          disabled={!billingEntityOverride}
+                          onChange={(event) => {
+                            setInvoiceProviderId(event.target.value);
+                          }}
+                          className={`block w-full rounded-lg border px-2 py-1.5 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-sky-500 ${
+                            billingEntityOverride
+                              ? "border-sky-400 bg-white text-slate-900 focus:border-sky-500"
+                              : "border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed"
+                          }`}
+                        >
+                          <option value="">{tf("selectBillingEntity")}</option>
+                          {billingEntityOptions.map((entity) => (
+                            <option key={entity.id} value={entity.id}>
+                              {entity.name}{entity.billing_type === "aesthetic" ? " ✦" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        {invoiceProviderId && (() => {
+                          const selProv = billingEntityOptions.find(p => p.id === invoiceProviderId);
+                          if (!selProv) return null;
+                          const isAesthetic = selProv.billing_type === "aesthetic";
+                          return (
+                            <p className={`text-[10px] ${isAesthetic ? "text-violet-600" : "text-sky-600"}`}>
+                              {isAesthetic ? "VAT 8.1% applies" : "VAT exempt (Tardoc/KVG)"}
+                            </p>
+                          );
+                        })()}
+                      </div>
                     </div>
 
                     <div className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)]">
