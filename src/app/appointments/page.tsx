@@ -716,6 +716,7 @@ export default function CalendarPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isSystemUser, setIsSystemUser] = useState(false);
   const [doctorCalendars, setDoctorCalendars] = useState<DoctorCalendar[]>([]);
+  const [calendarDefaultIds, setCalendarDefaultIds] = useState<string[] | null>(null);
   const [doctorSchedulingSettings, setDoctorSchedulingSettings] = useState<DoctorSchedulingConfig[]>([]);
   const [showAllDoctors, setShowAllDoctors] = useState(false);
   const [activeDoctorTabId, setActiveDoctorTabId] = useState<string | null>(null);
@@ -1308,7 +1309,7 @@ export default function CalendarPage() {
         const rawName = provider.name ?? "Unnamed doctor";
         const trimmedName = rawName.trim() || "Unnamed doctor";
 
-        // Priority: 1) URL doctor ID, 2) URL doctor name, 3) saved selection, 4) default logic
+        // Priority: 1) URL doctor ID, 2) URL doctor name, 3) saved selection, 4) calendar defaults, 5) current user, 6) all
         let selected: boolean;
         if (initialDoctorId) {
           // If doctor ID param is specified, match by ID
@@ -1322,6 +1323,8 @@ export default function CalendarPage() {
                      targetLower.includes(nameLower);
         } else if (savedSelectedIds !== null) {
           selected = savedSelectedIds.includes(provider.id);
+        } else if (calendarDefaultIds !== null) {
+          selected = calendarDefaultIds.includes(provider.id);
         } else if (currentUserId) {
           selected = provider.id === currentUserId;
         } else {
@@ -1339,8 +1342,8 @@ export default function CalendarPage() {
         return calendar;
       });
 
-      // Only apply fallback logic if no saved selections exist
-      if (savedSelectedIds === null && currentUserId) {
+      // Only apply fallback logic if no saved selections and no configured defaults
+      if (savedSelectedIds === null && calendarDefaultIds === null && currentUserId) {
         const anySelected = baseCalendars.some((calendar) => calendar.selected);
         if (!anySelected && baseCalendars.length > 0) {
           baseCalendars[0] = {
@@ -1362,7 +1365,7 @@ export default function CalendarPage() {
 
       return baseCalendars;
     });
-  }, [providers, currentUserId, initialDoctorId, initialDoctorName]);
+  }, [providers, currentUserId, initialDoctorId, initialDoctorName, calendarDefaultIds]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1468,6 +1471,31 @@ export default function CalendarPage() {
       }
     }
     void loadSchedulingSettings();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Load calendar defaults
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCalendarDefaults() {
+      try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return; // no session → fall back to own calendar
+        const res = await fetch("/api/settings/calendar-defaults", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!isMounted) return;
+        if (res.ok) {
+          const data = await res.json();
+          const ids = (data.defaults || []).map((d: any) => d.provider_id as string);
+          setCalendarDefaultIds(ids.length > 0 ? ids : null);
+        }
+      } catch {
+        if (!isMounted) return;
+      }
+    }
+    void loadCalendarDefaults();
     return () => { isMounted = false; };
   }, []);
 

@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 const TABS = [
   { id: "external-labs", label: "External Labs" },
   { id: "doctor-scheduling", label: "Doctor Scheduling" },
+  { id: "calendar-defaults", label: "Calendar Defaults" },
   { id: "medidata", label: "MediData Connection" },
   { id: "booking-categories", label: "Booking Categories" },
 ] as const;
@@ -41,6 +43,7 @@ export default function SettingsPage() {
   const tabLabels: Record<TabId, string> = {
     "external-labs": t("tabs.externalLabs"),
     "doctor-scheduling": t("tabs.doctorScheduling"),
+    "calendar-defaults": t("tabs.calendarDefaults"),
     "medidata": t("tabs.medidata"),
     "booking-categories": t("tabs.bookingCategories"),
   };
@@ -76,6 +79,7 @@ export default function SettingsPage() {
       <div className="mt-6">
         {activeTab === "external-labs" && <ExternalLabsTab />}
         {activeTab === "doctor-scheduling" && <DoctorSchedulingTab />}
+        {activeTab === "calendar-defaults" && <CalendarDefaultsTab />}
         {activeTab === "medidata" && <MediDataConnectionTab />}
         {activeTab === "booking-categories" && <BookingCategoriesTab />}
       </div>
@@ -117,6 +121,151 @@ const DEFAULT_DURATION_OPTIONS = [
   { value: 90, label: "1.5 hours" },
   { value: 120, label: "2 hours" },
 ];
+
+function CalendarDefaultsTab() {
+  // Each entry: { providerId: string (providers table), name: string }
+  const [staffList, setStaffList] = useState<{ providerId: string; name: string }[]>([]);
+  const [defaultIds, setDefaultIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        const token = session?.access_token;
+        const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+        const [defaultsRes, usersRes] = await Promise.all([
+          fetch("/api/settings/calendar-defaults", { headers: authHeaders }),
+          fetch("/api/users/list"),
+        ]);
+
+        if (defaultsRes.ok) {
+          const data = await defaultsRes.json();
+          setDefaultIds((data.defaults || []).map((d: any) => d.provider_id as string));
+        }
+        if (usersRes.ok) {
+          const data: any[] = await usersRes.json();
+          // Only show users that have a linked provider_id (i.e. they appear on the calendar)
+          const mapped = (Array.isArray(data) ? data : [])
+            .filter((u) => u.provider_id)
+            .map((u) => ({
+              providerId: u.provider_id as string,
+              name: (u.full_name || u.email || "Unnamed") as string,
+            }));
+          setStaffList(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to load calendar defaults:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  function toggleProvider(id: string) {
+    setDefaultIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch("/api/settings/calendar-defaults", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ provider_ids: defaultIds }),
+      });
+      if (res.ok) {
+        setToast({ type: "success", message: "Calendar defaults saved." });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setToast({ type: "error", message: err.error || "Failed to save." });
+      }
+    } catch {
+      setToast({ type: "error", message: "Failed to save." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="max-w-xl rounded-2xl border border-slate-200/80 bg-white/80 shadow-sm">
+      {/* Toast — portalled to body to escape overflow:hidden ancestors */}
+      {toast && typeof document !== "undefined" && createPortal(
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium ${
+          toast.type === "success" ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+        }`}>
+          {toast.message}
+        </div>,
+        document.body
+      )}
+
+      <div className="border-b border-slate-200/80 px-6 py-4">
+        <h2 className="text-sm font-semibold text-slate-800">Default Calendars</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Choose which calendars open by default for your account. If none are selected, your own calendar opens by default.
+        </p>
+      </div>
+
+      <div className="px-6 py-4">
+        {loading ? (
+          <p className="text-xs text-slate-400">Loading…</p>
+        ) : staffList.length === 0 ? (
+          <p className="text-xs text-slate-400">No staff members found.</p>
+        ) : (
+          <div className="space-y-1">
+            {staffList.map((s) => (
+              <label
+                key={s.providerId}
+                className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={defaultIds.includes(s.providerId)}
+                  onChange={() => toggleProvider(s.providerId)}
+                  className="h-4 w-4 rounded border-slate-300 accent-sky-500"
+                />
+                <span className="text-sm text-slate-700">{s.name}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between border-t border-slate-200/80 px-6 py-3">
+        <span className="text-xs text-slate-400">
+          {defaultIds.length === 0
+            ? "No defaults set — your own calendar opens by default."
+            : `${defaultIds.length} calendar${defaultIds.length !== 1 ? "s" : ""} selected.`}
+        </span>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || loading}
+          className="rounded-lg bg-sky-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-sky-600 transition-colors disabled:opacity-60"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function DoctorSchedulingTab() {
   const t = useTranslations("settingsPage.scheduling");

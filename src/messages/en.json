@@ -1277,6 +1277,7 @@
     "tabs": {
       "externalLabs": "External Labs",
       "doctorScheduling": "Doctor Scheduling",
+      "calendarDefaults": "Calendar Defaults",
       "medidata": "MediData Connection",
       "bookingCategories": "Booking Categories"
     },

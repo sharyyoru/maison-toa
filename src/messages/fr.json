@@ -1277,6 +1277,7 @@
     "tabs": {
       "externalLabs": "Laboratoires externes",
       "doctorScheduling": "Planification des médecins",
+      "calendarDefaults": "Calendriers par défaut",
       "medidata": "Connexion MediData",
       "bookingCategories": "Catégories de réservation"
     },
