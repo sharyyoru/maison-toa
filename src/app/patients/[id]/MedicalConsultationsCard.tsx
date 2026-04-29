@@ -4098,12 +4098,17 @@ export default function MedicalConsultationsCard({
                         }
 
                         // ── CREATE MODE: Insert new invoice ──
+                        const isCashOrCard = ["cash", "card"].includes((paymentMethod || "").toLowerCase());
+                        const nowIso = new Date().toISOString();
                         const invoiceInsertPayload: Record<string, unknown> = {
                           ...invoicePayload,
                           patient_id: patientId,
                           consultation_id: invoiceFromConsultationId || null,
                           invoice_number: consultationId,
-                          status: "OPEN",
+                          status: isCashOrCard ? "PAID" : "OPEN",
+                          paid_amount: isCashOrCard ? (invoiceTotalAmountForInsert || 0) : 0,
+                          paid_at: isCashOrCard ? nowIso : null,
+                          paid_by_user_id: isCashOrCard ? (createdByUserId || null) : null,
                           created_by_user_id: createdByUserId,
                           created_by_name: createdByName,
                           is_archived: false,
@@ -4242,9 +4247,9 @@ export default function MedicalConsultationsCard({
                           invoice_id: invoiceRow.id,
                           invoice_total_amount: invoiceTotalAmountForInsert,
                           invoice_is_complimentary: invoiceIsComplimentaryForInsert,
-                          invoice_is_paid: false,
-                          invoice_status: "OPEN",
-                          invoice_paid_amount: null,
+                          invoice_is_paid: isCashOrCard,
+                          invoice_status: isCashOrCard ? "PAID" : "OPEN",
+                          invoice_paid_amount: isCashOrCard ? (invoiceTotalAmountForInsert || 0) : null,
                           cash_receipt_path: null,
                           invoice_pdf_path: null,
                           payment_link_token: null,
