@@ -62,6 +62,7 @@ type AppointmentPatient = {
   email: string | null;
   phone: string | null;
   is_vip?: boolean | null;
+  language_preference?: string | null;
 };
 
 type AppointmentPatientSuggestion = {
@@ -543,10 +544,6 @@ async function sendAppointmentConfirmationEmail(
   if (!patientEmail) return;
 
   try {
-    const { data: authData } = await supabaseClient.auth.getUser();
-    const authUser = authData?.user ?? null;
-    const fromAddress = authUser?.email ?? null;
-
     const start = new Date(appointment.start_time);
     const end = appointment.end_time ? new Date(appointment.end_time) : null;
 
@@ -554,98 +551,42 @@ async function sendAppointmentConfirmationEmail(
     const timeLabel = formatTimeRangeLabel(start, end);
     const dateTimeLabel = `${dateLabel} ${timeLabel}`;
 
-    const patientName = `${appointment.patient?.first_name ?? ""} ${appointment
-      .patient?.last_name ?? ""}`
-      .trim()
-      .replace(/\s+/g, " ");
-
     const doctorName =
       getDoctorNameFromReason(appointment.reason) ??
       appointment.provider?.name ??
       "your doctor";
 
-    const location = appointment.location ?? "the clinic";
+    const location = appointment.location ?? "Lausanne";
 
     const { serviceLabel } = getServiceAndStatusFromReason(appointment.reason);
 
-    const preConsultationUrl = "https://maison-toa-dk99.vercel.app/intake";
-
-    const subject = `Appointment confirmation - ${dateLabel} ${timeLabel}`;
-
-    const htmlBody = `
-      <p>Dear ${patientName || "patient"},</p>
-      <p>Your appointment has been booked with ${doctorName}.</p>
-      <p>
-        <strong>Date:</strong> ${dateLabel}<br />
-        <strong>Time:</strong> ${timeLabel}<br />
-        <strong>Location:</strong> ${location}
-      </p>
-      <p>
-        If you need to reschedule or cancel, please contact the clinic or reply to this email.
-      </p>
-      <p>
-        <strong>Complete Your Pre-Consultation Form</strong><br />
-        <a href="${preConsultationUrl}">Pre Consultation Link</a>
-      </p>
-      <p>
-        <strong>Aesthetics Clinic</strong><br />
-        <strong>GENEVE</strong><br />
-        Chemin Rieu 18,1208, Switzerland<br />
-        Rue du Rhône 17, 1204 <br />
-        📞 0227322223 ✉️ info@aesthetics-ge.ch<br /><br />
-        <strong>GSTAAD</strong><br />
-        Gsteigstrasse 70, 3780, Switzerland<br />
-        📞 +41 337 483 437 ✉️ info@aesthetics-ge.ch<br /><br />
-        <strong>MONTREUX</strong><br />
-        Av Calud Nobs 2, 1820, Switzerland<br />
-        📞 +41 21 991 98 98 ✉️ info@thebeautybooth.shop
-      </p>
-    `;
-
-    const nowIso = new Date().toISOString();
-
-    const { data, error } = await supabaseClient
-      .from("emails")
-      .insert({
-        patient_id: appointment.patient_id,
-        deal_id: null,
-        to_address: patientEmail,
-        from_address: fromAddress,
-        subject,
-        body: htmlBody,
-        direction: "outbound",
-        status: "sent",
-        sent_at: nowIso,
-      })
-      .select("id")
-      .single();
-
-    if (error || !data) {
-      console.error("Failed to insert appointment confirmation email", error);
-      return;
-    }
-
+    // Send branded confirmation email via API
     try {
-      await fetch("/api/emails/send", {
+      await fetch("/api/appointments/send-confirmation", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          to: patientEmail,
-          subject,
-          html: htmlBody,
-          fromUserEmail: fromAddress,
-          emailId: (data as any).id as string,
+          appointmentId: appointment.id,
+          patientEmail,
+          patientFirstName: appointment.patient?.first_name ?? "",
+          patientLastName: appointment.patient?.last_name ?? "",
+          doctorName,
+          appointmentDate: appointment.start_time,
+          service: serviceLabel || "Consultation",
+          location,
+          language: appointment.patient?.language_preference || "fr",
         }),
       });
     } catch (error) {
       console.error(
-        "Appointment confirmation email saved but failed to send via provider",
+        "Failed to send branded appointment confirmation email",
         error,
       );
     }
 
+    // Send WhatsApp notification if patient has phone
     const patientPhone = appointment.patient?.phone ?? null;
     if (patientPhone && patientPhone.trim().length > 0) {
       const whatsappText = `Appointment confirmation on ${dateTimeLabel} for ${serviceLabel} with ${doctorName} at ${location}`;
@@ -985,7 +926,7 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip), provider:providers(id, name)",
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -2556,7 +2497,7 @@ export default function CalendarPage() {
           const { data: fullApptData } = await supabaseClient
             .from("appointments")
             .select(
-              "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip), provider:providers(id, name)",
+              "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
             )
             .eq('id', firstAppt.id)
             .single();
@@ -2572,7 +2513,7 @@ export default function CalendarPage() {
         const { data: refreshedData } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip), provider:providers(id, name)",
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -2621,7 +2562,7 @@ export default function CalendarPage() {
             source: "manual",
           })
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip), provider:providers(id, name)",
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .single();
 
@@ -2911,7 +2852,7 @@ export default function CalendarPage() {
         })
         .eq("id", editingAppointment.id)
         .select(
-          "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip), provider:providers(id, name)",
+          "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
         )
         .single();
 
