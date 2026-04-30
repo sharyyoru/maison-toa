@@ -48,7 +48,7 @@ export type FormDefinition = {
   description: string;
   descriptionFr?: string;
   language: "en" | "fr";
-  category: "consent" | "questionnaire" | "instructions";
+  category: "consent" | "questionnaire" | "instructions" | "attestation" | "convocation" | "operative-protocol" | "medical-letter" | "insurance-letter";
   originalFile: string;
   sections: FormSection[];
 };
@@ -267,7 +267,7 @@ export function getFormsByLanguage(language: "en" | "fr"): FormDefinition[] {
   return FORM_DEFINITIONS.filter((form) => form.language === language);
 }
 
-export function getFormsByCategory(category: "consent" | "questionnaire" | "instructions"): FormDefinition[] {
+export function getFormsByCategory(category: "consent" | "questionnaire" | "instructions" | "attestation" | "convocation" | "operative-protocol" | "medical-letter" | "insurance-letter"): FormDefinition[] {
   return FORM_DEFINITIONS.filter((form) => form.category === category);
 }
 
