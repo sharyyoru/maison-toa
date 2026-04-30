@@ -51,6 +51,7 @@ export type FormDefinition = {
   category: "consent" | "questionnaire" | "instructions" | "attestation" | "convocation" | "operative-protocol" | "medical-letter" | "insurance-letter";
   originalFile: string;
   sections: FormSection[];
+  doctor?: string;
 };
 
 export const FORM_DEFINITIONS: FormDefinition[] = [
