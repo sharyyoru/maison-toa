@@ -1356,9 +1356,12 @@ export default function PatientActivityCard({
 
       // Handle editing existing note
       if (editingNote) {
+        // Convert plain text to HTML (preserve line breaks)
+        const htmlBody = trimmed.replace(/\n/g, "<br>");
+        
         const { data: updated, error: updateError } = await supabaseClient
           .from("patient_notes")
-          .update({ body: trimmed })
+          .update({ body: htmlBody })
           .eq("id", editingNote.id)
           .select("id, body, author_name, created_at")
           .single();
@@ -1446,7 +1449,9 @@ export default function PatientActivityCard({
   // Function to start editing a note
   function handleEditNote(note: PatientNote) {
     setEditingNote(note);
-    setNoteBody(note.body);
+    // Strip HTML tags for editing in textarea
+    const plainText = (note.body || "").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+    setNoteBody(plainText);
     setNoteSaveError(null);
     setNoteModalOpen(true);
   }

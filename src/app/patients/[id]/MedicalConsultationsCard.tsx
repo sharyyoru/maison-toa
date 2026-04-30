@@ -523,6 +523,7 @@ export default function MedicalConsultationsCard({
   const [editConsultationTarget, setEditConsultationTarget] = useState<ConsultationRow | null>(null);
   const [editConsultationTitle, setEditConsultationTitle] = useState("");
   const [editConsultationContent, setEditConsultationContent] = useState("");
+  const editConsultationContentRef = useRef<HTMLDivElement>(null);
   const [editConsultationDoctorId, setEditConsultationDoctorId] = useState("");
   const [editConsultationDate, setEditConsultationDate] = useState("");
   const [editConsultationHour, setEditConsultationHour] = useState("");
@@ -1536,6 +1537,13 @@ export default function MedicalConsultationsCard({
     setEditConsultationModalOpen(true);
   }
 
+  // Sync edit consultation content to contentEditable div
+  useEffect(() => {
+    if (editConsultationModalOpen && editConsultationContentRef.current) {
+      editConsultationContentRef.current.innerHTML = editConsultationContent;
+    }
+  }, [editConsultationModalOpen, editConsultationContent]);
+
   async function handleSaveEditInvoice() {
     if (!editInvoiceTarget) return;
 
@@ -2039,11 +2047,14 @@ export default function MedicalConsultationsCard({
         doctorName = null;
       }
 
+      // Get HTML content from contentEditable div
+      const htmlContent = editConsultationContentRef.current?.innerHTML || editConsultationContent;
+
       const { error } = await supabaseClient
         .from("consultations")
         .update({
           title: editConsultationTitle,
-          content: editConsultationContent,
+          content: htmlContent,
           doctor_user_id: editConsultationDoctorId || null,
           doctor_name: doctorName,
           scheduled_at: scheduledAt,
@@ -2063,7 +2074,7 @@ export default function MedicalConsultationsCard({
             ? {
                 ...row,
                 title: editConsultationTitle,
-                content: editConsultationContent,
+                content: htmlContent,
                 doctor_user_id: editConsultationDoctorId || null,
                 doctor_name: doctorName,
                 scheduled_at: scheduledAt || row.scheduled_at,
@@ -4583,12 +4594,12 @@ export default function MedicalConsultationsCard({
                         }}
                         className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-[13px] text-slate-700 hover:bg-slate-100"
                       >
-                        7
+                        •
                       </button>
                     </div>
                     <div className="relative">
                       <div
-                        className="min-h-[80px] max-h-64 overflow-y-auto px-2 py-1.5 text-[11px] text-slate-900 focus:outline-none"
+                        className="min-h-[80px] max-h-64 overflow-y-auto px-2 py-1.5 text-[11px] text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
                         contentEditable
                         onInput={(event) => {
                           const html = (event.currentTarget as HTMLDivElement).innerHTML;
@@ -7024,13 +7035,13 @@ export default function MedicalConsultationsCard({
                       {/* Content/Notes */}
                       {isNotes && row.content ? (
                         <div
-                          className="rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-3 text-[12px] leading-relaxed text-slate-700"
+                          className="rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-3 text-[12px] leading-relaxed text-slate-700 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
                           style={{ whiteSpace: "pre-wrap" }}
                           dangerouslySetInnerHTML={{ __html: row.content }}
                         />
                       ) : (isPrescription || isInvoice) && row.content ? (
                         <div
-                          className="rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-3 text-[12px] leading-relaxed text-slate-700"
+                          className="rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-3 text-[12px] leading-relaxed text-slate-700 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
                           dangerouslySetInnerHTML={{ __html: row.content }}
                         />
                       ) : null}
@@ -8082,13 +8093,49 @@ export default function MedicalConsultationsCard({
 
               <div className="space-y-1">
                 <label className="block text-[11px] font-medium text-slate-700">Content / Notes</label>
-                <textarea
-                  value={editConsultationContent}
-                  onChange={(e) => setEditConsultationContent(e.target.value)}
-                  rows={8}
-                  className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  placeholder="Enter consultation notes..."
-                />
+                <div className="rounded-lg border border-slate-200 bg-white">
+                  <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        document.execCommand("bold");
+                        editConsultationContentRef.current?.focus();
+                      }}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      B
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        document.execCommand("italic");
+                        editConsultationContentRef.current?.focus();
+                      }}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-[11px] font-medium italic text-slate-700 hover:bg-slate-100"
+                    >
+                      I
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        document.execCommand("insertUnorderedList");
+                        editConsultationContentRef.current?.focus();
+                      }}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-[13px] text-slate-700 hover:bg-slate-100"
+                    >
+                      •
+                    </button>
+                  </div>
+                  <div
+                    ref={editConsultationContentRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    className="min-h-[120px] max-h-64 overflow-y-auto px-3 py-2 text-xs text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                  />
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">

@@ -25,6 +25,7 @@ import PatientPageClientWrapper from "./PatientPageClientWrapper";
 import PatientFormsTab from "./PatientFormsTab";
 import PatientTabRegistrar from "./PatientTabRegistrar";
 import VipToggle from "./VipToggle";
+import PatientNotesDrawer from "@/components/PatientNotesDrawer";
 
 export const dynamic = "force-dynamic";
 
@@ -740,6 +741,9 @@ export default async function PatientPage({
           </div>
         ) : null}
       </PatientPageClientWrapper>
+
+      {/* Notes drawer - available on all tabs */}
+      <PatientNotesDrawer patientId={patient.id} />
     </div>
   );
 }

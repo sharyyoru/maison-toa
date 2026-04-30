@@ -46,7 +46,6 @@ export default function PatientCockpitDetails({
   const [country, setCountry] = useState(patient.country ?? "");
 
   function handleOpen(type: ModalType) {
-    // Reset form state to current patient values
     if (type === "details") {
       setEmail(patient.email ?? "");
       setPhone(patient.phone ?? "");
@@ -200,7 +199,6 @@ export default function PatientCockpitDetails({
         </div>
       </div>
 
-      {/* Modal overlay */}
       {openModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="relative w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
