@@ -169,7 +169,7 @@ function formatDateLocal(date: Date): string {
   return formatSwissYmd(date);
 }
 
-function findNearestAvailableDate(doctorSlug: string, locationId: string, maxDaysAhead: number = 90, dbAvail?: DayAvailability | null): string | null {
+function findNearestAvailableDate(doctorSlug: string, locationId: string, maxDaysAhead: number = 365, dbAvail?: DayAvailability | null): string | null {
   const today = getSwissToday();
 
   for (let i = 1; i <= maxDaysAhead; i++) {
@@ -182,7 +182,7 @@ function findNearestAvailableDate(doctorSlug: string, locationId: string, maxDay
   return null;
 }
 
-function getAvailableDates(doctorSlug: string, locationId: string, maxDaysAhead: number = 90, dbAvail?: DayAvailability | null): string[] {
+function getAvailableDates(doctorSlug: string, locationId: string, maxDaysAhead: number = 365, dbAvail?: DayAvailability | null): string[] {
   const today = getSwissToday();
   const availableDates: string[] = [];
   for (let i = 1; i <= maxDaysAhead; i++) {
@@ -529,12 +529,6 @@ function DoctorBookingContent() {
     return tomorrow.toISOString().split("T")[0];
   };
 
-  const getMaxDate = () => {
-    const maxDate = new Date();
-    maxDate.setMonth(maxDate.getMonth() + 3);
-    return maxDate.toISOString().split("T")[0];
-  };
-
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -759,7 +753,7 @@ function DoctorBookingContent() {
                     <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
-                    <p className="text-sm text-amber-700">No available slots in the next 3 months</p>
+                    <p className="text-sm text-amber-700">No available slots found</p>
                   </div>
                 ) : null}
 
@@ -774,7 +768,6 @@ function DoctorBookingContent() {
                       setSelectedTime("");
                     }}
                     min={getMinDate()}
-                    max={getMaxDate()}
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 outline-none transition-all"
                   />
                 </div>
