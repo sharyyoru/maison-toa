@@ -35,6 +35,19 @@ function parseLocalDate(dateStr: string): Date {
   return parseSwissDate(dateStr);
 }
 
+function slotConflicts(time: string, durationMinutes: number, bookedSlots: string[]): boolean {
+  const [h, m] = time.split(":").map(Number);
+  const startMins = h * 60 + m;
+  const endMins = startMins + durationMinutes;
+  for (const booked of bookedSlots) {
+    const [bh, bm] = booked.split(":").map(Number);
+    const bookedStart = bh * 60 + bm;
+    const bookedEnd = bookedStart + 30;
+    if (startMins < bookedEnd && endMins > bookedStart) return true;
+  }
+  return false;
+}
+
 function generateTimeSlots(doctorSlug: string, locationId: string, dateStr: string, dbAvail?: DayAvailability | null): string[] {
   const date = parseLocalDate(dateStr);
   const dayOfWeek = date.getDay();
@@ -217,7 +230,8 @@ function DoctorBookingContent() {
               : [];
 
             const allSlots = generateTimeSlots(doctorSlug, locationId, dateStr, dbAvailability);
-            const openSlots = allSlots.filter(time => !blockedSlots.includes(time));
+            const duration = treatment?.duration_minutes ?? 60;
+            const openSlots = allSlots.filter(time => !slotConflicts(time, duration, blockedSlots));
             
             if (openSlots.length > 0) {
               setNearestAvailableDate(dateStr);
@@ -274,7 +288,8 @@ function DoctorBookingContent() {
       }
       
       const currentSlots = generateTimeSlots(doctorSlug, locationId || "", date, dbAvailability);
-      const openSlots = currentSlots.filter(time => !blockedSlots.includes(time));
+      const duration = treatment?.duration_minutes ?? 60;
+      const openSlots = currentSlots.filter(time => !slotConflicts(time, duration, blockedSlots));
       if (openSlots.length > 0) {
         setSelectedTime(openSlots[0]);
         if (date === nearestAvailableDate) {
@@ -668,7 +683,8 @@ function DoctorBookingContent() {
                 </div>
 
                 {selectedDate && availableSlots.length > 0 && (() => {
-                  const openSlots = availableSlots.filter(time => !bookedSlots.includes(time));
+                  const duration = treatment?.duration_minutes ?? 60;
+                  const openSlots = availableSlots.filter(time => !slotConflicts(time, duration, bookedSlots));
                   
                   if (openSlots.length === 0) {
                     return (
