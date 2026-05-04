@@ -26,6 +26,7 @@ type BookingPayload = {
   location?: string;
   language?: string;
   gender?: string;
+  treatmentId?: string;
 };
 
 async function sendEmail(to: string, subject: string, html: string) {
@@ -239,6 +240,7 @@ export async function POST(request: Request) {
       notes,
       location,
       language = "en",
+      treatmentId,
     } = body;
 
     // Validate required fields
@@ -310,11 +312,22 @@ export async function POST(request: Request) {
     const MULTI_CAPACITY_DOCTORS = ["xavier-tenorio", "cesar-rodriguez"];
     const maxCapacity = MULTI_CAPACITY_DOCTORS.includes(doctorSlug) ? 3 : 1;
 
+    // Look up treatment duration; fall back to 60 min if not found
+    let durationMinutes = 60;
+    if (treatmentId) {
+      const { data: treatmentData } = await supabase
+        .from("booking_treatments")
+        .select("duration_minutes")
+        .eq("id", treatmentId)
+        .single();
+      if (treatmentData?.duration_minutes) {
+        durationMinutes = treatmentData.duration_minutes;
+      }
+    }
+
     // Check if time slot has capacity for this doctor using full overlap detection.
-    // The appointment is 1 hour; we check for any existing appointment that overlaps
-    // the full [appointmentDateObj, appointmentDateObj + 1h) window.
     const apptStart = appointmentDateObj;
-    const apptEnd = new Date(appointmentDateObj.getTime() + 60 * 60 * 1000); // 1 hour
+    const apptEnd = new Date(appointmentDateObj.getTime() + durationMinutes * 60 * 1000);
 
     console.log(`[Booking] Checking availability for ${doctorName} (${doctorSlug}) at ${apptStart.toISOString()}`);
     console.log(`[Booking] Max capacity for this doctor: ${maxCapacity}`);
