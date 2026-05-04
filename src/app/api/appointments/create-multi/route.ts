@@ -94,7 +94,30 @@ export async function POST(request: Request) {
       .from('providers')
       .select('id, name')
       .in('id', providerIds);
-    
+
+    // Check for overlapping appointments for each provider (future bookings only)
+    if (new Date(startTime) > new Date()) {
+      const { data: overlapping } = await supabase
+        .from('appointments')
+        .select('id, provider_id, reason')
+        .lt('start_time', endTime)
+        .gt('end_time', startTime)
+        .not('status', 'in', '(cancelled,no_show)')
+        .in('provider_id', providerIds);
+
+      if (overlapping && overlapping.length > 0) {
+        const conflictingProviderIds = new Set(overlapping.map((a: { provider_id: string }) => a.provider_id));
+        const conflictingNames = (providers || [])
+          .filter((p: { id: string }) => conflictingProviderIds.has(p.id))
+          .map((p: { name: string }) => p.name)
+          .join(', ');
+        return NextResponse.json(
+          { error: `Scheduling conflict: ${conflictingNames} already has an appointment during this time.` },
+          { status: 409 }
+        );
+      }
+    }
+
     // Create N separate appointment rows (one per doctor)
     const appointmentRows = providerIds.map((providerId: string) => {
       const provider = providers?.find((p) => p.id === providerId);

@@ -310,20 +310,21 @@ export async function POST(request: Request) {
     const MULTI_CAPACITY_DOCTORS = ["xavier-tenorio", "cesar-rodriguez"];
     const maxCapacity = MULTI_CAPACITY_DOCTORS.includes(doctorSlug) ? 3 : 1;
 
-    // Check if time slot has capacity for this doctor
-    // Use 30-minute slot window to match the check-availability logic
-    const slotStart = new Date(appointmentDateObj);
-    const slotEnd = new Date(appointmentDateObj.getTime() + 30 * 60 * 1000); // 30 minutes
+    // Check if time slot has capacity for this doctor using full overlap detection.
+    // The appointment is 1 hour; we check for any existing appointment that overlaps
+    // the full [appointmentDateObj, appointmentDateObj + 1h) window.
+    const apptStart = appointmentDateObj;
+    const apptEnd = new Date(appointmentDateObj.getTime() + 60 * 60 * 1000); // 1 hour
 
-    console.log(`[Booking] Checking availability for ${doctorName} (${doctorSlug}) at ${slotStart.toISOString()}`);
+    console.log(`[Booking] Checking availability for ${doctorName} (${doctorSlug}) at ${apptStart.toISOString()}`);
     console.log(`[Booking] Max capacity for this doctor: ${maxCapacity}`);
     console.log(`[Booking] Provider ID found: ${providerId}`);
 
     const { data: existingAppointments, error: fetchError } = await supabase
       .from("appointments")
-      .select("id, no_patient, provider_id, reason, start_time")
-      .gte("start_time", slotStart.toISOString())
-      .lt("start_time", slotEnd.toISOString())
+      .select("id, no_patient, provider_id, reason, start_time, end_time")
+      .lt("start_time", apptEnd.toISOString())
+      .gt("end_time", apptStart.toISOString())
       .neq("status", "cancelled");
 
     if (fetchError) {
@@ -332,7 +333,7 @@ export async function POST(request: Request) {
 
     console.log(`[Booking] Found ${existingAppointments?.length || 0} total appointments in time range`);
 
-    // Filter to only this doctor's appointments
+    // Filter to only this doctor's appointments (excluding placeholder/blocking ones)
     const doctorAppointments = (existingAppointments || []).filter((apt) => {
       // Skip placeholder appointments
       if (apt.no_patient === true) return false;
@@ -353,7 +354,7 @@ export async function POST(request: Request) {
       return false;
     });
 
-    console.log(`[Booking] Found ${doctorAppointments.length} appointments for ${doctorName}`);
+    console.log(`[Booking] Found ${doctorAppointments.length} overlapping appointments for ${doctorName}`);
     console.log(`[Booking] Appointments:`, doctorAppointments.map(a => ({ id: a.id, provider_id: a.provider_id, reason: a.reason?.substring(0, 50) })));
 
     // Only block if provider has reached maximum capacity
@@ -410,9 +411,6 @@ export async function POST(request: Request) {
       isNewPatient = true;
     }
 
-    // Calculate end time (1 hour duration)
-    const endDateObj = new Date(appointmentDateObj.getTime() + 60 * 60 * 1000);
-
     // providerId was already looked up earlier for availability check
     // If it wasn't found earlier, try one more lookup method
     if (!providerId) {
@@ -443,7 +441,7 @@ export async function POST(request: Request) {
         patient_id: patientId,
         provider_id: providerId,
         start_time: appointmentDateObj.toISOString(),
-        end_time: endDateObj.toISOString(),
+        end_time: apptEnd.toISOString(),
         reason,
         location: location || "Geneva",
         status: "scheduled",
