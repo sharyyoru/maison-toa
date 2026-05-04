@@ -1052,37 +1052,6 @@ export default function CalendarPage() {
         setProvidersLoading(true);
         setProvidersError(null);
 
-        // First, check and add missing Maison Toa doctors and staff
-        const missingDoctors = [
-          { name: "Dr. Natalia Koltunova", check: "natalia" },
-          { name: "Dr. Reda Benani", check: "reda" },
-          { name: "Dr. Adnan Plakalo", check: "adnan" },
-          { name: "Laetitia Guarino", check: "laetitia guarino" },
-          { name: "Louise Goerig", check: "louise goerig" },
-          { name: "Juliette Le Mentec", check: "juliette le mentec" },
-          { name: "Gwendoline Boursault", check: "gwendoline boursault" },
-          { name: "Claire Balbo", check: "claire balbo" },
-          { name: "Ophélie Perrin", check: "ophelie perrin" },
-        ];
-        
-        for (const doctor of missingDoctors) {
-          const { data: existing } = await supabaseClient
-            .from("providers")
-            .select("id")
-            .ilike("name", `%${doctor.check}%`)
-            .maybeSingle();
-          
-          if (!existing) {
-            await supabaseClient
-              .from("providers")
-              .insert({
-                name: doctor.name,
-                email: "info@maisontoa.com",
-                specialty: "Dermatology & Venereology"
-              });
-          }
-        }
-
         // Load from providers table (appointments reference provider_id from this table)
         const { data, error } = await supabaseClient
           .from("providers")
