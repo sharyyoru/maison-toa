@@ -1371,6 +1371,7 @@ export async function buildInvoiceRequest(
             lGenerationAttributes: genAttrs,
             ePrintPreview: YesNo.No,
             eAddressRight: YesNo.Yes,
+            lLanguage: input.language ?? 2,
             plTimestamp: result.timestamp ?? 0,
           },
         );

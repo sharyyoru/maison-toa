@@ -183,10 +183,10 @@ export async function POST(request: NextRequest) {
       const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
       const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
       const provName = billingEntityData?.name || invoiceData.provider_name || "Aesthetics Clinic XT SA";
-      const provStreet = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Rue de Lausanne 64";
-      const provZip = billingEntityData?.zip_code || "1202";
-      const provCity = billingEntityData?.city || "Genève";
-      const provCanton = billingEntityData?.canton || invoiceData.treatment_canton || "GE";
+      const provStreet = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Voie du Chariot 6";
+      const provZip = billingEntityData?.zip_code || "1003";
+      const provCity = billingEntityData?.city || "Lausanne";
+      const provCanton = billingEntityData?.canton || invoiceData.treatment_canton || "VD";
       // IBAN: strip spaces, validate Swiss QR-IBAN (Sumex SetEsrQR requires IID 30000-31999).
       // Regular IBANs are rejected by Sumex with code 638; fall back to the clinic's default QR-IBAN.
       const sanitizeQrIban = (raw: string | null | undefined): string | null => {
@@ -431,10 +431,10 @@ export async function POST(request: NextRequest) {
       const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
       const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
       const provName = billingEntityData?.name || invoiceData.provider_name || "Aesthetics Clinic XT SA";
-      const provStreetFull = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Rue de Lausanne 64";
-      const provZip = billingEntityData?.zip_code || "1202";
-      const provCity = billingEntityData?.city || "Genève";
-      const provCanton = billingEntityData?.canton || invoiceData.treatment_canton || "GE";
+      const provStreetFull = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Voie du Chariot 6";
+      const provZip = billingEntityData?.zip_code || "1003";
+      const provCity = billingEntityData?.city || "Lausanne";
+      const provCanton = billingEntityData?.canton || invoiceData.treatment_canton || "VD";
       // QR-IBAN check: Sumex SetEsrQR requires IID 30000-31999.
       const sanitizeQrIban2 = (raw: string | null | undefined): string | null => {
         if (!raw) return null;
