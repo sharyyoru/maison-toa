@@ -7088,6 +7088,12 @@ export default function MedicalConsultationsCard({
                               )}
                             </div>
                           )}
+                          {linkedInvoice.content && (
+                            <div
+                              className="mb-2 rounded-md border border-slate-100 bg-white/80 px-3 py-2 text-[11px] text-slate-700 [&_table]:w-full [&_table]:text-[10px] [&_th]:text-left [&_th]:font-medium [&_th]:text-slate-500 [&_th]:pb-1 [&_td]:py-0.5 [&_td]:pr-2"
+                              dangerouslySetInnerHTML={{ __html: linkedInvoice.content }}
+                            />
+                          )}
                           {/* Installments summary */}
                           {linkedInvoice.invoice_id && installmentSummaries[linkedInvoice.invoice_id] && (
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-violet-100 bg-violet-50/60 px-3 py-2 text-[11px] mb-2">
