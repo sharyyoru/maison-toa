@@ -1021,19 +1021,21 @@ function BankPaymentReceipts() {
         setError(listError.message);
         setFiles([]);
       } else {
-        const items: ReceiptFile[] = (data || [])
-          .filter((f) => f.name && !f.name.startsWith("."))
-          .map((f) => {
-            const { data: urlData } = supabaseClient.storage
-              .from(BUCKET)
-              .getPublicUrl(f.name);
-            return {
-              name: f.name,
-              created_at: f.created_at || "",
-              size: (f.metadata as any)?.size || 0,
-              url: urlData?.publicUrl || "",
-            };
-          });
+        const items: ReceiptFile[] = await Promise.all(
+          (data || [])
+            .filter((f) => f.name && !f.name.startsWith("."))
+            .map(async (f) => {
+              const { data: signedData } = await supabaseClient.storage
+                .from(BUCKET)
+                .createSignedUrl(f.name, 3600);
+              return {
+                name: f.name,
+                created_at: f.created_at || "",
+                size: (f.metadata as any)?.size || 0,
+                url: signedData?.signedUrl || "",
+              };
+            })
+        );
         setFiles(items);
       }
     } catch {
