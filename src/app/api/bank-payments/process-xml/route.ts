@@ -79,36 +79,40 @@ function parseCamt054(xmlText: string): {
 
   for (const entry of entries) {
     const bookingDate = getTagContent(entry, "BookgDt>Dt");
-    const amtTag = entry.match(/<Amt[^>]*Ccy="([^"]*)"[^>]*>([^<]*)<\/Amt>/i);
-    const amount = amtTag ? parseFloat(amtTag[2]) : 0;
-    const currency = amtTag ? amtTag[1] : "CHF";
     const creditDebit = getTagContent(entry, "CdtDbtInd") || "CRDT";
 
-    // Get transaction details
-    const txDtls = getAllMatches(entry, "TxDtls");
-    const txBlock = txDtls[0] || entry;
+    // Each Ntry may have multiple TxDtls — iterate all
+    const txDtlsList = getAllMatches(entry, "TxDtls");
+    const blocks = txDtlsList.length > 0 ? txDtlsList : [entry];
 
-    const referenceNumber = getTagContent(txBlock, "CdtrRefInf>Ref");
-    const debtorName = getTagContent(txBlock, "Dbtr>Pty>Nm");
-    const ultimateDebtorName = getTagContent(txBlock, "UltmtDbtr>Pty>Nm");
-    const debtorIban = getTagContent(txBlock, "DbtrAcct>Id>IBAN");
-    const description = getTagContent(entry, "AddtlNtryInf") || getTagContent(txBlock, "AddtlTxInf");
-    const bankReference = getTagContent(txBlock, "Refs>AcctSvcrRef");
-    const endToEndId = getTagContent(txBlock, "Refs>EndToEndId");
+    for (const txBlock of blocks) {
+      const amtTag = txBlock.match(/<Amt[^>]*Ccy="([^"]*)"[^>]*>([^<]*)<\/Amt>/i);
+      const amount = amtTag ? parseFloat(amtTag[2]) : 0;
+      const currency = amtTag ? amtTag[1] : "CHF";
 
-    transactions.push({
-      bookingDate,
-      amount: creditDebit === "DBIT" ? -amount : amount,
-      currency,
-      creditDebit,
-      referenceNumber,
-      debtorName,
-      ultimateDebtorName,
-      debtorIban,
-      description,
-      bankReference,
-      endToEndId,
-    });
+      const referenceNumber = getTagContent(txBlock, "CdtrRefInf>Ref");
+      const debtorName = getTagContent(txBlock, "Dbtr>Pty>Nm") || getTagContent(txBlock, "Dbtr>Nm") ||
+                         getTagContent(txBlock, "Dbtr>PstlAdr>AdrLine");
+      const ultimateDebtorName = getTagContent(txBlock, "UltmtDbtr>Pty>Nm") || getTagContent(txBlock, "UltmtDbtr>Nm");
+      const debtorIban = getTagContent(txBlock, "DbtrAcct>Id>IBAN");
+      const description = getTagContent(entry, "AddtlNtryInf") || getTagContent(txBlock, "AddtlTxInf");
+      const bankReference = getTagContent(txBlock, "Refs>AcctSvcrRef");
+      const endToEndId = getTagContent(txBlock, "Refs>EndToEndId");
+
+      transactions.push({
+        bookingDate,
+        amount: creditDebit === "DBIT" ? -amount : amount,
+        currency,
+        creditDebit,
+        referenceNumber,
+        debtorName,
+        ultimateDebtorName,
+        debtorIban,
+        description,
+        bankReference,
+        endToEndId,
+      });
+    }
   }
 
   return { transactions, messageId, iban, bankName, dateFrom, dateTo };

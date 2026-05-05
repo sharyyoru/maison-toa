@@ -876,46 +876,58 @@ type ParsedTransaction = {
 
 function parseCamt054Xml(xmlText: string): ParsedTransaction[] {
   try {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, "text/xml");
-    
-    // Check for parsing errors
-    const parserError = doc.querySelector("parsererror");
-    if (parserError) return [];
+    // Use regex-based parsing to avoid XML namespace issues with querySelectorAll
+    const getAllTags = (xml: string, tag: string): string[] => {
+      const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
+      const results: string[] = [];
+      let m;
+      while ((m = re.exec(xml)) !== null) results.push(m[1]);
+      return results;
+    };
+    const getTag = (xml: string, tag: string): string => {
+      const m = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
+      return m ? m[1].trim() : "";
+    };
+    const getAttrVal = (xml: string, tag: string, attr: string): string => {
+      const m = xml.match(new RegExp(`<${tag}[^>]*\\s${attr}="([^"]*)"`, "i"));
+      return m ? m[1] : "";
+    };
 
     const transactions: ParsedTransaction[] = [];
-    const entries = doc.querySelectorAll("Ntry");
+    const entries = getAllTags(xmlText, "Ntry");
 
-    entries.forEach((entry) => {
-      const date = entry.querySelector("BookgDt Dt")?.textContent || "";
-      const amtEl = entry.querySelector("Amt");
-      const amount = amtEl?.textContent || "0";
-      const currency = amtEl?.getAttribute("Ccy") || "";
-      const cdtDbtInd = entry.querySelector("CdtDbtInd")?.textContent || "";
-      
-      // Get debtor name from transaction details
-      const debtor = entry.querySelector("TxDtls RltdPties Dbtr Pty Nm")?.textContent || 
-                     entry.querySelector("TxDtls RltdPties UltmtDbtr Pty Nm")?.textContent || 
-                     "Unknown";
-      
-      // Get reference (QRR or other)
-      const reference = entry.querySelector("TxDtls RmtInf Strd CdtrRefInf Ref")?.textContent || 
-                       entry.querySelector("TxDtls Refs EndToEndId")?.textContent || 
-                       "";
-      
-      const description = entry.querySelector("AddtlNtryInf")?.textContent || 
-                         entry.querySelector("TxDtls AddtlTxInf")?.textContent || 
-                         "";
+    for (const entry of entries) {
+      const date = getTag(getTag(entry, "BookgDt"), "Dt") || getTag(entry, "Dt");
+      const cdtDbtInd = getTag(entry, "CdtDbtInd");
 
-      transactions.push({
-        date,
-        amount: `${cdtDbtInd === "DBIT" ? "-" : ""}${amount}`,
-        currency,
-        debtor,
-        reference,
-        description,
-      });
-    });
+      // Each Ntry may have multiple TxDtls — iterate all
+      const txDtlsList = getAllTags(entry, "TxDtls");
+      const blocks = txDtlsList.length > 0 ? txDtlsList : [entry];
+
+      for (const tx of blocks) {
+        const amtEl = tx.match(/<Amt\s+Ccy="([^"]*)"[^>]*>([^<]*)<\/Amt>/i);
+        const amount = amtEl ? amtEl[2].trim() : getTag(entry, "Amt");
+        const currency = amtEl ? amtEl[1] : getAttrVal(entry, "Amt", "Ccy") || "CHF";
+
+        const debtor = getTag(getTag(getTag(tx, "RltdPties"), "Dbtr"), "Nm") ||
+                       getTag(getTag(getTag(tx, "RltdPties"), "UltmtDbtr"), "Nm") ||
+                       getTag(getTag(getTag(tx, "RltdPties"), "UltmtDbtr"), "AdrLine") ||
+                       getTag(getTag(getTag(tx, "RltdPties"), "Dbtr"), "AdrLine") ||
+                       "Unknown";
+        const reference = getTag(getTag(getTag(tx, "RmtInf"), "Strd"), "Ref") ||
+                          getTag(getTag(tx, "Refs"), "EndToEndId") || "";
+        const description = getTag(entry, "AddtlNtryInf") || getTag(tx, "AddtlTxInf") || "";
+
+        transactions.push({
+          date,
+          amount: `${cdtDbtInd === "DBIT" ? "-" : ""}${amount}`,
+          currency,
+          debtor,
+          reference,
+          description,
+        });
+      }
+    }
 
     return transactions;
   } catch {
