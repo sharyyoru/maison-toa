@@ -1080,6 +1080,17 @@ export default function CalendarPage() {
             "claire balbo",
             "ophélie perrin",
             "ophelie perrin",
+            // Agenda resources
+            "mélissa",
+            "melissa",
+            "sandra",
+            "giulia",
+            "jessica",
+            "non présence",
+            "non presence",
+            "bloc",
+            "cabine 1",
+            "cabine 3",
             // Without Dr. prefix
             "sophie nordback",
             "alexandra miles",
