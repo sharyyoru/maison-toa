@@ -65,13 +65,61 @@ export default function InvoicePaymentPage() {
     void loadInvoice();
   }, [token]);
 
-  function handlePayrexxPayment() {
+  const [redirectingToStripe, setRedirectingToStripe] = useState(false);
+
+  async function handleStripePayment() {
+    if (!token) return;
+    setRedirectingToStripe(true);
+    try {
+      const res = await fetch("/api/payments/stripe/create-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "Failed to create payment session");
+        setRedirectingToStripe(false);
+      }
+    } catch {
+      alert("Failed to connect to payment service");
+      setRedirectingToStripe(false);
+    }
+  }
+
+
     if (!invoice?.payrexx_payment_link) {
       alert("Payment link not available. Please contact support.");
       return;
     }
     // Redirect to Payrexx payment gateway
     window.location.href = invoice.payrexx_payment_link;
+  }
+
+  const [redirectingToStripe, setRedirectingToStripe] = useState(false);
+
+  async function handleStripePayment() {
+    if (!token) return;
+    setRedirectingToStripe(true);
+    try {
+      const res = await fetch("/api/payments/stripe/create-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "Failed to create payment session");
+        setRedirectingToStripe(false);
+      }
+    } catch {
+      alert("Failed to connect to payment service");
+      setRedirectingToStripe(false);
+    }
   }
 
   function handleBankTransfer() {
@@ -234,14 +282,15 @@ export default function InvoicePaymentPage() {
             <div>
               <h3 className="mb-4 text-center text-sm font-semibold text-slate-900">Pay Online</h3>
               <button
-                onClick={handlePayrexxPayment}
-                className="w-full rounded-lg bg-gradient-to-r from-sky-600 to-sky-700 px-6 py-4 font-semibold text-white shadow-lg hover:from-sky-700 hover:to-sky-800"
+                onClick={handleStripePayment}
+                disabled={redirectingToStripe}
+                className="w-full rounded-lg bg-gradient-to-r from-sky-600 to-sky-700 px-6 py-4 font-semibold text-white shadow-lg hover:from-sky-700 hover:to-sky-800 disabled:opacity-60"
               >
                 <span className="flex items-center justify-center gap-2">
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                   </svg>
-                  Pay Now with Card
+                  {redirectingToStripe ? "Redirecting..." : "Pay Now with Card"}
                 </span>
               </button>
             </div>
@@ -249,22 +298,19 @@ export default function InvoicePaymentPage() {
             <div>
               <h3 className="mb-4 text-center text-lg font-semibold text-slate-900">Payment Options</h3>
               <div className="space-y-3">
-                {/* Show Payrexx button if payment link exists */}
-                {invoice.payrexx_payment_link && (
-                  <button
-                    onClick={handlePayrexxPayment}
-                    className="w-full rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-5 text-lg font-bold text-white shadow-lg hover:from-emerald-700 hover:to-emerald-800 transition-all"
-                  >
-                    <span className="flex items-center justify-center gap-3">
-                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                      </svg>
-                      Pay Online with Card
-                    </span>
-                  </button>
-                )}
+                <button
+                  onClick={handleStripePayment}
+                  disabled={redirectingToStripe}
+                  className="w-full rounded-lg bg-gradient-to-r from-sky-600 to-sky-700 px-6 py-5 text-lg font-bold text-white shadow-lg hover:from-sky-700 hover:to-sky-800 transition-all disabled:opacity-60"
+                >
+                  <span className="flex items-center justify-center gap-3">
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                    {redirectingToStripe ? "Redirecting..." : "Pay Online with Card"}
+                  </span>
+                </button>
 
-                {/* Always show Bank Transfer option as fallback */}
                 <button
                   onClick={handleBankTransfer}
                   className="w-full rounded-lg bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-4 font-semibold text-white shadow-lg hover:from-slate-800 hover:to-slate-900"
