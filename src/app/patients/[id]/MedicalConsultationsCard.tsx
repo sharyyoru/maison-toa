@@ -325,6 +325,165 @@ function createEmptyMedProduct(): MedProduct {
   };
 }
 
+function ServiceSearchPicker({
+  services,
+  categories,
+  selectedCategoryId,
+  onCategoryChange,
+  selectedServiceId,
+  onServiceChange,
+}: {
+  services: { id: string; name: string; code: string | null; base_price: number | null; category_id: string | null }[];
+  categories: { id: string; name: string }[];
+  selectedCategoryId: string;
+  onCategoryChange: (id: string) => void;
+  selectedServiceId: string;
+  onServiceChange: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = services.filter((s) => {
+    const matchCat = !selectedCategoryId || s.category_id === selectedCategoryId;
+    const q = query.trim().toLowerCase();
+    const matchQ = !q || s.name.toLowerCase().includes(q) || (s.code ?? "").toLowerCase().includes(q);
+    return matchCat && matchQ;
+  });
+
+  const selected = services.find((s) => s.id === selectedServiceId);
+  const selectedCat = categories.find((c) => c.id === (selected?.category_id ?? selectedCategoryId));
+
+  return (
+    <div className="space-y-1.5">
+      {/* Category filter pills */}
+      <div className="flex flex-wrap gap-1">
+        <button
+          type="button"
+          onClick={() => { onCategoryChange(""); setQuery(""); }}
+          className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${!selectedCategoryId ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+        >
+          Tous
+        </button>
+        {categories.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => { onCategoryChange(c.id); setQuery(""); onServiceChange(""); }}
+            className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${selectedCategoryId === c.id ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Searchable service picker */}
+      <div ref={ref} className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white hover:border-sky-300 focus:ring-1 focus:ring-sky-400 outline-none text-left"
+        >
+          {selected ? (
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                {selected.code && (
+                  <span className="shrink-0 px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono">{selected.code}</span>
+                )}
+                <span className="truncate font-medium text-slate-800">{selected.name}</span>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                {selectedCat && <span className="text-[10px] text-sky-600">{selectedCat.name}</span>}
+                {selected.base_price != null && (
+                  <span className="text-[10px] text-slate-500">CHF {selected.base_price}</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <span className="text-slate-400 flex-1">— sélectionner un service —</span>
+          )}
+          <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {open && (
+          <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden" style={{ minWidth: 280 }}>
+            <div className="p-2 border-b border-slate-100">
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Rechercher par nom ou code..."
+                className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+              />
+            </div>
+            <div className="max-h-60 overflow-y-auto">
+              {selectedServiceId && (
+                <button
+                  type="button"
+                  onClick={() => { onServiceChange(""); setOpen(false); setQuery(""); }}
+                  className="w-full px-3 py-1.5 text-left text-[10px] text-red-500 hover:bg-red-50 border-b border-slate-100"
+                >
+                  ✕ Effacer la sélection
+                </button>
+              )}
+              {filtered.length === 0 ? (
+                <div className="px-3 py-4 text-xs text-slate-400 text-center">Aucun service trouvé</div>
+              ) : (
+                filtered.map((s) => {
+                  const cat = categories.find((c) => c.id === s.category_id);
+                  const isSelected = s.id === selectedServiceId;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => { onServiceChange(s.id); setOpen(false); setQuery(""); }}
+                      className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-sky-50 transition-colors ${isSelected ? "bg-sky-50" : ""}`}
+                    >
+                      {isSelected ? (
+                        <svg className="w-3 h-3 text-sky-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      ) : <div className="w-3 shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {s.code && (
+                            <span className="shrink-0 px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-mono">{s.code}</span>
+                          )}
+                          <span className="text-xs font-medium text-slate-800 truncate">{s.name}</span>
+                        </div>
+                        {cat && <div className="text-[10px] text-sky-600 mt-0.5">{cat.name}</div>}
+                      </div>
+                      {s.base_price != null && (
+                        <div className="shrink-0 text-right">
+                          <div className="text-xs font-semibold text-slate-700">CHF {s.base_price}</div>
+                          {s.code === "10001" && (
+                            <div className="text-[10px] text-red-500">-15% auto</div>
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function MedicalConsultationsCard({
   patientId,
   recordTypeFilter,
@@ -4942,54 +5101,14 @@ export default function MedicalConsultationsCard({
 
                           {invoiceMode === "individual" ? (
                             <div className="space-y-2 px-3 py-3">
-                              <div className="space-y-1">
-                                <span className="block text-[10px] font-medium text-slate-600">
-                                  {tf("serviceCategory")}
-                                </span>
-                                <select
-                                  value={invoiceSelectedCategoryId}
-                                  onChange={(event) =>
-                                    setInvoiceSelectedCategoryId(
-                                      event.target.value,
-                                    )
-                                  }
-                                  className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                >
-                                  <option value="">{tf("allCategories")}</option>
-                                  {invoiceServiceCategories.map((category) => (
-                                    <option key={category.id} value={category.id}>
-                                      {category.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              <div className="space-y-1">
-                                <span className="block text-[10px] font-medium text-slate-600">
-                                  {tf("service")}
-                                </span>
-                                <select
-                                  value={invoiceSelectedServiceId}
-                                  onChange={(event) =>
-                                    setInvoiceSelectedServiceId(event.target.value)
-                                  }
-                                  className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                >
-                                  <option value="">{tf("selectService")}</option>
-                                  {invoiceServices
-                                    .filter(
-                                      (service) =>
-                                        !invoiceSelectedCategoryId ||
-                                        service.category_id ===
-                                        invoiceSelectedCategoryId,
-                                    )
-                                    .map((service) => (
-                                      <option key={service.id} value={service.id}>
-                                        {service.code ? `${service.code} - ` : ""}{service.name}
-                                      </option>
-                                    ))}
-                                </select>
-                              </div>
+                              <ServiceSearchPicker
+                                services={invoiceServices}
+                                categories={invoiceServiceCategories}
+                                selectedCategoryId={invoiceSelectedCategoryId}
+                                onCategoryChange={setInvoiceSelectedCategoryId}
+                                selectedServiceId={invoiceSelectedServiceId}
+                                onServiceChange={setInvoiceSelectedServiceId}
+                              />
 
                               <button
                                 type="button"
