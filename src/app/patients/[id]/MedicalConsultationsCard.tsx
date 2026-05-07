@@ -364,26 +364,17 @@ function ServiceSearchPicker({
 
   return (
     <div className="space-y-1.5">
-      {/* Category filter pills */}
-      <div className="flex flex-wrap gap-1">
-        <button
-          type="button"
-          onClick={() => { onCategoryChange(""); setQuery(""); }}
-          className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${!selectedCategoryId ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-        >
-          Tous
-        </button>
+      {/* Category filter dropdown */}
+      <select
+        value={selectedCategoryId}
+        onChange={(e) => { onCategoryChange(e.target.value); onServiceChange(""); }}
+        className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+      >
+        <option value="">Toutes les catégories</option>
         {categories.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => { onCategoryChange(c.id); setQuery(""); onServiceChange(""); }}
-            className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${selectedCategoryId === c.id ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-          >
-            {c.name}
-          </button>
+          <option key={c.id} value={c.id}>{c.name}</option>
         ))}
-      </div>
+      </select>
 
       {/* Searchable service picker */}
       <div ref={ref} className="relative">
