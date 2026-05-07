@@ -2520,7 +2520,7 @@ export default function MedicalConsultationsCard({
 
     const unit = (() => {
       if (line.unitPrice !== null && Number.isFinite(line.unitPrice)) {
-        return Math.max(0, line.unitPrice);
+        return line.unitPrice;
       }
       const service = invoiceServices.find(
         (s) => s.id === line.serviceId,
@@ -2553,7 +2553,7 @@ export default function MedicalConsultationsCard({
       if (!ratePct) return sum;
       const quantity = line.quantity > 0 ? line.quantity : 1;
       const unit = line.unitPrice !== null && Number.isFinite(line.unitPrice)
-        ? Math.max(0, line.unitPrice)
+        ? line.unitPrice
         : Number(service?.base_price ?? 0) || 0;
       const lineTotal = unit * quantity;
       return sum + (lineTotal * ratePct) / (100 + ratePct);
@@ -3397,7 +3397,7 @@ export default function MedicalConsultationsCard({
                               line.unitPrice !== null &&
                               Number.isFinite(line.unitPrice)
                             ) {
-                              return Math.max(0, line.unitPrice);
+                              return line.unitPrice;
                             }
                             const base =
                               service?.base_price !== null &&
@@ -3762,7 +3762,7 @@ export default function MedicalConsultationsCard({
                             const service = (isTardocLine || isAcfRelated) ? null : invoiceServices.find((s) => s.id === line.serviceId);
                             const quantity = line.quantity > 0 ? line.quantity : 1;
                             const resolvedUnitPrice = (() => {
-                              if (line.unitPrice !== null && Number.isFinite(line.unitPrice)) return Math.max(0, line.unitPrice);
+                              if (line.unitPrice !== null && Number.isFinite(line.unitPrice)) return line.unitPrice;
                               const base = service?.base_price !== null && service?.base_price !== undefined ? Number(service.base_price) : 0;
                               return Number.isFinite(base) && base > 0 ? base : 0;
                             })();
@@ -5004,9 +5004,18 @@ export default function MedicalConsultationsCard({
                                       service.base_price !== undefined
                                       ? Number(service.base_price)
                                       : 0;
-                                  const unitPrice = Number.isFinite(base)
-                                    ? Math.max(0, base)
-                                    : 0;
+
+                                  // For discount service (code 10001), auto-calculate -15% of current subtotal
+                                  let unitPrice: number;
+                                  if (service.code === "10001") {
+                                    const currentSubtotal = invoiceServiceLines.reduce((sum, l) => {
+                                      const p = l.unitPrice !== null && Number.isFinite(l.unitPrice) ? l.unitPrice : 0;
+                                      return sum + p * (l.quantity > 0 ? l.quantity : 1);
+                                    }, 0);
+                                    unitPrice = Math.round(currentSubtotal * -0.15 * 100) / 100;
+                                  } else {
+                                    unitPrice = Number.isFinite(base) ? base : 0;
+                                  }
 
                                   setInvoiceServiceLines((prev) => [
                                     ...prev,
@@ -5925,7 +5934,7 @@ export default function MedicalConsultationsCard({
                               const unit =
                                 line.unitPrice !== null &&
                                   Number.isFinite(line.unitPrice)
-                                  ? Math.max(0, line.unitPrice)
+                                  ? line.unitPrice
                                   : 0;
                               const lineTotal = unit * quantity;
 
@@ -5967,7 +5976,6 @@ export default function MedicalConsultationsCard({
                                     </span>
                                     <input
                                       type="number"
-                                      min={0}
                                       step="0.01"
                                       value={
                                         line.unitPrice !== null &&
@@ -5988,7 +5996,7 @@ export default function MedicalConsultationsCard({
                                             unitPrice:
                                               value === null || Number.isNaN(value)
                                                 ? null
-                                                : Math.max(0, value),
+                                                : value,
                                           };
                                           return next;
                                         });
