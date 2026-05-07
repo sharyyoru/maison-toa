@@ -15,7 +15,6 @@ import PatientModeInitializer from "./PatientModeInitializer";
 import PatientEditingPresence from "./PatientEditingPresence";
 import InvoicePaymentMethodFilter from "./InvoicePaymentMethodFilter";
 import PrepaymentInvoiceButton from "./PrepaymentInvoiceButton";
-import PrepaymentInvoiceButton from "./PrepaymentInvoiceButton";
 import PatientIntakeDataCard from "./PatientIntakeDataCard";
 import PatientRendezvousTab from "./PatientRendezvousTab";
 import PatientCrmSection from "./PatientCrmSection";
