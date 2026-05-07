@@ -715,6 +715,8 @@ export default async function PatientPage({
             patientId={patient.id}
             patientEmail={(patient as any).email ?? null}
             patientName={`${patient.first_name} ${patient.last_name}`}
+            patientFirstName={patient.first_name}
+            patientLastName={patient.last_name}
           />
         ) : null}
 

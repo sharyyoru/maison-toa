@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getAllForms, getFormById, FormDefinition } from "@/lib/formDefinitions";
 import { FileText, Send, Eye, Clock, CheckCircle, AlertCircle, Copy, ExternalLink, ChevronDown, X, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import PrepaymentInvoiceButton from "./PrepaymentInvoiceButton";
 
 type FormSubmission = {
   id: string;
@@ -419,10 +420,14 @@ export default function PatientFormsTab({
   patientId,
   patientEmail,
   patientName,
+  patientFirstName,
+  patientLastName,
 }: {
   patientId: string;
   patientEmail: string | null;
   patientName: string;
+  patientFirstName: string;
+  patientLastName: string;
 }) {
   const t = useTranslations("patient.formsTab");
   const [submissions, setSubmissions] = useState<FormSubmission[]>([]);
@@ -563,14 +568,22 @@ export default function PatientFormsTab({
     <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-900">{t("title")}</h3>
-        <button
-          type="button"
-          onClick={() => setShowSendModal(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-600"
-        >
-          <Send className="h-3.5 w-3.5" />
-          {t("sendForm")}
-        </button>
+        <div className="flex items-center gap-2">
+          <PrepaymentInvoiceButton
+            patientId={patientId}
+            patientEmail={patientEmail}
+            patientFirstName={patientFirstName}
+            patientLastName={patientLastName}
+          />
+          <button
+            type="button"
+            onClick={() => setShowSendModal(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-600"
+          >
+            <Send className="h-3.5 w-3.5" />
+            {t("sendForm")}
+          </button>
+        </div>
       </div>
 
       {loading && (
