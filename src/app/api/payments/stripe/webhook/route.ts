@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
           throw new Error(`book-appointment failed: ${bookErr}`);
         }
 
-        // 2. Look up the patient that was just created/found
+        // 2. Look up the patient by email
         const { data: patients } = await supabase
           .from("patients")
           .select("id")
@@ -126,7 +126,21 @@ export async function POST(req: NextRequest) {
           .limit(1);
         const patientId = patients?.[0]?.id ?? null;
 
-        // 3. Create a PARTIAL_PAID invoice for the full consultation amount
+        // 3. Look up provider by doctor slug/name for billing
+        const doctorSlug = m.doctor_slug || "";
+        const doctorName = m.doctor_name || "";
+        let provider: any = null;
+
+        const { data: providerBySlug } = await supabase
+          .from("providers")
+          .select("id, name, iban, gln, zsr")
+          .ilike("name", `%${doctorName.replace(/^Dr\.\s*/i, "").split(" ")[0]}%`)
+          .in("role", ["provider", "billing_entity"])
+          .limit(1)
+          .single();
+        provider = providerBySlug;
+
+        // 4. Create PARTIAL_PAID invoice with proper fields
         if (patientId && fullPrice > 0) {
           const { data: maxRow } = await supabase
             .from("invoices")
@@ -136,24 +150,50 @@ export async function POST(req: NextRequest) {
             .single();
           const nextNumber = String((parseInt(maxRow?.invoice_number || "1000000") + 1));
 
+          const nowIso = new Date().toISOString();
+          const title = `Acompte – ${m.treatment_name}`;
+
           const { data: newInvoice } = await supabase
             .from("invoices")
             .insert({
               patient_id: patientId,
               invoice_number: nextNumber,
-              total_amount: fullPrice,
+              title,
+              invoice_date: nowIso.split("T")[0],
+              treatment_date: m.appointment_date?.split("T")[0] ?? nowIso.split("T")[0],
+              doctor_name: doctorName,
+              provider_id: provider?.id ?? null,
+              provider_name: provider?.name ?? null,
+              provider_iban: provider?.iban ?? null,
+              provider_gln: provider?.gln ?? null,
+              provider_zsr: provider?.zsr ?? null,
               subtotal: fullPrice,
+              total_amount: fullPrice,
               paid_amount: depositAmount,
               status: "PARTIAL_PAID",
-              paid_at: new Date().toISOString(),
+              paid_at: nowIso,
               stripe_payment_intent_id: paymentIntentId,
+              payment_method: "card",
+              is_archived: false,
+              is_demo: false,
             })
             .select("id")
             .single();
 
           invoiceId = newInvoice?.id ?? null;
 
-          // Log transaction
+          // 5. Create line item for the consultation service
+          if (invoiceId && m.service_id) {
+            await supabase.from("invoice_line_items").insert({
+              invoice_id: invoiceId,
+              name: m.service_name || m.treatment_name,
+              quantity: 1,
+              unit_price: fullPrice,
+              total_price: fullPrice,
+            });
+          }
+
+          // 6. Log transaction
           await supabase.from("stripe_transactions").upsert({
             stripe_payment_intent_id: paymentIntentId,
             stripe_session_id: session.id,
