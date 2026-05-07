@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
               status: "PARTIAL_PAID",
               paid_at: nowIso,
               stripe_payment_intent_id: paymentIntentId,
-              payment_method: "card",
+              payment_method: "online",
               is_archived: false,
               is_demo: false,
             })
