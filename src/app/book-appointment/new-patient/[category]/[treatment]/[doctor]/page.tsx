@@ -216,6 +216,8 @@ interface Treatment {
   id: string;
   name: string;
   duration_minutes: number;
+  prepayment_required?: boolean;
+  linked_service_id?: string | null;
 }
 
 function DoctorBookingContent() {
