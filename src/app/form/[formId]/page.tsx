@@ -397,21 +397,36 @@ export default function PublicFormPage() {
           }
 
           if (data.submission.patient) {
-            setPatientInfo(data.submission.patient);
-            // Pre-fill patient name if form has full_name field
-            if (data.submission.patient.first_name && data.submission.patient.last_name) {
-              setFormData((prev) => ({
-                ...prev,
-                full_name: `${data.submission.patient.first_name} ${data.submission.patient.last_name}`,
-              }));
+            const patient = data.submission.patient;
+            setPatientInfo(patient);
+            
+            // Pre-fill all patient information fields
+            const preFillData: FormData = {};
+            
+            if (patient.first_name) preFillData.first_name = patient.first_name;
+            if (patient.last_name) preFillData.last_name = patient.last_name;
+            if (patient.email) preFillData.email = patient.email;
+            if (patient.phone) preFillData.phone = patient.phone;
+            if (patient.gender) preFillData.gender = patient.gender;
+            if (patient.dob) {
+              preFillData.dob = patient.dob;
+              preFillData.date_of_birth = patient.dob;
             }
-            // Pre-fill date of birth if available
-            if (data.submission.patient.dob) {
-              setFormData((prev) => ({
-                ...prev,
-                date_of_birth: data.submission.patient.dob,
-              }));
+            if (patient.street_address) preFillData.street_address = patient.street_address;
+            if (patient.postal_code) preFillData.postal_code = patient.postal_code;
+            if (patient.town) preFillData.town = patient.town;
+            if (patient.country) preFillData.country = patient.country;
+            if (patient.language_preference) preFillData.language_preference = patient.language_preference;
+            
+            // Pre-fill full_name for legacy forms
+            if (patient.first_name && patient.last_name) {
+              preFillData.full_name = `${patient.first_name} ${patient.last_name}`;
             }
+            
+            setFormData((prev) => ({
+              ...prev,
+              ...preFillData,
+            }));
           }
         }
 

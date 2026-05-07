@@ -69,6 +69,43 @@ export async function POST(request: Request) {
       );
     }
 
+    // If this is a patient information form, update the patient record
+    if (submission.form_id.startsWith("patient-information-")) {
+      const patientUpdate: Record<string, unknown> = {};
+
+      // Map form fields to patient record fields
+      if (submissionData.first_name) patientUpdate.first_name = submissionData.first_name;
+      if (submissionData.last_name) patientUpdate.last_name = submissionData.last_name;
+      if (submissionData.email) patientUpdate.email = submissionData.email.toLowerCase();
+      if (submissionData.phone) patientUpdate.phone = submissionData.phone;
+      if (submissionData.gender) patientUpdate.gender = submissionData.gender;
+      if (submissionData.dob) patientUpdate.dob = submissionData.dob;
+      if (submissionData.street_address) {
+        // Combine street address and number if both provided
+        const fullAddress = submissionData.street_number 
+          ? `${submissionData.street_address} ${submissionData.street_number}`
+          : submissionData.street_address;
+        patientUpdate.street_address = fullAddress;
+      }
+      if (submissionData.postal_code) patientUpdate.postal_code = submissionData.postal_code;
+      if (submissionData.town) patientUpdate.town = submissionData.town;
+      if (submissionData.country) patientUpdate.country = submissionData.country;
+      if (submissionData.language_preference) patientUpdate.language_preference = submissionData.language_preference;
+
+      // Only update if there are fields to update
+      if (Object.keys(patientUpdate).length > 0) {
+        const { error: patientUpdateError } = await supabaseAdmin
+          .from("patients")
+          .update(patientUpdate)
+          .eq("id", submission.patient_id);
+
+        if (patientUpdateError) {
+          console.error("Error updating patient record:", patientUpdateError);
+          // Don't fail the whole submission, just log the error
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: "Form submitted successfully",
@@ -111,7 +148,14 @@ export async function GET(request: Request) {
           first_name,
           last_name,
           email,
-          dob
+          phone,
+          gender,
+          dob,
+          street_address,
+          postal_code,
+          town,
+          country,
+          language_preference
         )
       `)
       .eq("token", token)

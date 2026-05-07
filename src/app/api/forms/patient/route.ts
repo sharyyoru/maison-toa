@@ -112,3 +112,42 @@ export async function PATCH(request: Request) {
     );
   }
 }
+
+// DELETE /api/forms/patient - Delete form submissions
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json();
+    const { submissionIds } = body;
+
+    if (!submissionIds || !Array.isArray(submissionIds) || submissionIds.length === 0) {
+      return NextResponse.json(
+        { error: "Missing or invalid submissionIds" },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await supabaseAdmin
+      .from("patient_form_submissions")
+      .delete()
+      .in("id", submissionIds);
+
+    if (error) {
+      console.error("Error deleting form submissions:", error);
+      return NextResponse.json(
+        { error: "Failed to delete form submissions" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      deletedCount: submissionIds.length 
+    });
+  } catch (error) {
+    console.error("Error deleting form submissions:", error);
+    return NextResponse.json(
+      { error: "Failed to delete form submissions" },
+      { status: 500 }
+    );
+  }
+}

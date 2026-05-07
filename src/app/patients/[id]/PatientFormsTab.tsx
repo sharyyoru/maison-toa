@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAllForms, getFormById, FormDefinition } from "@/lib/formDefinitions";
-import { FileText, Send, Eye, Clock, CheckCircle, AlertCircle, Copy, ExternalLink, ChevronDown, X } from "lucide-react";
+import { FileText, Send, Eye, Clock, CheckCircle, AlertCircle, Copy, ExternalLink, ChevronDown, X, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 type FormSubmission = {
@@ -486,6 +486,9 @@ export default function PatientFormsTab({
   const [error, setError] = useState<string | null>(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [viewingSubmission, setViewingSubmission] = useState<FormSubmission | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const loadSubmissions = async () => {
     try {
@@ -559,6 +562,59 @@ export default function PatientFormsTab({
     navigator.clipboard.writeText(url);
   };
 
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const pendingSubmissions = submissions.filter((s) => s.status === "pending");
+    if (selectedIds.size === pendingSubmissions.length && pendingSubmissions.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingSubmissions.map((s) => s.id)));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+
+    try {
+      setDeleting(true);
+      setError(null);
+
+      const response = await fetch("/api/forms/patient", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ submissionIds: Array.from(selectedIds) }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Failed to delete forms");
+        setDeleting(false);
+        return;
+      }
+
+      setSelectedIds(new Set());
+      setShowDeleteConfirm(false);
+      await loadSubmissions();
+      setDeleting(false);
+    } catch (err) {
+      console.error("Error deleting forms:", err);
+      setError("Failed to delete forms");
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
       <div className="mb-4 flex items-center justify-between">
@@ -597,73 +653,110 @@ export default function PatientFormsTab({
       )}
 
       {!loading && !error && submissions.length > 0 && (
-        <div className="space-y-3">
-          {submissions.map((submission) => (
-            <div
-              key={submission.id}
-              className="rounded-lg border border-slate-200 bg-white p-4 transition-shadow hover:shadow-md"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-slate-400" />
-                    <span className="font-medium text-slate-900">{submission.form_name}</span>
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${getStatusColor(submission.status)}`}>
-                      {getStatusIcon(submission.status)}
-                      {getStatusLabel(submission.status)}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-center gap-3 text-xs text-slate-500">
-                    <span>{t("created")} {new Date(submission.created_at).toLocaleDateString()}</span>
-                    {submission.submitted_at && (
-                      <span>• {t("submitted")} {new Date(submission.submitted_at).toLocaleDateString()}</span>
-                    )}
+        <>
+          {submissions.filter((s) => s.status === "pending").length > 0 && (
+            <div className="mb-3 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <label className="flex items-center gap-2 text-xs text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.size > 0 && selectedIds.size === submissions.filter((s) => s.status === "pending").length}
+                  onChange={toggleSelectAll}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+                <span className="font-medium">
+                  {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all pending"}
+                </span>
+              </label>
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="inline-flex items-center gap-1 rounded-lg bg-red-500 px-2 py-1 text-xs font-medium text-white hover:bg-red-600"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Delete selected
+                </button>
+              )}
+            </div>
+          )}
+          <div className="space-y-3">
+            {submissions.map((submission) => (
+              <div
+                key={submission.id}
+                className="rounded-lg border border-slate-200 bg-white p-4 transition-shadow hover:shadow-md"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 flex-1">
                     {submission.status === "pending" && (
-                      <span className="text-amber-600">
-                        {t("expires")} {new Date(submission.expires_at).toLocaleDateString()}
-                      </span>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(submission.id)}
+                        onChange={() => toggleSelection(submission.id)}
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                      />
                     )}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-slate-400" />
+                        <span className="font-medium text-slate-900">{submission.form_name}</span>
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${getStatusColor(submission.status)}`}>
+                          {getStatusIcon(submission.status)}
+                          {getStatusLabel(submission.status)}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-3 text-xs text-slate-500">
+                        <span>{t("created")} {new Date(submission.created_at).toLocaleDateString()}</span>
+                        {submission.submitted_at && (
+                          <span>• {t("submitted")} {new Date(submission.submitted_at).toLocaleDateString()}</span>
+                        )}
+                        {submission.status === "pending" && (
+                          <span className="text-amber-600">
+                            {t("expires")} {new Date(submission.expires_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {submission.status === "pending" && submission.formUrl && (
-                    <>
+                  <div className="flex items-center gap-2">
+                    {submission.status === "pending" && submission.formUrl && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyLink(submission.formUrl!)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
+                          title="Copy link"
+                        >
+                          <Copy className="h-3 w-3" />
+                          {t("copyLink")}
+                        </button>
+                        <a
+                          href={submission.formUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
+                          title="Open form"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          {t("open")}
+                        </a>
+                      </>
+                    )}
+                    {submission.status !== "pending" && (
                       <button
                         type="button"
-                        onClick={() => handleCopyLink(submission.formUrl!)}
+                        onClick={() => setViewingSubmission(submission)}
                         className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-                        title="Copy link"
                       >
-                        <Copy className="h-3 w-3" />
-                        {t("copyLink")}
+                        <Eye className="h-3 w-3" />
+                        {t("viewResponse")}
                       </button>
-                      <a
-                        href={submission.formUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-                        title="Open form"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        {t("open")}
-                      </a>
-                    </>
-                  )}
-                  {submission.status !== "pending" && (
-                    <button
-                      type="button"
-                      onClick={() => setViewingSubmission(submission)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-                    >
-                      <Eye className="h-3 w-3" />
-                      {t("viewResponse")}
-                    </button>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
 
       {showSendModal && (
@@ -681,6 +774,54 @@ export default function PatientFormsTab({
           submission={viewingSubmission}
           onClose={() => setViewingSubmission(null)}
         />
+      )}
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">Delete Forms</h2>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-6 text-sm text-slate-600">
+              Are you sure you want to delete {selectedIds.size} selected form{selectedIds.size > 1 ? 's' : ''}? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSelected}
+                disabled={deleting}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50"
+              >
+                {deleting ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
