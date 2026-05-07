@@ -168,6 +168,7 @@ type InvoiceServiceGroup = {
 type InvoiceServiceCategory = {
   id: string;
   name: string;
+  color: string | null;
 };
 
 type InvoiceGroupServiceLink = {
@@ -334,7 +335,7 @@ function ServiceSearchPicker({
   onServiceChange,
 }: {
   services: { id: string; name: string; code: string | null; base_price: number | null; category_id: string | null }[];
-  categories: { id: string; name: string }[];
+  categories: { id: string; name: string; color: string | null }[];
   selectedCategoryId: string;
   onCategoryChange: (id: string) => void;
   selectedServiceId: string;
@@ -342,15 +343,36 @@ function ServiceSearchPicker({
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [catQuery, setCatQuery] = useState("");
+  const [catOpen, setCatOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const catRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (catRef.current && !catRef.current.contains(e.target as Node)) setCatOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  // Extract a CSS color from Tailwind class string like "bg-yellow-300/70"
+  const tailwindToHex: Record<string, string> = {
+    yellow: "#fde047", lime: "#bef264", green: "#86efac", cyan: "#67e8f9",
+    pink: "#f9a8d4", violet: "#c4b5fd", orange: "#fdba74", amber: "#fcd34d",
+    emerald: "#6ee7b7", slate: "#cbd5e1", rose: "#fca5a5", sky: "#7dd3fc",
+    blue: "#93c5fd", red: "#fca5a5", purple: "#d8b4fe",
+  };
+  const getCatColor = (color: string | null) => {
+    if (!color) return "#e2e8f0";
+    const match = color.match(/bg-(\w+)-/);
+    return match ? (tailwindToHex[match[1]] ?? "#e2e8f0") : "#e2e8f0";
+  };
+
+  const filteredCats = catQuery.trim()
+    ? categories.filter(c => c.name.toLowerCase().includes(catQuery.toLowerCase()))
+    : categories;
 
   const filtered = services.filter((s) => {
     const matchCat = !selectedCategoryId || s.category_id === selectedCategoryId;
@@ -361,20 +383,53 @@ function ServiceSearchPicker({
 
   const selected = services.find((s) => s.id === selectedServiceId);
   const selectedCat = categories.find((c) => c.id === (selected?.category_id ?? selectedCategoryId));
+  const activeCat = categories.find((c) => c.id === selectedCategoryId);
 
   return (
     <div className="space-y-1.5">
-      {/* Category filter dropdown */}
-      <select
-        value={selectedCategoryId}
-        onChange={(e) => { onCategoryChange(e.target.value); onServiceChange(""); }}
-        className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-      >
-        <option value="">Toutes les catégories</option>
-        {categories.map((c) => (
-          <option key={c.id} value={c.id}>{c.name}</option>
-        ))}
-      </select>
+      {/* Category searchable dropdown */}
+      <div ref={catRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setCatOpen(o => !o)}
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white hover:border-sky-300 outline-none text-left"
+        >
+          {activeCat ? (
+            <>
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: getCatColor(activeCat.color) }} />
+              <span className="flex-1 truncate font-medium text-slate-800">{activeCat.name}</span>
+            </>
+          ) : (
+            <span className="flex-1 text-slate-400">Toutes les catégories</span>
+          )}
+          <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {catOpen && (
+          <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
+            <div className="p-2 border-b border-slate-100">
+              <input autoFocus type="text" value={catQuery} onChange={e => setCatQuery(e.target.value)}
+                placeholder="Rechercher catégorie..." className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-sky-400" />
+            </div>
+            <div className="max-h-48 overflow-y-auto">
+              <button type="button" onClick={() => { onCategoryChange(""); onServiceChange(""); setCatOpen(false); setCatQuery(""); }}
+                className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-slate-50 ${!selectedCategoryId ? "bg-sky-50 font-medium text-sky-700" : "text-slate-600"}`}>
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-200 shrink-0" />
+                Toutes les catégories
+              </button>
+              {filteredCats.map(c => (
+                <button key={c.id} type="button"
+                  onClick={() => { onCategoryChange(c.id); onServiceChange(""); setCatOpen(false); setCatQuery(""); }}
+                  className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-slate-50 ${selectedCategoryId === c.id ? "bg-sky-50 font-medium text-sky-700" : "text-slate-700"}`}>
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: getCatColor(c.color) }} />
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Searchable service picker */}
       <div ref={ref} className="relative">
@@ -386,6 +441,9 @@ function ServiceSearchPicker({
           {selected ? (
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
+                {selectedCat && (
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: getCatColor(selectedCat.color) }} />
+                )}
                 {selected.code && (
                   <span className="shrink-0 px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono">{selected.code}</span>
                 )}
@@ -453,7 +511,12 @@ function ServiceSearchPicker({
                           )}
                           <span className="text-xs font-medium text-slate-800 truncate">{s.name}</span>
                         </div>
-                        {cat && <div className="text-[10px] text-sky-600 mt-0.5">{cat.name}</div>}
+                        {cat && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: getCatColor(cat.color) }} />
+                            <span className="text-[10px] text-sky-600">{cat.name}</span>
+                          </div>
+                        )}
                       </div>
                       {s.base_price != null && (
                         <div className="shrink-0 text-right">
@@ -1442,7 +1505,7 @@ export default function MedicalConsultationsCard({
             .order("name", { ascending: true }),
           supabaseClient
             .from("service_categories")
-            .select("id, name")
+            .select("id, name, color")
             .order("name", { ascending: true }),
           supabaseClient
             .from("service_group_services")

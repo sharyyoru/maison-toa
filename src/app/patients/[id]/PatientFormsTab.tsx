@@ -36,23 +36,6 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
   const [error, setError] = useState<string | null>(null);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [includeDeposit, setIncludeDeposit] = useState(false);
-  const [depositServiceId, setDepositServiceId] = useState("");
-  const [depositDoctorId, setDepositDoctorId] = useState("");
-  const [depositServices, setDepositServices] = useState<{id:string;name:string;base_price:number|null}[]>([]);
-  const [depositStaff, setDepositStaff] = useState<{id:string;name:string}[]>([]);
-  const [depositUrl, setDepositUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!includeDeposit || depositServices.length > 0) return;
-    Promise.all([
-      fetch("/api/services?category_id=20fdd180-860c-43fc-a5d3-caf5372ef07c").then(r => r.json()),
-      fetch("/api/providers?role=doctor,nurse,technician").then(r => r.json()),
-    ]).then(([s, p]) => {
-      setDepositServices(s.services || []);
-      setDepositStaff(p.providers || []);
-    });
-  }, [includeDeposit]);
 
   const selectedForm = selectedFormId ? getFormById(selectedFormId) : null;
 
@@ -81,18 +64,6 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
       }
 
       setGeneratedUrl(data.formUrl);
-
-      // Also create deposit invoice if requested
-      if (includeDeposit && depositServiceId) {
-        const depRes = await fetch("/api/payments/stripe/create-prepayment-invoice", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ patientId, serviceId: depositServiceId, doctorId: depositDoctorId || null }),
-        });
-        const depData = await depRes.json();
-        if (depRes.ok) setDepositUrl(depData.stripeUrl);
-      }
-
       setSending(false);
     } catch (err) {
       console.error("Error generating form link:", err);
@@ -258,33 +229,6 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
               </div>
             )}
 
-            {/* Prepayment deposit option */}
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={includeDeposit} onChange={e => setIncludeDeposit(e.target.checked)}
-                  className="w-4 h-4 text-amber-500 rounded" />
-                <span className="text-sm font-medium text-amber-800">Inclure un lien d&apos;acompte 50%</span>
-              </label>
-              {includeDeposit && (
-                <div className="mt-3 space-y-2">
-                  <select value={depositServiceId} onChange={e => setDepositServiceId(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-amber-200 rounded-lg bg-white outline-none focus:ring-1 focus:ring-amber-400">
-                    <option value="">— sélectionner un service (1ère consultation) *</option>
-                    {depositServices.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}{s.base_price != null ? ` — CHF ${s.base_price} (50% = ${(s.base_price*0.5).toFixed(2)})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <select value={depositDoctorId} onChange={e => setDepositDoctorId(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-amber-200 rounded-lg bg-white outline-none focus:ring-1 focus:ring-amber-400">
-                    <option value="">— médecin (optionnel) —</option>
-                    {depositStaff.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
-              )}
-            </div>
-
             <div className="flex justify-end gap-3">
               <button
                 type="button"
@@ -296,7 +240,7 @@ function SendFormModal({ patientId, patientEmail, patientName, onClose, onSucces
               <button
                 type="button"
                 onClick={handleGenerateLink}
-                disabled={!selectedFormId || sending || (includeDeposit && !depositServiceId)}
+                disabled={!selectedFormId || sending}
                 className="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {sending ? (
