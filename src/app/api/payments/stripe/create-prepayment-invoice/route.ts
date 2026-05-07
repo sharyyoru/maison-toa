@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { stripe } from "@/lib/stripe";
+import { randomBytes } from "crypto";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
 
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     if (!service?.base_price) return NextResponse.json({ error: "Service has no price" }, { status: 400 });
 
     const fullPrice = Number(service.base_price);
-    const depositAmount = Math.round(fullPrice * 0.5 * 100); // cents
+    const depositAmount = Math.round(fullPrice * 0.5 * 100) / 100;
 
     // Fetch patient
     const { data: patient } = await supabaseAdmin
@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .single();
     const invoiceNumber = String((parseInt(maxRow?.invoice_number || "1000000") + 1));
+    const paymentLinkToken = randomBytes(24).toString("hex");
 
     const nowIso = new Date().toISOString();
 
@@ -87,10 +88,11 @@ export async function POST(req: NextRequest) {
         provider_gln: billingEntity?.gln ?? null,
         provider_zsr: billingEntity?.zsr ?? null,
         subtotal: fullPrice,
-        total_amount: fullPrice,
+        total_amount: depositAmount,  // pay page charges this amount (50% deposit)
         paid_amount: 0,
         status: "OPEN",
         payment_method: "online",
+        payment_link_token: paymentLinkToken,
         is_archived: false,
         is_demo: false,
       })
@@ -108,43 +110,13 @@ export async function POST(req: NextRequest) {
       total_price: fullPrice,
     });
 
-    // Create Stripe Checkout session for 50% deposit
-    const expiresAt = Math.floor(Date.now() / 1000) + 23 * 60 * 60;
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      currency: "chf",
-      line_items: [{
-        quantity: 1,
-        price_data: {
-          currency: "chf",
-          unit_amount: depositAmount,
-          product_data: {
-            name: `Acompte 50% – ${service.name}`,
-            description: "Acompte déductible de tout traitement réalisé dans les 3 mois suivants.",
-          },
-        },
-      }],
-      customer_email: patient?.email || undefined,
-      expires_at: expiresAt,
-      metadata: {
-        type: "invoice_deposit",
-        invoice_id: invoice.id,
-        full_price: String(fullPrice),
-      },
-      success_url: `${APP_URL}/invoice/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${APP_URL}/invoice/pay/${invoice.id}`,
-    });
-
-    // Save session on invoice
-    await supabaseAdmin.from("invoices").update({
-      stripe_session_id: session.id,
-      stripe_session_expires_at: new Date(expiresAt * 1000).toISOString(),
-    }).eq("id", invoice.id);
+    // The pay page URL generates a fresh Stripe session on demand — no expiry issue
+    const payUrl = `${APP_URL}/invoice/pay/${paymentLinkToken}`;
 
     return NextResponse.json({
       invoiceId: invoice.id,
       invoiceNumber,
-      stripeUrl: session.url,
+      stripeUrl: payUrl,
     });
   } catch (err: any) {
     console.error("[create-prepayment-invoice]", err);
