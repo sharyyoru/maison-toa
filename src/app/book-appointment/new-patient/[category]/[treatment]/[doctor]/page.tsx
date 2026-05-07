@@ -243,6 +243,8 @@ function DoctorBookingContent() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [emailExistsError, setEmailExistsError] = useState(false);
+  const [emailChecking, setEmailChecking] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   const [availableDatesSet, setAvailableDatesSet] = useState<Set<string>>(new Set());
   const [nearestAvailableDate, setNearestAvailableDate] = useState<string | null>(null);
@@ -422,6 +424,20 @@ function DoctorBookingContent() {
     const phoneRegex = /^[+]?[\d\s()-]{7,20}$/;
     return phoneRegex.test(phone.trim());
   };
+
+  async function checkEmailExists(value: string) {
+    if (!isValidEmail(value)) return;
+    setEmailChecking(true);
+    try {
+      const res = await fetch(`/api/public/check-patient-email?email=${encodeURIComponent(value)}`);
+      const data = await res.json();
+      setEmailExistsError(data.exists);
+    } catch {
+      // silently ignore — don't block booking on network error
+    } finally {
+      setEmailChecking(false);
+    }
+  }
 
   async function handleSubmit() {
     if (!doctor) return;
@@ -729,9 +745,18 @@ function DoctorBookingContent() {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 outline-none transition-all"
+                    onChange={(e) => { setEmail(e.target.value); setEmailExistsError(false); }}
+                    onBlur={(e) => checkEmailExists(e.target.value)}
+                    className={`w-full rounded-xl border px-4 py-3 text-slate-900 focus:ring-2 outline-none transition-all ${emailExistsError ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-slate-200 focus:border-slate-400 focus:ring-slate-200"}`}
                   />
+                  {emailChecking && <p className="text-xs text-slate-400 mt-1">Checking...</p>}
+                  {emailExistsError && (
+                    <p className="text-xs text-red-600 mt-1">
+                      {language === "fr"
+                        ? "Un compte existe déjà avec cet email. Veuillez utiliser le formulaire patient existant."
+                        : "An account already exists with this email. Please use the existing patient booking form."}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">{t("booking.phone")}</label>
@@ -757,10 +782,12 @@ function DoctorBookingContent() {
                         setError(t("error.invalidPhone"));
                         return;
                       }
+                      if (emailExistsError) return;
                       setStep("datetime");
                       setError(null);
                     }}
-                    className="w-full bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors"
+                    disabled={emailExistsError || emailChecking}
+                    className="w-full bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t("booking.continue")}
                   </button>
