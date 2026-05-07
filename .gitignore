@@ -55,3 +55,17 @@ next-env.d.ts
 
 .claude
 db-access.md
+
+# Sensitive/local files
+*.xml
+update-patient-data.sql
+*-report.md
+*-report.txt
+analyze-*.py
+generate-*.py
+detailed-*.py
+sumex_proxy.py
+PATIENT-*.md
+PAYMENT_FLOW_REFERENCE.md
+UPDATE-EXECUTION-SUMMARY.md
+src/app/api/admin/
