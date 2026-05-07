@@ -2443,7 +2443,8 @@ export default function CalendarPage() {
             status: 'scheduled',
             category: appointmentCategory && appointmentCategory !== 'No selection' ? appointmentCategory : null,
             channel: bookingStatus || null,
-            notes: draftDescription.trim() || null
+            notes: draftDescription.trim() || null,
+            allowOverlap: true,
           })
         });
         

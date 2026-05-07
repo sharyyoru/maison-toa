@@ -14,7 +14,8 @@ export async function POST(request: Request) {
       status,
       category,
       channel,
-      notes
+      notes,
+      allowOverlap = false,
     } = await request.json();
     
     // Input validation
@@ -96,7 +97,8 @@ export async function POST(request: Request) {
       .in('id', providerIds);
 
     // Check for overlapping appointments for each provider (future bookings only)
-    if (new Date(startTime) > new Date()) {
+    // Skip this check for internal calendar bookings (allowOverlap = true)
+    if (!allowOverlap && new Date(startTime) > new Date()) {
       const { data: overlapping } = await supabase
         .from('appointments')
         .select('id, provider_id, reason')
