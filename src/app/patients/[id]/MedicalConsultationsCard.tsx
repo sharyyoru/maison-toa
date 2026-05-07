@@ -7459,17 +7459,30 @@ export default function MedicalConsultationsCard({
                               Installments
                             </button>
 
-                            {!row.invoice_is_paid && row.payment_method &&
-                              (row.payment_method.toLowerCase().includes("cash") || row.payment_method.toLowerCase().includes("online") || row.payment_method.toLowerCase().includes("card")) && (
+                            {!row.invoice_is_paid && (
                               <button
                                 type="button"
-                                onClick={() => {
+                                onClick={async () => {
                                   let paymentLink = row.payrexx_payment_link;
                                   if (!paymentLink && row.payment_link_token) {
                                     paymentLink = `${window.location.origin}/invoice/pay/${row.payment_link_token}`;
                                   }
+                                  // If no token yet, generate one
+                                  if (!paymentLink && row.invoice_id) {
+                                    try {
+                                      const res = await fetch("/api/invoices/generate-payment-token", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ invoiceId: row.invoice_id }),
+                                      });
+                                      const data = await res.json();
+                                      if (data.token) {
+                                        paymentLink = `${window.location.origin}/invoice/pay/${data.token}`;
+                                      }
+                                    } catch {}
+                                  }
                                   if (!paymentLink) {
-                                    alert("Payment link not yet generated. Please generate the invoice PDF first.");
+                                    alert("Unable to generate payment link.");
                                     return;
                                   }
                                   navigator.clipboard.writeText(paymentLink).then(() => alert("Payment link copied!")).catch(() => alert("Failed to copy link"));
