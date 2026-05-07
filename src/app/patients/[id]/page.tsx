@@ -668,12 +668,6 @@ export default async function PatientPage({
             </div>
 
             <div className="flex justify-end mb-2">
-              <PrepaymentInvoiceButton
-                patientId={patient.id}
-                patientEmail={patient.email}
-                patientFirstName={patient.first_name}
-                patientLastName={patient.last_name}
-              />
             </div>
 
             <MedicalConsultationsCard patientId={patient.id} recordTypeFilter="invoice" patientFirstName={patient.first_name} patientLastName={patient.last_name} patientEmail={(patient as any).email ?? null} />
@@ -721,6 +715,8 @@ export default async function PatientPage({
             patientId={patient.id}
             patientEmail={(patient as any).email ?? null}
             patientName={`${patient.first_name} ${patient.last_name}`}
+            patientFirstName={patient.first_name}
+            patientLastName={patient.last_name}
           />
         ) : null}
 

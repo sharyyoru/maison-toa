@@ -6,7 +6,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.verc
 
 export async function POST(req: NextRequest) {
   try {
-    const { patientId, serviceId, doctorId, billingEntityId } = await req.json();
+    const { patientId, serviceId, doctorId } = await req.json();
     if (!patientId || !serviceId) return NextResponse.json({ error: "Missing patientId or serviceId" }, { status: 400 });
 
     // Fetch service price
@@ -35,11 +35,28 @@ export async function POST(req: NextRequest) {
       doctor = data;
     }
 
-    // Fetch billing entity
+    // Auto-select billing entity: prefer aesthetic type linked to this doctor
     let billingEntity: any = null;
-    if (billingEntityId) {
-      const { data } = await supabaseAdmin.from("providers").select("id, name, iban, gln, zsr").eq("id", billingEntityId).single();
-      billingEntity = data;
+    if (doctorId) {
+      const { data: entities } = await supabaseAdmin
+        .from("providers")
+        .select("id, name, iban, gln, zsr, billing_type")
+        .eq("role", "billing_entity")
+        .eq("doctor_id", doctorId);
+      if (entities && entities.length > 0) {
+        billingEntity = entities.find((e: any) => e.billing_type === "aesthetic") ?? entities[0];
+      }
+    }
+    // Fallback: first billing entity
+    if (!billingEntity) {
+      const { data: fallback } = await supabaseAdmin
+        .from("providers")
+        .select("id, name, iban, gln, zsr")
+        .eq("role", "billing_entity")
+        .eq("billing_type", "aesthetic")
+        .limit(1)
+        .single();
+      billingEntity = fallback;
     }
 
     // Generate invoice number

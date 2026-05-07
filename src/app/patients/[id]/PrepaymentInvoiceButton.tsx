@@ -24,10 +24,8 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
   const [open, setOpen] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [medicalStaff, setMedicalStaff] = useState<Provider[]>([]);
-  const [billingEntities, setBillingEntities] = useState<Provider[]>([]);
   const [serviceId, setServiceId] = useState("");
   const [doctorId, setDoctorId] = useState("");
-  const [billingEntityId, setBillingEntityId] = useState("");
   const [serviceQuery, setServiceQuery] = useState("");
   const [serviceDropOpen, setServiceDropOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -42,11 +40,9 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
     Promise.all([
       fetch("/api/services?category_id=20fdd180-860c-43fc-a5d3-caf5372ef07c").then(r => r.json()),
       fetch("/api/providers?role=doctor,nurse,technician").then(r => r.json()),
-      fetch("/api/providers?role=billing_entity").then(r => r.json()),
-    ]).then(([sData, staffData, beData]) => {
+    ]).then(([sData, staffData]) => {
       setServices(sData.services || []);
       setMedicalStaff(staffData.providers || []);
-      setBillingEntities(beData.providers || []);
     });
   }, [open]);
 
@@ -68,7 +64,7 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
       const res = await fetch("/api/payments/stripe/create-prepayment-invoice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientId, serviceId, doctorId: doctorId || null, billingEntityId: billingEntityId || null }),
+        body: JSON.stringify({ patientId, serviceId, doctorId: doctorId || null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
@@ -111,7 +107,6 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
     setError(null);
     setServiceId("");
     setDoctorId("");
-    setBillingEntityId("");
     setServiceQuery("");
     setEmailSent(false);
   }
@@ -207,16 +202,6 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
                     {medicalStaff.map(p => (
                       <option key={p.id} value={p.id}>{p.name}{p.specialty ? ` (${p.specialty})` : ""}</option>
                     ))}
-                  </select>
-                </div>
-
-                {/* Billing entity */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Entité de facturation</label>
-                  <select value={billingEntityId} onChange={e => setBillingEntityId(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-amber-400">
-                    <option value="">— optionnel —</option>
-                    {billingEntities.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
 
