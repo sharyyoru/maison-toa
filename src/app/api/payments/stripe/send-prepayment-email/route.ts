@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       infoRow("Facture", `#${invoiceNumber}`),
       infoRow("Service", serviceName || "Consultation"),
       infoRow("Acompte (50%)", `CHF ${Number(depositAmount).toFixed(2)}`),
-    ])}
+    ].join(""))}
     <p style="margin:24px 0 8px;font-size:13px;color:#64748b;">
       Le montant de la consultation est déductible de tout traitement réalisé dans les 3 mois suivants.
     </p>
