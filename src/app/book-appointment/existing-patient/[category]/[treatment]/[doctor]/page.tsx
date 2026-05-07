@@ -814,6 +814,20 @@ function DoctorBookingContent() {
                   )}
                 </div>
 
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  {language === "fr" ? (
+                    <>
+                      <p className="font-medium mb-1">Un acompte de 50% est demandé lors de la prise de rendez-vous pour toute première consultation.</p>
+                      <p>Le montant de la consultation est déductible de tout traitement réalisé dans les 3 mois suivants.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-medium mb-1">A 50% deposit is required when booking any first consultation appointment.</p>
+                      <p>The consultation fee is deductible from any treatment carried out within the following 3 months.</p>
+                    </>
+                  )}
+                </div>
+
                 <div className="flex gap-3">
                   <button
                     onClick={() => setStep("datetime")}

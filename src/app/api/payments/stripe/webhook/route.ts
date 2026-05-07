@@ -82,6 +82,92 @@ export async function POST(req: NextRequest) {
         }, { onConflict: "stripe_payment_intent_id" });
 
         console.log(`[Stripe Webhook] Invoice ${invoice_id} marked PAID — CHF ${paidAmount}`);
+
+      } else if (type === "booking_deposit") {
+        const m = session.metadata!;
+        const depositAmount = (session.amount_total || 0) / 100;
+        const fullPrice = parseFloat(m.full_price || "0");
+        const paymentIntentId = session.payment_intent as string;
+
+        const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
+
+        // 1. Create appointment via existing API (handles patient, provider, email, workflow)
+        const bookRes = await fetch(`${APP_URL}/api/public/book-appointment`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: m.first_name,
+            lastName: m.last_name,
+            email: m.email,
+            phone: m.phone || undefined,
+            appointmentDate: m.appointment_date,
+            service: m.service_label,
+            doctorSlug: m.doctor_slug,
+            doctorName: m.doctor_name,
+            doctorEmail: "info@maisontoa.com",
+            notes: m.notes || undefined,
+            location: m.location || "Lausanne",
+            patientType: "new",
+            treatmentId: m.treatment_id,
+            language: m.language || "fr",
+          }),
+        });
+
+        if (!bookRes.ok) {
+          const bookErr = await bookRes.text();
+          throw new Error(`book-appointment failed: ${bookErr}`);
+        }
+
+        // 2. Look up the patient that was just created/found
+        const { data: patients } = await supabase
+          .from("patients")
+          .select("id")
+          .ilike("email", m.email)
+          .limit(1);
+        const patientId = patients?.[0]?.id ?? null;
+
+        // 3. Create a PARTIAL_PAID invoice for the full consultation amount
+        if (patientId && fullPrice > 0) {
+          const { data: maxRow } = await supabase
+            .from("invoices")
+            .select("invoice_number")
+            .order("invoice_number", { ascending: false })
+            .limit(1)
+            .single();
+          const nextNumber = String((parseInt(maxRow?.invoice_number || "1000000") + 1));
+
+          const { data: newInvoice } = await supabase
+            .from("invoices")
+            .insert({
+              patient_id: patientId,
+              invoice_number: nextNumber,
+              total_amount: fullPrice,
+              subtotal: fullPrice,
+              paid_amount: depositAmount,
+              status: "PARTIAL_PAID",
+              paid_at: new Date().toISOString(),
+              stripe_payment_intent_id: paymentIntentId,
+            })
+            .select("id")
+            .single();
+
+          invoiceId = newInvoice?.id ?? null;
+
+          // Log transaction
+          await supabase.from("stripe_transactions").upsert({
+            stripe_payment_intent_id: paymentIntentId,
+            stripe_session_id: session.id,
+            invoice_id: invoiceId,
+            patient_id: patientId,
+            amount: depositAmount,
+            currency: session.currency || "chf",
+            status: "succeeded",
+            metadata: { type: "booking_deposit", treatment: m.treatment_name, session_id: session.id },
+          }, { onConflict: "stripe_payment_intent_id" });
+        }
+
+        console.log(`[Stripe Webhook] Booking deposit processed — ${m.first_name} ${m.last_name}, CHF ${depositAmount} deposit for ${m.treatment_name}`);
+
       } else {
         status = "ignored";
       }

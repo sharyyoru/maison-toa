@@ -86,8 +86,10 @@ export async function PUT(request: NextRequest) {
     const existingIds = new Set((existing || []).map((r: { id: string }) => r.id));
     const incomingIds = new Set(doctors.map((d: { id: string }) => d.id));
 
-    // Delete removed doctors
-    const toDelete = [...existingIds].filter((id) => !incomingIds.has(id));
+    // Safety: never delete all doctors if incoming list is suspiciously small
+    const toDelete = doctors.length > 0
+      ? [...existingIds].filter((id) => !incomingIds.has(id))
+      : [];
     if (toDelete.length > 0) {
       await supabaseAdmin.from("booking_doctors").delete().in("id", toDelete);
     }

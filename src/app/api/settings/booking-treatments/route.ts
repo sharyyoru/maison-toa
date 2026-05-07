@@ -64,23 +64,26 @@ export async function PUT(request: Request) {
         .in("id", toDelete);
     }
 
-    // Upsert all treatments
-    for (const treatment of treatments) {
-      const { error } = await supabaseAdmin
-        .from("booking_treatments")
-        .upsert({
-          id: treatment.id,
-          category_id: treatment.category_id,
-          name: treatment.name,
-          description: treatment.description || null,
-          duration_minutes: treatment.duration_minutes,
-          order_index: treatment.order_index,
-          enabled: treatment.enabled,
-        });
+    // Upsert all treatments in one batch
+    const { error: upsertError } = await supabaseAdmin
+      .from("booking_treatments")
+      .upsert(
+        treatments.map((t: any) => ({
+          id: t.id,
+          category_id: t.category_id,
+          name: t.name,
+          description: t.description || null,
+          duration_minutes: t.duration_minutes,
+          order_index: t.order_index,
+          enabled: t.enabled,
+          prepayment_required: t.prepayment_required ?? false,
+          linked_service_id: t.linked_service_id || null,
+        }))
+      );
 
-      if (error) {
-        console.error("Error upserting treatment:", error);
-      }
+    if (upsertError) {
+      console.error("Error upserting treatments:", upsertError);
+      return NextResponse.json({ error: "Failed to save treatments" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

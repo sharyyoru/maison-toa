@@ -446,7 +446,33 @@ function DoctorBookingContent() {
     try {
       const [hour, minute] = selectedTime.split(":").map(Number);
       const appointmentDateSwiss = createSwissDateTime(selectedDate, hour, minute);
-      
+
+      // If treatment requires prepayment, redirect to Stripe instead of booking directly
+      if (treatment?.prepayment_required) {
+        const res = await fetch("/api/payments/stripe/create-booking-deposit-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            treatmentId,
+            firstName,
+            lastName,
+            email,
+            phone,
+            appointmentDate: appointmentDateSwiss.toISOString(),
+            service: selectedService,
+            doctorSlug,
+            doctorName: doctor.name,
+            notes,
+            location: locationLabel,
+            language,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to create payment session");
+        window.location.href = data.url;
+        return;
+      }
+
       const res = await fetch("/api/public/book-appointment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -921,6 +947,20 @@ function DoctorBookingContent() {
                   )}
                 </div>
 
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  {language === "fr" ? (
+                    <>
+                      <p className="font-medium mb-1">Un acompte de 50% est demandé lors de la prise de rendez-vous pour toute première consultation.</p>
+                      <p>Le montant de la consultation est déductible de tout traitement réalisé dans les 3 mois suivants.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-medium mb-1">A 50% deposit is required when booking any first consultation appointment.</p>
+                      <p>The consultation fee is deductible from any treatment carried out within the following 3 months.</p>
+                    </>
+                  )}
+                </div>
+
                 <div className="flex gap-3">
                   <button
                     onClick={() => setStep("datetime")}
@@ -943,7 +983,9 @@ function DoctorBookingContent() {
                         {t("booking.booking")}
                       </>
                     ) : (
-                      t("booking.confirmBooking")
+                      treatment?.prepayment_required
+                        ? (language === "fr" ? "Payer l'acompte & confirmer" : "Pay deposit & confirm")
+                        : t("booking.confirmBooking")
                     )}
                   </button>
                 </div>
