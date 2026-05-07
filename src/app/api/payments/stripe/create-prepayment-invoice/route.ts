@@ -1,0 +1,127 @@
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { stripe } from "@/lib/stripe";
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
+
+export async function POST(req: NextRequest) {
+  try {
+    const { patientId, serviceId, providerId } = await req.json();
+    if (!patientId || !serviceId) return NextResponse.json({ error: "Missing patientId or serviceId" }, { status: 400 });
+
+    // Fetch service price
+    const { data: service } = await supabaseAdmin
+      .from("services")
+      .select("id, name, base_price")
+      .eq("id", serviceId)
+      .single();
+
+    if (!service?.base_price) return NextResponse.json({ error: "Service has no price" }, { status: 400 });
+
+    const fullPrice = Number(service.base_price);
+    const depositAmount = Math.round(fullPrice * 0.5 * 100); // cents
+
+    // Fetch patient
+    const { data: patient } = await supabaseAdmin
+      .from("patients")
+      .select("first_name, last_name, email")
+      .eq("id", patientId)
+      .single();
+
+    // Fetch provider if given
+    let provider: any = null;
+    if (providerId) {
+      const { data } = await supabaseAdmin.from("providers").select("id, name, iban, gln, zsr").eq("id", providerId).single();
+      provider = data;
+    }
+
+    // Generate invoice number
+    const { data: maxRow } = await supabaseAdmin
+      .from("invoices")
+      .select("invoice_number")
+      .order("invoice_number", { ascending: false })
+      .limit(1)
+      .single();
+    const invoiceNumber = String((parseInt(maxRow?.invoice_number || "1000000") + 1));
+
+    const nowIso = new Date().toISOString();
+
+    // Create invoice (OPEN — not paid yet, Stripe will confirm)
+    const { data: invoice, error: invErr } = await supabaseAdmin
+      .from("invoices")
+      .insert({
+        patient_id: patientId,
+        invoice_number: invoiceNumber,
+        title: `Acompte 50% – ${service.name}`,
+        invoice_date: nowIso.split("T")[0],
+        doctor_name: provider?.name ?? null,
+        provider_id: provider?.id ?? null,
+        provider_name: provider?.name ?? null,
+        provider_iban: provider?.iban ?? null,
+        provider_gln: provider?.gln ?? null,
+        provider_zsr: provider?.zsr ?? null,
+        subtotal: fullPrice,
+        total_amount: fullPrice,
+        paid_amount: 0,
+        status: "OPEN",
+        payment_method: "online",
+        is_archived: false,
+        is_demo: false,
+      })
+      .select("id")
+      .single();
+
+    if (invErr || !invoice) return NextResponse.json({ error: invErr?.message || "Failed to create invoice" }, { status: 500 });
+
+    // Create line item
+    await supabaseAdmin.from("invoice_line_items").insert({
+      invoice_id: invoice.id,
+      name: service.name,
+      quantity: 1,
+      unit_price: fullPrice,
+      total_price: fullPrice,
+    });
+
+    // Create Stripe Checkout session for 50% deposit
+    const expiresAt = Math.floor(Date.now() / 1000) + 23 * 60 * 60;
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      currency: "chf",
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: "chf",
+          unit_amount: depositAmount,
+          product_data: {
+            name: `Acompte 50% – ${service.name}`,
+            description: "Acompte déductible de tout traitement réalisé dans les 3 mois suivants.",
+          },
+        },
+      }],
+      customer_email: patient?.email || undefined,
+      expires_at: expiresAt,
+      metadata: {
+        type: "invoice_deposit",
+        invoice_id: invoice.id,
+        full_price: String(fullPrice),
+      },
+      success_url: `${APP_URL}/invoice/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${APP_URL}/invoice/pay/${invoice.id}`,
+    });
+
+    // Save session on invoice
+    await supabaseAdmin.from("invoices").update({
+      stripe_session_id: session.id,
+      stripe_session_expires_at: new Date(expiresAt * 1000).toISOString(),
+    }).eq("id", invoice.id);
+
+    return NextResponse.json({
+      invoiceId: invoice.id,
+      invoiceNumber,
+      stripeUrl: session.url,
+    });
+  } catch (err: any) {
+    console.error("[create-prepayment-invoice]", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}

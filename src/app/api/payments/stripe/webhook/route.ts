@@ -44,7 +44,37 @@ export async function POST(req: NextRequest) {
       const session = event.data.object as Stripe.Checkout.Session;
       const { type, invoice_id } = session.metadata || {};
 
-      if (type === "invoice" && invoice_id) {
+      if (type === "invoice_deposit" && invoice_id) {
+        // Manual prepayment invoice — mark as PARTIAL_PAID
+        invoiceId = invoice_id;
+        const paidAmount = (session.amount_total || 0) / 100;
+        const fullPrice = parseFloat(session.metadata?.full_price || "0");
+        const paymentIntentId = session.payment_intent as string;
+
+        await supabase.from("invoices").update({
+          status: "PARTIAL_PAID",
+          paid_amount: paidAmount,
+          paid_at: new Date().toISOString(),
+          stripe_payment_intent_id: paymentIntentId,
+          stripe_session_id: null,
+          stripe_session_expires_at: null,
+        }).eq("id", invoice_id);
+
+        const { data: inv } = await supabase.from("invoices").select("patient_id").eq("id", invoice_id).single();
+        await supabase.from("stripe_transactions").upsert({
+          stripe_payment_intent_id: paymentIntentId,
+          stripe_session_id: session.id,
+          invoice_id,
+          patient_id: inv?.patient_id || null,
+          amount: paidAmount,
+          currency: session.currency || "chf",
+          status: "succeeded",
+          metadata: { type: "invoice_deposit", full_price: fullPrice },
+        }, { onConflict: "stripe_payment_intent_id" });
+
+        console.log(`[Stripe Webhook] Invoice deposit ${invoice_id} marked PARTIAL_PAID — CHF ${paidAmount}`);
+
+      } else if (type === "invoice" && invoice_id) {
         invoiceId = invoice_id;
         const paidAmount = (session.amount_total || 0) / 100;
         const paymentIntentId = session.payment_intent as string;
