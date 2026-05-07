@@ -15,7 +15,10 @@ export async function GET(req: Request) {
       .select('id, name, email, specialty, role, iban, gln, zsr')
       .order('name', { ascending: true });
 
-    if (role) query = query.eq('role', role);
+    if (role) {
+      const roles = role.split(",").map(r => r.trim());
+      query = roles.length === 1 ? query.eq("role", roles[0]) : query.in("role", roles);
+    }
 
     const { data, error } = await query;
 

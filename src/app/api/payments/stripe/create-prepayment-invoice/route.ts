@@ -6,7 +6,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.verc
 
 export async function POST(req: NextRequest) {
   try {
-    const { patientId, serviceId, providerId } = await req.json();
+    const { patientId, serviceId, doctorId, billingEntityId } = await req.json();
     if (!patientId || !serviceId) return NextResponse.json({ error: "Missing patientId or serviceId" }, { status: 400 });
 
     // Fetch service price
@@ -28,11 +28,18 @@ export async function POST(req: NextRequest) {
       .eq("id", patientId)
       .single();
 
-    // Fetch provider if given
-    let provider: any = null;
-    if (providerId) {
-      const { data } = await supabaseAdmin.from("providers").select("id, name, iban, gln, zsr").eq("id", providerId).single();
-      provider = data;
+    // Fetch doctor (medical staff)
+    let doctor: any = null;
+    if (doctorId) {
+      const { data } = await supabaseAdmin.from("providers").select("id, name, gln, zsr").eq("id", doctorId).single();
+      doctor = data;
+    }
+
+    // Fetch billing entity
+    let billingEntity: any = null;
+    if (billingEntityId) {
+      const { data } = await supabaseAdmin.from("providers").select("id, name, iban, gln, zsr").eq("id", billingEntityId).single();
+      billingEntity = data;
     }
 
     // Generate invoice number
@@ -54,12 +61,14 @@ export async function POST(req: NextRequest) {
         invoice_number: invoiceNumber,
         title: `Acompte 50% – ${service.name}`,
         invoice_date: nowIso.split("T")[0],
-        doctor_name: provider?.name ?? null,
-        provider_id: provider?.id ?? null,
-        provider_name: provider?.name ?? null,
-        provider_iban: provider?.iban ?? null,
-        provider_gln: provider?.gln ?? null,
-        provider_zsr: provider?.zsr ?? null,
+        doctor_name: doctor?.name ?? null,
+        doctor_gln: doctor?.gln ?? null,
+        doctor_zsr: doctor?.zsr ?? null,
+        provider_id: billingEntity?.id ?? null,
+        provider_name: billingEntity?.name ?? null,
+        provider_iban: billingEntity?.iban ?? null,
+        provider_gln: billingEntity?.gln ?? null,
+        provider_zsr: billingEntity?.zsr ?? null,
         subtotal: fullPrice,
         total_amount: fullPrice,
         paid_amount: 0,
