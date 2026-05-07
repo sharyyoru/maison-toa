@@ -122,7 +122,7 @@ function DoctorBookingContent() {
 
   const locationId = "lausanne";
   const locationLabel = "Lausanne";
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const [treatment, setTreatment] = useState<Treatment | null>(null);
   const [step, setStep] = useState<BookingStep>("info");
