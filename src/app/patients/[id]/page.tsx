@@ -422,12 +422,6 @@ export default async function PatientPage({
                     patientId={patient.id}
                     value={paymentMethodFilter}
                   />
-                  <PrepaymentInvoiceButton
-                    patientId={patient.id}
-                    patientEmail={patient.email}
-                    patientFirstName={patient.first_name}
-                    patientLastName={patient.last_name}
-                  />
                   <div className="flex items-center gap-2">
                     <div className="inline-flex items-center rounded-full bg-slate-100 px-0.5 py-0.5 text-[11px] font-semibold text-slate-700">
                       <span className="rounded-full bg-slate-800 px-3 py-1 text-[11px] font-semibold text-white">
@@ -589,6 +583,12 @@ export default async function PatientPage({
                   <InvoicePaymentMethodFilter
                     patientId={patient.id}
                     value={paymentMethodFilter}
+                  />
+                  <PrepaymentInvoiceButton
+                    patientId={patient.id}
+                    patientEmail={patient.email}
+                    patientFirstName={patient.first_name}
+                    patientLastName={patient.last_name}
                   />
                 </div>
               </div>
