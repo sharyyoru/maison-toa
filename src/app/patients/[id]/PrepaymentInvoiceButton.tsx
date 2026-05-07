@@ -37,8 +37,8 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
   useEffect(() => {
     if (!open) return;
     Promise.all([
-      fetch("/api/services").then(r => r.json()),
-      fetch("/api/providers?role=billing_entity").then(r => r.json()),
+      fetch("/api/services?category_id=20fdd180-860c-43fc-a5d3-caf5372ef07c").then(r => r.json()),
+      fetch("/api/providers?role=provider").then(r => r.json()),
     ]).then(([sData, pData]) => {
       setServices(sData.services || []);
       setProviders(pData.providers || []);
@@ -194,7 +194,7 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
 
                 {/* Provider */}
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Médecin / Entité de facturation</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Médecin / Prestataire</label>
                   <select value={providerId} onChange={e => setProviderId(e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-amber-400">
                     <option value="">— optionnel —</option>

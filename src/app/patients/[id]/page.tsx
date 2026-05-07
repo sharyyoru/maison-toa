@@ -584,12 +584,6 @@ export default async function PatientPage({
                     patientId={patient.id}
                     value={paymentMethodFilter}
                   />
-                  <PrepaymentInvoiceButton
-                    patientId={patient.id}
-                    patientEmail={patient.email}
-                    patientFirstName={patient.first_name}
-                    patientLastName={patient.last_name}
-                  />
                 </div>
               </div>
 
@@ -671,6 +665,15 @@ export default async function PatientPage({
                   </p>
                 </div>
               </div>
+            </div>
+
+            <div className="flex justify-end mb-2">
+              <PrepaymentInvoiceButton
+                patientId={patient.id}
+                patientEmail={patient.email}
+                patientFirstName={patient.first_name}
+                patientLastName={patient.last_name}
+              />
             </div>
 
             <MedicalConsultationsCard patientId={patient.id} recordTypeFilter="invoice" patientFirstName={patient.first_name} patientLastName={patient.last_name} patientEmail={(patient as any).email ?? null} />
