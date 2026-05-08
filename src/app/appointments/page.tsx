@@ -2372,7 +2372,7 @@ export default function CalendarPage() {
 
     // Check if at least one service is selected (either old single select or new multi-select)
     if (!selectedServiceId && selectedServiceIds.length === 0) {
-      setCreateError("Please select a service.");
+      setCreateError("Please select a service. If you pasted an appointment, the service may not have matched - please select it manually from the dropdown.");
       return;
     }
 
@@ -2685,20 +2685,76 @@ export default function CalendarPage() {
   }
 
   function handleCopyAppointment(appt: CalendarAppointment) {
+    console.log('[Copy] Copying appointment:', appt);
+    console.log('[Copy] Reason:', appt.reason);
     setCopiedAppointment(appt);
   }
 
   function handlePasteAppointment() {
     if (!copiedAppointment) return;
 
+    console.log('[Paste] Copied appointment:', copiedAppointment);
+    console.log('[Paste] Reason field:', copiedAppointment.reason);
+
     // Extract data from copied appointment
     const { serviceLabel, statusLabel } = getServiceAndStatusFromReason(copiedAppointment.reason);
     const categoryFromReason = getCategoryFromReason(copiedAppointment.reason);
 
-    // Find matching service
-    const matchedService = serviceOptions.find(
-      (s) => s.name.toLowerCase() === serviceLabel?.toLowerCase()
-    );
+    // Handle multiple services (comma-separated) or single service
+    const matchedServices: Array<{ id: string; name: string }> = [];
+    
+    // Helper function to normalize strings for matching
+    const normalize = (str: string) => str.toLowerCase().trim()
+      .replace(/['']/g, "'")
+      .replace(/[""]/g, '"')
+      .replace(/\s+/g, ' ');
+    
+    console.log('[Paste] Service label from reason:', serviceLabel);
+    console.log('[Paste] Available serviceOptions count:', serviceOptions.length);
+    console.log('[Paste] First 10 services:', serviceOptions.slice(0, 10).map(s => s.name));
+    
+    if (serviceLabel) {
+      // Split by comma to handle multiple services
+      const serviceParts = serviceLabel.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      console.log('[Paste] Service parts:', serviceParts);
+      
+      for (const servicePart of serviceParts) {
+        const searchNorm = normalize(servicePart);
+        
+        // Try exact match first (normalized)
+        let matched = serviceOptions.find(
+          (s) => normalize(s.name) === searchNorm
+        );
+        
+        // If no exact match, try contains match
+        if (!matched) {
+          matched = serviceOptions.find(
+            (s) => normalize(s.name).includes(searchNorm) || searchNorm.includes(normalize(s.name))
+          );
+        }
+        
+        // If still no match, try matching first word(s) - e.g., "Auto laser" matches "Auto laser GG"
+        if (!matched) {
+          const searchWords = searchNorm.split(' ').filter(w => w.length > 2);
+          if (searchWords.length > 0) {
+            matched = serviceOptions.find((s) => {
+              const serviceNorm = normalize(s.name);
+              // Check if most words match
+              const matchingWords = searchWords.filter(w => serviceNorm.includes(w));
+              return matchingWords.length >= Math.ceil(searchWords.length * 0.5);
+            });
+          }
+        }
+        
+        console.log('[Paste] Matching service part:', servicePart, '-> matched:', matched?.name ?? 'NONE');
+        
+        if (matched && !matchedServices.find(m => m.id === matched.id)) {
+          matchedServices.push(matched);
+        }
+      }
+    }
+    
+    console.log('[Paste] Total matched services:', matchedServices.length, matchedServices.map(s => s.name));
 
     if (copiedAppointment.patient?.id) {
       const patientName = `${copiedAppointment.patient.first_name ?? ""} ${copiedAppointment.patient.last_name ?? ""}`.trim();
@@ -2707,15 +2763,24 @@ export default function CalendarPage() {
       setCreatePatientSearch(patientName);
     }
 
-    if (matchedService) {
-      setSelectedServiceId(matchedService.id);
-      setServiceSearch(matchedService.name);
-      // Initialize multi-select with the matched service
-      setSelectedServiceIds([matchedService.id]);
-      setServiceQuantities({ [matchedService.id]: 1 });
+    if (matchedServices.length > 0) {
+      // Use first service for single-select field (backward compatibility)
+      setSelectedServiceId(matchedServices[0].id);
+      setServiceSearch(matchedServices[0].name);
+      // Set all matched services for multi-select
+      setSelectedServiceIds(matchedServices.map(s => s.id));
+      const quantities: Record<string, number> = {};
+      matchedServices.forEach(s => {
+        quantities[s.id] = 1;
+      });
+      setServiceQuantities(quantities);
     } else {
+      // No match found - preserve the service text for manual selection
+      setSelectedServiceId("");
+      setServiceSearch(serviceLabel ?? "");
       setSelectedServiceIds([]);
       setServiceQuantities({});
+      console.log('[Paste] No service match found, keeping search text:', serviceLabel);
     }
 
     setBookingStatus(statusLabel ?? "");
@@ -2725,6 +2790,10 @@ export default function CalendarPage() {
     setDraftLocation(copiedAppointment.location ?? "Lausanne");
     setLocationSearch(copiedAppointment.location ?? "Lausanne");
 
+    // Set notes from copied appointment
+    const copiedNotes = getAppointmentNotes(copiedAppointment) ?? "";
+    setDraftDescription(copiedNotes);
+
     // Set duration from copied appointment
     const start = new Date(copiedAppointment.start_time);
     const end = copiedAppointment.end_time ? new Date(copiedAppointment.end_time) : null;
@@ -2732,19 +2801,23 @@ export default function CalendarPage() {
       const diffMinutes = Math.round((end.getTime() - start.getTime()) / (60 * 1000));
       if (diffMinutes > 0) {
         setConsultationDuration(diffMinutes);
-        setDurationSearch(String(diffMinutes));
+        const durationOption = CONSULTATION_DURATION_OPTIONS.find(opt => opt.value === diffMinutes);
+        setDurationSearch(durationOption ? durationOption.label : `${diffMinutes} minutes`);
       }
     }
     
     // Initialize multi-select doctors
     if (copiedAppointment.provider_id) {
       setSelectedDoctorIds([copiedAppointment.provider_id]);
+      setCreateDoctorCalendarId(copiedAppointment.provider_id);
     } else {
       const defaultCalendar = doctorCalendars.find((calendar) => calendar.selected) || doctorCalendars[0] || null;
       if (defaultCalendar?.id) {
         setSelectedDoctorIds([defaultCalendar.id]);
+        setCreateDoctorCalendarId(defaultCalendar.id);
       } else {
         setSelectedDoctorIds([]);
+        setCreateDoctorCalendarId("");
       }
     }
     setDoctorConflicts({});
