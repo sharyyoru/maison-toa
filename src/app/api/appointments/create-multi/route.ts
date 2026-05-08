@@ -10,6 +10,7 @@ export async function POST(request: Request) {
       serviceQuantities,
       startTime,
       endTime,
+      occurrences,
       location,
       status,
       category,
@@ -26,34 +27,55 @@ export async function POST(request: Request) {
       );
     }
     
-    if (!startTime || !endTime) {
+    const requestedOccurrences = Array.isArray(occurrences)
+      ? occurrences
+          .map((occurrence: { startTime?: unknown; endTime?: unknown }) => ({
+            startTime: typeof occurrence.startTime === 'string' ? occurrence.startTime : '',
+            endTime: typeof occurrence.endTime === 'string' ? occurrence.endTime : '',
+          }))
+          .filter((occurrence) => occurrence.startTime && occurrence.endTime)
+      : null;
+
+    if ((!startTime || !endTime) && (!requestedOccurrences || requestedOccurrences.length === 0)) {
       return NextResponse.json(
         { error: 'startTime and endTime are required' },
         { status: 400 }
       );
     }
-    
-    // Validate timestamps
-    const startDate = new Date(startTime);
-    const endDate = new Date(endTime);
-    
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+
+    const appointmentTimes = requestedOccurrences && requestedOccurrences.length > 0
+      ? requestedOccurrences
+      : [{ startTime, endTime }];
+
+    if (appointmentTimes.length > 120) {
       return NextResponse.json(
-        { error: 'Invalid timestamp format' },
+        { error: 'Recurring appointments are limited to 120 occurrences.' },
         { status: 400 }
       );
     }
-    
-    if (endDate <= startDate) {
-      return NextResponse.json(
-        { error: 'endTime must be after startTime' },
-        { status: 400 }
-      );
+
+    for (const appointmentTime of appointmentTimes) {
+      const startDate = new Date(appointmentTime.startTime);
+      const endDate = new Date(appointmentTime.endTime);
+
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid timestamp format' },
+          { status: 400 }
+        );
+      }
+
+      if (endDate <= startDate) {
+        return NextResponse.json(
+          { error: 'endTime must be after startTime' },
+          { status: 400 }
+        );
+      }
     }
     
     // Validate service quantities
     if (serviceQuantities) {
-      for (const [serviceId, quantity] of Object.entries(serviceQuantities)) {
+      for (const quantity of Object.values(serviceQuantities)) {
         const qty = quantity as number;
         if (qty < 1 || qty > 10) {
           return NextResponse.json(
@@ -98,12 +120,26 @@ export async function POST(request: Request) {
 
     // Check for overlapping appointments for each provider (future bookings only)
     // Skip this check for internal calendar bookings (allowOverlap = true)
-    if (!allowOverlap && new Date(startTime) > new Date()) {
+    if (!allowOverlap) {
+      const earliestStart = appointmentTimes.reduce((earliest, appointmentTime) => {
+        return new Date(appointmentTime.startTime) < new Date(earliest.startTime)
+          ? appointmentTime
+          : earliest;
+      }, appointmentTimes[0]);
+      const latestEnd = appointmentTimes.reduce((latest, appointmentTime) => {
+        return new Date(appointmentTime.endTime) > new Date(latest.endTime)
+          ? appointmentTime
+          : latest;
+      }, appointmentTimes[0]);
+
+      if (new Date(earliestStart.startTime) <= new Date()) {
+        // Existing behavior only checks future bookings. Skip past ranges.
+      } else {
       const { data: overlapping } = await supabase
         .from('appointments')
         .select('id, provider_id, reason')
-        .lt('start_time', endTime)
-        .gt('end_time', startTime)
+        .lt('start_time', latestEnd.endTime)
+        .gt('end_time', earliestStart.startTime)
         .not('status', 'in', '(cancelled,no_show)')
         .in('provider_id', providerIds);
 
@@ -118,10 +154,11 @@ export async function POST(request: Request) {
           { status: 409 }
         );
       }
+      }
     }
 
-    // Create N separate appointment rows (one per doctor)
-    const appointmentRows = providerIds.map((providerId: string) => {
+    // Create separate appointment rows for each doctor and each requested occurrence.
+    const appointmentRows = appointmentTimes.flatMap((appointmentTime) => providerIds.map((providerId: string) => {
       const provider = providers?.find((p) => p.id === providerId);
       const doctorName = provider?.name || 'Unknown';
       
@@ -147,14 +184,14 @@ export async function POST(request: Request) {
         patient_id: patientId || null,
         provider_id: providerId,
         appointment_group_id: providerIds.length > 1 ? appointmentGroupId : null,
-        start_time: startTime,
-        end_time: endTime,
+        start_time: appointmentTime.startTime,
+        end_time: appointmentTime.endTime,
         status: status || 'scheduled',
         reason,
         location: location || null,
         source: 'manual'
       };
-    });
+    }));
     
     // Insert all appointments in a single transaction
     const { data: createdAppointments, error } = await supabase

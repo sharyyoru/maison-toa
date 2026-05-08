@@ -28,6 +28,102 @@ type AppointmentStatus =
   | "no_show";
 
 type WorkflowStatus = "pending" | "approved" | "rescheduled" | "cancelled";
+type RecurrenceFrequency = "none" | "daily" | "weekly" | "monthly" | "yearly";
+type RecurrenceEndMode = "after" | "on";
+
+type AppointmentOccurrence = {
+  startTime: string;
+  endTime: string;
+  date: string;
+};
+
+const MAX_RECURRENCE_OCCURRENCES = 120;
+
+function parseYmdParts(dateStr: string): { year: number; month: number; day: number } | null {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return { year, month, day };
+}
+
+function toYmdFromLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const day = date.getDate().toString().padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function daysInMonth(year: number, monthIndex: number): number {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+function addMonthsClamped(dateStr: string, monthsToAdd: number): string {
+  const parts = parseYmdParts(dateStr);
+  if (!parts) return dateStr;
+  const targetMonthIndex = parts.month - 1 + monthsToAdd;
+  const targetYear = parts.year + Math.floor(targetMonthIndex / 12);
+  const normalizedMonthIndex = ((targetMonthIndex % 12) + 12) % 12;
+  const targetDay = Math.min(parts.day, daysInMonth(targetYear, normalizedMonthIndex));
+  return toYmdFromLocalDate(new Date(targetYear, normalizedMonthIndex, targetDay, 12, 0, 0));
+}
+
+function addDaysToYmd(dateStr: string, daysToAdd: number): string {
+  const parts = parseYmdParts(dateStr);
+  if (!parts) return dateStr;
+  const date = new Date(parts.year, parts.month - 1, parts.day, 12, 0, 0);
+  date.setDate(date.getDate() + daysToAdd);
+  return toYmdFromLocalDate(date);
+}
+
+function getNextRecurrenceDate(dateStr: string, frequency: RecurrenceFrequency): string {
+  switch (frequency) {
+    case "daily":
+      return addDaysToYmd(dateStr, 1);
+    case "weekly":
+      return addDaysToYmd(dateStr, 7);
+    case "monthly":
+      return addMonthsClamped(dateStr, 1);
+    case "yearly":
+      return addMonthsClamped(dateStr, 12);
+    default:
+      return dateStr;
+  }
+}
+
+function buildAppointmentOccurrences(
+  startDate: string,
+  startHour: number,
+  startMinute: number,
+  durationMinutes: number,
+  frequency: RecurrenceFrequency,
+  endMode: RecurrenceEndMode,
+  count: number,
+  untilDate: string,
+): AppointmentOccurrence[] {
+  const safeCount = Math.min(Math.max(Math.floor(count || 1), 1), MAX_RECURRENCE_OCCURRENCES);
+  const occurrences: AppointmentOccurrence[] = [];
+  let currentDate = startDate;
+
+  for (let index = 0; index < MAX_RECURRENCE_OCCURRENCES; index += 1) {
+    if (endMode === "after" && index >= safeCount) break;
+    if (endMode === "on" && untilDate && currentDate > untilDate) break;
+
+    const start = createSwissDateTime(currentDate, startHour, startMinute);
+    const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) break;
+
+    occurrences.push({
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      date: currentDate,
+    });
+
+    const nextDate = getNextRecurrenceDate(currentDate, frequency);
+    if (nextDate === currentDate) break;
+    currentDate = nextDate;
+  }
+
+  return occurrences;
+}
 
 function appointmentStatusToWorkflow(status: AppointmentStatus): WorkflowStatus {
   if (status === "confirmed") return "approved";
@@ -692,6 +788,13 @@ export default function CalendarPage() {
   const [draftTime, setDraftTime] = useState("");
   const [draftLocation, setDraftLocation] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
+  const [repeatAppointment, setRepeatAppointment] = useState(false);
+  const [recurrenceFrequency, setRecurrenceFrequency] =
+    useState<RecurrenceFrequency>("weekly");
+  const [recurrenceEndMode, setRecurrenceEndMode] =
+    useState<RecurrenceEndMode>("after");
+  const [recurrenceCount, setRecurrenceCount] = useState(4);
+  const [recurrenceUntilDate, setRecurrenceUntilDate] = useState("");
   const [savingCreate, setSavingCreate] = useState(false);
   const [createPatientSearch, setCreatePatientSearch] = useState("");
   const [showCreatePatientSuggestions, setShowCreatePatientSuggestions] =
@@ -752,6 +855,14 @@ export default function CalendarPage() {
   const [timeSearch, setTimeSearch] = useState("");
   const [timeDropdownOpen, setTimeDropdownOpen] = useState(false);
   const [createDoctorCalendarId, setCreateDoctorCalendarId] = useState("");
+
+  const resetCreateRecurrence = () => {
+    setRepeatAppointment(false);
+    setRecurrenceFrequency("weekly");
+    setRecurrenceEndMode("after");
+    setRecurrenceCount(4);
+    setRecurrenceUntilDate("");
+  };
 
   const closeAllCreateDropdowns = (except?: string) => {
     if (except !== "patient") setShowCreatePatientSuggestions(false);
@@ -2005,6 +2116,39 @@ export default function CalendarPage() {
     );
   }, [timeSearch, allTimeOptions]);
 
+  const recurrencePreview = useMemo(() => {
+    if (!repeatAppointment || recurrenceFrequency === "none" || !draftDate || !draftTime) {
+      return [] as AppointmentOccurrence[];
+    }
+
+    const [hourStr, minuteStr] = draftTime.split(":");
+    const hour = parseInt(hourStr, 10);
+    const minute = parseInt(minuteStr, 10);
+    if (Number.isNaN(hour) || Number.isNaN(minute)) {
+      return [] as AppointmentOccurrence[];
+    }
+
+    return buildAppointmentOccurrences(
+      draftDate,
+      hour,
+      minute,
+      consultationDuration || DAY_VIEW_SLOT_MINUTES,
+      recurrenceFrequency,
+      recurrenceEndMode,
+      recurrenceCount,
+      recurrenceUntilDate || draftDate,
+    );
+  }, [
+    repeatAppointment,
+    recurrenceFrequency,
+    draftDate,
+    draftTime,
+    consultationDuration,
+    recurrenceEndMode,
+    recurrenceCount,
+    recurrenceUntilDate,
+  ]);
+
   function handleSelectDayView() {
     const base = selectedDate ?? new Date();
     const day = new Date(
@@ -2157,6 +2301,7 @@ export default function CalendarPage() {
     setDurationSearch(durationOption ? durationOption.label : `${durationMinutes} minutes`);
     
     setDraftDescription("");
+    resetCreateRecurrence();
     // Use the doctor from the dragged column if available, otherwise default
     if (dragDoctorCalendarId) {
       setCreateDoctorCalendarId(dragDoctorCalendarId);
@@ -2412,12 +2557,52 @@ export default function CalendarPage() {
 
     const startIso = startLocal.toISOString();
     const endIso = endLocal.toISOString();
+    const occurrences = repeatAppointment
+      ? buildAppointmentOccurrences(
+          draftDate,
+          hour,
+          minute,
+          durationMinutes,
+          recurrenceFrequency,
+          recurrenceEndMode,
+          recurrenceCount,
+          recurrenceUntilDate || draftDate,
+        )
+      : [];
+
+    if (repeatAppointment && recurrenceFrequency === "none") {
+      setCreateError("Please choose how often this appointment repeats.");
+      return;
+    }
+
+    if (repeatAppointment && occurrences.length === 0) {
+      setCreateError("Please choose a valid repeat schedule.");
+      return;
+    }
+
+    if (repeatAppointment && recurrenceEndMode === "on" && recurrenceUntilDate && recurrenceUntilDate < draftDate) {
+      setCreateError("Repeat end date must be on or after the appointment date.");
+      return;
+    }
+
+    if (!isSystemUser && repeatAppointment) {
+      const weekendOccurrence = occurrences.find((occurrence) => {
+        const date = createSwissDateTime(occurrence.date, 12, 0);
+        const dayOfWeek = date.getDay();
+        return dayOfWeek === 0 || dayOfWeek === 6;
+      });
+
+      if (weekendOccurrence) {
+        setCreateError("This repeat schedule includes a weekend. Please choose weekdays only.");
+        return;
+      }
+    }
 
     try {
       setSavingCreate(true);
 
       // Use multi-doctor/multi-service API if multiple doctors or services selected
-      const useMultiAPI = selectedDoctorIds.length > 0 || selectedServiceIds.length > 0;
+      const useMultiAPI = repeatAppointment || selectedDoctorIds.length > 0 || selectedServiceIds.length > 0;
       
       if (useMultiAPI) {
         // Use new multi-appointment creation API
@@ -2439,6 +2624,7 @@ export default function CalendarPage() {
             serviceQuantities,
             startTime: startIso,
             endTime: endIso,
+            occurrences: repeatAppointment ? occurrences : undefined,
             location: draftLocation || null,
             status: 'scheduled',
             category: appointmentCategory && appointmentCategory !== 'No selection' ? appointmentCategory : null,
@@ -2603,6 +2789,7 @@ export default function CalendarPage() {
       setCategorySearch("");
       setLocationSearch("");
       setDurationSearch("");
+      resetCreateRecurrence();
       setCreateError(null);
       setCreateDoctorCalendarId("");
       // Reset multi-select state
@@ -2821,6 +3008,7 @@ export default function CalendarPage() {
       }
     }
     setDoctorConflicts({});
+    resetCreateRecurrence();
 
     // Open the create modal
     setCreateModalOpen(true);
@@ -3047,6 +3235,7 @@ export default function CalendarPage() {
               setDraftLocation(CLINIC_LOCATION_OPTIONS[0] ?? "");
               setLocationSearch(CLINIC_LOCATION_OPTIONS[0] ?? "");
               setDraftDescription("");
+              resetCreateRecurrence();
               const defaultCalendar =
                 doctorCalendars.find((calendar) => calendar.selected) ||
                 doctorCalendars[0] ||
@@ -4670,7 +4859,9 @@ export default function CalendarPage() {
                       type="date"
                       value={draftDate}
                       onChange={(event) => {
-                        setDraftDate(event.target.value);
+                        const nextDate = event.target.value;
+                        setDraftDate(nextDate);
+                        setRecurrenceUntilDate((current) => current && current >= nextDate ? current : nextDate);
                         setDraftTime("");
                         setTimeSearch("");
                       }}
@@ -4722,6 +4913,85 @@ export default function CalendarPage() {
                       )}
                     </div>
                   </div>
+                </div>
+                <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
+                  <label className="flex items-center justify-between gap-3">
+                    <span className="text-[11px] font-medium text-slate-700">{t("modal.recurrence.repeatAppointment")}</span>
+                    <input
+                      type="checkbox"
+                      checked={repeatAppointment}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setRepeatAppointment(checked);
+                        if (checked && draftDate && (!recurrenceUntilDate || recurrenceUntilDate < draftDate)) {
+                          setRecurrenceUntilDate(draftDate);
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    />
+                  </label>
+                  {repeatAppointment ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="space-y-1">
+                          <span className="text-[10px] text-slate-500">{t("modal.recurrence.frequency")}</span>
+                          <select
+                            value={recurrenceFrequency}
+                            onChange={(event) => setRecurrenceFrequency(event.target.value as RecurrenceFrequency)}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                          >
+                            <option value="daily">{t("modal.recurrence.daily")}</option>
+                            <option value="weekly">{t("modal.recurrence.weekly")}</option>
+                            <option value="monthly">{t("modal.recurrence.monthly")}</option>
+                            <option value="yearly">{t("modal.recurrence.yearly")}</option>
+                          </select>
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-[10px] text-slate-500">{t("modal.recurrence.ends")}</span>
+                          <select
+                            value={recurrenceEndMode}
+                            onChange={(event) => setRecurrenceEndMode(event.target.value as RecurrenceEndMode)}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                          >
+                            <option value="after">{t("modal.recurrence.after")}</option>
+                            <option value="on">{t("modal.recurrence.onDate")}</option>
+                          </select>
+                        </label>
+                      </div>
+                      {recurrenceEndMode === "after" ? (
+                        <label className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-500">{t("modal.recurrence.occurrences")}</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={MAX_RECURRENCE_OCCURRENCES}
+                            value={recurrenceCount}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              setRecurrenceCount(Math.min(Math.max(value || 1, 1), MAX_RECURRENCE_OCCURRENCES));
+                            }}
+                            className="w-20 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                          />
+                        </label>
+                      ) : (
+                        <label className="space-y-1">
+                          <span className="text-[10px] text-slate-500">{t("modal.recurrence.until")}</span>
+                          <input
+                            type="date"
+                            value={recurrenceUntilDate || draftDate}
+                            min={draftDate || undefined}
+                            onChange={(event) => setRecurrenceUntilDate(event.target.value)}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                          />
+                        </label>
+                      )}
+                      <p className="text-[10px] text-slate-500">
+                        {recurrencePreview.length > 0
+                          ? t("modal.recurrence.preview", { count: recurrencePreview.length })
+                          : t("modal.recurrence.previewEmpty")}
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.services")}</p>
