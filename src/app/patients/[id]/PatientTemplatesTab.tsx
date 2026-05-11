@@ -119,17 +119,11 @@ export default function PatientTemplatesTab({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [useOnlyOffice, setUseOnlyOffice] = useState<boolean | null>(null);
 
-  // Check if OnlyOffice is available
+  // Check if OnlyOffice URL is configured
   useEffect(() => {
     const onlyOfficeUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL;
-    if (!onlyOfficeUrl) {
-      setUseOnlyOffice(false);
-      return;
-    }
-    // Try to ping OnlyOffice server
-    fetch(`${onlyOfficeUrl}/web-apps/apps/api/documents/api.js`, { mode: "no-cors" })
-      .then(() => setUseOnlyOffice(true))
-      .catch(() => setUseOnlyOffice(false));
+    console.log("[Templates] OnlyOffice URL:", onlyOfficeUrl);
+    setUseOnlyOffice(!!onlyOfficeUrl);
   }, []);
 
   const patientData = {
