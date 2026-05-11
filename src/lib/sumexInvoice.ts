@@ -788,6 +788,12 @@ export async function buildInvoiceRequest(
   console.log(`${LOG_PREFIX} Session created: mgr=${mgr}, req=${req}, addr=${addr}`);
 
   try {
+    // --- Initialize (must be called first — sets language for XML and PDF template) ---
+    await reqPost("IGeneralInvoiceRequest", "Initialize", {
+      pIGeneralInvoiceRequest: req,
+      eDataLanguage: input.language ?? 2, // 2 = FR (default), 1 = DE, 3 = IT
+    });
+
     // --- SetPackage ---
     await reqPost("IGeneralInvoiceRequest", "SetPackage", {
       pIGeneralInvoiceRequest: req,
