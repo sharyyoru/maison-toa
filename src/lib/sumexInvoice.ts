@@ -788,11 +788,24 @@ export async function buildInvoiceRequest(
   console.log(`${LOG_PREFIX} Session created: mgr=${mgr}, req=${req}, addr=${addr}`);
 
   try {
-    // --- Initialize (must be called first — sets language for XML and PDF template) ---
-    await reqPost("IGeneralInvoiceRequest", "Initialize", {
-      pIGeneralInvoiceRequest: req,
-      eDataLanguage: input.language ?? 2, // 2 = FR (default), 1 = DE, 3 = IT
-    });
+    // --- Initialize ---
+    // Per Sumex1 SDK: must be called BEFORE any Set* methods.
+    // eDataLanguage controls XML <request language="…"> and PDF print template language.
+    // 1=DE, 2=FR, 3=IT. Default to FR.
+    const dataLanguage = input.language ?? 2;
+    const initRes = await reqPost<{ pbStatus: boolean }>(
+      "IGeneralInvoiceRequest",
+      "Initialize",
+      {
+        pIGeneralInvoiceRequest: req,
+        eDataLanguage: dataLanguage,
+      },
+    );
+    if (!initRes.pbStatus) {
+      const abortInfo = await getAbortInfo(mgr);
+      throw new Error(`IGeneralInvoiceRequest/Initialize failed: ${abortInfo}`);
+    }
+    console.log(`${LOG_PREFIX} Initialize OK: eDataLanguage=${dataLanguage} (1=DE,2=FR,3=IT)`);
 
     // --- SetPackage ---
     await reqPost("IGeneralInvoiceRequest", "SetPackage", {
