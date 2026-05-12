@@ -329,7 +329,9 @@ export async function POST(request: NextRequest) {
       };
 
       // Generate XML + PDF via Sumex1 server
-      const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true });
+      // TG = 1-page Summary, TP/reminder/receipt = multi-page Detail
+      const printTemplate = invoiceType === "tg" ? "Summary_R_fr" : "Detail_GR_fr";
+      const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate });
 
       if (!sumexResult.success) {
         console.error(`[GeneratePDF] Sumex1 FAILED: ${sumexResult.error} / ${sumexResult.abortInfo}`);
@@ -556,7 +558,8 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true });
+        const printTemplate2 = invoiceType === "tg" ? "Summary_R_fr" : "Detail_GR_fr";
+        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: printTemplate2 });
 
         if (sumexResult2.success && sumexResult2.pdfContent) {
           // Overlay Payrexx QR for Online and Card payments (both use Payrexx gateway)

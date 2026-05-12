@@ -371,6 +371,7 @@ export type SumexInvoiceInput = {
   creditTimestamp?: number;
 
   // Reminder (optional)
+  reminderId?: string;
   reminderLevel?: number;
   reminderText?: string;
   reminderDate?: string;
@@ -777,6 +778,7 @@ export async function buildInvoiceRequest(
     generatePdf?: boolean;
     pdfPath?: string;
     generationAttributes?: number;
+    printTemplate?: string;
   },
 ): Promise<SumexBuildResult> {
   // Always create a fresh session for each invoice build
@@ -860,10 +862,11 @@ export async function buildInvoiceRequest(
     if (input.reminderLevel && input.reminderLevel > 0) {
       await reqPost("IGeneralInvoiceRequest", "SetReminder", {
         pIGeneralInvoiceRequest: req,
-        lReminderLevel: input.reminderLevel,
-        bstrReminderText: input.reminderText || `Rappel niveau ${input.reminderLevel}`,
+        bstrRequestReminderID: input.reminderId || input.invoiceId || "",
         dRequestReminderDate: input.reminderDate || input.invoiceDate,
         lRequestReminderTimestamp: input.reminderTimestamp ?? 0,
+        lReminderLevel: input.reminderLevel,
+        bstrReminderText: input.reminderText || `Rappel niveau ${input.reminderLevel}`,
         dAmountReminder: input.reminderAmount ?? 0,
       });
     }
@@ -1373,9 +1376,13 @@ export async function buildInvoiceRequest(
     if (options?.generatePdf) {
       console.log(`${LOG_PREFIX} Print/PDF generation requested`);
       try {
-        const pdfTemplate = options.pdfPath
+        const templateName = options.printTemplate || "";
+        const pdfOutputDirective = options.pdfPath
           ? `(PDF_NOPRINT=${options.pdfPath};)`
           : "";
+        const pdfTemplate = templateName
+          ? (pdfOutputDirective ? `${templateName}${pdfOutputDirective}` : templateName)
+          : pdfOutputDirective;
         const printRes = await reqPost<{
           plTimestamp: number;
           pIGeneralInvoiceResult: number;
