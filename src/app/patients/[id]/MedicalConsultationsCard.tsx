@@ -78,6 +78,10 @@ type ConsultationRow = {
   invoice_paid_amount: number | null;
   cash_receipt_path: string | null;
   invoice_pdf_path: string | null;
+  invoice_pdf_path_tg: string | null;
+  invoice_pdf_path_tp: string | null;
+  invoice_pdf_path_reminder: string | null;
+  invoice_pdf_path_receipt: string | null;
   payment_link_token: string | null;
   payrexx_payment_link: string | null;
   payrexx_payment_status: string | null;
@@ -694,6 +698,7 @@ export default function MedicalConsultationsCard({
 
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
   const [pdfDropdownOpen, setPdfDropdownOpen] = useState<string | null>(null);
+  const [viewPdfDropdownOpen, setViewPdfDropdownOpen] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [generatedPaymentLink, setGeneratedPaymentLink] = useState<{ consultationId: string; url: string } | null>(null);
   const [paymentLinkCopied, setPaymentLinkCopied] = useState(false);
@@ -1174,7 +1179,7 @@ export default function MedicalConsultationsCard({
         const { data: invoiceData, error: invoiceError } = await supabaseClient
           .from("invoices")
           .select(
-            "id, patient_id, consultation_id, invoice_number, invoice_date, treatment_date, doctor_user_id, doctor_name, provider_name, payment_method, total_amount, subtotal, paid_amount, status, is_complimentary, cash_receipt_path, pdf_path, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, title, reference_number",
+            "id, patient_id, consultation_id, invoice_number, invoice_date, treatment_date, doctor_user_id, doctor_name, provider_name, payment_method, total_amount, subtotal, paid_amount, status, is_complimentary, cash_receipt_path, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, title, reference_number",
           )
           .eq("patient_id", patientId)
           .eq("is_archived", showArchived ? true : false)
@@ -1228,6 +1233,10 @@ export default function MedicalConsultationsCard({
             invoice_paid_amount: inv.paid_amount ?? null,
             cash_receipt_path: inv.cash_receipt_path ?? null,
             invoice_pdf_path: inv.pdf_path ?? null,
+            invoice_pdf_path_tg: inv.pdf_path_tg ?? null,
+            invoice_pdf_path_tp: inv.pdf_path_tp ?? null,
+            invoice_pdf_path_reminder: inv.pdf_path_reminder ?? null,
+            invoice_pdf_path_receipt: inv.pdf_path_receipt ?? null,
             payment_link_token: inv.payment_link_token ?? null,
             payrexx_payment_link: inv.payrexx_payment_link ?? null,
             payrexx_payment_status: inv.payrexx_payment_status ?? null,
@@ -4505,6 +4514,10 @@ export default function MedicalConsultationsCard({
                           invoice_paid_amount: isCashOrCard ? (invoiceTotalAmountForInsert || 0) : null,
                           cash_receipt_path: null,
                           invoice_pdf_path: null,
+                          invoice_pdf_path_tg: null,
+                          invoice_pdf_path_tp: null,
+                          invoice_pdf_path_reminder: null,
+                          invoice_pdf_path_receipt: null,
                           payment_link_token: null,
                           payrexx_payment_link: null,
                           payrexx_payment_status: null,
@@ -7463,15 +7476,27 @@ export default function MedicalConsultationsCard({
                           {/* Action buttons toolbar */}
                           <div className="flex flex-wrap items-center gap-1.5">
                             {/* Document group */}
-                            {row.invoice_pdf_path ? (
-                              <button
-                                type="button"
-                                onClick={() => handleViewPdf(row.invoice_pdf_path!)}
-                                className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
-                              >
-                                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                View PDF
-                              </button>
+                            {(row.invoice_pdf_path || row.invoice_pdf_path_tg || row.invoice_pdf_path_tp || row.invoice_pdf_path_reminder || row.invoice_pdf_path_receipt) ? (
+                              <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setViewPdfDropdownOpen(null); }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setViewPdfDropdownOpen(viewPdfDropdownOpen === row.id ? null : row.id)}
+                                  className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
+                                >
+                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                  View PDF
+                                  <svg className="h-3 w-3 ml-0.5" fill="none" viewBox="0 0 20 20" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8l4 4 4-4" /></svg>
+                                </button>
+                                {viewPdfDropdownOpen === row.id && (
+                                  <div className="absolute left-0 top-full mt-1 z-50 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                                    {row.invoice_pdf_path_tg && <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-indigo-50" onClick={() => { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_tg!); }}>Invoice (patient)</button>}
+                                    {row.invoice_pdf_path_tp && <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-indigo-50" onClick={() => { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_tp!); }}>Invoice (insurance)</button>}
+                                    {row.invoice_pdf_path_reminder && <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-indigo-50" onClick={() => { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_reminder!); }}>Reminder</button>}
+                                    {row.invoice_pdf_path_receipt && <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-indigo-50" onClick={() => { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_receipt!); }}>Patient receipt</button>}
+                                    {!row.invoice_pdf_path_tg && !row.invoice_pdf_path_tp && !row.invoice_pdf_path_reminder && !row.invoice_pdf_path_receipt && row.invoice_pdf_path && <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-indigo-50" onClick={() => { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path!); }}>Latest PDF</button>}
+                                  </div>
+                                )}
+                              </div>
                             ) : null}
                             <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setPdfDropdownOpen(null); }}>
                               <button
