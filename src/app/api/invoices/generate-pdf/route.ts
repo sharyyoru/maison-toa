@@ -54,8 +54,8 @@ type ProviderData = {
 
 export async function POST(request: NextRequest) {
   try {
-    const { invoiceId } = await request.json();
-    console.log("PDF generation request received for invoice ID:", invoiceId);
+    const { invoiceId, invoiceType = "tp", reminderLevel = 1 } = await request.json();
+    console.log("PDF generation request received for invoice ID:", invoiceId, "type:", invoiceType);
 
     if (!invoiceId) {
       return NextResponse.json(
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
 
       const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
       const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
-      const provName = billingEntityData?.name || invoiceData.provider_name || "Toa SA";
+      const provName = "TOA SA";
       const provStreet = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Voie du Chariot 6";
       const provZip = billingEntityData?.zip_code || "1003";
       const provCity = billingEntityData?.city || "Lausanne";
@@ -249,9 +249,9 @@ export async function POST(request: NextRequest) {
         language: 2,
         roleType: RoleType.Physician,
         placeType: PlaceType.Practice,
-        requestType: RequestType.Invoice,
-        requestSubtype: RequestSubtype.Normal,
-        tiersMode: mapSumexTiers(invoiceData.billing_type || "TG"),
+        requestType: invoiceType === "reminder" ? RequestType.Reminder : RequestType.Invoice,
+        requestSubtype: invoiceType === "receipt" ? RequestSubtype.Copy : RequestSubtype.Normal,
+        tiersMode: mapSumexTiers(invoiceType === "tg" ? "TG" : invoiceType === "tp" ? "TP" : (invoiceData.billing_type || "TG")),
         vatNumber: (billingEntityData as any)?.vatuid || "",
         invoiceId: invoiceData.invoice_number || `INV-${invoiceId.slice(0, 8)}`,
         invoiceDate: invoiceData.invoice_date || new Date().toISOString().split("T")[0],
@@ -320,6 +320,12 @@ export async function POST(request: NextRequest) {
         transportFrom: provGln,
         transportTo: receiverGln || insurerGln || "",
         printCopyToGuarantor: (invoiceData.billing_type === 'TP' || invoiceData.copy_to_guarantor) ? YesNo.Yes : YesNo.No,
+        amountPrepaid: (invoiceData.status === "PAID" || invoiceData.status === "OVERPAID") ? (Number(invoiceData.paid_amount) || Number(invoiceData.total_amount) || 0) : (Number(invoiceData.paid_amount) || 0),
+        ...(invoiceType === "reminder" ? {
+          reminderLevel: Number(reminderLevel) || 1,
+          reminderText: `Rappel de paiement (${reminderLevel}${reminderLevel === 1 ? "er" : "ème"} rappel)`,
+          reminderDate: new Date().toISOString().split("T")[0],
+        } : {}),
       };
 
       // Generate XML + PDF via Sumex1 server
@@ -346,7 +352,8 @@ export async function POST(request: NextRequest) {
       const pdfBuffer = sumexResult.pdfContent;
       console.log(`[GeneratePDF] Sumex1 PDF: ${pdfBuffer.length} bytes, schema=${sumexResult.usedSchema}`);
 
-      const fileName = `invoice-sumex-${invoiceData.invoice_number}-${Date.now()}.pdf`;
+      const typePrefix = invoiceType === "tg" ? "invoice" : invoiceType === "tp" ? "invoice-tp" : invoiceType === "reminder" ? "reminder" : "receipt";
+      const fileName = `${typePrefix}-${invoiceData.invoice_number}-${Date.now()}.pdf`;
       const filePath = `${invoiceData.patient_id}/${fileName}`;
 
       const { error: uploadError } = await supabaseAdmin.storage
@@ -361,9 +368,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Failed to upload PDF" }, { status: 500 });
       }
 
+      const pdfColumn = invoiceType === "tg" ? "pdf_path_tg" : invoiceType === "tp" ? "pdf_path_tp" : invoiceType === "reminder" ? "pdf_path_reminder" : "pdf_path_receipt";
       await supabaseAdmin
         .from("invoices")
-        .update({ pdf_path: filePath, pdf_generated_at: new Date().toISOString() })
+        .update({ pdf_path: filePath, [pdfColumn]: filePath, pdf_generated_at: new Date().toISOString() })
         .eq("id", invoiceId);
 
       const { data: publicUrlData } = supabaseAdmin.storage
@@ -430,7 +438,7 @@ export async function POST(request: NextRequest) {
 
       const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
       const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
-      const provName = billingEntityData?.name || invoiceData.provider_name || "Toa SA";
+      const provName = "TOA SA";
       const provStreetFull = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Voie du Chariot 6";
       const provZip = billingEntityData?.zip_code || "1003";
       const provCity = billingEntityData?.city || "Lausanne";
@@ -478,9 +486,9 @@ export async function POST(request: NextRequest) {
         language: 2,
         roleType: RoleType.Physician,
         placeType: PlaceType.Practice,
-        requestType: RequestType.Invoice,
-        requestSubtype: RequestSubtype.Normal,
-        tiersMode: mapSumexTiers("TG"),
+        requestType: invoiceType === "reminder" ? RequestType.Reminder : RequestType.Invoice,
+        requestSubtype: invoiceType === "receipt" ? RequestSubtype.Copy : RequestSubtype.Normal,
+        tiersMode: mapSumexTiers(invoiceType === "tg" ? "TG" : invoiceType === "tp" ? "TP" : (invoiceData.billing_type || "TG")),
         vatNumber: (billingEntityData as any)?.vatuid || "",
         invoiceId: invoiceData.invoice_number || `INV-${invoiceId.slice(0, 8)}`,
         invoiceDate: invoiceData.invoice_date || new Date().toISOString().split("T")[0],
@@ -539,6 +547,12 @@ export async function POST(request: NextRequest) {
         treatmentDateBegin: treatmentDate,
         treatmentDateEnd: treatmentDate,
         services: sumexServices2,
+        amountPrepaid: (invoiceData.status === "PAID" || invoiceData.status === "OVERPAID") ? (Number(invoiceData.paid_amount) || Number(invoiceData.total_amount) || 0) : (Number(invoiceData.paid_amount) || 0),
+        ...(invoiceType === "reminder" ? {
+          reminderLevel: Number(reminderLevel) || 1,
+          reminderText: `Rappel de paiement (${reminderLevel}${reminderLevel === 1 ? "er" : "ème"} rappel)`,
+          reminderDate: new Date().toISOString().split("T")[0],
+        } : {}),
       };
 
       try {
@@ -615,11 +629,13 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          const fileName = `invoice-sumex-${invoiceData.invoice_number}-${Date.now()}.pdf`;
+          const typePrefix2 = invoiceType === "tg" ? "invoice" : invoiceType === "tp" ? "invoice-tp" : invoiceType === "reminder" ? "reminder" : "receipt";
+          const fileName = `${typePrefix2}-${invoiceData.invoice_number}-${Date.now()}.pdf`;
           const filePath = `${invoiceData.patient_id}/${fileName}`;
           const { error: uploadError } = await supabaseAdmin.storage.from("invoice-pdfs").upload(filePath, finalPdfBuffer, { contentType: "application/pdf", cacheControl: "3600", upsert: true });
           if (!uploadError) {
-            await supabaseAdmin.from("invoices").update({ pdf_path: filePath, pdf_generated_at: new Date().toISOString() }).eq("id", invoiceId);
+            const pdfCol2 = invoiceType === "tg" ? "pdf_path_tg" : invoiceType === "tp" ? "pdf_path_tp" : invoiceType === "reminder" ? "pdf_path_reminder" : "pdf_path_receipt";
+            await supabaseAdmin.from("invoices").update({ pdf_path: filePath, [pdfCol2]: filePath, pdf_generated_at: new Date().toISOString() }).eq("id", invoiceId);
             const { data: publicUrlData } = supabaseAdmin.storage.from("invoice-pdfs").getPublicUrl(filePath);
             return NextResponse.json({ 
               success: true, 

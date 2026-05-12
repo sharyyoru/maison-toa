@@ -693,6 +693,7 @@ export default function MedicalConsultationsCard({
   const [cashReceiptError, setCashReceiptError] = useState<string | null>(null);
 
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
+  const [pdfDropdownOpen, setPdfDropdownOpen] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [generatedPaymentLink, setGeneratedPaymentLink] = useState<{ consultationId: string; url: string } | null>(null);
   const [paymentLinkCopied, setPaymentLinkCopied] = useState(false);
@@ -1069,8 +1070,9 @@ export default function MedicalConsultationsCard({
 
   // Auto-prefill billing entity based on selected doctor + payment method + invoice mode.
   // Rule:
-  //   - Payment Method = "Insurance" OR Invoice Mode = "tardoc"  -> medical entity (e.g. "Dr X")
-  //   - Anything else (Cash/Card/Online/Bank, Individual/Group/Flatrate) -> aesthetic entity (e.g. "Soins X")
+  //   - For Dr Miles, Dr Nordback, Dr Koltunova, Dr Plakalo: NO auto-assignment (entity is mandatory, user must choose)
+  //   - For others: Payment Method = "Insurance" OR Invoice Mode = "tardoc" -> medical entity (e.g. "Dr X")
+  //     Anything else (Cash/Card/Online/Bank, Individual/Group/Flatrate) -> aesthetic entity (e.g. "Soins X")
   // If the doctor has only one billing entity, use it regardless.
   // User can manually override via the dropdown; override flag is reset when doctor changes.
   useEffect(() => {
@@ -1078,6 +1080,16 @@ export default function MedicalConsultationsCard({
     if (billingEntityOverride) return;
     if (!consultationDoctorId) return;
     if (billingEntityOptions.length === 0) return;
+
+    // Skip auto-assignment for these doctors — entity must be chosen manually
+    const selectedDoctor = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
+    const noAutoAssignDoctors = ["miles", "nordback", "koltunova", "plakalo"];
+    if (selectedDoctor) {
+      const nameLC = (selectedDoctor.name || "").toLowerCase();
+      if (noAutoAssignDoctors.some((n) => nameLC.includes(n))) {
+        return;
+      }
+    }
 
     const doctorEntities = billingEntityOptions.filter(
       (be) => be.doctor_id === consultationDoctorId,
@@ -1103,6 +1115,7 @@ export default function MedicalConsultationsCard({
     invoiceMode,
     billingEntityOptions,
     invoiceProviderId,
+    medicalStaffOptions,
   ]);
 
   useEffect(() => {
@@ -2464,16 +2477,16 @@ export default function MedicalConsultationsCard({
     }
   }
 
-  async function handleGenerateInvoicePdf(invoiceId: string) {
+  async function handleGenerateInvoicePdf(invoiceId: string, invoiceType: "tg" | "tp" | "reminder" | "receipt" = "tp", reminderLevel = 1) {
     try {
-      console.log("Generating PDF for invoice ID:", invoiceId);
+      console.log("Generating PDF for invoice ID:", invoiceId, "type:", invoiceType);
       setGeneratingPdf(invoiceId);
       setPdfError(null);
 
       const response = await fetch("/api/invoices/generate-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceId }),
+        body: JSON.stringify({ invoiceId, invoiceType, reminderLevel }),
       });
 
       const data = await response.json();
@@ -3416,6 +3429,16 @@ export default function MedicalConsultationsCard({
                     return;
                   }
 
+                  // Billing entity is mandatory for Dr Miles, Dr Nordback, Dr Koltunova, Dr Plakalo
+                  if (!invoiceProviderId) {
+                    const doc = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
+                    const nameLC = (doc?.name || "").toLowerCase();
+                    if (["miles", "nordback", "koltunova", "plakalo"].some((n) => nameLC.includes(n))) {
+                      setConsultationError("Billing entity is required for this doctor. Please select one.");
+                      return;
+                    }
+                  }
+
                   const hasService = invoiceServiceLines.some(
                     (line) => line.serviceId,
                   );
@@ -4139,6 +4162,7 @@ export default function MedicalConsultationsCard({
                         }
 
                         // Auto-select first billing entity if none selected (required for Sumex1 PDF generation)
+                        // Skip for doctors who must choose manually (Miles, Nordback, Koltunova, Plakalo)
                         let finalProviderId = selectedProviderId;
                         let finalProviderName = selectedProviderName;
                         let finalProviderGln = selectedProviderGln;
@@ -4146,12 +4170,17 @@ export default function MedicalConsultationsCard({
                         let finalProviderIban = providerIban;
                         
                         if (!finalProviderId && billingEntityOptions.length > 0) {
-                          const defaultEntity = billingEntityOptions[0];
-                          finalProviderId = defaultEntity.id;
-                          finalProviderName = defaultEntity.name;
-                          finalProviderGln = defaultEntity.gln || null;
-                          finalProviderZsr = defaultEntity.zsr || null;
-                          finalProviderIban = defaultEntity.iban || null;
+                          const docForFallback = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
+                          const docNameLC = (docForFallback?.name || "").toLowerCase();
+                          const skipFallback = ["miles", "nordback", "koltunova", "plakalo"].some((n) => docNameLC.includes(n));
+                          if (!skipFallback) {
+                            const defaultEntity = billingEntityOptions[0];
+                            finalProviderId = defaultEntity.id;
+                            finalProviderName = defaultEntity.name;
+                            finalProviderGln = defaultEntity.gln || null;
+                            finalProviderZsr = defaultEntity.zsr || null;
+                            finalProviderIban = defaultEntity.iban || null;
+                          }
                         }
 
                         // Build invoice payload (shared between insert and update)
@@ -4162,7 +4191,7 @@ export default function MedicalConsultationsCard({
                             doctor_user_id: consultationDoctorId || null,
                             doctor_name: doctorName,
                             provider_id: finalProviderId,
-                            provider_name: finalProviderName,
+                            provider_name: "TOA SA",
                             provider_gln: finalProviderGln,
                             provider_zsr: finalProviderZsr,
                             provider_iban: finalProviderIban,
@@ -4672,7 +4701,9 @@ export default function MedicalConsultationsCard({
                   >
                     <option value="">{consultationRecordType === "invoice" ? tf("selectStaff") : tf("selectDoctor")}</option>
                     {consultationRecordType === "invoice" 
-                      ? medicalStaffOptions.map((staff) => (
+                      ? medicalStaffOptions
+                          .filter((staff) => !(staff.name || "").toLowerCase().includes("boursault"))
+                          .map((staff) => (
                           <option key={staff.id} value={staff.id}>
                             {staff.name}{staff.specialty ? ` (${staff.specialty})` : ""}{staff.gln ? ` - GLN: ${staff.gln}` : ""}
                           </option>
@@ -5054,38 +5085,64 @@ export default function MedicalConsultationsCard({
                         <div className="flex items-center justify-between">
                           <label className="block text-[11px] font-medium text-slate-700">
                             {tf("billingEntity")}
+                            {(() => {
+                              const doc = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
+                              const nameLC = (doc?.name || "").toLowerCase();
+                              if (["miles", "nordback", "koltunova", "plakalo"].some((n) => nameLC.includes(n))) {
+                                return <span className="text-red-500 ml-0.5">*</span>;
+                              }
+                              return null;
+                            })()}
                           </label>
-                          <label className="flex items-center gap-1 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={billingEntityOverride}
-                              onChange={(e) => {
-                                setBillingEntityOverride(e.target.checked);
-                              }}
-                              className="h-3 w-3 rounded border-slate-300 text-sky-600"
-                            />
-                            <span className="text-[10px] text-slate-500">Override</span>
-                          </label>
+                          {(() => {
+                            const doc = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
+                            const nameLC = (doc?.name || "").toLowerCase();
+                            const isNoAutoDoctor = ["miles", "nordback", "koltunova", "plakalo"].some((n) => nameLC.includes(n));
+                            if (isNoAutoDoctor) return null;
+                            return (
+                              <label className="flex items-center gap-1 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={billingEntityOverride}
+                                  onChange={(e) => {
+                                    setBillingEntityOverride(e.target.checked);
+                                  }}
+                                  className="h-3 w-3 rounded border-slate-300 text-sky-600"
+                                />
+                                <span className="text-[10px] text-slate-500">Override</span>
+                              </label>
+                            );
+                          })()}
                         </div>
-                        <select
-                          value={invoiceProviderId}
-                          disabled={!billingEntityOverride}
-                          onChange={(event) => {
-                            setInvoiceProviderId(event.target.value);
-                          }}
-                          className={`block w-full rounded-lg border px-2 py-1.5 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-sky-500 ${
-                            billingEntityOverride
-                              ? "border-sky-400 bg-white text-slate-900 focus:border-sky-500"
-                              : "border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed"
-                          }`}
-                        >
-                          <option value="">{tf("selectBillingEntity")}</option>
-                          {billingEntityOptions.map((entity) => (
-                            <option key={entity.id} value={entity.id}>
-                              {entity.name}{entity.billing_type === "aesthetic" ? " ✦" : ""}
-                            </option>
-                          ))}
-                        </select>
+                        {(() => {
+                          const doc = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
+                          const nameLC = (doc?.name || "").toLowerCase();
+                          const isNoAutoDoctor = ["miles", "nordback", "koltunova", "plakalo"].some((n) => nameLC.includes(n));
+                          const isEnabled = isNoAutoDoctor || billingEntityOverride;
+                          return (
+                            <select
+                              value={invoiceProviderId}
+                              disabled={!isEnabled}
+                              onChange={(event) => {
+                                setInvoiceProviderId(event.target.value);
+                              }}
+                              className={`block w-full rounded-lg border px-2 py-1.5 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-sky-500 ${
+                                isEnabled
+                                  ? isNoAutoDoctor && !invoiceProviderId
+                                    ? "border-red-400 bg-white text-slate-900 focus:border-red-500 focus:ring-red-500"
+                                    : "border-sky-400 bg-white text-slate-900 focus:border-sky-500"
+                                  : "border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed"
+                              }`}
+                            >
+                              <option value="">{tf("selectBillingEntity")}</option>
+                              {billingEntityOptions.map((entity) => (
+                                <option key={entity.id} value={entity.id}>
+                                  {entity.name}{entity.billing_type === "aesthetic" ? " ✦" : ""}
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        })()}
                         {invoiceProviderId && (() => {
                           const selProv = billingEntityOptions.find(p => p.id === invoiceProviderId);
                           if (!selProv) return null;
@@ -7416,15 +7473,40 @@ export default function MedicalConsultationsCard({
                                 View PDF
                               </button>
                             ) : null}
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateInvoicePdf(row.id)}
-                              disabled={generatingPdf === row.id}
-                              className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50"
-                            >
-                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                              {generatingPdf === row.id ? "Generating..." : row.invoice_pdf_path ? "Regenerate PDF" : "Generate PDF"}
-                            </button>
+                            <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setPdfDropdownOpen(null); }}>
+                              <button
+                                type="button"
+                                onClick={() => setPdfDropdownOpen(pdfDropdownOpen === row.id ? null : row.id)}
+                                disabled={generatingPdf === row.id}
+                                className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50"
+                              >
+                                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                {generatingPdf === row.id ? "Generating..." : "Generate PDF"}
+                                <svg className="h-3 w-3 ml-0.5" fill="none" viewBox="0 0 20 20" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8l4 4 4-4" /></svg>
+                              </button>
+                              {pdfDropdownOpen === row.id && (
+                                <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                                  <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGenerateInvoicePdf(row.id, "tg"); }}>
+                                    Invoice (patient / TG)
+                                  </button>
+                                  <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGenerateInvoicePdf(row.id, "tp"); }}>
+                                    Invoice (insurance / TP)
+                                  </button>
+                                  <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGenerateInvoicePdf(row.id, "reminder", 1); }}>
+                                    Reminder (1st)
+                                  </button>
+                                  <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGenerateInvoicePdf(row.id, "reminder", 2); }}>
+                                    Reminder (2nd)
+                                  </button>
+                                  <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGenerateInvoicePdf(row.id, "reminder", 3); }}>
+                                    Reminder (3rd)
+                                  </button>
+                                  <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGenerateInvoicePdf(row.id, "receipt"); }}>
+                                    Patient receipt
+                                  </button>
+                                </div>
+                              )}
+                            </div>
 
                             <div className="h-4 w-px bg-slate-200" />
 
