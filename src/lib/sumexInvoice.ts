@@ -48,6 +48,7 @@ export enum LawType {
   MVG = 2,
   IVG = 3,
   VVG = 4,
+  ORG = 5,
 }
 
 export enum TiersMode {
@@ -1397,7 +1398,6 @@ export async function buildInvoiceRequest(
             lGenerationAttributes: genAttrs,
             ePrintPreview: YesNo.No,
             eAddressRight: YesNo.Yes,
-            lLanguage: input.language ?? 2,
             plTimestamp: result.timestamp ?? 0,
           },
         );
@@ -2073,6 +2073,7 @@ export function mapLawType(law: string): LawType {
     case "MVG": return LawType.MVG;
     case "IVG": return LawType.IVG;
     case "VVG": return LawType.VVG;
+    case "ORG": return LawType.ORG;
     default: return LawType.KVG;
   }
 }

@@ -329,8 +329,16 @@ export async function POST(request: NextRequest) {
       };
 
       // Generate XML + PDF via Sumex1 server
-      // Template: summary = 1-page with QR, detail = multi-page, patCopy = patient copy
-      const printTemplate = invoiceType === "tg" ? "summary" : invoiceType === "receipt" ? "patCopy" : "detail";
+      // Template per CHM:
+      // - TG patient invoice: feeSummary (1-page "Facture d'honoraires") with law=ORG
+      // - TP insurance: detail (multi-page for healthcare company)
+      // - Reminder: same template as base type but with RequestType.Reminder
+      // - Receipt: summary (1-page "Justificatif de remboursement") with law from invoice
+      const printTemplate = invoiceType === "tg" ? "feeSummary" : invoiceType === "receipt" ? "summary" : invoiceType === "tp" ? "detail" : "summary";
+      // For TG patient invoice, force law=ORG to get "Facture d'honoraires" format
+      if (invoiceType === "tg") {
+        sumexInput.lawType = mapSumexLaw("ORG");
+      }
       const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate });
 
       if (!sumexResult.success) {
@@ -558,7 +566,10 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        const printTemplate2 = invoiceType === "tg" ? "summary" : invoiceType === "receipt" ? "patCopy" : "detail";
+        const printTemplate2 = invoiceType === "tg" ? "feeSummary" : invoiceType === "receipt" ? "summary" : invoiceType === "tp" ? "detail" : "summary";
+        if (invoiceType === "tg") {
+          sumexInput2.lawType = mapSumexLaw("ORG");
+        }
         const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: printTemplate2 });
 
         if (sumexResult2.success && sumexResult2.pdfContent) {
