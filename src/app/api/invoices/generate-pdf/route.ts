@@ -329,8 +329,8 @@ export async function POST(request: NextRequest) {
       };
 
       // Generate XML + PDF via Sumex1 server
-      // TG = 1-page Summary, TP/reminder/receipt = multi-page Detail
-      const printTemplate = invoiceType === "tg" ? "Summary_R_fr" : "Detail_GR_fr";
+      // Template: summary = 1-page with QR, detail = multi-page, patCopy = patient copy
+      const printTemplate = invoiceType === "tg" ? "summary" : invoiceType === "receipt" ? "patCopy" : "detail";
       const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate });
 
       if (!sumexResult.success) {
@@ -558,7 +558,7 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        const printTemplate2 = invoiceType === "tg" ? "Summary_R_fr" : "Detail_GR_fr";
+        const printTemplate2 = invoiceType === "tg" ? "summary" : invoiceType === "receipt" ? "patCopy" : "detail";
         const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: printTemplate2 });
 
         if (sumexResult2.success && sumexResult2.pdfContent) {
