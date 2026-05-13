@@ -7476,28 +7476,34 @@ export default function MedicalConsultationsCard({
                           {/* Action buttons toolbar */}
                           <div className="flex flex-wrap items-center gap-1.5">
                             {/* Document group */}
-                            {(row.invoice_pdf_path || row.invoice_pdf_path_tg || row.invoice_pdf_path_tp || row.invoice_pdf_path_reminder || row.invoice_pdf_path_receipt) ? (
-                              <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setViewPdfDropdownOpen(null); }}>
-                                <button
-                                  type="button"
-                                  onClick={() => setViewPdfDropdownOpen(viewPdfDropdownOpen === row.id ? null : row.id)}
-                                  className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
-                                >
-                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                  View PDF
-                                  <svg className="h-3 w-3 ml-0.5" fill="none" viewBox="0 0 20 20" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8l4 4 4-4" /></svg>
-                                </button>
-                                {viewPdfDropdownOpen === row.id && (
-                                  <div className="absolute left-0 top-full mt-1 z-50 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                                    {row.invoice_pdf_path_tg && <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-indigo-50" onClick={() => { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_tg!); }}>Invoice (patient)</button>}
-                                    {row.invoice_pdf_path_tp && <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-indigo-50" onClick={() => { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_tp!); }}>Invoice (insurance)</button>}
-                                    {row.invoice_pdf_path_reminder && <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-indigo-50" onClick={() => { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_reminder!); }}>Reminder</button>}
-                                    {row.invoice_pdf_path_receipt && <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-indigo-50" onClick={() => { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_receipt!); }}>Patient receipt</button>}
-                                    {!row.invoice_pdf_path_tg && !row.invoice_pdf_path_tp && !row.invoice_pdf_path_reminder && !row.invoice_pdf_path_receipt && row.invoice_pdf_path && <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-indigo-50" onClick={() => { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path!); }}>Latest PDF</button>}
-                                  </div>
-                                )}
-                              </div>
-                            ) : null}
+                            {/* View PDF dropdown - always visible */}
+                            <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setViewPdfDropdownOpen(null); }}>
+                              <button
+                                type="button"
+                                onClick={() => setViewPdfDropdownOpen(viewPdfDropdownOpen === row.id ? null : row.id)}
+                                className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
+                              >
+                                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                View PDF
+                                <svg className="h-3 w-3 ml-0.5" fill="none" viewBox="0 0 20 20" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8l4 4 4-4" /></svg>
+                              </button>
+                              {viewPdfDropdownOpen === row.id && (
+                                <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                                  <button type="button" disabled={!row.invoice_pdf_path_tg} title={!row.invoice_pdf_path_tg ? "Generate this type first" : ""} className={`w-full px-3 py-1.5 text-left text-[11px] ${row.invoice_pdf_path_tg ? "text-slate-700 hover:bg-indigo-50 cursor-pointer" : "text-slate-300 cursor-not-allowed"}`} onClick={() => { if (row.invoice_pdf_path_tg) { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_tg); } }}>
+                                    Invoice (patient)
+                                  </button>
+                                  <button type="button" disabled={!row.invoice_pdf_path_tp} title={!row.invoice_pdf_path_tp ? "Generate this type first" : ""} className={`w-full px-3 py-1.5 text-left text-[11px] ${row.invoice_pdf_path_tp ? "text-slate-700 hover:bg-indigo-50 cursor-pointer" : "text-slate-300 cursor-not-allowed"}`} onClick={() => { if (row.invoice_pdf_path_tp) { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_tp); } }}>
+                                    Invoice (insurance)
+                                  </button>
+                                  <button type="button" disabled={!row.invoice_pdf_path_reminder} title={!row.invoice_pdf_path_reminder ? "Generate this type first" : ""} className={`w-full px-3 py-1.5 text-left text-[11px] ${row.invoice_pdf_path_reminder ? "text-slate-700 hover:bg-indigo-50 cursor-pointer" : "text-slate-300 cursor-not-allowed"}`} onClick={() => { if (row.invoice_pdf_path_reminder) { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_reminder); } }}>
+                                    Reminder
+                                  </button>
+                                  <button type="button" disabled={!row.invoice_pdf_path_receipt} title={!row.invoice_pdf_path_receipt ? "Generate this type first" : ""} className={`w-full px-3 py-1.5 text-left text-[11px] ${row.invoice_pdf_path_receipt ? "text-slate-700 hover:bg-indigo-50 cursor-pointer" : "text-slate-300 cursor-not-allowed"}`} onClick={() => { if (row.invoice_pdf_path_receipt) { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_receipt); } }}>
+                                    Patient receipt
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                             <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setPdfDropdownOpen(null); }}>
                               <button
                                 type="button"
