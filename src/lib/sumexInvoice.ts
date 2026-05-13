@@ -1384,6 +1384,7 @@ export async function buildInvoiceRequest(
         const pdfTemplate = templateName
           ? (pdfOutputDirective ? `${templateName}${pdfOutputDirective}` : templateName)
           : pdfOutputDirective;
+        console.log(`${LOG_PREFIX} Print call: bstrPrintTemplate="${pdfTemplate}", templateName="${templateName}", pdfOutputDirective="${pdfOutputDirective}"`);
         const printRes = await reqPost<{
           plTimestamp: number;
           pIGeneralInvoiceResult: number;

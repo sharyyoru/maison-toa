@@ -250,7 +250,7 @@ export async function POST(request: NextRequest) {
         roleType: RoleType.Physician,
         placeType: PlaceType.Practice,
         requestType: invoiceType === "reminder" ? RequestType.Reminder : RequestType.Invoice,
-        requestSubtype: invoiceType === "receipt" ? RequestSubtype.Copy : RequestSubtype.Normal,
+        requestSubtype: RequestSubtype.Normal,
         tiersMode: mapSumexTiers(invoiceType === "tg" ? "TG" : invoiceType === "tp" ? "TP" : (invoiceData.billing_type || "TG")),
         vatNumber: (billingEntityData as any)?.vatuid || "",
         invoiceId: invoiceData.invoice_number || `INV-${invoiceId.slice(0, 8)}`,
@@ -332,11 +332,16 @@ export async function POST(request: NextRequest) {
       // Template per CHM:
       // - TG patient invoice: feeSummary (1-page "Facture d'honoraires") with law=ORG
       // - TP insurance: detail (multi-page for healthcare company)
-      // - Reminder: same template as base type but with RequestType.Reminder
-      // - Receipt: summary (1-page "Justificatif de remboursement") with law from invoice
-      const printTemplate = invoiceType === "tg" ? "feeSummary" : invoiceType === "receipt" ? "summary" : invoiceType === "tp" ? "detail" : "summary";
-      // For TG patient invoice, force law=ORG to get "Facture d'honoraires" format
-      if (invoiceType === "tg") {
+      // - Reminder: summary (1-page with reminder header)
+      // - Receipt: summary (1-page "Justificatif de remboursement")
+      // Templates per CHM:
+      // - TG: feeSummary + ORG = "Note d'honoraires" (2 pages in v5.0)
+      // - TP: detail = multi-page insurance invoice
+      // - Receipt: feeSummary + ORG = same compact format as TG
+      // - Reminder: feeSummary + ORG + Reminder = "Rappel: Note d'honoraires"
+      const printTemplate = invoiceType === "tp" ? "detail" : "feeSummary";
+      // For non-TP types, force law=ORG (only template the server respects)
+      if (invoiceType !== "tp") {
         sumexInput.lawType = mapSumexLaw("ORG");
       }
       const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate });
@@ -497,7 +502,7 @@ export async function POST(request: NextRequest) {
         roleType: RoleType.Physician,
         placeType: PlaceType.Practice,
         requestType: invoiceType === "reminder" ? RequestType.Reminder : RequestType.Invoice,
-        requestSubtype: invoiceType === "receipt" ? RequestSubtype.Copy : RequestSubtype.Normal,
+        requestSubtype: RequestSubtype.Normal,
         tiersMode: mapSumexTiers(invoiceType === "tg" ? "TG" : invoiceType === "tp" ? "TP" : (invoiceData.billing_type || "TG")),
         vatNumber: (billingEntityData as any)?.vatuid || "",
         invoiceId: invoiceData.invoice_number || `INV-${invoiceId.slice(0, 8)}`,
@@ -566,8 +571,8 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        const printTemplate2 = invoiceType === "tg" ? "feeSummary" : invoiceType === "receipt" ? "summary" : invoiceType === "tp" ? "detail" : "summary";
-        if (invoiceType === "tg") {
+        const printTemplate2 = invoiceType === "tp" ? "detail" : "feeSummary";
+        if (invoiceType !== "tp") {
           sumexInput2.lawType = mapSumexLaw("ORG");
         }
         const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: printTemplate2 });

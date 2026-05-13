@@ -2515,10 +2515,11 @@ export default function MedicalConsultationsCard({
 
       // Update local state with the pdf path so buttons reflect immediately
       if (data.pdfPath) {
+        const typeKey = invoiceType === "tg" ? "invoice_pdf_path_tg" : invoiceType === "tp" ? "invoice_pdf_path_tp" : invoiceType === "reminder" ? "invoice_pdf_path_reminder" : "invoice_pdf_path_receipt";
         setConsultations((prev) =>
           prev.map((row) =>
             row.id === invoiceId
-              ? { ...row, invoice_pdf_path: data.pdfPath }
+              ? { ...row, invoice_pdf_path: data.pdfPath, [typeKey]: data.pdfPath }
               : row,
           ),
         );
