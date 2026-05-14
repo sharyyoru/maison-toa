@@ -104,6 +104,7 @@ export default function PatientDocumentFormsTab({
   const [editingDocument, setEditingDocument] = useState<EditingDocument | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [useOnlyOffice, setUseOnlyOffice] = useState<boolean | null>(null);
+  const [onlyOfficeFailed, setOnlyOfficeFailed] = useState(false);
 
   // Check if OnlyOffice URL is configured
   useEffect(() => {
@@ -194,6 +195,7 @@ export default function PatientDocumentFormsTab({
 
   const closeEditor = () => {
     setEditingDocument(null);
+    setOnlyOfficeFailed(false);
   };
 
   const closePreview = () => {
@@ -356,7 +358,7 @@ export default function PatientDocumentFormsTab({
 
       {/* Document Editor - OnlyOffice or Fallback */}
       {editingDocument && (
-        useOnlyOffice ? (
+        useOnlyOffice && !onlyOfficeFailed && !editingDocument.blob ? (
           <div className="fixed inset-0 z-50 flex flex-col bg-white">
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-800 px-4 py-3">
               <h2 className="text-sm font-semibold text-white">
@@ -378,9 +380,20 @@ export default function PatientDocumentFormsTab({
                 mode="edit"
                 userName={patientName}
                 onClose={closeEditor}
-                onError={(err) => {
+                onError={async (err) => {
                   console.error("OnlyOffice error:", err);
-                  setError(err);
+                  // Auto-fallback to DocxPreviewEditor
+                  setOnlyOfficeFailed(true);
+                  try {
+                    const response = await fetch(`/api/patient-forms/serve?file=${encodeURIComponent(editingDocument.form.name)}`);
+                    if (response.ok) {
+                      const blob = await response.blob();
+                      setEditingDocument({ ...editingDocument, blob });
+                    }
+                  } catch (e) {
+                    console.error("Fallback also failed:", e);
+                    setError(t("loadError"));
+                  }
                 }}
               />
             </div>

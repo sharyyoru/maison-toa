@@ -84,7 +84,19 @@ interface OnlyOfficeEditorProps {
 }
 
 const ONLYOFFICE_SERVER_URL = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080";
-const ONLYOFFICE_API_KEY = process.env.NEXT_PUBLIC_ONLYOFFICE_API_KEY || "";
+
+function getOnlyOfficeSetupHint(): string {
+  if (typeof window === "undefined") return "";
+
+  const appIsHttps = window.location.protocol === "https:";
+  const onlyOfficeIsHttp = ONLYOFFICE_SERVER_URL.startsWith("http://");
+
+  if (appIsHttps && onlyOfficeIsHttp) {
+    return "This app is running over HTTPS, but ONLYOFFICE is configured with an HTTP URL. Browsers block HTTP editor scripts on HTTPS pages. Put ONLYOFFICE behind HTTPS and update NEXT_PUBLIC_ONLYOFFICE_URL.";
+  }
+
+  return `Could not load ${ONLYOFFICE_SERVER_URL}/web-apps/apps/api/documents/api.js. Check that NEXT_PUBLIC_ONLYOFFICE_URL is reachable from the browser.`;
+}
 
 export default function OnlyOfficeEditor({
   documentUrl,
@@ -126,11 +138,16 @@ export default function OnlyOfficeEditor({
         }
 
         scriptLoadedRef.current = true;
+        if (window.location.protocol === "https:" && ONLYOFFICE_SERVER_URL.startsWith("http://")) {
+          reject(new Error(getOnlyOfficeSetupHint()));
+          return;
+        }
+
         const script = document.createElement("script");
         script.src = `${ONLYOFFICE_SERVER_URL}/web-apps/apps/api/documents/api.js`;
         script.async = true;
         script.onload = () => resolve();
-        script.onerror = () => reject(new Error("Failed to load OnlyOffice API"));
+        script.onerror = () => reject(new Error(getOnlyOfficeSetupHint()));
         document.head.appendChild(script);
       });
     };
@@ -237,13 +254,14 @@ export default function OnlyOfficeEditor({
           <h3 className="mb-2 text-lg font-semibold text-red-800">OnlyOffice Server Not Available</h3>
           <p className="mb-4 text-sm text-red-600">{error}</p>
           <div className="text-left text-xs text-slate-600">
-            <p className="mb-2 font-medium">To use OnlyOffice Document Server:</p>
+            <p className="mb-2 font-medium">Current OnlyOffice URL:</p>
+            <p className="mb-3 break-all rounded bg-slate-100 px-2 py-1 font-mono">{ONLYOFFICE_SERVER_URL}</p>
+            <p className="mb-2 font-medium">Production requirements:</p>
             <ol className="list-inside list-decimal space-y-1">
-              <li>Install Docker on your machine</li>
-              <li>Run: <code className="rounded bg-slate-100 px-1 py-0.5">docker run -i -t -d -p 8080:80 onlyoffice/documentserver</code></li>
-              <li>Wait ~30 seconds for the server to start</li>
-              <li>Add <code className="rounded bg-slate-100 px-1 py-0.5">NEXT_PUBLIC_ONLYOFFICE_URL=http://localhost:8080</code> to .env.local</li>
-              <li>Refresh this page</li>
+              <li>Expose ONLYOFFICE through HTTPS, for example <code className="rounded bg-slate-100 px-1 py-0.5">https://docs.yourdomain.com</code></li>
+              <li>Set <code className="rounded bg-slate-100 px-1 py-0.5">NEXT_PUBLIC_ONLYOFFICE_URL</code> to that HTTPS URL in Vercel</li>
+              <li>Redeploy the app after changing the environment variable</li>
+              <li>Make sure the document URL and callback URL are reachable by the ONLYOFFICE server</li>
             </ol>
           </div>
         </div>

@@ -118,6 +118,7 @@ export default function PatientTemplatesTab({
   const [generating, setGenerating] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [useOnlyOffice, setUseOnlyOffice] = useState<boolean | null>(null);
+  const [onlyOfficeFailed, setOnlyOfficeFailed] = useState(false);
 
   // Check if OnlyOffice URL is configured
   useEffect(() => {
@@ -261,6 +262,7 @@ export default function PatientTemplatesTab({
 
   const closeEditor = () => {
     setEditingDocument(null);
+    setOnlyOfficeFailed(false);
   };
 
   const closePreview = () => {
@@ -466,7 +468,7 @@ export default function PatientTemplatesTab({
 
       {/* Document Editor - OnlyOffice or Fallback */}
       {editingDocument && (
-        useOnlyOffice ? (
+        useOnlyOffice && !onlyOfficeFailed && !editingDocument.blob ? (
           <div className="fixed inset-0 z-50 flex flex-col bg-white">
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-800 px-4 py-3">
               <h2 className="text-sm font-semibold text-white">
@@ -488,9 +490,20 @@ export default function PatientTemplatesTab({
                 mode="edit"
                 userName={patientName}
                 onClose={closeEditor}
-                onError={(err) => {
+                onError={async (err) => {
                   console.error("OnlyOffice error:", err);
-                  setError(err);
+                  // Auto-fallback to DocxPreviewEditor
+                  setOnlyOfficeFailed(true);
+                  try {
+                    const response = await fetch(`/api/templates/serve?template=${encodeURIComponent(editingDocument.template.name)}&patientId=${patientId}`);
+                    if (response.ok) {
+                      const blob = await response.blob();
+                      setEditingDocument({ ...editingDocument, blob });
+                    }
+                  } catch (e) {
+                    console.error("Fallback also failed:", e);
+                    setError(t("loadError"));
+                  }
                 }}
               />
             </div>
