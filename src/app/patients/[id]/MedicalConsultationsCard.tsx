@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -22,6 +22,7 @@ import InvoiceStatusBadge from "@/components/InvoiceStatusBadge";
 import TardocAccordionTree from "@/components/TardocAccordionTree";
 import AcfAccordionTree from "@/components/AcfAccordionTree";
 import { type MediDataInvoiceStatus } from "@/lib/medidata";
+import MedicalRecordsTab from "./MedicalRecordsTab";
 
 type TaskPriority = "low" | "medium" | "high";
 
@@ -558,6 +559,9 @@ export default function MedicalConsultationsCard({
   const router = useRouter();
   const tc = useTranslations("patient.consultationsCard");
   const tf = useTranslations("patient.form");
+
+  // Tab state for switching between Consultations and Medical Records
+  const [activeMainTab, setActiveMainTab] = useState<"consultations" | "medical_records">("consultations");
 
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [taskName, setTaskName] = useState("");
@@ -3017,9 +3021,36 @@ export default function MedicalConsultationsCard({
     <>
       <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-900">
-            {showArchived ? tc("archivedTitle") : tc("title")}
-          </h3>
+          <div className="flex items-center gap-4">
+            <h3 className="text-sm font-semibold text-slate-900">
+              {showArchived ? tc("archivedTitle") : tc("title")}
+            </h3>
+            {/* Tab switcher */}
+            <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              <button
+                type="button"
+                onClick={() => setActiveMainTab("consultations")}
+                className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+                  activeMainTab === "consultations"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                Consultations
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveMainTab("medical_records")}
+                className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+                  activeMainTab === "medical_records"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                Medical Records
+              </button>
+            </div>
+          </div>
           <div className="flex items-center gap-3 text-sky-700">
             {!showArchived ? (
               <>
@@ -3307,6 +3338,19 @@ export default function MedicalConsultationsCard({
             </button>
           </div>
         </div>
+
+        {/* Medical Records Tab Content */}
+        {activeMainTab === "medical_records" && (
+          <MedicalRecordsTab
+            patientId={patientId}
+            patientFirstName={patientFirstName || ""}
+            patientLastName={patientLastName || ""}
+          />
+        )}
+
+        {/* Consultations Tab Content */}
+        {activeMainTab === "consultations" && (
+        <>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
           <div className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50/80 px-1 py-0.5">
             <span className="hidden sm:inline px-2 text-slate-500">{tc("sort")}</span>
@@ -7679,6 +7723,8 @@ export default function MedicalConsultationsCard({
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
 
       {taskModalOpen ? (
