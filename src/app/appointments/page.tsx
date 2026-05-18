@@ -173,6 +173,8 @@ type ServiceOption = {
   id: string;
   name: string;
   duration_minutes: number | null;
+  category_id: string | null;
+  category_name: string | null;
 };
 
 const BOOKING_STATUS_OPTIONS = [
@@ -902,6 +904,11 @@ export default function CalendarPage() {
         ...quantities,
         [serviceId]: 1,
       }));
+      // Auto-set category from service if not already set
+      const svc = serviceOptions.find((s) => s.id === serviceId);
+      if (svc?.category_name && !appointmentCategory) {
+        setAppointmentCategory(svc.category_name);
+      }
       return [...prev, serviceId];
     });
   }
@@ -1409,7 +1416,7 @@ export default function CalendarPage() {
 
         const { data, error } = await supabaseClient
           .from("services")
-          .select("id, name, is_active, duration_minutes, category_id")
+          .select("id, name, is_active, duration_minutes, category_id, service_categories(name)")
           .eq("is_active", true)
           .order("name", { ascending: true });
 
@@ -1427,6 +1434,8 @@ export default function CalendarPage() {
                 row.duration_minutes !== null && row.duration_minutes !== undefined
                   ? Number(row.duration_minutes)
                   : null,
+              category_id: row.category_id ?? null,
+              category_name: row.service_categories?.name ?? null,
             })),
           );
         }
@@ -2390,28 +2399,17 @@ export default function CalendarPage() {
   }, [isDraggingCreate, dragStartMinutes, dragEndMinutes, dragDate, dragDoctorCalendarId, doctorCalendars]);
 
   function formatTimeLabel(totalMinutes: number): string {
-    if (totalMinutes === DAY_VIEW_END_MINUTES - DAY_VIEW_SLOT_MINUTES) {
-      return "8:00 PM";
-    }
-
     const minutes = totalMinutes % 60;
     if (minutes !== 0) return "";
-
     const hour = Math.floor(totalMinutes / 60);
-    const suffix = hour >= 12 ? "PM" : "AM";
-    let display = hour % 12;
-    if (display === 0) display = 12;
-    return `${display}:00 ${suffix}`;
+    return `${hour}h00`;
   }
 
   function formatTimeOptionLabel(totalMinutes: number): string {
     const minutes = totalMinutes % 60;
     const hour = Math.floor(totalMinutes / 60);
-    const suffix = hour >= 12 ? "PM" : "AM";
-    let displayHour = hour % 12;
-    if (displayHour === 0) displayHour = 12;
     const minutePadded = minutes.toString().padStart(2, "0");
-    return `${displayHour}:${minutePadded} ${suffix}`;
+    return `${hour}h${minutePadded}`;
   }
 
   // Patient search is now done server-side in the useEffect above
