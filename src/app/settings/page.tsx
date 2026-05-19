@@ -1800,7 +1800,7 @@ interface ServiceMachineMapping {
   machine_id: string;
 }
 
-function MachinesView({ services }: { services: { id: string; name: string }[] }) {
+function MachinesView({ services }: { services: { id: string; name: string; category_name: string | null }[] }) {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [mappings, setMappings] = useState<ServiceMachineMapping[]>([]);
   const [bookingTreatments, setBookingTreatments] = useState<{ id: string; name: string; machine_id: string | null }[]>([]);
