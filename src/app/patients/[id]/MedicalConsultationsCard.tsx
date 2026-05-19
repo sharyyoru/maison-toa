@@ -754,6 +754,8 @@ export default function MedicalConsultationsCard({
   const [editConsultationDiagnosisCode, setEditConsultationDiagnosisCode] = useState("");
   const [editConsultationRefIcd10, setEditConsultationRefIcd10] = useState("");
   const [editConsultationSaving, setEditConsultationSaving] = useState(false);
+  const [editConsultationAutosaveStatus, setEditConsultationAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved">("idle");
+  const editConsultationAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [invoiceFromConsultationSuccess, setInvoiceFromConsultationSuccess] = useState<string | null>(null);
 
   const [axenitaPdfDocs, setAxenitaPdfDocs] = useState<AxenitaPdfDocument[]>([]);
@@ -1783,6 +1785,15 @@ export default function MedicalConsultationsCard({
     }
   }, [editConsultationModalOpen, editConsultationContent]);
 
+  // Cleanup autosave timer when modal closes
+  useEffect(() => {
+    if (!editConsultationModalOpen && editConsultationAutosaveTimerRef.current) {
+      clearTimeout(editConsultationAutosaveTimerRef.current);
+      editConsultationAutosaveTimerRef.current = null;
+      setEditConsultationAutosaveStatus("idle");
+    }
+  }, [editConsultationModalOpen]);
+
   async function handleSaveEditInvoice() {
     if (!editInvoiceTarget) return;
 
@@ -2326,11 +2337,103 @@ export default function MedicalConsultationsCard({
 
       setEditConsultationModalOpen(false);
       setEditConsultationTarget(null);
+      setEditConsultationAutosaveStatus("idle");
     } catch {
       setConsultationsError("Failed to update consultation.");
     } finally {
       setEditConsultationSaving(false);
     }
+  }
+
+  // Autosave function - saves without closing modal
+  async function handleAutosaveEditConsultation() {
+    if (!editConsultationTarget || editConsultationSaving) return;
+
+    setEditConsultationAutosaveStatus("saving");
+    try {
+      // Build scheduled_at from date/hour/minute
+      let scheduledAt: string | null = editConsultationTarget.scheduled_at;
+      if (editConsultationDate) {
+        const h = editConsultationHour || "00";
+        const m = editConsultationMinute || "00";
+        scheduledAt = new Date(`${editConsultationDate}T${h}:${m}:00`).toISOString();
+      }
+
+      // Find doctor name from userOptions
+      let doctorName: string | null = editConsultationTarget.doctor_name;
+      if (editConsultationDoctorId) {
+        const doctor = userOptions.find((u) => u.id === editConsultationDoctorId);
+        if (doctor) {
+          doctorName = (doctor.full_name || doctor.email || "Doctor") as string;
+        }
+      } else {
+        doctorName = null;
+      }
+
+      // Get HTML content from contentEditable div
+      const htmlContent = editConsultationContentRef.current?.innerHTML || editConsultationContent;
+
+      const { error } = await supabaseClient
+        .from("consultations")
+        .update({
+          title: editConsultationTitle,
+          content: htmlContent,
+          doctor_user_id: editConsultationDoctorId || null,
+          doctor_name: doctorName,
+          scheduled_at: scheduledAt,
+          diagnosis_code: editConsultationDiagnosisCode.trim() || null,
+          ref_icd10: editConsultationRefIcd10.trim() || null,
+        })
+        .eq("id", editConsultationTarget.id);
+
+      if (error) {
+        console.error("Autosave failed:", error.message);
+        setEditConsultationAutosaveStatus("idle");
+        return;
+      }
+
+      // Update local state silently
+      setConsultations((prev) =>
+        prev.map((row) =>
+          row.id === editConsultationTarget.id
+            ? {
+                ...row,
+                title: editConsultationTitle,
+                content: htmlContent,
+                doctor_user_id: editConsultationDoctorId || null,
+                doctor_name: doctorName,
+                scheduled_at: scheduledAt || row.scheduled_at,
+                diagnosis_code: editConsultationDiagnosisCode.trim() || null,
+                ref_icd10: editConsultationRefIcd10.trim() || null,
+              }
+            : row
+        )
+      );
+
+      setEditConsultationAutosaveStatus("saved");
+      // Reset to idle after 2 seconds
+      setTimeout(() => setEditConsultationAutosaveStatus("idle"), 2000);
+    } catch {
+      console.error("Autosave failed");
+      setEditConsultationAutosaveStatus("idle");
+    }
+  }
+
+  // Trigger autosave when edit fields change (debounced)
+  function triggerEditConsultationAutosave() {
+    if (!editConsultationTarget) return;
+    
+    // Clear existing timer
+    if (editConsultationAutosaveTimerRef.current) {
+      clearTimeout(editConsultationAutosaveTimerRef.current);
+    }
+    
+    setEditConsultationAutosaveStatus("pending");
+    
+    // Set new timer for 3 seconds
+    editConsultationAutosaveTimerRef.current = setTimeout(() => {
+      void handleAutosaveEditConsultation();
+    }, 3000);
   }
 
   async function handleToggleInvoicePaid(
@@ -6843,72 +6946,6 @@ export default function MedicalConsultationsCard({
           </div>
         ) : null}
 
-        {/* Axenita PDF Documents Section */}
-        {axenitaPdfDocs.length > 0 && (!recordTypeFilter || recordTypeFilter === "notes") && (
-          <div className="mt-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <h4 className="text-[11px] font-semibold text-slate-700">{tc("axenitaTitle")}</h4>
-              <span className="text-[10px] text-slate-400">({axenitaPdfDocs.length} document{axenitaPdfDocs.length !== 1 ? 's' : ''})</span>
-            </div>
-            {axenitaPdfDocs.map((doc, index) => (
-              <div
-                key={`${doc.folderName}-${doc.fileName}-${index}`}
-                className="rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-xs"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${doc.fileType === "ap"
-                    ? "bg-purple-100 text-purple-700"
-                    : doc.fileType === "af"
-                      ? "bg-indigo-100 text-indigo-700"
-                      : doc.fileType === "notes"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-blue-100 text-blue-700"
-                    }`}>
-                    {doc.fileType === "ap" ? "Medical Notes (AP)" :
-                      doc.fileType === "af" ? "Medical Notes (AF)" :
-                        doc.fileType === "notes" ? "Notes" : "Consultation"}
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    {doc.fileName}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-700 leading-relaxed line-clamp-3">
-                  {doc.content || "No content extracted"}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {axenitaPdfLoading && (!recordTypeFilter || recordTypeFilter === "notes") && (
-          <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-            {tc("loadingAxenita")}
-          </div>
-        )}
-
-        {/* Show message when no Axenita documents found (after loading) */}
-        {!axenitaPdfLoading && !axenitaPdfError && axenitaPdfDocs.length === 0 && (!recordTypeFilter || recordTypeFilter === "notes") && patientFirstName && patientLastName && (
-          <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2 text-[11px] text-slate-500">
-            <div className="flex items-center gap-2">
-              <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <span>{tc("noAxenita")}</span>
-            </div>
-          </div>
-        )}
-
-        {axenitaPdfError && (!recordTypeFilter || recordTypeFilter === "notes") && (
-          <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
-            <div className="flex items-center gap-2">
-              <svg className="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <span>{axenitaPdfError}</span>
-            </div>
-          </div>
-        )}
-
         {/* Success banner for invoice created from consultation */}
         {invoiceFromConsultationSuccess && (
           <div className="mt-3 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-medium text-emerald-800">
@@ -8354,7 +8391,35 @@ export default function MedicalConsultationsCard({
         <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/40 backdrop-blur-sm py-6 sm:py-8">
           <div className="w-full max-w-lg max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 shadow-[0_24px_60px_rgba(15,23,42,0.65)]">
             <div className="border-b border-slate-200 px-6 py-4">
-              <h3 className="text-sm font-semibold text-slate-900">Edit Consultation</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-900">Edit Consultation</h3>
+                {/* Autosave Status Indicator */}
+                <div className="flex items-center gap-1.5 text-[10px]">
+                  {editConsultationAutosaveStatus === "pending" && (
+                    <span className="text-amber-600 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      Unsaved changes...
+                    </span>
+                  )}
+                  {editConsultationAutosaveStatus === "saving" && (
+                    <span className="text-sky-600 flex items-center gap-1">
+                      <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Saving...
+                    </span>
+                  )}
+                  {editConsultationAutosaveStatus === "saved" && (
+                    <span className="text-emerald-600 flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Saved
+                    </span>
+                  )}
+                </div>
+              </div>
               <p className="mt-1 text-xs text-slate-600">
                 {editConsultationTarget.record_type.toUpperCase()} • {editConsultationTarget.consultation_id}
               </p>
@@ -8365,7 +8430,7 @@ export default function MedicalConsultationsCard({
                 <input
                   type="text"
                   value={editConsultationTitle}
-                  onChange={(e) => setEditConsultationTitle(e.target.value)}
+                  onChange={(e) => { setEditConsultationTitle(e.target.value); triggerEditConsultationAutosave(); }}
                   className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   placeholder="Consultation title"
                 />
@@ -8376,7 +8441,7 @@ export default function MedicalConsultationsCard({
                 <label className="block text-[11px] font-medium text-slate-700">Doctor</label>
                 <select
                   value={editConsultationDoctorId}
-                  onChange={(e) => setEditConsultationDoctorId(e.target.value)}
+                  onChange={(e) => { setEditConsultationDoctorId(e.target.value); triggerEditConsultationAutosave(); }}
                   className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                 >
                   <option value="">Select doctor</option>
@@ -8395,7 +8460,7 @@ export default function MedicalConsultationsCard({
                   <input
                     type="date"
                     value={editConsultationDate}
-                    onChange={(e) => setEditConsultationDate(e.target.value)}
+                    onChange={(e) => { setEditConsultationDate(e.target.value); triggerEditConsultationAutosave(); }}
                     className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
@@ -8403,7 +8468,7 @@ export default function MedicalConsultationsCard({
                   <label className="block text-[11px] font-medium text-slate-700">Hour</label>
                   <select
                     value={editConsultationHour}
-                    onChange={(e) => setEditConsultationHour(e.target.value)}
+                    onChange={(e) => { setEditConsultationHour(e.target.value); triggerEditConsultationAutosave(); }}
                     className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   >
                     <option value="">--</option>
@@ -8416,7 +8481,7 @@ export default function MedicalConsultationsCard({
                   <label className="block text-[11px] font-medium text-slate-700">Min</label>
                   <select
                     value={editConsultationMinute}
-                    onChange={(e) => setEditConsultationMinute(e.target.value)}
+                    onChange={(e) => { setEditConsultationMinute(e.target.value); triggerEditConsultationAutosave(); }}
                     className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   >
                     <option value="">--</option>
@@ -8434,7 +8499,7 @@ export default function MedicalConsultationsCard({
                   <input
                     type="text"
                     value={editConsultationDiagnosisCode}
-                    onChange={(e) => setEditConsultationDiagnosisCode(e.target.value)}
+                    onChange={(e) => { setEditConsultationDiagnosisCode(e.target.value); triggerEditConsultationAutosave(); }}
                     placeholder="e.g. L91.0"
                     className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
@@ -8444,7 +8509,7 @@ export default function MedicalConsultationsCard({
                   <input
                     type="text"
                     value={editConsultationRefIcd10}
-                    onChange={(e) => setEditConsultationRefIcd10(e.target.value)}
+                    onChange={(e) => { setEditConsultationRefIcd10(e.target.value); triggerEditConsultationAutosave(); }}
                     placeholder="e.g. Z42.1"
                     className="block w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
@@ -8493,6 +8558,7 @@ export default function MedicalConsultationsCard({
                     ref={editConsultationContentRef}
                     contentEditable
                     suppressContentEditableWarning
+                    onInput={() => triggerEditConsultationAutosave()}
                     className="min-h-[120px] max-h-64 overflow-y-auto px-3 py-2 text-xs text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
                   />
                 </div>
@@ -8502,6 +8568,12 @@ export default function MedicalConsultationsCard({
               <button
                 type="button"
                 onClick={() => {
+                  // Clear autosave timer on cancel
+                  if (editConsultationAutosaveTimerRef.current) {
+                    clearTimeout(editConsultationAutosaveTimerRef.current);
+                    editConsultationAutosaveTimerRef.current = null;
+                  }
+                  setEditConsultationAutosaveStatus("idle");
                   setEditConsultationModalOpen(false);
                   setEditConsultationTarget(null);
                 }}
