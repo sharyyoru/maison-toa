@@ -1,18 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
+const BOOKING_NAME_TRANSLATIONS_KEY = "booking_name_translations";
+
+async function getBookingNameTranslations() {
+  const { data } = await supabaseAdmin
+    .from("site_settings")
+    .select("value")
+    .eq("key", BOOKING_NAME_TRANSLATIONS_KEY)
+    .single();
+
+  return (data?.value ?? {}) as {
+    categories?: Record<string, string>;
+    treatments?: Record<string, string>;
+  };
+}
+
 export async function GET() {
   try {
-    const { data, error } = await supabaseAdmin
-      .from("booking_categories")
-      .select("*")
-      .order("order_index", { ascending: true });
+    const [categoriesResult, translations] = await Promise.all([
+      supabaseAdmin
+        .from("booking_categories")
+        .select("*")
+        .order("order_index", { ascending: true }),
+      getBookingNameTranslations(),
+    ]);
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (categoriesResult.error) {
+      return NextResponse.json({ error: categoriesResult.error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ categories: data || [] });
+    const categories = (categoriesResult.data || []).map((category: any) => ({
+      ...category,
+      name_en: translations.categories?.[category.id] || category.name_en || null,
+    }));
+
+    return NextResponse.json({ categories });
   } catch (err) {
     console.error("GET booking-categories error:", err);
     return NextResponse.json({ error: "Failed to fetch booking categories" }, { status: 500 });
@@ -35,6 +58,12 @@ export async function PUT(request: NextRequest) {
 
     const existingIds = new Set((existing || []).map((r: { id: string }) => r.id));
     const incomingIds = new Set(categories.map((c: { id: string }) => c.id));
+    const currentTranslations = await getBookingNameTranslations();
+    const categoryTranslations = Object.fromEntries(
+      categories
+        .filter((c: { id: string; name_en?: string | null }) => c.name_en?.trim())
+        .map((c: { id: string; name_en?: string | null }) => [c.id, c.name_en!.trim()])
+    );
 
     // Delete removed categories
     const toDelete = [...existingIds].filter((id) => !incomingIds.has(id));
@@ -78,6 +107,24 @@ export async function PUT(request: NextRequest) {
       if (upsertError) {
         return NextResponse.json({ error: upsertError.message }, { status: 500 });
       }
+    }
+
+    const { error: translationsError } = await supabaseAdmin
+      .from("site_settings")
+      .upsert(
+        {
+          key: BOOKING_NAME_TRANSLATIONS_KEY,
+          value: {
+            ...currentTranslations,
+            categories: categoryTranslations,
+          },
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "key" }
+      );
+
+    if (translationsError) {
+      return NextResponse.json({ error: translationsError.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

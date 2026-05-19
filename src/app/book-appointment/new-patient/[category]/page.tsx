@@ -7,11 +7,13 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { SectionRenderer } from "@/components/PageBuilder";
 import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
+import { getLocalizedBookingName } from "@/lib/bookingLocalization";
 
 interface Treatment {
   id: string;
   category_id: string;
   name: string;
+  name_en?: string | null;
   duration_minutes: number;
   order_index: number;
   enabled: boolean;
@@ -20,6 +22,7 @@ interface Treatment {
 interface Category {
   id: string;
   name: string;
+  name_en?: string | null;
   slug: string;
   skip_treatment?: boolean;
 }
@@ -147,7 +150,7 @@ export default function NewPatientTreatmentsPage() {
                         >
                           <div className="flex flex-col h-full">
                             <h3 className="text-base font-semibold text-slate-900 group-hover:text-slate-700 transition-colors mb-2 line-clamp-2 flex-grow">
-                              {treatment.name}
+                              {getLocalizedBookingName(treatment, language)}
                             </h3>
                             <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
                               <span className="text-sm text-slate-500">

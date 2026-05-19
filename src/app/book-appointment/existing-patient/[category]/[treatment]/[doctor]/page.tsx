@@ -10,6 +10,7 @@ import { pushToDataLayer } from "@/components/GoogleTagManager";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
+import { getLocalizedBookingName } from "@/lib/bookingLocalization";
 
 interface DoctorInfo {
   name: string;
@@ -119,6 +120,7 @@ type BookingStep = "info" | "datetime" | "confirm";
 interface Treatment {
   id: string;
   name: string;
+  name_en?: string | null;
   duration_minutes: number;
 }
 
@@ -157,7 +159,7 @@ function DoctorBookingContent() {
   const [selectedTime, setSelectedTime] = useState("");
   const [notes, setNotes] = useState("");
 
-  const selectedService = treatment?.name || "General Consultation";
+  const selectedService = treatment ? getLocalizedBookingName(treatment, language) : "General Consultation";
   const bookingFormElement = pageConfig.sections
     .flatMap((section) => section.elements)
     .find((element) => element.type === "booking-form");

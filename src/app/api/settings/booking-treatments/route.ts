@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
+const BOOKING_NAME_TRANSLATIONS_KEY = "booking_name_translations";
+
+async function getBookingNameTranslations() {
+  const { data } = await supabaseAdmin
+    .from("site_settings")
+    .select("value")
+    .eq("key", BOOKING_NAME_TRANSLATIONS_KEY)
+    .single();
+
+  return (data?.value ?? {}) as {
+    categories?: Record<string, string>;
+    treatments?: Record<string, string>;
+  };
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -15,17 +30,25 @@ export async function GET(request: Request) {
       query = query.eq("category_id", categoryId);
     }
 
-    const { data: treatments, error } = await query;
+    const [treatmentsResult, translations] = await Promise.all([
+      query,
+      getBookingNameTranslations(),
+    ]);
 
-    if (error) {
-      console.error("Error fetching treatments:", error);
+    if (treatmentsResult.error) {
+      console.error("Error fetching treatments:", treatmentsResult.error);
       return NextResponse.json(
         { error: "Failed to fetch treatments" },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ treatments: treatments || [] });
+    const treatments = (treatmentsResult.data || []).map((treatment: any) => ({
+      ...treatment,
+      name_en: translations.treatments?.[treatment.id] || treatment.name_en || null,
+    }));
+
+    return NextResponse.json({ treatments });
   } catch (error) {
     console.error("Error in GET /api/settings/booking-treatments:", error);
     return NextResponse.json(
@@ -54,6 +77,12 @@ export async function PUT(request: Request) {
 
     const existingIds = new Set(existingTreatments?.map((t) => t.id) || []);
     const newIds = new Set(treatments.map((t) => t.id));
+    const currentTranslations = await getBookingNameTranslations();
+    const treatmentTranslations = Object.fromEntries(
+      treatments
+        .filter((t: { id: string; name_en?: string | null }) => t.name_en?.trim())
+        .map((t: { id: string; name_en?: string | null }) => [t.id, t.name_en!.trim()])
+    );
 
     // Delete treatments that are no longer in the list
     const toDelete = [...existingIds].filter((id) => !newIds.has(id));
@@ -84,6 +113,25 @@ export async function PUT(request: Request) {
     if (upsertError) {
       console.error("Error upserting treatments:", upsertError);
       return NextResponse.json({ error: "Failed to save treatments" }, { status: 500 });
+    }
+
+    const { error: translationsError } = await supabaseAdmin
+      .from("site_settings")
+      .upsert(
+        {
+          key: BOOKING_NAME_TRANSLATIONS_KEY,
+          value: {
+            ...currentTranslations,
+            treatments: treatmentTranslations,
+          },
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "key" }
+      );
+
+    if (translationsError) {
+      console.error("Error saving treatment translations:", translationsError);
+      return NextResponse.json({ error: "Failed to save treatment translations" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

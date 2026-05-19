@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { findEarliestAvailableDoctor } from "@/lib/bookingEarliestDoctor";
+import { getLocalizedBookingName } from "@/lib/bookingLocalization";
 
 interface BookingDoctor {
   id: string;
@@ -21,13 +22,14 @@ interface BookingDoctor {
 interface Treatment {
   id: string;
   name: string;
+  name_en?: string | null;
   duration_minutes?: number;
 }
 
 export default function SelectDoctorPage() {
   const router = useRouter();
   const params = useParams();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const categorySlug = params.category as string;
   const treatmentId = params.treatment as string;
 
@@ -172,7 +174,7 @@ export default function SelectDoctorPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
               <span className="text-sm font-medium text-slate-700">
-                {loading ? t("common.loading") : treatment?.name || "Treatment"}
+                {loading ? t("common.loading") : treatment ? getLocalizedBookingName(treatment, language) : "Treatment"}
               </span>
             </div>
           )}

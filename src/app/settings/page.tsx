@@ -1041,6 +1041,7 @@ function MediDataConnectionTab() {
 interface BookingCategory {
   id: string;
   name: string;
+  name_en: string | null;
   description: string;
   patient_type: "new" | "existing";
   order_index: number;
@@ -1053,6 +1054,7 @@ interface BookingTreatment {
   id: string;
   category_id: string;
   name: string;
+  name_en: string | null;
   description: string;
   duration_minutes: number;
   order_index: number;
@@ -1323,6 +1325,7 @@ function BookingCategoriesTab() {
     const newCategory: BookingCategory = {
       id: crypto.randomUUID(),
       name: "",
+      name_en: "",
       description: "",
       patient_type: patientType,
       order_index: categories.filter((c) => c.patient_type === patientType).length,
@@ -1349,6 +1352,7 @@ function BookingCategoriesTab() {
       id: crypto.randomUUID(),
       category_id: categoryId,
       name: "",
+      name_en: "",
       description: "",
       duration_minutes: 30,
       order_index: treatments.filter((t) => t.category_id === categoryId).length,
@@ -1460,13 +1464,22 @@ function BookingCategoriesTab() {
               ) : (
                 filteredCategories.map((cat) => (
                   <div key={cat.id} className="p-4 hover:bg-slate-50/50">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                       <div>
-                        <label className="block text-[10px] font-medium text-slate-500 mb-1">{tc("name")}</label>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-1">{t("nameDefault")}</label>
                         <input
                           type="text"
                           value={cat.name}
                           onChange={(e) => updateCategory(cat.id, "name", e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-1">{t("nameEnglish")}</label>
+                        <input
+                          type="text"
+                          value={cat.name_en || ""}
+                          onChange={(e) => updateCategory(cat.id, "name_en", e.target.value)}
                           className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
                         />
                       </div>
@@ -1606,12 +1619,21 @@ function BookingCategoriesTab() {
                     categoryTreatments.map((treat, idx) => (
                       <div key={treat.id} className="p-4 hover:bg-slate-50/50">
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                          <div className="md:col-span-4">
+                          <div className="md:col-span-3">
                             <label className="block text-[10px] font-medium text-slate-500 mb-1">{t("treatmentName")}</label>
                             <input
                               type="text"
                               value={treat.name}
                               onChange={(e) => updateTreatment(treat.id, "name", e.target.value)}
+                              className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                            />
+                          </div>
+                          <div className="md:col-span-3">
+                            <label className="block text-[10px] font-medium text-slate-500 mb-1">{t("treatmentNameEnglish")}</label>
+                            <input
+                              type="text"
+                              value={treat.name_en || ""}
+                              onChange={(e) => updateTreatment(treat.id, "name_en", e.target.value)}
                               className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
                             />
                           </div>
@@ -1645,7 +1667,7 @@ function BookingCategoriesTab() {
                               {tc("enabled")}
                             </label>
                           </div>
-                          <div className="md:col-span-2 flex justify-end gap-2">
+                          <div className="md:col-span-12 flex justify-end gap-2">
                             <button
                               onClick={() => { setSelectedTreatmentId(treat.id); setView("doctor-assignments"); }}
                               className="px-3 py-1 text-xs text-sky-600 hover:bg-sky-50 rounded-lg"

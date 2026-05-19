@@ -6,10 +6,12 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { SectionRenderer } from "@/components/PageBuilder";
 import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
+import { getLocalizedBookingName } from "@/lib/bookingLocalization";
 
 interface Category {
   id: string;
   name: string;
+  name_en?: string | null;
   description: string;
   slug: string;
   enabled: boolean;
@@ -109,7 +111,7 @@ export default function ExistingPatientCategoryPage() {
                         >
                           <div className="flex flex-col h-full">
                             <h3 className="text-lg font-semibold text-slate-900 mb-3 group-hover:text-slate-700 transition-colors">
-                              {category.name}
+                              {getLocalizedBookingName(category, language)}
                             </h3>
                             <div className="flex items-center text-slate-700 font-medium group-hover:text-slate-900 transition-colors mt-auto">
                               <span>{t("treatment.selectTreatment")}</span>
