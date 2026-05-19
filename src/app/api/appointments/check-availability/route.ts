@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
   const end = searchParams.get("end");
   const doctorName = searchParams.get("doctor"); // Optional: filter by doctor name
   const doctorSlug = searchParams.get("slug"); // Optional: doctor slug for capacity lookup
+  const treatmentId = searchParams.get("treatmentId"); // Optional: for machine availability
 
   if (!start || !end) {
     return NextResponse.json(
@@ -141,6 +142,53 @@ export async function GET(request: NextRequest) {
         fullSlots.push(slotStart.toISOString());
       }
     });
+
+    // ── Machine availability: mark slots as full if machine is at capacity ──
+    if (treatmentId) {
+      const { data: treatmentRow } = await supabase
+        .from("booking_treatments")
+        .select("linked_service_id")
+        .eq("id", treatmentId)
+        .single();
+
+      if (treatmentRow?.linked_service_id) {
+        const { data: machineMapping } = await supabase
+          .from("service_machines")
+          .select("machine_id, machines(max_concurrent)")
+          .eq("service_id", treatmentRow.linked_service_id)
+          .limit(1)
+          .single();
+
+        if (machineMapping) {
+          const machineId = machineMapping.machine_id;
+          const machineMax = (machineMapping.machines as any)?.max_concurrent ?? 1;
+
+          // Fetch all appointments using this machine in the range
+          const { data: machineAppts } = await supabase
+            .from("appointments")
+            .select("id, appointment_group_id, start_time, end_time")
+            .eq("machine_id", machineId)
+            .lt("start_time", end)
+            .gt("end_time", start)
+            .not("status", "in", "(cancelled,no_show)");
+
+          if (machineAppts && machineAppts.length > 0) {
+            allSlots.forEach((slotStart) => {
+              const slotIso = slotStart.toISOString();
+              if (fullSlots.includes(slotIso)) return; // already full
+              const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
+              const overlapping = machineAppts.filter((a) => {
+                return new Date(a.start_time) < slotEnd && new Date(a.end_time) > slotStart;
+              });
+              const uniqueUses = new Set(overlapping.map((a) => a.appointment_group_id || a.id));
+              if (uniqueUses.size >= machineMax) {
+                fullSlots.push(slotIso);
+              }
+            });
+          }
+        }
+      }
+    }
 
     return NextResponse.json({
       appointments: patientAppointments,

@@ -381,6 +381,52 @@ export async function POST(request: Request) {
 
     console.log(`[Booking] ALLOWED: ${doctorAppointments.length} < ${maxCapacity}`);
 
+    // ── Machine availability check ──
+    // Look up if the treatment requires a machine via linked_service_id → service_machines
+    let resolvedMachineId: string | null = null;
+    if (treatmentId) {
+      const { data: treatmentRow } = await supabase
+        .from("booking_treatments")
+        .select("linked_service_id")
+        .eq("id", treatmentId)
+        .single();
+
+      if (treatmentRow?.linked_service_id) {
+        const { data: machineMapping } = await supabase
+          .from("service_machines")
+          .select("machine_id, machines(max_concurrent, name)")
+          .eq("service_id", treatmentRow.linked_service_id)
+          .limit(1)
+          .single();
+
+        if (machineMapping) {
+          resolvedMachineId = machineMapping.machine_id;
+          const machine = machineMapping.machines as any;
+          const maxConcurrent = machine?.max_concurrent ?? 1;
+
+          // Count overlapping appointments using this machine (dedup by group)
+          const { data: machineAppts } = await supabase
+            .from("appointments")
+            .select("id, appointment_group_id")
+            .eq("machine_id", resolvedMachineId)
+            .lt("start_time", apptEnd.toISOString())
+            .gt("end_time", apptStart.toISOString())
+            .not("status", "in", "(cancelled,no_show)");
+
+          if (machineAppts) {
+            const uniqueUses = new Set(machineAppts.map((a) => a.appointment_group_id || a.id));
+            if (uniqueUses.size >= maxConcurrent) {
+              console.log(`[Booking] REJECTED: Machine ${machine?.name} at capacity (${uniqueUses.size}/${maxConcurrent})`);
+              return NextResponse.json(
+                { error: `The ${machine?.name || "required machine"} is not available at this time. Please choose another slot.` },
+                { status: 409 }
+              );
+            }
+          }
+        }
+      }
+    }
+
     // Check if patient exists or create new — use ilike + limit(1) to handle
     // case-insensitive matching and gracefully tolerate any pre-existing duplicates.
     let patientId: string;
@@ -459,6 +505,7 @@ export async function POST(request: Request) {
         location: location || "Geneva",
         status: "scheduled",
         source: "online_booking",
+        machine_id: resolvedMachineId,
       })
       .select("id")
       .single();

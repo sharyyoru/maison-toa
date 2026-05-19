@@ -17,6 +17,7 @@ export async function POST(request: Request) {
       channel,
       notes,
       allowOverlap = false,
+      machineId = null,
     } = await request.json();
     
     // Input validation
@@ -189,7 +190,9 @@ export async function POST(request: Request) {
         status: status || 'scheduled',
         reason,
         location: location || null,
-        source: 'manual'
+        source: 'manual',
+        service_ids: serviceIds && serviceIds.length > 0 ? serviceIds : null,
+        machine_id: machineId || null,
       };
     }));
     

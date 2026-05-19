@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: Request) {
   try {
-    const { providers, providerIds, startTime, endTime, excludeAppointmentId } = await request.json();
+    const { providers, providerIds, startTime, endTime, excludeAppointmentId, machineId } = await request.json();
     
     // Support both old format (providerIds) and new format (providers array)
     const providersArray = providers || (providerIds || []).map((id: string) => ({ id, name: '' }));
@@ -167,7 +167,41 @@ export async function POST(request: Request) {
       })
     );
     
-    return NextResponse.json({ conflicts });
+    // ── Machine conflict check ──
+    let machineConflict: { machineName: string; currentUses: number; maxConcurrent: number; hasConflict: boolean } | null = null;
+    if (machineId) {
+      const { data: machine } = await supabase
+        .from("machines")
+        .select("name, max_concurrent")
+        .eq("id", machineId)
+        .single();
+
+      if (machine) {
+        let machineQuery = supabase
+          .from("appointments")
+          .select("id, appointment_group_id")
+          .eq("machine_id", machineId)
+          .lt("start_time", endTime)
+          .gt("end_time", startTime)
+          .not("status", "in", "(cancelled,no_show)");
+
+        if (excludeAppointmentId) {
+          machineQuery = machineQuery.neq("id", excludeAppointmentId);
+        }
+
+        const { data: machineAppts } = await machineQuery;
+        const uniqueUses = new Set((machineAppts || []).map((a) => a.appointment_group_id || a.id));
+
+        machineConflict = {
+          machineName: machine.name,
+          currentUses: uniqueUses.size,
+          maxConcurrent: machine.max_concurrent,
+          hasConflict: uniqueUses.size >= machine.max_concurrent,
+        };
+      }
+    }
+
+    return NextResponse.json({ conflicts, machineConflict });
   } catch (error) {
     console.error('Error in check-conflicts endpoint:', error);
     return NextResponse.json(

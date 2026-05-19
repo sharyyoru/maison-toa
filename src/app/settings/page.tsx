@@ -1221,7 +1221,7 @@ function BookingCategoriesTab() {
   const [activeSubTab, setActiveSubTab] = useState<"new" | "existing">("new");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedTreatmentId, setSelectedTreatmentId] = useState<string | null>(null);
-  const [view, setView] = useState<"categories" | "treatments" | "doctors" | "doctor-assignments" | "category-doctor-assignments">("categories");
+  const [view, setView] = useState<"categories" | "treatments" | "doctors" | "doctor-assignments" | "category-doctor-assignments" | "machines">("categories");
 
   useEffect(() => {
     fetchData();
@@ -1417,6 +1417,14 @@ function BookingCategoriesTab() {
           }`}
         >
           {t("doctorsBtn")}
+        </button>
+        <button
+          onClick={() => { setView("machines"); setSelectedCategoryId(null); setSelectedTreatmentId(null); }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            view === "machines" ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          Machines
         </button>
       </div>
 
@@ -1768,14 +1776,184 @@ function BookingCategoriesTab() {
           doctors={doctors}
           onBack={() => { setView("categories"); setSelectedCategoryId(null); }}
         />
+      ) : view === "machines" ? (
+        <MachinesView services={services} />
       ) : null}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Doctors View — global doctor pool management
+// Machines View
 // ---------------------------------------------------------------------------
+
+interface Machine {
+  id: string;
+  name: string;
+  max_concurrent: number;
+  is_active: boolean;
+}
+
+interface ServiceMachineMapping {
+  id: string;
+  service_id: string;
+  machine_id: string;
+}
+
+function MachinesView({ services }: { services: { id: string; name: string }[] }) {
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [mappings, setMappings] = useState<ServiceMachineMapping[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editMax, setEditMax] = useState(1);
+  const [newName, setNewName] = useState("");
+  const [newMax, setNewMax] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [serviceSearch, setServiceSearch] = useState("");
+
+  const supabase = supabaseClient;
+
+  async function loadData() {
+    setLoading(true);
+    const [{ data: m }, { data: sm }] = await Promise.all([
+      supabase.from("machines").select("*").order("name"),
+      supabase.from("service_machines").select("*"),
+    ]);
+    setMachines(m || []);
+    setMappings(sm || []);
+    setLoading(false);
+  }
+
+  useEffect(() => { loadData(); }, []);
+
+  async function handleAdd() {
+    if (!newName.trim()) return;
+    setSaving(true);
+    await supabase.from("machines").insert({ name: newName.trim(), max_concurrent: newMax });
+    setNewName("");
+    setNewMax(1);
+    await loadData();
+    setSaving(false);
+  }
+
+  async function handleSaveEdit(id: string) {
+    setSaving(true);
+    await supabase.from("machines").update({ name: editName, max_concurrent: editMax }).eq("id", id);
+    setEditingId(null);
+    await loadData();
+    setSaving(false);
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this machine? Service mappings will also be removed.")) return;
+    await supabase.from("machines").delete().eq("id", id);
+    await loadData();
+  }
+
+  async function handleToggleService(machineId: string, serviceId: string) {
+    const existing = mappings.find((m) => m.machine_id === machineId && m.service_id === serviceId);
+    if (existing) {
+      await supabase.from("service_machines").delete().eq("id", existing.id);
+    } else {
+      await supabase.from("service_machines").insert({ machine_id: machineId, service_id: serviceId });
+    }
+    await loadData();
+  }
+
+  const filteredServices = services.filter((s) =>
+    s.name.toLowerCase().includes(serviceSearch.toLowerCase())
+  );
+
+  if (loading) return <div className="text-sm text-slate-500">Loading machines...</div>;
+
+  return (
+    <div className="space-y-4">
+      {/* Add new machine */}
+      <div className="flex items-end gap-2">
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Machine Name</label>
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. HIFU" className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Max Concurrent</label>
+          <input type="number" min={1} value={newMax} onChange={(e) => setNewMax(Number(e.target.value))} className="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
+        </div>
+        <button onClick={handleAdd} disabled={saving || !newName.trim()} className="rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50">
+          Add
+        </button>
+      </div>
+
+      {/* Machine list */}
+      <div className="space-y-3">
+        {machines.map((machine) => {
+          const linkedServices = mappings.filter((m) => m.machine_id === machine.id);
+          const isEditing = editingId === machine.id;
+
+          return (
+            <div key={machine.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                {isEditing ? (
+                  <div className="flex items-center gap-2">
+                    <input value={editName} onChange={(e) => setEditName(e.target.value)} className="rounded border border-slate-200 px-2 py-1 text-sm font-semibold" />
+                    <input type="number" min={1} value={editMax} onChange={(e) => setEditMax(Number(e.target.value))} className="w-14 rounded border border-slate-200 px-2 py-1 text-sm" />
+                    <button onClick={() => handleSaveEdit(machine.id)} className="text-xs text-sky-600 font-medium">Save</button>
+                    <button onClick={() => setEditingId(null)} className="text-xs text-slate-400">Cancel</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-semibold text-sm text-slate-900">{machine.name}</h3>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">max {machine.max_concurrent}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  {!isEditing && (
+                    <button onClick={() => { setEditingId(machine.id); setEditName(machine.name); setEditMax(machine.max_concurrent); }} className="text-xs text-slate-500 hover:text-sky-600">Edit</button>
+                  )}
+                  <button onClick={() => handleDelete(machine.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                </div>
+              </div>
+
+              {/* Linked services */}
+              <div className="mt-2">
+                <p className="text-[10px] font-medium text-slate-500 mb-1">{linkedServices.length} service(s) linked</p>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {linkedServices.map((ls) => {
+                    const svc = services.find((s) => s.id === ls.service_id);
+                    return (
+                      <span key={ls.id} className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] text-sky-700">
+                        {svc?.name || "Unknown"}
+                        <button onClick={() => handleToggleService(machine.id, ls.service_id)} className="text-sky-400 hover:text-red-500">×</button>
+                      </span>
+                    );
+                  })}
+                </div>
+                {/* Add service */}
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-sky-600 hover:text-sky-700">+ Assign services</summary>
+                  <div className="mt-2 space-y-1">
+                    <input value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} placeholder="Search services..." className="w-full rounded border border-slate-200 px-2 py-1 text-xs" />
+                    <div className="max-h-40 overflow-y-auto space-y-0.5">
+                      {filteredServices.slice(0, 50).map((svc) => {
+                        const isLinked = linkedServices.some((ls) => ls.service_id === svc.id);
+                        return (
+                          <label key={svc.id} className="flex items-center gap-2 px-1 py-0.5 hover:bg-slate-50 rounded cursor-pointer">
+                            <input type="checkbox" checked={isLinked} onChange={() => handleToggleService(machine.id, svc.id)} className="h-3 w-3 rounded border-slate-300" />
+                            <span className={isLinked ? "text-sky-700 font-medium" : "text-slate-600"}>{svc.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 interface DoctorsViewProps {
   doctors: BookingDoctor[];
