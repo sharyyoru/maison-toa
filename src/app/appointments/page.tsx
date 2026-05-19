@@ -4866,53 +4866,42 @@ export default function CalendarPage() {
                       min={isSystemUser ? undefined : new Date().toISOString().split('T')[0]}
                       className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={timeSearch}
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={draftTime ? draftTime.split(":")[0] : ""}
                         onChange={(e) => {
-                          setTimeSearch(e.target.value);
-                          const v = e.target.value.trim();
-                          const m = v.match(/^(\d{1,2})[h:](\d{2})$/);
-                          if (m && Number(m[1]) < 24 && Number(m[2]) < 60) {
-                            setDraftTime(`${m[1].padStart(2, "0")}:${m[2]}`);
-                          } else if (!v) {
-                            setDraftTime("");
-                          }
-                          setTimeDropdownOpen(true);
+                          const hh = e.target.value;
+                          const mm = draftTime ? draftTime.split(":")[1] : "00";
+                          const newTime = hh ? `${hh}:${mm}` : "";
+                          setDraftTime(newTime);
+                          setTimeSearch(newTime ? `${Number(hh)}h${mm}` : "");
                         }}
-                        onFocus={() => { closeAllCreateDropdowns("time"); setTimeDropdownOpen(true); }}
-                        placeholder={!draftDate ? t("modal.selectDateFirst") : t("modal.searchTime")}
                         disabled={!draftDate}
-                        className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100"
-                      />
-                      {draftTime && (
-                        <button
-                          type="button"
-                          onClick={() => { setDraftTime(""); setTimeSearch(""); }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                        >
-                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
-                      )}
-                      {timeDropdownOpen && draftDate && filteredTimeOptions.length > 0 && (
-                        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-xs shadow-lg">
-                          {filteredTimeOptions.map((opt) => (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => {
-                                setDraftTime(opt.value);
-                                setTimeSearch(opt.label);
-                                setTimeDropdownOpen(false);
-                              }}
-                              className={`w-full px-3 py-1.5 text-left hover:bg-sky-50 ${draftTime === opt.value ? "bg-sky-50 text-sky-700" : "text-slate-700"}`}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                        className="w-16 rounded-lg border border-slate-200 bg-slate-50/80 px-1.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                      >
+                        <option value="">HH</option>
+                        {Array.from({ length: 24 }, (_, i) => (
+                          <option key={i} value={i.toString().padStart(2, "0")}>{i.toString().padStart(2, "0")}</option>
+                        ))}
+                      </select>
+                      <span className="text-xs font-medium text-slate-500">h</span>
+                      <select
+                        value={draftTime ? draftTime.split(":")[1] : ""}
+                        onChange={(e) => {
+                          const hh = draftTime ? draftTime.split(":")[0] : "08";
+                          const mm = e.target.value;
+                          const newTime = mm ? `${hh}:${mm}` : "";
+                          setDraftTime(newTime);
+                          setTimeSearch(newTime ? `${Number(hh)}h${mm}` : "");
+                        }}
+                        disabled={!draftDate}
+                        className="w-16 rounded-lg border border-slate-200 bg-slate-50/80 px-1.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                      >
+                        <option value="">MM</option>
+                        {Array.from({ length: 60 }, (_, i) => (
+                          <option key={i} value={i.toString().padStart(2, "0")}>{i.toString().padStart(2, "0")}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>
