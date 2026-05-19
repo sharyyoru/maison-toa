@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: Request) {
   try {
-    const { providers, providerIds, startTime, endTime, excludeAppointmentId, machineId } = await request.json();
+    const { providers, providerIds, startTime, endTime, excludeAppointmentId, machineIds } = await request.json();
     
     // Support both old format (providerIds) and new format (providers array)
     const providersArray = providers || (providerIds || []).map((id: string) => ({ id, name: '' }));
@@ -169,35 +169,41 @@ export async function POST(request: Request) {
     
     // ── Machine conflict check ──
     let machineConflict: { machineName: string; currentUses: number; maxConcurrent: number; hasConflict: boolean } | null = null;
-    if (machineId) {
-      const { data: machine } = await supabase
-        .from("machines")
-        .select("name, max_concurrent")
-        .eq("id", machineId)
-        .single();
+    if (machineIds && machineIds.length > 0) {
+      // Check the first machine that has a conflict (any one blocking is enough)
+      for (const mid of machineIds) {
+        const { data: machine } = await supabase
+          .from("machines")
+          .select("name, max_concurrent")
+          .eq("id", mid)
+          .single();
 
-      if (machine) {
-        let machineQuery = supabase
-          .from("appointments")
-          .select("id, appointment_group_id")
-          .eq("machine_id", machineId)
-          .lt("start_time", endTime)
-          .gt("end_time", startTime)
-          .not("status", "in", "(cancelled,no_show)");
+        if (machine) {
+          let machineQuery = supabase
+            .from("appointments")
+            .select("id, appointment_group_id")
+            .contains("machine_ids", [mid])
+            .lt("start_time", endTime)
+            .gt("end_time", startTime)
+            .not("status", "in", "(cancelled,no_show)");
 
-        if (excludeAppointmentId) {
-          machineQuery = machineQuery.neq("id", excludeAppointmentId);
+          if (excludeAppointmentId) {
+            machineQuery = machineQuery.neq("id", excludeAppointmentId);
+          }
+
+          const { data: machineAppts } = await machineQuery;
+          const uniqueUses = new Set((machineAppts || []).map((a) => a.appointment_group_id || a.id));
+
+          if (uniqueUses.size >= machine.max_concurrent) {
+            machineConflict = {
+              machineName: machine.name,
+              currentUses: uniqueUses.size,
+              maxConcurrent: machine.max_concurrent,
+              hasConflict: true,
+            };
+            break;
+          }
         }
-
-        const { data: machineAppts } = await machineQuery;
-        const uniqueUses = new Set((machineAppts || []).map((a) => a.appointment_group_id || a.id));
-
-        machineConflict = {
-          machineName: machine.name,
-          currentUses: uniqueUses.size,
-          maxConcurrent: machine.max_concurrent,
-          hasConflict: uniqueUses.size >= machine.max_concurrent,
-        };
       }
     }
 

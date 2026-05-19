@@ -1803,6 +1803,7 @@ interface ServiceMachineMapping {
 function MachinesView({ services }: { services: { id: string; name: string }[] }) {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [mappings, setMappings] = useState<ServiceMachineMapping[]>([]);
+  const [bookingTreatments, setBookingTreatments] = useState<{ id: string; name: string; machine_id: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -1816,12 +1817,14 @@ function MachinesView({ services }: { services: { id: string; name: string }[] }
 
   async function loadData() {
     setLoading(true);
-    const [{ data: m }, { data: sm }] = await Promise.all([
+    const [{ data: m }, { data: sm }, { data: bt }] = await Promise.all([
       supabase.from("machines").select("*").order("name"),
       supabase.from("service_machines").select("*"),
+      supabase.from("booking_treatments").select("id, name, machine_id").eq("enabled", true).order("name"),
     ]);
     setMachines(m || []);
     setMappings(sm || []);
+    setBookingTreatments(bt || []);
     setLoading(false);
   }
 
@@ -1855,10 +1858,19 @@ function MachinesView({ services }: { services: { id: string; name: string }[] }
     const existing = mappings.find((m) => m.machine_id === machineId && m.service_id === serviceId);
     if (existing) {
       await supabase.from("service_machines").delete().eq("id", existing.id);
+      setMappings((prev) => prev.filter((m) => m.id !== existing.id));
     } else {
-      await supabase.from("service_machines").insert({ machine_id: machineId, service_id: serviceId });
+      const { data } = await supabase.from("service_machines").insert({ machine_id: machineId, service_id: serviceId }).select().single();
+      if (data) setMappings((prev) => [...prev, data]);
     }
-    await loadData();
+  }
+
+  async function handleToggleBookingTreatment(machineId: string, treatmentId: string) {
+    const bt = bookingTreatments.find((t) => t.id === treatmentId);
+    if (!bt) return;
+    const newMachineId = bt.machine_id === machineId ? null : machineId;
+    await supabase.from("booking_treatments").update({ machine_id: newMachineId }).eq("id", treatmentId);
+    setBookingTreatments((prev) => prev.map((t) => t.id === treatmentId ? { ...t, machine_id: newMachineId } : t));
   }
 
   const filteredServices = services.filter((s) =>
@@ -1914,36 +1926,93 @@ function MachinesView({ services }: { services: { id: string; name: string }[] }
                 </div>
               </div>
 
-              {/* Linked services */}
+              {/* Linked services - grouped by category */}
               <div className="mt-2">
                 <p className="text-[10px] font-medium text-slate-500 mb-1">{linkedServices.length} service(s) linked</p>
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {linkedServices.map((ls) => {
+                {(() => {
+                  const grouped: Record<string, { id: string; service_id: string; name: string }[]> = {};
+                  linkedServices.forEach((ls) => {
                     const svc = services.find((s) => s.id === ls.service_id);
-                    return (
-                      <span key={ls.id} className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] text-sky-700">
-                        {svc?.name || "Unknown"}
-                        <button onClick={() => handleToggleService(machine.id, ls.service_id)} className="text-sky-400 hover:text-red-500">×</button>
-                      </span>
-                    );
-                  })}
-                </div>
-                {/* Add service */}
-                <details className="text-xs">
-                  <summary className="cursor-pointer text-sky-600 hover:text-sky-700">+ Assign services</summary>
+                    const cat = svc?.category_name || "Uncategorized";
+                    if (!grouped[cat]) grouped[cat] = [];
+                    grouped[cat].push({ id: ls.id, service_id: ls.service_id, name: svc?.name || "Unknown" });
+                  });
+                  const catColors = ["bg-sky-100 text-sky-800", "bg-violet-100 text-violet-800", "bg-emerald-100 text-emerald-800", "bg-amber-100 text-amber-800", "bg-rose-100 text-rose-800", "bg-teal-100 text-teal-800"];
+                  return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([cat, svcs], idx) => (
+                    <div key={cat} className="mb-2">
+                      <div className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-semibold mb-1 ${catColors[idx % catColors.length]}`}>{cat} ({svcs.length})</div>
+                      <div className="ml-2 space-y-0.5">
+                        {svcs.map((s) => (
+                          <div key={s.id} className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-600">{s.name}</span>
+                            <button onClick={() => handleToggleService(machine.id, s.service_id)} className="text-red-400 hover:text-red-600 text-sm leading-none px-1">×</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ));
+                })()}
+                {/* Linked booking treatments */}
+                {(() => {
+                  const linkedBt = bookingTreatments.filter((bt) => bt.machine_id === machine.id);
+                  if (linkedBt.length === 0) return null;
+                  return (
+                    <div className="mb-2">
+                      <div className="inline-block rounded-md px-2 py-0.5 text-[10px] font-semibold mb-1 bg-violet-100 text-violet-800">Booking Treatments ({linkedBt.length})</div>
+                      <div className="ml-2 space-y-0.5">
+                        {linkedBt.map((bt) => (
+                          <div key={bt.id} className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-600">{bt.name}</span>
+                            <button onClick={() => handleToggleBookingTreatment(machine.id, bt.id)} className="text-red-400 hover:text-red-600 text-sm leading-none px-1">×</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+                {/* Add service - grouped by category */}
+                <details className="text-xs mt-2">
+                  <summary className="cursor-pointer text-sky-600 hover:text-sky-700 font-medium">+ Assign services</summary>
                   <div className="mt-2 space-y-1">
                     <input value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} placeholder="Search services..." className="w-full rounded border border-slate-200 px-2 py-1 text-xs" />
-                    <div className="max-h-40 overflow-y-auto space-y-0.5">
-                      {filteredServices.slice(0, 50).map((svc) => {
-                        const isLinked = linkedServices.some((ls) => ls.service_id === svc.id);
-                        return (
-                          <label key={svc.id} className="flex items-center gap-2 px-1 py-0.5 hover:bg-slate-50 rounded cursor-pointer">
-                            <input type="checkbox" checked={isLinked} onChange={() => handleToggleService(machine.id, svc.id)} className="h-3 w-3 rounded border-slate-300" />
-                            <span className={isLinked ? "text-sky-700 font-medium" : "text-slate-600"}>{svc.name}</span>
-                          </label>
-                        );
-                      })}
+                    <div className="max-h-52 overflow-y-auto">
+                      {(() => {
+                        const catGroups: Record<string, typeof filteredServices> = {};
+                        filteredServices.forEach((svc) => {
+                          const cat = svc.category_name || "Uncategorized";
+                          if (!catGroups[cat]) catGroups[cat] = [];
+                          catGroups[cat].push(svc);
+                        });
+                        return Object.entries(catGroups).sort(([a], [b]) => a.localeCompare(b)).map(([cat, svcs]) => (
+                          <details key={cat} className="mb-1">
+                            <summary className="cursor-pointer text-[10px] font-semibold text-slate-600 hover:text-slate-800 py-0.5">{cat}</summary>
+                            <div className="ml-3 space-y-0.5">
+                              {svcs.map((svc) => {
+                                const isLinked = linkedServices.some((ls) => ls.service_id === svc.id);
+                                return (
+                                  <label key={svc.id} className="flex items-center gap-2 px-1 py-0.5 hover:bg-slate-50 rounded cursor-pointer">
+                                    <input type="checkbox" checked={isLinked} onChange={() => handleToggleService(machine.id, svc.id)} className="h-3 w-3 rounded border-slate-300" />
+                                    <span className={`text-[10px] ${isLinked ? "text-sky-700 font-medium" : "text-slate-600"}`}>{svc.name}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </details>
+                        ));
+                      })()}
                     </div>
+                  </div>
+                </details>
+                {/* Booking treatments linked to this machine */}
+                <details className="text-xs mt-2">
+                  <summary className="cursor-pointer text-violet-600 hover:text-violet-700 font-medium">+ Assign booking treatments (public page)</summary>
+                  <div className="mt-2 max-h-40 overflow-y-auto space-y-0.5">
+                    {bookingTreatments.map((bt) => (
+                      <label key={bt.id} className="flex items-center gap-2 px-1 py-0.5 hover:bg-slate-50 rounded cursor-pointer">
+                        <input type="checkbox" checked={bt.machine_id === machine.id} onChange={() => handleToggleBookingTreatment(machine.id, bt.id)} className="h-3 w-3 rounded border-slate-300" />
+                        <span className={`text-[10px] ${bt.machine_id === machine.id ? "text-violet-700 font-medium" : "text-slate-600"}`}>{bt.name}</span>
+                      </label>
+                    ))}
                   </div>
                 </details>
               </div>

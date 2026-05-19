@@ -382,16 +382,47 @@ export async function POST(request: Request) {
     console.log(`[Booking] ALLOWED: ${doctorAppointments.length} < ${maxCapacity}`);
 
     // ── Machine availability check ──
-    // Look up if the treatment requires a machine via linked_service_id → service_machines
+    // Look up if the treatment requires a machine:
+    // 1. Direct machine_id on booking_treatments (preferred)
+    // 2. Fallback: linked_service_id → service_machines
     let resolvedMachineId: string | null = null;
     if (treatmentId) {
       const { data: treatmentRow } = await supabase
         .from("booking_treatments")
-        .select("linked_service_id")
+        .select("machine_id, linked_service_id")
         .eq("id", treatmentId)
         .single();
 
-      if (treatmentRow?.linked_service_id) {
+      if (treatmentRow?.machine_id) {
+        // Direct assignment on booking treatment
+        resolvedMachineId = treatmentRow.machine_id;
+        const { data: machine } = await supabase
+          .from("machines")
+          .select("max_concurrent, name")
+          .eq("id", resolvedMachineId)
+          .single();
+
+        if (machine) {
+          const { data: machineAppts } = await supabase
+            .from("appointments")
+            .select("id, appointment_group_id")
+            .contains("machine_ids", [resolvedMachineId])
+            .lt("start_time", apptEnd.toISOString())
+            .gt("end_time", apptStart.toISOString())
+            .not("status", "in", "(cancelled,no_show)");
+
+          if (machineAppts) {
+            const uniqueUses = new Set(machineAppts.map((a) => a.appointment_group_id || a.id));
+            if (uniqueUses.size >= machine.max_concurrent) {
+              console.log(`[Booking] REJECTED: Machine ${machine.name} at capacity (${uniqueUses.size}/${machine.max_concurrent})`);
+              return NextResponse.json(
+                { error: `The ${machine.name} is not available at this time. Please choose another slot.` },
+                { status: 409 }
+              );
+            }
+          }
+        }
+      } else if (treatmentRow?.linked_service_id) {
         const { data: machineMapping } = await supabase
           .from("service_machines")
           .select("machine_id, machines(max_concurrent, name)")
@@ -408,7 +439,7 @@ export async function POST(request: Request) {
           const { data: machineAppts } = await supabase
             .from("appointments")
             .select("id, appointment_group_id")
-            .eq("machine_id", resolvedMachineId)
+            .contains("machine_ids", [resolvedMachineId])
             .lt("start_time", apptEnd.toISOString())
             .gt("end_time", apptStart.toISOString())
             .not("status", "in", "(cancelled,no_show)");
@@ -505,7 +536,7 @@ export async function POST(request: Request) {
         location: location || "Geneva",
         status: "scheduled",
         source: "online_booking",
-        machine_id: resolvedMachineId,
+        machine_ids: resolvedMachineId ? [resolvedMachineId] : [],
       })
       .select("id")
       .single();

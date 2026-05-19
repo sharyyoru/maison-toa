@@ -167,7 +167,7 @@ export async function GET(request: NextRequest) {
           const { data: machineAppts } = await supabase
             .from("appointments")
             .select("id, appointment_group_id, start_time, end_time")
-            .eq("machine_id", machineId)
+            .contains("machine_ids", [machineId])
             .lt("start_time", end)
             .gt("end_time", start)
             .not("status", "in", "(cancelled,no_show)");

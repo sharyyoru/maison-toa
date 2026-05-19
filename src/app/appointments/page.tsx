@@ -393,7 +393,7 @@ type CalendarAppointment = {
   reason: string | null;
   location: string | null;
   temporary_text: string | null;
-  machine_id: string | null;
+  machine_ids: string[];
   patient: AppointmentPatient | null;
   provider: {
     id: string;
@@ -862,42 +862,42 @@ export default function CalendarPage() {
   // Machine resource state
   const [machines, setMachines] = useState<{ id: string; name: string; max_concurrent: number }[]>([]);
   const [serviceMachineMappings, setServiceMachineMappings] = useState<{ service_id: string; machine_id: string }[]>([]);
-  const [selectedMachineId, setSelectedMachineId] = useState<string>("");
+  const [selectedMachineIds, setSelectedMachineIds] = useState<string[]>([]);
   const [machineConflictWarning, setMachineConflictWarning] = useState<string>("");
 
   // Check machine availability when machine or time changes
   useEffect(() => {
-    if (!selectedMachineId || !draftDate || !draftTime) {
+    if (selectedMachineIds.length === 0 || !draftDate || !draftTime) {
       setMachineConflictWarning("");
       return;
     }
-    const machine = machines.find((m) => m.id === selectedMachineId);
-    if (!machine) return;
 
     const startIso = new Date(`${draftDate}T${draftTime}:00`).toISOString();
     const durationMs = (consultationDuration || 15) * 60 * 1000;
     const endIso = new Date(new Date(`${draftDate}T${draftTime}:00`).getTime() + durationMs).toISOString();
 
     async function checkConflict() {
-      const { data } = await supabaseClient
-        .from("appointments")
-        .select("id, appointment_group_id")
-        .eq("machine_id", selectedMachineId)
-        .lt("start_time", endIso)
-        .gt("end_time", startIso)
-        .not("status", "in", "(cancelled,no_show)");
-
-      if (!data) return;
-      // Dedup by group
-      const uniqueUses = new Set(data.map((a) => a.appointment_group_id || a.id));
-      if (machine && uniqueUses.size >= machine.max_concurrent) {
-        setMachineConflictWarning(`${machine.name} is fully booked during this time (${uniqueUses.size}/${machine.max_concurrent} in use)`);
-      } else {
-        setMachineConflictWarning("");
+      for (const mid of selectedMachineIds) {
+        const machine = machines.find((m) => m.id === mid);
+        if (!machine) continue;
+        const { data } = await supabaseClient
+          .from("appointments")
+          .select("id, appointment_group_id")
+          .contains("machine_ids", [mid])
+          .lt("start_time", endIso)
+          .gt("end_time", startIso)
+          .not("status", "in", "(cancelled,no_show)");
+        if (!data) continue;
+        const uniqueUses = new Set(data.map((a) => a.appointment_group_id || a.id));
+        if (uniqueUses.size >= machine.max_concurrent) {
+          setMachineConflictWarning(`${machine.name} is fully booked during this time (${uniqueUses.size}/${machine.max_concurrent} in use)`);
+          return;
+        }
       }
+      setMachineConflictWarning("");
     }
     void checkConflict();
-  }, [selectedMachineId, draftDate, draftTime, consultationDuration, machines]);
+  }, [selectedMachineIds, draftDate, draftTime, consultationDuration, machines]);
 
   const resetCreateRecurrence = () => {
     setRepeatAppointment(false);
@@ -939,9 +939,11 @@ export default function CalendarPage() {
           return updated;
         });
         const remaining = prev.filter((id) => id !== serviceId);
-        // Re-detect machine from remaining services
-        const machineForRemaining = serviceMachineMappings.find((m) => remaining.includes(m.service_id));
-        setSelectedMachineId(machineForRemaining?.machine_id || "");
+        // Re-detect machines from remaining services
+        const machinesForRemaining = serviceMachineMappings
+          .filter((m) => remaining.includes(m.service_id))
+          .map((m) => m.machine_id);
+        setSelectedMachineIds([...new Set(machinesForRemaining)]);
         return remaining;
       }
       // Add service with default quantity of 1
@@ -956,8 +958,8 @@ export default function CalendarPage() {
       }
       // Auto-detect machine from service
       const mapping = serviceMachineMappings.find((m) => m.service_id === serviceId);
-      if (mapping && !selectedMachineId) {
-        setSelectedMachineId(mapping.machine_id);
+      if (mapping && !selectedMachineIds.includes(mapping.machine_id)) {
+        setSelectedMachineIds((prev) => [...prev, mapping.machine_id]);
       }
       return [...prev, serviceId];
     });
@@ -1020,7 +1022,7 @@ export default function CalendarPage() {
   const [editServiceId, setEditServiceId] = useState<string>("");
   const [editServiceSearch, setEditServiceSearch] = useState("");
   const [editServiceDropdownOpen, setEditServiceDropdownOpen] = useState(false);
-  const [editMachineId, setEditMachineId] = useState<string>("");
+  const [editMachineIds, setEditMachineIds] = useState<string[]>([]);
 
   // Categories loaded from service_categories (with optional color) — used to populate
   // the category dropdowns and override CATEGORY_COLORS when a color is set in DB.
@@ -1095,7 +1097,7 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_id, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -2693,7 +2695,7 @@ export default function CalendarPage() {
             channel: bookingStatus || null,
             notes: draftDescription.trim() || null,
             allowOverlap: true,
-            machineId: selectedMachineId || null,
+            machineIds: selectedMachineIds.length > 0 ? selectedMachineIds : null,
           })
         });
         
@@ -2727,7 +2729,7 @@ export default function CalendarPage() {
           const { data: fullApptData } = await supabaseClient
             .from("appointments")
             .select(
-              "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_id, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+              "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
             )
             .eq('id', firstAppt.id)
             .single();
@@ -2743,7 +2745,7 @@ export default function CalendarPage() {
         const { data: refreshedData } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_id, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -2792,7 +2794,7 @@ export default function CalendarPage() {
             source: "manual",
           })
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_id, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .single();
 
@@ -2852,7 +2854,7 @@ export default function CalendarPage() {
       setCategorySearch("");
       setLocationSearch("");
       setDurationSearch("");
-      setSelectedMachineId("");
+      setSelectedMachineIds([]);
       setMachineConflictWarning("");
       resetCreateRecurrence();
       setCreateError(null);
@@ -2933,7 +2935,7 @@ export default function CalendarPage() {
 
     setEditNotes(getAppointmentNotes(appt) || "");
 
-    setEditMachineId(appt.machine_id || "");
+    setEditMachineIds(appt.machine_ids || []);
     setEditModalOpen(true);
   }
 
@@ -3157,11 +3159,11 @@ export default function CalendarPage() {
           reason: updatedReason,
           notes: editNotes.trim() || null,
           provider_id: editProviderId || null,
-          machine_id: editMachineId || null,
+          machine_ids: editMachineIds,
         })
         .eq("id", editingAppointment.id)
         .select(
-          "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_id, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+          "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
         )
         .single();
 
@@ -4162,7 +4164,7 @@ export default function CalendarPage() {
                                           </div>
                                           <div className="truncate text-[9px] text-slate-600">
                                             {timeLabel} {serviceLabel ? `• ${serviceLabel}` : ""}
-                                            {appt.machine_id && (() => { const m = machines.find((x) => x.id === appt.machine_id); return m ? <span className="ml-1 text-[8px] text-violet-600" title={m.name}>⚙</span> : null; })()}
+                                            {appt.machine_ids && appt.machine_ids.length > 0 && (() => { const m = machines.find((x) => x.id === appt.machine_ids[0]); return m ? <span className="ml-1 text-[8px] text-violet-600" title={appt.machine_ids.map((id) => machines.find((x) => x.id === id)?.name).filter(Boolean).join(", ")}>⚙</span> : null; })()}
                                           </div>
                                           {notes && (
                                             <div className="truncate text-[9px] text-slate-500 italic">
@@ -4478,17 +4480,26 @@ export default function CalendarPage() {
                   </div>
                   {machines.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-slate-200">
-                      <p className="text-[10px] text-slate-500 mb-1">Machine</p>
-                      <select
-                        value={editMachineId}
-                        onChange={(e) => setEditMachineId(e.target.value)}
-                        className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                      >
-                        <option value="">No machine</option>
+                      <p className="text-[10px] text-slate-500 mb-1">Machine(s)</p>
+                      <div className="space-y-0.5 max-h-28 overflow-y-auto">
                         {machines.map((m) => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
+                          <label key={m.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+                            <input
+                              type="checkbox"
+                              checked={editMachineIds.includes(m.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setEditMachineIds((prev) => [...prev, m.id]);
+                                } else {
+                                  setEditMachineIds((prev) => prev.filter((id) => id !== m.id));
+                                }
+                              }}
+                              className="h-3 w-3 rounded border-slate-300"
+                            />
+                            <span className="text-[10px] text-slate-600">{m.name}</span>
+                          </label>
                         ))}
-                      </select>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -5389,20 +5400,29 @@ export default function CalendarPage() {
                     placeholder={t("modal.addNotes")}
                   />
                 </div>
-                {/* Machine dropdown */}
+                {/* Machine selection */}
                 {machines.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-slate-600">Machine</p>
-                    <select
-                      value={selectedMachineId}
-                      onChange={(e) => setSelectedMachineId(e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    >
-                      <option value="">No machine</option>
+                    <p className="text-[11px] font-medium text-slate-600">Machine(s)</p>
+                    <div className="space-y-0.5 max-h-32 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5">
                       {machines.map((m) => (
-                        <option key={m.id} value={m.id}>{m.name} (max {m.max_concurrent})</option>
+                        <label key={m.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+                          <input
+                            type="checkbox"
+                            checked={selectedMachineIds.includes(m.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedMachineIds((prev) => [...prev, m.id]);
+                              } else {
+                                setSelectedMachineIds((prev) => prev.filter((id) => id !== m.id));
+                              }
+                            }}
+                            className="h-3 w-3 rounded border-slate-300"
+                          />
+                          <span className="text-xs text-slate-700">{m.name} <span className="text-slate-400">(max {m.max_concurrent})</span></span>
+                        </label>
                       ))}
-                    </select>
+                    </div>
                     {machineConflictWarning && (
                       <p className="text-[10px] text-amber-600 font-medium">⚠ {machineConflictWarning}</p>
                     )}
