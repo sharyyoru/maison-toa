@@ -16,6 +16,7 @@
     "controllers": "Controllers",
     "emailReports": "Email Reports",
     "chatWithAliice": "Chat with Aliice",
+    "chatLogs": "Chat Logs",
     "clientOnboarding": "Client Onboarding",
     "settings": "Settings"
   },
