@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { findEarliestAvailableDoctor } from "@/lib/bookingEarliestDoctor";
 
 interface BookingDoctor {
   id: string;
@@ -20,6 +21,7 @@ interface BookingDoctor {
 interface Treatment {
   id: string;
   name: string;
+  duration_minutes?: number;
 }
 
 export default function SelectDoctorPage() {
@@ -32,6 +34,8 @@ export default function SelectDoctorPage() {
   const [treatment, setTreatment] = useState<Treatment | null>(null);
   const [doctors, setDoctors] = useState<BookingDoctor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [autoSelecting, setAutoSelecting] = useState(false);
+  const [autoSelectError, setAutoSelectError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -62,6 +66,26 @@ export default function SelectDoctorPage() {
 
     fetchData();
   }, [treatmentId, categorySlug]);
+
+  const handleAutoSelectDoctor = async () => {
+    setAutoSelecting(true);
+    setAutoSelectError(null);
+
+    try {
+      const result = await findEarliestAvailableDoctor(doctors, treatment?.duration_minutes ?? 60);
+      if (!result) {
+        setAutoSelectError(t("doctor.noEarliestAvailable"));
+        return;
+      }
+
+      router.push(`/book-appointment/new-patient/${categorySlug}/${treatmentId}/${result.doctor.slug}`);
+    } catch (error) {
+      console.error("Failed to auto select specialist:", error);
+      setAutoSelectError(t("doctor.autoSelectFailed"));
+    } finally {
+      setAutoSelecting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 relative">
@@ -164,53 +188,71 @@ export default function SelectDoctorPage() {
         {loading ? (
           <div className="text-center py-12 text-slate-400 text-sm">{t("common.loading")}</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {doctors.map((doctor) => (
-              <Link
-                key={doctor.slug}
-                href={`/book-appointment/new-patient/${categorySlug}/${treatmentId}/${doctor.slug}`}
-                className="group bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-xl hover:border-slate-300 transition-all duration-300 hover:scale-[1.02]"
-              >
-                <div className="relative h-40 sm:h-48 bg-gradient-to-br from-slate-100 to-slate-50 overflow-hidden">
-                  {doctor.image_url && (
-                    <Image
-                      src={doctor.image_url}
-                      alt={doctor.name}
-                      fill
-                      className="object-cover object-top group-hover:scale-105 transition-transform duration-300"
-                    />
-                  )}
-                </div>
-                <div className="p-4 sm:p-5">
-                  <h2 className="text-base sm:text-lg font-semibold text-slate-900 mb-1 group-hover:text-slate-700 transition-colors">
-                    {doctor.name}
-                  </h2>
-                  <p className="text-sm text-slate-500 font-medium mb-2">
-                    {doctor.specialty}
-                  </p>
-                  <p className="text-sm text-slate-500 line-clamp-2 mb-3">
-                    {doctor.description}
-                  </p>
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-900 group-hover:text-slate-700">
-                    <span>{t("doctor.bookConsultation")}</span>
-                    <svg
-                      className="w-4 h-4 group-hover:translate-x-1 transition-transform"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {doctors.map((doctor) => (
+                <Link
+                  key={doctor.slug}
+                  href={`/book-appointment/new-patient/${categorySlug}/${treatmentId}/${doctor.slug}`}
+                  className="group bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-xl hover:border-slate-300 transition-all duration-300 hover:scale-[1.02]"
+                >
+                  <div className="relative h-40 sm:h-48 bg-gradient-to-br from-slate-100 to-slate-50 overflow-hidden">
+                    {doctor.image_url && (
+                      <Image
+                        src={doctor.image_url}
+                        alt={doctor.name}
+                        fill
+                        className="object-cover object-top group-hover:scale-105 transition-transform duration-300"
                       />
-                    </svg>
+                    )}
                   </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+                  <div className="p-4 sm:p-5">
+                    <h2 className="text-base sm:text-lg font-semibold text-slate-900 mb-1 group-hover:text-slate-700 transition-colors">
+                      {doctor.name}
+                    </h2>
+                    <p className="text-sm text-slate-500 font-medium mb-2">
+                      {doctor.specialty}
+                    </p>
+                    <p className="text-sm text-slate-500 line-clamp-2 mb-3">
+                      {doctor.description}
+                    </p>
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-900 group-hover:text-slate-700">
+                      <span>{t("doctor.bookConsultation")}</span>
+                      <svg
+                        className="w-4 h-4 group-hover:translate-x-1 transition-transform"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+            <div className="mt-8 flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={handleAutoSelectDoctor}
+                disabled={autoSelecting || doctors.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {autoSelecting && (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                )}
+                {autoSelecting ? t("doctor.findingEarliest") : t("doctor.autoSelectEarliest")}
+              </button>
+              {autoSelectError && (
+                <p className="text-center text-sm text-amber-700">{autoSelectError}</p>
+              )}
+            </div>
+          </>
         )}
       </main>
 

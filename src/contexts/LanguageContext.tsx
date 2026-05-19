@@ -41,6 +41,10 @@ const translations: Record<Language, Record<string, string>> = {
     "doctor.title": "Select a Specialist",
     "doctor.subtitle": "Select a specialist available at Lausanne to book your consultation",
     "doctor.bookConsultation": "Book Consultation",
+    "doctor.autoSelectEarliest": "Book earliest available specialist",
+    "doctor.findingEarliest": "Finding earliest availability...",
+    "doctor.noEarliestAvailable": "No available specialist was found in the next 90 days.",
+    "doctor.autoSelectFailed": "Could not find the earliest available specialist. Please select a specialist manually.",
     
     // Booking form
     "booking.title": "Book an Appointment",
@@ -124,6 +128,10 @@ const translations: Record<Language, Record<string, string>> = {
     "doctor.title": "Spécialistes disponibles",
     "doctor.subtitle": "Sélectionnez un spécialiste disponible à Lausanne pour réserver votre consultation",
     "doctor.bookConsultation": "Réserver une consultation",
+    "doctor.autoSelectEarliest": "Réserver le spécialiste disponible au plus tôt",
+    "doctor.findingEarliest": "Recherche de la première disponibilité...",
+    "doctor.noEarliestAvailable": "Aucun spécialiste disponible trouvé dans les 90 prochains jours.",
+    "doctor.autoSelectFailed": "Impossible de trouver le spécialiste disponible au plus tôt. Veuillez sélectionner un spécialiste manuellement.",
     
     // Booking form
     "booking.title": "Prendre un rendez-vous",
