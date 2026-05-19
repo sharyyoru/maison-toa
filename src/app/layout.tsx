@@ -434,12 +434,6 @@ export default async function RootLayout({
                     </span>
                     <span>{tNav("chatWithAliice")}</span>
                   </Link>
-                  <Link
-                    href="/chatlogs"
-                    className="group flex items-center gap-3 px-3 py-2 text-xs font-medium text-slate-500 hover:bg-sky-50/80 hover:text-slate-900 sm:text-sm pl-[52px]"
-                  >
-                    <span>{tNav("chatLogs")}</span>
-                  </Link>
                 </div>
                 <div className="border-b border-slate-100/80">
                   <Link
