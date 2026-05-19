@@ -2103,7 +2103,7 @@ export default function CalendarPage() {
   // Generate all time options using the selected doctor's interval (or default 15 min)
   const allTimeOptions = useMemo(() => {
     const options: { value: string; label: string }[] = [];
-    for (let minutes = DAY_VIEW_START_MINUTES; minutes < DAY_VIEW_END_MINUTES; minutes += createTimeInterval) {
+    for (let minutes = DAY_VIEW_START_MINUTES; minutes < DAY_VIEW_END_MINUTES; minutes += 5) {
       const hours24 = Math.floor(minutes / 60);
       const mins = minutes % 60;
       const value = `${hours24.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
@@ -4868,16 +4868,13 @@ export default function CalendarPage() {
                     />
                     <div className="relative">
                       <input
-                        type="text"
-                        value={timeSearch}
+                        type="time"
+                        value={draftTime}
                         onChange={(e) => {
+                          setDraftTime(e.target.value);
                           setTimeSearch(e.target.value);
-                          setTimeDropdownOpen(true);
-                          if (!e.target.value.trim()) {
-                            setDraftTime("");
-                          }
                         }}
-                        onFocus={() => { closeAllCreateDropdowns("time"); setTimeDropdownOpen(true); }}
+                        onFocus={() => { closeAllCreateDropdowns("time"); }}
                         placeholder={!draftDate ? t("modal.selectDateFirst") : t("modal.searchTime")}
                         disabled={!draftDate}
                         className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100"
