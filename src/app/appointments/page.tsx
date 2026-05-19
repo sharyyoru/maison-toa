@@ -4877,7 +4877,7 @@ export default function CalendarPage() {
                           setTimeSearch(newTime ? `${Number(hh)}h${mm}` : "");
                         }}
                         disabled={!draftDate}
-                        className="w-16 rounded-lg border border-slate-200 bg-slate-50/80 px-1.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                        className="w-16 rounded-lg border border-slate-200 bg-slate-50/80 px-1.5 pr-6 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100"
                       >
                         <option value="">HH</option>
                         {Array.from({ length: 24 }, (_, i) => (
@@ -4895,7 +4895,7 @@ export default function CalendarPage() {
                           setTimeSearch(newTime ? `${Number(hh)}h${mm}` : "");
                         }}
                         disabled={!draftDate}
-                        className="w-16 rounded-lg border border-slate-200 bg-slate-50/80 px-1.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                        className="w-16 rounded-lg border border-slate-200 bg-slate-50/80 px-1.5 pr-6 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100"
                       >
                         <option value="">MM</option>
                         {Array.from({ length: 60 }, (_, i) => (
