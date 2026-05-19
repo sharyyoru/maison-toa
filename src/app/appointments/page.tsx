@@ -890,7 +890,7 @@ export default function CalendarPage() {
       if (!data) return;
       // Dedup by group
       const uniqueUses = new Set(data.map((a) => a.appointment_group_id || a.id));
-      if (uniqueUses.size >= machine.max_concurrent) {
+      if (machine && uniqueUses.size >= machine.max_concurrent) {
         setMachineConflictWarning(`${machine.name} is fully booked during this time (${uniqueUses.size}/${machine.max_concurrent} in use)`);
       } else {
         setMachineConflictWarning("");
