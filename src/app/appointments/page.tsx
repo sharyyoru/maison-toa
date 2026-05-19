@@ -863,6 +863,7 @@ export default function CalendarPage() {
   const [machines, setMachines] = useState<{ id: string; name: string; max_concurrent: number }[]>([]);
   const [serviceMachineMappings, setServiceMachineMappings] = useState<{ service_id: string; machine_id: string }[]>([]);
   const [selectedMachineIds, setSelectedMachineIds] = useState<string[]>([]);
+  const [machineManualOpen, setMachineManualOpen] = useState(false);
   const [machineConflictWarning, setMachineConflictWarning] = useState<string>("");
 
   // Check machine availability when machine or time changes
@@ -958,8 +959,8 @@ export default function CalendarPage() {
       }
       // Auto-detect machine from service
       const mapping = serviceMachineMappings.find((m) => m.service_id === serviceId);
-      if (mapping && !selectedMachineIds.includes(mapping.machine_id)) {
-        setSelectedMachineIds((prev) => [...prev, mapping.machine_id]);
+      if (mapping) {
+        setSelectedMachineIds((prev) => prev.includes(mapping.machine_id) ? prev : [...prev, mapping.machine_id]);
       }
       return [...prev, serviceId];
     });
@@ -1023,6 +1024,7 @@ export default function CalendarPage() {
   const [editServiceSearch, setEditServiceSearch] = useState("");
   const [editServiceDropdownOpen, setEditServiceDropdownOpen] = useState(false);
   const [editMachineIds, setEditMachineIds] = useState<string[]>([]);
+  const [editMachineManualOpen, setEditMachineManualOpen] = useState(false);
 
   // Categories loaded from service_categories (with optional color) — used to populate
   // the category dropdowns and override CATEGORY_COLORS when a color is set in DB.
@@ -2855,6 +2857,7 @@ export default function CalendarPage() {
       setLocationSearch("");
       setDurationSearch("");
       setSelectedMachineIds([]);
+      setMachineManualOpen(false);
       setMachineConflictWarning("");
       resetCreateRecurrence();
       setCreateError(null);
@@ -2936,6 +2939,7 @@ export default function CalendarPage() {
     setEditNotes(getAppointmentNotes(appt) || "");
 
     setEditMachineIds(appt.machine_ids || []);
+    setEditMachineManualOpen(false);
     setEditModalOpen(true);
   }
 
@@ -4299,6 +4303,7 @@ export default function CalendarPage() {
                           onClick={() => {
                             setEditServiceId("");
                             setEditServiceSearch("");
+                            setEditMachineIds([]);
                           }}
                           className="absolute right-2 top-6 text-slate-400 hover:text-slate-600 text-xs"
                         >
@@ -4315,6 +4320,11 @@ export default function CalendarPage() {
                                 setEditServiceId(svc.id);
                                 setEditServiceSearch(svc.name);
                                 setEditServiceDropdownOpen(false);
+                                // Auto-select linked machine
+                                const mapping = serviceMachineMappings.find((m) => m.service_id === svc.id);
+                                if (mapping) {
+                                  setEditMachineIds((prev) => prev.includes(mapping.machine_id) ? prev : [...prev, mapping.machine_id]);
+                                }
                               }}
                               className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50 ${editServiceId === svc.id ? "bg-sky-50 text-sky-700" : ""}`}
                             >
@@ -4480,26 +4490,47 @@ export default function CalendarPage() {
                   </div>
                   {machines.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-slate-200">
-                      <p className="text-[10px] text-slate-500 mb-1">Machine(s)</p>
-                      <div className="space-y-0.5 max-h-28 overflow-y-auto">
-                        {machines.map((m) => (
-                          <label key={m.id} className="flex items-center gap-2 cursor-pointer py-0.5">
-                            <input
-                              type="checkbox"
-                              checked={editMachineIds.includes(m.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setEditMachineIds((prev) => [...prev, m.id]);
-                                } else {
-                                  setEditMachineIds((prev) => prev.filter((id) => id !== m.id));
-                                }
-                              }}
-                              className="h-3 w-3 rounded border-slate-300"
-                            />
-                            <span className="text-[10px] text-slate-600">{m.name}</span>
-                          </label>
-                        ))}
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] text-slate-500 mb-1">Machine(s)</p>
+                        {editMachineIds.length > 0 && !editMachineManualOpen && (
+                          <span className="text-[9px] text-emerald-600 font-medium">Auto-detected</span>
+                        )}
                       </div>
+                      {editMachineIds.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {editMachineIds.map((mid) => {
+                            const m = machines.find((x) => x.id === mid);
+                            return m ? (
+                              <span key={mid} className="inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-200 px-2 py-0.5 text-[10px] text-violet-700">
+                                ⚙ {m.name}
+                                {editMachineManualOpen && <button type="button" onClick={() => setEditMachineIds((prev) => prev.filter((id) => id !== mid))} className="text-violet-400 hover:text-red-500 ml-0.5">×</button>}
+                              </span>
+                            ) : null;
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-400 italic">No machine needed</p>
+                      )}
+                      {!editMachineManualOpen ? (
+                        <button type="button" onClick={() => setEditMachineManualOpen(true)} className="text-[10px] text-sky-600 hover:text-sky-700 mt-1">
+                          Manually assign machine
+                        </button>
+                      ) : (
+                        <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-medium text-slate-500">Select machines:</span>
+                            <button type="button" onClick={() => setEditMachineManualOpen(false)} className="text-[10px] text-slate-400 hover:text-slate-600">Done</button>
+                          </div>
+                          <div className="space-y-0.5 max-h-24 overflow-y-auto">
+                            {machines.map((m) => (
+                              <label key={m.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+                                <input type="checkbox" checked={editMachineIds.includes(m.id)} onChange={(e) => { if (e.target.checked) setEditMachineIds((prev) => [...prev, m.id]); else setEditMachineIds((prev) => prev.filter((id) => id !== m.id)); }} className="h-3 w-3 rounded border-slate-300" />
+                                <span className="text-[10px] text-slate-700">{m.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -4699,7 +4730,7 @@ export default function CalendarPage() {
             }}
           >
             <div 
-              className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.65)]" 
+              className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200/80 bg-white p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.65)]" 
               style={{ touchAction: 'auto' } as React.CSSProperties}
               onClick={(e) => {
                 // Close dropdowns only if clicking on the modal background, not on inputs
@@ -5400,31 +5431,54 @@ export default function CalendarPage() {
                     placeholder={t("modal.addNotes")}
                   />
                 </div>
-                {/* Machine selection */}
+                {/* Machine auto-detect + manual override */}
                 {machines.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-slate-600">Machine(s)</p>
-                    <div className="space-y-0.5 max-h-32 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5">
-                      {machines.map((m) => (
-                        <label key={m.id} className="flex items-center gap-2 cursor-pointer py-0.5">
-                          <input
-                            type="checkbox"
-                            checked={selectedMachineIds.includes(m.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedMachineIds((prev) => [...prev, m.id]);
-                              } else {
-                                setSelectedMachineIds((prev) => prev.filter((id) => id !== m.id));
-                              }
-                            }}
-                            className="h-3 w-3 rounded border-slate-300"
-                          />
-                          <span className="text-xs text-slate-700">{m.name} <span className="text-slate-400">(max {m.max_concurrent})</span></span>
-                        </label>
-                      ))}
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-medium text-slate-600">Machine(s)</p>
+                      {selectedMachineIds.length > 0 && !machineManualOpen && (
+                        <span className="text-[9px] text-emerald-600 font-medium">Auto-detected</span>
+                      )}
                     </div>
+                    {/* Show assigned machines as tags */}
+                    {selectedMachineIds.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {selectedMachineIds.map((mid) => {
+                          const m = machines.find((x) => x.id === mid);
+                          return m ? (
+                            <span key={mid} className="inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-200 px-2 py-0.5 text-[10px] text-violet-700">
+                              ⚙ {m.name}
+                              {machineManualOpen && <button type="button" onClick={() => setSelectedMachineIds((prev) => prev.filter((id) => id !== mid))} className="text-violet-400 hover:text-red-500 ml-0.5">×</button>}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-slate-400 italic">No machine needed</p>
+                    )}
                     {machineConflictWarning && (
                       <p className="text-[10px] text-amber-600 font-medium">⚠ {machineConflictWarning}</p>
+                    )}
+                    {/* Manual override toggle */}
+                    {!machineManualOpen ? (
+                      <button type="button" onClick={() => setMachineManualOpen(true)} className="text-[10px] text-sky-600 hover:text-sky-700">
+                        Manually assign machine
+                      </button>
+                    ) : (
+                      <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-medium text-slate-500">Select machines:</span>
+                          <button type="button" onClick={() => setMachineManualOpen(false)} className="text-[10px] text-slate-400 hover:text-slate-600">Done</button>
+                        </div>
+                        <div className="space-y-0.5 max-h-24 overflow-y-auto">
+                          {machines.map((m) => (
+                            <label key={m.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+                              <input type="checkbox" checked={selectedMachineIds.includes(m.id)} onChange={(e) => { if (e.target.checked) setSelectedMachineIds((prev) => [...prev, m.id]); else setSelectedMachineIds((prev) => prev.filter((id) => id !== m.id)); }} className="h-3 w-3 rounded border-slate-300" />
+                              <span className="text-[10px] text-slate-700">{m.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
