@@ -6,13 +6,14 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { SectionRenderer } from "@/components/PageBuilder";
 import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
-import { getLocalizedBookingName } from "@/lib/bookingLocalization";
+import { getLocalizedBookingDescription, getLocalizedBookingName } from "@/lib/bookingLocalization";
 
 interface Category {
   id: string;
   name: string;
   name_en?: string | null;
   description: string;
+  description_en?: string | null;
   slug: string;
   enabled: boolean;
 }
@@ -104,23 +105,33 @@ export default function NewPatientCategoryPage() {
                   return (
                     <div className={`grid ${gridClasses} gap-4 mb-12`}>
                       {categories.map((category) => (
-                        <Link
-                          key={category.id}
-                          href={`/book-appointment/new-patient/${category.slug}`}
-                          className="group bg-white/80 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-105"
-                        >
-                          <div className="flex flex-col h-full">
-                            <h3 className="text-lg font-semibold text-slate-900 mb-3 group-hover:text-slate-700 transition-colors">
-                              {getLocalizedBookingName(category, language)}
-                            </h3>
-                            <div className="flex items-center text-slate-700 font-medium group-hover:text-slate-900 transition-colors mt-auto">
-                              <span>{t("treatment.selectTreatment")}</span>
-                              <svg className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </div>
-                          </div>
-                        </Link>
+                        (() => {
+                          const description = getLocalizedBookingDescription(category, language);
+                          return (
+                            <Link
+                              key={category.id}
+                              href={`/book-appointment/new-patient/${category.slug}`}
+                              className="group bg-white/80 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-105"
+                            >
+                              <div className="flex flex-col h-full">
+                                <h3 className="text-lg font-semibold text-slate-900 mb-2 group-hover:text-slate-700 transition-colors">
+                                  {getLocalizedBookingName(category, language)}
+                                </h3>
+                                {description && (
+                                  <p className="text-sm text-slate-500 line-clamp-3 mb-4">
+                                    {description}
+                                  </p>
+                                )}
+                                <div className="flex items-center text-slate-700 font-medium group-hover:text-slate-900 transition-colors mt-auto">
+                                  <span>{t("treatment.selectTreatment")}</span>
+                                  <svg className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </div>
+                              </div>
+                            </Link>
+                          );
+                        })()
                       ))}
                     </div>
                   );

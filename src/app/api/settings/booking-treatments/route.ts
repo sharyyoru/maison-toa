@@ -12,7 +12,9 @@ async function getBookingNameTranslations() {
 
   return (data?.value ?? {}) as {
     categories?: Record<string, string>;
+    categoryDescriptions?: Record<string, string>;
     treatments?: Record<string, string>;
+    treatmentDescriptions?: Record<string, string>;
   };
 }
 
@@ -46,6 +48,7 @@ export async function GET(request: Request) {
     const treatments = (treatmentsResult.data || []).map((treatment: any) => ({
       ...treatment,
       name_en: translations.treatments?.[treatment.id] || treatment.name_en || null,
+      description_en: translations.treatmentDescriptions?.[treatment.id] || treatment.description_en || null,
     }));
 
     return NextResponse.json({ treatments });
@@ -82,6 +85,11 @@ export async function PUT(request: Request) {
       treatments
         .filter((t: { id: string; name_en?: string | null }) => t.name_en?.trim())
         .map((t: { id: string; name_en?: string | null }) => [t.id, t.name_en!.trim()])
+    );
+    const treatmentDescriptionTranslations = Object.fromEntries(
+      treatments
+        .filter((t: { id: string; description_en?: string | null }) => t.description_en?.trim())
+        .map((t: { id: string; description_en?: string | null }) => [t.id, t.description_en!.trim()])
     );
 
     // Delete treatments that are no longer in the list
@@ -123,6 +131,7 @@ export async function PUT(request: Request) {
           value: {
             ...currentTranslations,
             treatments: treatmentTranslations,
+            treatmentDescriptions: treatmentDescriptionTranslations,
           },
           updated_at: new Date().toISOString(),
         },

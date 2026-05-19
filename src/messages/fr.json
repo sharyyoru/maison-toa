@@ -1435,6 +1435,7 @@
       "noCategories": "Aucune catégorie",
       "nameDefault": "Nom",
       "nameEnglish": "Nom anglais",
+      "descriptionEnglish": "Description anglaise",
       "slug": "Slug",
       "skipTreatment": "Ignorer l'étape du traitement",
       "treatmentsCount": "{count} traitements",

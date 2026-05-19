@@ -1043,6 +1043,7 @@ interface BookingCategory {
   name: string;
   name_en: string | null;
   description: string;
+  description_en: string | null;
   patient_type: "new" | "existing";
   order_index: number;
   slug: string;
@@ -1056,6 +1057,7 @@ interface BookingTreatment {
   name: string;
   name_en: string | null;
   description: string;
+  description_en: string | null;
   duration_minutes: number;
   order_index: number;
   enabled: boolean;
@@ -1327,6 +1329,7 @@ function BookingCategoriesTab() {
       name: "",
       name_en: "",
       description: "",
+      description_en: "",
       patient_type: patientType,
       order_index: categories.filter((c) => c.patient_type === patientType).length,
       slug: "",
@@ -1354,6 +1357,7 @@ function BookingCategoriesTab() {
       name: "",
       name_en: "",
       description: "",
+      description_en: "",
       duration_minutes: 30,
       order_index: treatments.filter((t) => t.category_id === categoryId).length,
       enabled: true,
@@ -1501,6 +1505,17 @@ function BookingCategoriesTab() {
                           className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
                         />
                       </div>
+                      <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-medium text-slate-500 mb-1">{t("descriptionEnglish")}</label>
+                          <input
+                            type="text"
+                            value={cat.description_en || ""}
+                            onChange={(e) => updateCategory(cat.id, "description_en", e.target.value)}
+                            className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                          />
+                        </div>
+                      </div>
                     </div>
                     <div className="mt-3 flex items-center justify-between">
                       <div className="flex items-center gap-4">
@@ -1643,6 +1658,16 @@ function BookingCategoriesTab() {
                               type="text"
                               value={treat.description || ""}
                               onChange={(e) => updateTreatment(treat.id, "description", e.target.value)}
+                              placeholder={t("optionalDescription")}
+                              className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                            />
+                          </div>
+                          <div className="md:col-span-4">
+                            <label className="block text-[10px] font-medium text-slate-500 mb-1">{t("descriptionEnglish")}</label>
+                            <input
+                              type="text"
+                              value={treat.description_en || ""}
+                              onChange={(e) => updateTreatment(treat.id, "description_en", e.target.value)}
                               placeholder={t("optionalDescription")}
                               className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
                             />

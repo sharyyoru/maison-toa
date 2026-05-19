@@ -1435,6 +1435,7 @@
       "noCategories": "No categories yet",
       "nameDefault": "Name",
       "nameEnglish": "English Name",
+      "descriptionEnglish": "English Description",
       "slug": "Slug",
       "skipTreatment": "Skip treatment step",
       "treatmentsCount": "{count} treatments",

@@ -7,13 +7,15 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { SectionRenderer } from "@/components/PageBuilder";
 import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
-import { getLocalizedBookingName } from "@/lib/bookingLocalization";
+import { getLocalizedBookingDescription, getLocalizedBookingName } from "@/lib/bookingLocalization";
 
 interface Treatment {
   id: string;
   category_id: string;
   name: string;
   name_en?: string | null;
+  description?: string | null;
+  description_en?: string | null;
   duration_minutes: number;
   order_index: number;
   enabled: boolean;
@@ -143,35 +145,45 @@ export default function NewPatientTreatmentsPage() {
                   return (
                     <div className={`grid ${gridClasses} gap-4`}>
                       {treatments.map((treatment) => (
-                        <Link
-                          key={treatment.id}
-                          href={`/book-appointment/new-patient/${categorySlug}/${treatment.id}`}
-                          className="group bg-white/80 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02] hover:border-slate-300"
-                        >
-                          <div className="flex flex-col h-full">
-                            <h3 className="text-base font-semibold text-slate-900 group-hover:text-slate-700 transition-colors mb-2 line-clamp-2 flex-grow">
-                              {getLocalizedBookingName(treatment, language)}
-                            </h3>
-                            <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
-                              <span className="text-sm text-slate-500">
-                                {formatDuration(treatment.duration_minutes)}
-                              </span>
-                              <svg
-                                className="w-5 h-5 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-all"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M9 5l7 7-7 7"
-                                />
-                              </svg>
-                            </div>
-                          </div>
-                        </Link>
+                        (() => {
+                          const description = getLocalizedBookingDescription(treatment, language);
+                          return (
+                            <Link
+                              key={treatment.id}
+                              href={`/book-appointment/new-patient/${categorySlug}/${treatment.id}`}
+                              className="group bg-white/80 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02] hover:border-slate-300"
+                            >
+                              <div className="flex flex-col h-full">
+                                <h3 className="text-base font-semibold text-slate-900 group-hover:text-slate-700 transition-colors mb-2 line-clamp-2">
+                                  {getLocalizedBookingName(treatment, language)}
+                                </h3>
+                                {description && (
+                                  <p className="text-sm text-slate-500 line-clamp-3 mb-4 flex-grow">
+                                    {description}
+                                  </p>
+                                )}
+                                <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
+                                  <span className="text-sm text-slate-500">
+                                    {formatDuration(treatment.duration_minutes)}
+                                  </span>
+                                  <svg
+                                    className="w-5 h-5 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-all"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M9 5l7 7-7 7"
+                                    />
+                                  </svg>
+                                </div>
+                              </div>
+                            </Link>
+                          );
+                        })()
                       ))}
                     </div>
                   );

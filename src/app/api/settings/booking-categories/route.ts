@@ -12,7 +12,9 @@ async function getBookingNameTranslations() {
 
   return (data?.value ?? {}) as {
     categories?: Record<string, string>;
+    categoryDescriptions?: Record<string, string>;
     treatments?: Record<string, string>;
+    treatmentDescriptions?: Record<string, string>;
   };
 }
 
@@ -33,6 +35,7 @@ export async function GET() {
     const categories = (categoriesResult.data || []).map((category: any) => ({
       ...category,
       name_en: translations.categories?.[category.id] || category.name_en || null,
+      description_en: translations.categoryDescriptions?.[category.id] || category.description_en || null,
     }));
 
     return NextResponse.json({ categories });
@@ -63,6 +66,11 @@ export async function PUT(request: NextRequest) {
       categories
         .filter((c: { id: string; name_en?: string | null }) => c.name_en?.trim())
         .map((c: { id: string; name_en?: string | null }) => [c.id, c.name_en!.trim()])
+    );
+    const categoryDescriptionTranslations = Object.fromEntries(
+      categories
+        .filter((c: { id: string; description_en?: string | null }) => c.description_en?.trim())
+        .map((c: { id: string; description_en?: string | null }) => [c.id, c.description_en!.trim()])
     );
 
     // Delete removed categories
@@ -117,6 +125,7 @@ export async function PUT(request: NextRequest) {
           value: {
             ...currentTranslations,
             categories: categoryTranslations,
+            categoryDescriptions: categoryDescriptionTranslations,
           },
           updated_at: new Date().toISOString(),
         },
