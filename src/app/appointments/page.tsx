@@ -4868,13 +4868,20 @@ export default function CalendarPage() {
                     />
                     <div className="relative">
                       <input
-                        type="time"
-                        value={draftTime}
+                        type="text"
+                        value={timeSearch}
                         onChange={(e) => {
-                          setDraftTime(e.target.value);
                           setTimeSearch(e.target.value);
+                          const v = e.target.value.trim();
+                          const m = v.match(/^(\d{1,2})[h:](\d{2})$/);
+                          if (m && Number(m[1]) < 24 && Number(m[2]) < 60) {
+                            setDraftTime(`${m[1].padStart(2, "0")}:${m[2]}`);
+                          } else if (!v) {
+                            setDraftTime("");
+                          }
+                          setTimeDropdownOpen(true);
                         }}
-                        onFocus={() => { closeAllCreateDropdowns("time"); }}
+                        onFocus={() => { closeAllCreateDropdowns("time"); setTimeDropdownOpen(true); }}
                         placeholder={!draftDate ? t("modal.selectDateFirst") : t("modal.searchTime")}
                         disabled={!draftDate}
                         className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100"
