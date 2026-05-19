@@ -296,7 +296,7 @@ export default function BookAppointmentCMSPage() {
 
   const fetchContent = useCallback(async () => {
     try {
-      const res = await fetch("/api/settings/content-translations");
+      const res = await fetch("/api/settings/content-translations", { cache: "no-store" });
       const data = await res.json();
       if (data.translations && typeof data.translations === "object") {
         setContentDrafts({

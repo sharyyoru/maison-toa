@@ -5,6 +5,12 @@ const SETTINGS_KEY = "booking_content_translations";
 const PAGE_CONFIG_KEY = "booking_page_config";
 const BOOKING_PAGES_KEY = "booking_pages_config";
 
+export const dynamic = "force-dynamic";
+
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+};
+
 export async function GET() {
   try {
     // Fetch translations, page config, and all booking pages
@@ -28,27 +34,42 @@ export async function GET() {
 
     // Handle translations error (ignore PGRST116 = not found)
     if (translationsResult.error && translationsResult.error.code !== "PGRST116") {
-      return NextResponse.json({ error: translationsResult.error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: translationsResult.error.message },
+        { status: 500, headers: NO_STORE_HEADERS }
+      );
     }
 
     // Handle page config error (ignore PGRST116 = not found)
     if (pageConfigResult.error && pageConfigResult.error.code !== "PGRST116") {
-      return NextResponse.json({ error: pageConfigResult.error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: pageConfigResult.error.message },
+        { status: 500, headers: NO_STORE_HEADERS }
+      );
     }
 
     // Handle booking pages error (ignore PGRST116 = not found)
     if (bookingPagesResult.error && bookingPagesResult.error.code !== "PGRST116") {
-      return NextResponse.json({ error: bookingPagesResult.error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: bookingPagesResult.error.message },
+        { status: 500, headers: NO_STORE_HEADERS }
+      );
     }
 
-    return NextResponse.json({
-      translations: translationsResult.data?.value ?? {},
-      pageConfig: pageConfigResult.data?.value ?? null,
-      bookingPages: bookingPagesResult.data?.value ?? null,
-    });
+    return NextResponse.json(
+      {
+        translations: translationsResult.data?.value ?? {},
+        pageConfig: pageConfigResult.data?.value ?? null,
+        bookingPages: bookingPagesResult.data?.value ?? null,
+      },
+      { headers: NO_STORE_HEADERS }
+    );
   } catch (err) {
     console.error("GET content-translations error:", err);
-    return NextResponse.json({ error: "Failed to fetch translations" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch translations" },
+      { status: 500, headers: NO_STORE_HEADERS }
+    );
   }
 }
 
@@ -96,19 +117,28 @@ export async function PUT(request: Request) {
     }
 
     if (upsertPromises.length === 0) {
-      return NextResponse.json({ error: "No valid data to save" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No valid data to save" },
+        { status: 400, headers: NO_STORE_HEADERS }
+      );
     }
 
     const results = await Promise.all(upsertPromises);
     const errors = results.filter((r) => r.error);
 
     if (errors.length > 0) {
-      return NextResponse.json({ error: errors[0].error?.message }, { status: 500 });
+      return NextResponse.json(
+        { error: errors[0].error?.message },
+        { status: 500, headers: NO_STORE_HEADERS }
+      );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, { headers: NO_STORE_HEADERS });
   } catch (err) {
     console.error("PUT content-translations error:", err);
-    return NextResponse.json({ error: "Failed to save data" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to save data" },
+      { status: 500, headers: NO_STORE_HEADERS }
+    );
   }
 }

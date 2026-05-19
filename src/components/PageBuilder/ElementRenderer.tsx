@@ -16,6 +16,7 @@ import {
   Heart,
   CheckCircle,
 } from "lucide-react";
+import type { ReactNode } from "react";
 
 interface ElementRendererProps {
   element: PageElement;
@@ -23,6 +24,7 @@ interface ElementRendererProps {
   isEditing?: boolean;
   isSelected?: boolean;
   onClick?: () => void;
+  customRenderers?: Partial<Record<PageElement["type"], (element: PageElement) => ReactNode>>;
 }
 
 const getLocalizedText = (
@@ -40,6 +42,7 @@ export function ElementRenderer({
   isEditing = false,
   isSelected = false,
   onClick,
+  customRenderers,
 }: ElementRendererProps) {
   const wrapperClasses = isEditing
     ? `relative group cursor-pointer transition-all ${
@@ -50,6 +53,9 @@ export function ElementRenderer({
     : "";
 
   const renderElement = () => {
+    const customRenderer = customRenderers?.[element.type];
+    if (customRenderer) return customRenderer(element);
+
     switch (element.type) {
       case "logo":
         return (
@@ -310,7 +316,7 @@ export function ElementRenderer({
         return (
           <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center max-w-2xl mx-auto">
             <p className="text-lg text-slate-600 italic mb-6">
-              "{getLocalizedText(element.props.quote, language)}"
+              &quot;{getLocalizedText(element.props.quote, language)}&quot;
             </p>
             <div className="flex items-center justify-center gap-3">
               {element.props.avatar && (
@@ -678,6 +684,7 @@ interface SectionRendererProps {
   isEditing?: boolean;
   selectedElementId?: string | null;
   onSelectElement?: (id: string) => void;
+  customRenderers?: Partial<Record<PageElement["type"], (element: PageElement) => ReactNode>>;
 }
 
 export function SectionRenderer({
@@ -686,6 +693,7 @@ export function SectionRenderer({
   isEditing = false,
   selectedElementId,
   onSelectElement,
+  customRenderers,
 }: SectionRendererProps) {
   const paddingSizes = {
     none: "py-0",
@@ -717,6 +725,7 @@ export function SectionRenderer({
             isEditing={isEditing}
             isSelected={selectedElementId === element.id}
             onClick={() => onSelectElement?.(element.id)}
+            customRenderers={customRenderers}
           />
         ))}
       </div>

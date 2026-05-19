@@ -9,6 +9,7 @@ import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, forma
 import { pushToDataLayer } from "@/components/GoogleTagManager";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
 
 interface DoctorInfo {
   name: string;
@@ -17,6 +18,15 @@ interface DoctorInfo {
   email: string;
   description: string;
 }
+
+const getLocalizedText = (
+  text: { en: string; fr: string } | string | undefined,
+  language: "en" | "fr"
+) => {
+  if (!text) return "";
+  if (typeof text === "string") return text;
+  return text[language] || text.en || "";
+};
 
 // Default slot window Mon–Fri for all doctors (Sat/Sun off by default).
 // Actual availability is determined by the controllers schedule in the DB;
@@ -123,6 +133,8 @@ function DoctorBookingContent() {
   const locationId = "lausanne";
   const locationLabel = "Lausanne";
   const { t, language } = useLanguage();
+  const pageConfig = useBookingPageConfig("booking-form");
+  const successPageConfig = useBookingPageConfig("success");
 
   const [treatment, setTreatment] = useState<Treatment | null>(null);
   const [step, setStep] = useState<BookingStep>("info");
@@ -146,6 +158,35 @@ function DoctorBookingContent() {
   const [notes, setNotes] = useState("");
 
   const selectedService = treatment?.name || "General Consultation";
+  const bookingFormElement = pageConfig.sections
+    .flatMap((section) => section.elements)
+    .find((element) => element.type === "booking-form");
+  const timeSlotsElement = pageConfig.sections
+    .flatMap((section) => section.elements)
+    .find((element) => element.type === "time-slots");
+  const successMessageElement = successPageConfig.sections
+    .flatMap((section) => section.elements)
+    .find((element) => element.type === "success-message");
+  const bookingTitle =
+    bookingFormElement?.type === "booking-form"
+      ? getLocalizedText(bookingFormElement.props.title, language)
+      : t("booking.title");
+  const timeSlotsTitle =
+    timeSlotsElement?.type === "time-slots"
+      ? getLocalizedText(timeSlotsElement.props.title, language)
+      : t("booking.selectDate");
+  const timeSlotsSubtitle =
+    timeSlotsElement?.type === "time-slots"
+      ? getLocalizedText(timeSlotsElement.props.subtitle, language)
+      : t("booking.selectDateDesc");
+  const successTitle =
+    successMessageElement?.type === "success-message"
+      ? getLocalizedText(successMessageElement.props.title, language)
+      : t("success.title");
+  const successButtonText =
+    successMessageElement?.type === "success-message"
+      ? getLocalizedText(successMessageElement.props.buttonText, language)
+      : t("success.backHome");
 
   useEffect(() => {
     const fetchDoctor = async () => {

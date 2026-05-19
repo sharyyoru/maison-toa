@@ -9,6 +9,7 @@ import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, forma
 import { pushToDataLayer } from "@/components/GoogleTagManager";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
 
 interface DoctorInfo {
   name: string;
@@ -17,6 +18,15 @@ interface DoctorInfo {
   email: string;
   description: string;
 }
+
+const getLocalizedText = (
+  text: { en: string; fr: string } | string | undefined,
+  language: "en" | "fr"
+) => {
+  if (!text) return "";
+  if (typeof text === "string") return text;
+  return text[language] || text.en || "";
+};
 
 // Default fallback availability: Mon–Fri 09:00–18:00 (Sat/Sun off by default)
 const ALL_WEEK_SLOTS = {
@@ -231,6 +241,8 @@ function DoctorBookingContent() {
   const locationId = "lausanne";
   const locationLabel = "Lausanne";
   const { t, language } = useLanguage();
+  const pageConfig = useBookingPageConfig("booking-form");
+  const successPageConfig = useBookingPageConfig("success");
 
   const [treatment, setTreatment] = useState<Treatment | null>(null);
   const [step, setStep] = useState<BookingStep>("info");
@@ -256,6 +268,35 @@ function DoctorBookingContent() {
   const [notes, setNotes] = useState("");
 
   const selectedService = treatment?.name || "General Consultation";
+  const bookingFormElement = pageConfig.sections
+    .flatMap((section) => section.elements)
+    .find((element) => element.type === "booking-form");
+  const timeSlotsElement = pageConfig.sections
+    .flatMap((section) => section.elements)
+    .find((element) => element.type === "time-slots");
+  const successMessageElement = successPageConfig.sections
+    .flatMap((section) => section.elements)
+    .find((element) => element.type === "success-message");
+  const bookingTitle =
+    bookingFormElement?.type === "booking-form"
+      ? getLocalizedText(bookingFormElement.props.title, language)
+      : t("booking.title");
+  const timeSlotsTitle =
+    timeSlotsElement?.type === "time-slots"
+      ? getLocalizedText(timeSlotsElement.props.title, language)
+      : t("booking.selectDate");
+  const timeSlotsSubtitle =
+    timeSlotsElement?.type === "time-slots"
+      ? getLocalizedText(timeSlotsElement.props.subtitle, language)
+      : t("booking.selectDateDesc");
+  const successTitle =
+    successMessageElement?.type === "success-message"
+      ? getLocalizedText(successMessageElement.props.title, language)
+      : t("success.title");
+  const successButtonText =
+    successMessageElement?.type === "success-message"
+      ? getLocalizedText(successMessageElement.props.buttonText, language)
+      : t("success.backHome");
 
   useEffect(() => {
     const fetchDoctor = async () => {
@@ -550,14 +591,17 @@ function DoctorBookingContent() {
 
   if (success) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center p-4">
+      <main
+        className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center p-4"
+        style={{ backgroundColor: successPageConfig.settings.backgroundColor }}
+      >
         <div className="bg-white rounded-3xl shadow-xl p-8 max-w-md w-full text-center border border-slate-200">
           <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <svg className="w-10 h-10 text-slate-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-4">Appointment Booked!</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-4">{successTitle}</h1>
           <p className="text-slate-600 mb-6">
             Your appointment with <strong>{doctor.name}</strong> has been confirmed. 
             A confirmation email has been sent to <strong>{email}</strong>.
@@ -577,7 +621,7 @@ function DoctorBookingContent() {
             href="/book-appointment"
             className="inline-flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-full font-medium hover:bg-slate-800 transition-colors"
           >
-            Back to Home
+            {successButtonText}
           </Link>
         </div>
       </main>
@@ -591,7 +635,10 @@ function DoctorBookingContent() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <main
+      className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100"
+      style={{ backgroundColor: pageConfig.settings.backgroundColor }}
+    >
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-slate-200 rounded-full opacity-50 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-slate-200 rounded-full opacity-50 blur-3xl" />
@@ -678,7 +725,7 @@ function DoctorBookingContent() {
           </div>
 
           <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 lg:p-8 border border-slate-200">
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mb-4 sm:mb-6">{t("booking.title")}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mb-4 sm:mb-6">{bookingTitle}</h1>
 
             <div className="flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-8 overflow-x-auto pb-2">
               {(["info", "datetime", "confirm"] as BookingStep[]).map((s, idx) => (
@@ -799,9 +846,9 @@ function DoctorBookingContent() {
 
             {step === "datetime" && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-900 mb-4">{t("booking.selectDate")}</h3>
+                <h3 className="text-lg font-semibold text-slate-900 mb-4">{timeSlotsTitle}</h3>
                 <p className="text-sm text-slate-600 mb-4">
-                  {t("booking.selectDateDesc").replace("{doctor}", doctor.name).replace("{location}", locationLabel)}
+                  {timeSlotsSubtitle.replace("{doctor}", doctor.name).replace("{location}", locationLabel)}
                 </p>
 
                 {isLoadingDates ? (

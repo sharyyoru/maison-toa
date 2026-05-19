@@ -195,7 +195,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    fetch("/api/settings/content-translations")
+    fetch("/api/settings/content-translations", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         if (data.translations && typeof data.translations === "object") {
