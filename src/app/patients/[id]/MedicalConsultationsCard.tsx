@@ -22,7 +22,6 @@ import InvoiceStatusBadge from "@/components/InvoiceStatusBadge";
 import TardocAccordionTree from "@/components/TardocAccordionTree";
 import AcfAccordionTree from "@/components/AcfAccordionTree";
 import { type MediDataInvoiceStatus } from "@/lib/medidata";
-import MedicalRecordsTab from "./MedicalRecordsTab";
 
 type TaskPriority = "low" | "medium" | "high";
 
@@ -3141,17 +3140,6 @@ export default function MedicalConsultationsCard({
               >
                 Consultations
               </button>
-              <button
-                type="button"
-                onClick={() => setActiveMainTab("medical_records")}
-                className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
-                  activeMainTab === "medical_records"
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                Medical Records
-              </button>
             </div>
           </div>
           <div className="flex items-center gap-3 text-sky-700">
@@ -3441,15 +3429,6 @@ export default function MedicalConsultationsCard({
             </button>
           </div>
         </div>
-
-        {/* Medical Records Tab Content */}
-        {activeMainTab === "medical_records" && (
-          <MedicalRecordsTab
-            patientId={patientId}
-            patientFirstName={patientFirstName || ""}
-            patientLastName={patientLastName || ""}
-          />
-        )}
 
         {/* Consultations Tab Content */}
         {activeMainTab === "consultations" && (

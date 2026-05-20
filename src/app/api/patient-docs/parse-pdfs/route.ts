@@ -319,12 +319,9 @@ export async function GET(request: NextRequest) {
     const firstName = searchParams.get("firstName");
     const lastName = searchParams.get("lastName");
 
-    console.log("DEBUG GET - Bucket:", BUCKET_NAME);
-
     // Fetch ALL folders with pagination
     const folders = await fetchAllFolders();
 
-    console.log("DEBUG GET - Total folders found:", folders.length);
 
     if (folders.length === 0) {
       return NextResponse.json({ documents: [], debug: { bucket: BUCKET_NAME, foldersFound: 0 } });
@@ -402,13 +399,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "firstName and lastName are required" }, { status: 400 });
     }
 
-    console.log("DEBUG POST - Searching for:", { firstName, lastName });
 
     // Fetch ALL folders with pagination
     const folders = await fetchAllFolders();
 
-    console.log("DEBUG POST - Bucket:", BUCKET_NAME);
-    console.log("DEBUG POST - Total folders found:", folders.length);
 
     const debugInfo: DebugInfo = {
       bucket: BUCKET_NAME,
@@ -457,7 +451,6 @@ export async function POST(request: NextRequest) {
         matched,
       });
 
-      console.log("DEBUG POST - Folder:", folder.name, "Parsed:", folderInfo, "Matched:", matched);
 
       if (!matched) continue;
 
