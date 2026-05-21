@@ -1404,22 +1404,19 @@ export default function CalendarPage() {
       let savedSelectedIds: string[] | null = null;
       try {
         const saved = localStorage.getItem("appointments_selected_calendars");
-        if (saved && !initialDoctorId) {
+        if (saved && !initialDoctorId && !initialDoctorName) {
           // Only use localStorage if no doctor param is specified
           const parsed = JSON.parse(saved) as string[];
-          // Validate that saved IDs match current provider IDs (invalidate stale cache from users table)
+          // Validate that at least some saved IDs match current provider IDs
           const providerIds = uniqueProviders.map(p => p.id);
-          const hasValidIds = parsed.some(id => providerIds.includes(id));
-          // Clear stale data if the number of saved selections doesn't match current providers
-          if (hasValidIds && parsed.length === uniqueProviders.length) {
-            savedSelectedIds = parsed;
-          } else {
-            // Clear stale localStorage (old user IDs that don't match provider IDs)
-            localStorage.removeItem("appointments_selected_calendars");
+          const validIds = parsed.filter(id => providerIds.includes(id));
+          if (validIds.length > 0) {
+            // Use only valid IDs (providers that still exist)
+            savedSelectedIds = validIds;
           }
         }
       } catch {
-        localStorage.removeItem("appointments_selected_calendars");
+        // Silently ignore localStorage errors
       }
 
       const baseCalendars: DoctorCalendar[] = uniqueProviders.map((provider, index) => {
