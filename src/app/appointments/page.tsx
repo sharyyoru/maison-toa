@@ -3143,10 +3143,10 @@ export default function CalendarPage() {
     setCopiedAppointment(appt);
   }
 
-  function handlePasteAppointment() {
+  function handlePasteAppointment(skipDoctorSelection: boolean = false) {
     if (!copiedAppointment) return;
 
-    console.log('[Paste] Copied appointment:', copiedAppointment);
+    console.log('[Paste] Copied appointment:', copiedAppointment, 'skipDoctorSelection:', skipDoctorSelection);
     console.log('[Paste] Reason field:', copiedAppointment.reason);
 
     // Extract data from copied appointment
@@ -3305,55 +3305,61 @@ export default function CalendarPage() {
       }
     }
     
-    console.log('[Paste] Doctor selection - visibleCalendars:', visibleCalendars.length, 'originalCalendar:', originalCalendar?.name);
-    
-    // Priority: Use the original doctor from the copied appointment if we found a match
-    if (originalCalendar) {
-      // We found the original doctor - use it (this is the most common case for paste)
-      console.log('[Paste] BRANCH: Using original doctor:', originalCalendar.name, originalCalendar.id);
-      setSelectedDoctorIds([originalCalendar.id]);
-      setCreateDoctorCalendarId(originalCalendar.id);
-    } else if (visibleCalendars.length === 1) {
-      // Single doctor visible and no original found - use that one
-      console.log('[Paste] BRANCH: Single calendar visible, using:', visibleCalendars[0].name, visibleCalendars[0].id);
-      setSelectedDoctorIds([visibleCalendars[0].id]);
-      setCreateDoctorCalendarId(visibleCalendars[0].id);
-    } else if (visibleCalendars.length > 1) {
-      // Multiple doctors visible and no original found - use first visible
-      console.log('[Paste] BRANCH: Multiple calendars, using first visible:', visibleCalendars[0].name, visibleCalendars[0].id);
-      setSelectedDoctorIds([visibleCalendars[0].id]);
-      setCreateDoctorCalendarId(visibleCalendars[0].id);
-    } else {
-      // Fallback to first available calendar
-      const defaultCalendar = doctorCalendars[0] || null;
-      console.log('[Paste] BRANCH: Fallback to first calendar:', defaultCalendar?.name, defaultCalendar?.id);
-      if (defaultCalendar?.id) {
-        setSelectedDoctorIds([defaultCalendar.id]);
-        setCreateDoctorCalendarId(defaultCalendar.id);
+    // Only set doctor if not skipping (caller will set the target doctor)
+    if (!skipDoctorSelection) {
+      console.log('[Paste] Doctor selection - visibleCalendars:', visibleCalendars.length, 'originalCalendar:', originalCalendar?.name);
+      
+      // Priority: Use the original doctor from the copied appointment if we found a match
+      if (originalCalendar) {
+        // We found the original doctor - use it (this is the most common case for paste)
+        console.log('[Paste] BRANCH: Using original doctor:', originalCalendar.name, originalCalendar.id);
+        setSelectedDoctorIds([originalCalendar.id]);
+        setCreateDoctorCalendarId(originalCalendar.id);
+      } else if (visibleCalendars.length === 1) {
+        // Single doctor visible and no original found - use that one
+        console.log('[Paste] BRANCH: Single calendar visible, using:', visibleCalendars[0].name, visibleCalendars[0].id);
+        setSelectedDoctorIds([visibleCalendars[0].id]);
+        setCreateDoctorCalendarId(visibleCalendars[0].id);
+      } else if (visibleCalendars.length > 1) {
+        // Multiple doctors visible and no original found - use first visible
+        console.log('[Paste] BRANCH: Multiple calendars, using first visible:', visibleCalendars[0].name, visibleCalendars[0].id);
+        setSelectedDoctorIds([visibleCalendars[0].id]);
+        setCreateDoctorCalendarId(visibleCalendars[0].id);
       } else {
-        console.log('[Paste] BRANCH: No calendars available, clearing selection');
-        setSelectedDoctorIds([]);
-        setCreateDoctorCalendarId("");
+        // Fallback to first available calendar
+        const defaultCalendar = doctorCalendars[0] || null;
+        console.log('[Paste] BRANCH: Fallback to first calendar:', defaultCalendar?.name, defaultCalendar?.id);
+        if (defaultCalendar?.id) {
+          setSelectedDoctorIds([defaultCalendar.id]);
+          setCreateDoctorCalendarId(defaultCalendar.id);
+        } else {
+          console.log('[Paste] BRANCH: No calendars available, clearing selection');
+          setSelectedDoctorIds([]);
+          setCreateDoctorCalendarId("");
+        }
       }
+    } else {
+      console.log('[Paste] Skipping doctor selection (caller will set target doctor)');
     }
     setDoctorConflicts({});
     resetCreateRecurrence();
   }
 
   // Cross-agenda paste: paste to specific doctor and time slot
-  function handlePasteToSlot(doctorId: string, date: Date, minutes: number) {
+  function handlePasteToSlot(targetCalendarId: string, date: Date, minutes: number) {
     if (!copiedAppointment) return;
-
-    // Fill form with copied data
-    handlePasteAppointment();
     
-    // Override with target doctor and time (if a valid doctor column was clicked)
-    if (doctorId) {
-      setSelectedDoctorIds([doctorId]);
-      setCreateDoctorCalendarId(doctorId);
+    console.log('[PasteToSlot] Target calendar ID:', targetCalendarId);
+
+    // Fill form with copied data, but skip doctor selection if we have a target
+    handlePasteAppointment(targetCalendarId ? true : false);
+    
+    // Set target doctor (this is where the user wants to paste)
+    if (targetCalendarId) {
+      console.log('[PasteToSlot] Setting target doctor:', targetCalendarId);
+      setSelectedDoctorIds([targetCalendarId]);
+      setCreateDoctorCalendarId(targetCalendarId);
     }
-    // Note: If doctorId is empty, handlePasteAppointment already sets the doctor
-    // based on visible calendars, provider_id, or doctor name from reason
     
     // Set date and time
     setDraftDate(formatYmd(date));
