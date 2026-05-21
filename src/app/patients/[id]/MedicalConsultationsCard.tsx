@@ -7637,8 +7637,8 @@ export default function MedicalConsultationsCard({
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  let paymentLink = row.payrexx_payment_link;
-                                  if (!paymentLink && row.payment_link_token) {
+                                  let paymentLink = "";
+                                  if (row.payment_link_token) {
                                     paymentLink = `${window.location.origin}/invoice/pay/${row.payment_link_token}`;
                                   }
                                   // If no token yet, generate one

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import QRCode from "qrcode";
 import { generateSwissReference } from "@/lib/swissQrBill";
 import type { Invoice, InvoiceLineItem } from "@/lib/invoiceTypes";
-import { createPayrexxGateway } from "@/lib/payrexx";
 import {
   buildInvoiceRequest,
   mapLawType as mapSumexLaw,
@@ -406,51 +404,6 @@ export async function POST(request: NextRequest) {
     {
       console.log(`[GeneratePDF] Non-insurance invoice (${invoiceData.payment_method}) — attempting Sumex1 unified template (TG mode, no insurance)`);
 
-      // Auto-create Payrexx gateway for online/card/cash invoices that don't have one yet
-      const pmLower = (invoiceData.payment_method || "").toLowerCase();
-      const needsPayrexx = (pmLower.includes("online") || pmLower.includes("card") || pmLower.includes("cash")) && !invoiceData.payrexx_payment_link;
-      if (needsPayrexx) {
-        console.log(`[GeneratePDF] No Payrexx link for ${invoiceData.payment_method} invoice — auto-creating gateway`);
-        try {
-          const amount = Math.round((invoiceData.total_amount || 0) * 100);
-          if (amount > 0) {
-            const gatewayRes = await createPayrexxGateway({
-              amount,
-              currency: "CHF",
-              referenceId: invoiceData.invoice_number,
-              purpose: `Invoice ${invoiceData.invoice_number} - Medical Services`,
-              forename: patientData.first_name,
-              surname: patientData.last_name,
-              email: patientData.email || undefined,
-              phone: patientData.phone || undefined,
-              street: patientData.street_address || undefined,
-              postcode: patientData.postal_code || undefined,
-              place: patientData.town || undefined,
-              country: "CH",
-            });
-            const gwData = Array.isArray(gatewayRes.data) ? gatewayRes.data[0] : gatewayRes.data;
-            if (gatewayRes.status === "success" && gwData) {
-              const gw = gwData as { id: number; hash: string; link: string };
-              const paymentLink = gw.link || `https://aesthetics-ge.payrexx.com/?payment=${gw.hash}`;
-              await supabaseAdmin.from("invoices").update({
-                payrexx_gateway_id: gw.id,
-                payrexx_gateway_hash: gw.hash,
-                payrexx_payment_link: paymentLink,
-                payrexx_payment_status: "waiting",
-              }).eq("id", invoiceId);
-              // Update local copy so QR overlay picks it up
-              (invoiceData as any).payrexx_payment_link = paymentLink;
-              console.log(`[GeneratePDF] ✓ Payrexx gateway created: ${paymentLink}`);
-            } else {
-              console.warn(`[GeneratePDF] Payrexx gateway creation returned non-success:`, gatewayRes.status);
-            }
-          }
-        } catch (payrexxErr) {
-          console.error(`[GeneratePDF] ✗ Failed to auto-create Payrexx gateway:`, payrexxErr);
-          // Non-fatal — continue with bank QR instead
-        }
-      }
-
       const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
       const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
       const provName = "TOA SA";
@@ -578,75 +531,9 @@ export async function POST(request: NextRequest) {
         const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: printTemplate2 });
 
         if (sumexResult2.success && sumexResult2.pdfContent) {
-          // Overlay Payrexx QR for Online and Card payments (both use Payrexx gateway)
-          const hasPayrexxLink = !!invoiceData.payrexx_payment_link;
-          console.log(`[GeneratePDF] Sumex1 unified PDF generated: ${sumexResult2.pdfContent.length} bytes, paymentMethod=${invoiceData.payment_method}, hasPayrexxLink=${hasPayrexxLink}`);
+          console.log(`[GeneratePDF] Sumex1 unified PDF generated: ${sumexResult2.pdfContent.length} bytes, paymentMethod=${invoiceData.payment_method}`);
           
           let finalPdfBuffer = sumexResult2.pdfContent;
-
-          // For online payments with Payrexx link, overlay Payrexx QR on top of
-          // the bank QR code on the payment slip (FIRST page = patient invoice).
-          // Sumex1 generates multi-page PDF: page 1 = patient invoice with QR, rest = copies.
-          // Swiss QR-bill standard: A4 page (595x842pt), payment slip is bottom 105mm (≈298pt).
-          // Payment part is on the right side (210mm wide), receipt on left (62mm).
-          // QR code in payment part: 46x46mm, positioned 67mm from left edge of payment part.
-          if (hasPayrexxLink) {
-            try {
-              console.log(`[GeneratePDF] Starting Payrexx QR overlay for link: ${invoiceData.payrexx_payment_link}`);
-              const { PDFDocument, rgb } = await import("pdf-lib");
-              const pdfDoc = await PDFDocument.load(sumexResult2.pdfContent);
-              const pages = pdfDoc.getPages();
-              const firstPage = pages[0]; // Patient invoice is always page 1
-              const { width: pageWidth, height: pageHeight } = firstPage.getSize();
-              console.log(`[GeneratePDF] PDF total pages: ${pages.length}, page 1 size: ${pageWidth}x${pageHeight}pt`);
-              
-              // Generate Payrexx QR code as PNG
-              const payrexxLink = invoiceData.payrexx_payment_link as string;
-              const qrDataUrl = await QRCode.toDataURL(payrexxLink, {
-                width: 300,
-                margin: 0,
-                color: { dark: "#000000", light: "#FFFFFF" },
-              });
-              const qrImageBytes = Buffer.from(qrDataUrl.split(",")[1], "base64");
-              const qrImage = await pdfDoc.embedPng(qrImageBytes);
-              console.log(`[GeneratePDF] Payrexx QR image generated: ${qrImageBytes.length} bytes`);
-              
-              // Swiss QR-bill layout (in mm, converted to pt: 1mm ≈ 2.834pt):
-              // Payment slip (Zahlteil) is at the bottom 105mm of the page
-              // - Receipt part (Empfangsschein): left side, 0-62mm from left
-              // - Payment part (Zahlteil): right side, 62-210mm from left
-              // - QR code is in the payment part, positioned at:
-              //   * Horizontal: 67mm from left edge of payment part = 62+67 = 129mm from page left = 365pt
-              //   * Vertical: The QR is centered in the payment slip height, roughly 42mm from page bottom
-              // - QR size: 46x46mm ≈ 130x130pt
-              const qrSize = 130; // 46mm in points
-              const qrX = 190; // 129mm from left = 365pt
-              const qrY = 122; // 42mm from bottom = 119pt
-              
-              console.log(`[GeneratePDF] Overlaying on PAGE 1 at (${qrX}, ${qrY}) size ${qrSize}x${qrSize}`);
-              // White-out the existing bank QR code area
-              firstPage.drawRectangle({
-                x: qrX - 2,
-                y: qrY - 2,
-                width: qrSize + 4,
-                height: qrSize + 4,
-                color: rgb(1, 1, 1),
-              });
-              
-              // Draw Payrexx QR on top
-              firstPage.drawImage(qrImage, {
-                x: qrX,
-                y: qrY,
-                width: qrSize,
-                height: qrSize,
-              });
-              
-              finalPdfBuffer = Buffer.from(await pdfDoc.save());
-              console.log(`[GeneratePDF] ✓ Successfully overlaid Payrexx QR on page 1 payment slip`);
-            } catch (qrErr) {
-              console.error(`[GeneratePDF] ✗ Failed to overlay Payrexx QR:`, qrErr);
-            }
-          }
 
           const typePrefix2 = invoiceType === "tg" ? "invoice" : invoiceType === "tp" ? "invoice-tp" : invoiceType === "reminder" ? "reminder" : "receipt";
           const fileName = `${typePrefix2}-${invoiceData.invoice_number}-${Date.now()}.pdf`;
@@ -660,7 +547,7 @@ export async function POST(request: NextRequest) {
               success: true, 
               pdfUrl: publicUrlData.publicUrl, 
               pdfPath: filePath, 
-              qrCodeType: hasPayrexxLink ? "sumex1-payrexx" : "sumex1-unified", 
+              qrCodeType: "sumex1-unified", 
               sumex1Schema: sumexResult2.usedSchema 
             });
           }
