@@ -243,6 +243,9 @@ export default function PatientDetailsTabs({
                       <p className="text-xs text-slate-500">
                         {t("card")} {item.card_number}
                       </p>
+                                            <p className="text-xs text-slate-500">
+                          No CADA {item.policy_number || "N/A"}
+                        </p>
                     </div>
                     <div className="text-right text-xs text-slate-500">
                       <p className="font-semibold uppercase tracking-wide text-slate-700">

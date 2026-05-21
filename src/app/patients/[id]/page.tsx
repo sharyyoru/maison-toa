@@ -69,7 +69,7 @@ async function getPatientWithDetails(id: string) {
 
   const { data: insurance } = await supabaseAdmin
     .from("patient_insurances")
-    .select("id, provider_name, card_number, insurance_type, created_at")
+    .select("id, provider_name, card_number, policy_number, insurance_type, created_at")
     .eq("patient_id", id)
     .order("created_at", { ascending: false });
 
