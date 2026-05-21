@@ -28,3 +28,38 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Failed to fetch providers' }, { status: 500 });
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const body = await req.json();
+    
+    const { name, email, specialty } = body;
+    
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    }
+    
+    const { data, error } = await supabase
+      .from('providers')
+      .insert({
+        name: name.trim(),
+        email: email || null,
+        specialty: specialty || null,
+        role: 'provider',
+      })
+      .select('id, name, email, specialty, role')
+      .single();
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    
+    return NextResponse.json({ provider: data });
+  } catch (error) {
+    return NextResponse.json({ 
+      error: 'Failed to create provider',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
+}

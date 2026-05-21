@@ -763,6 +763,11 @@ export default function CalendarPage() {
   const [activeDoctorTabId, setActiveDoctorTabId] = useState<string | null>(null);
   const [isCreatingCalendar, setIsCreatingCalendar] = useState(false);
   const [newCalendarProviderId, setNewCalendarProviderId] = useState("");
+  const [isCreatingAgenda, setIsCreatingAgenda] = useState(false);
+  const [newAgendaName, setNewAgendaName] = useState("");
+  const [newAgendaEmail, setNewAgendaEmail] = useState("");
+  const [newAgendaSpecialty, setNewAgendaSpecialty] = useState("");
+  const [savingAgenda, setSavingAgenda] = useState(false);
   const [view, setView] = useState<CalendarView>("day");
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [rangeEndDate, setRangeEndDate] = useState<Date | null>(null);
@@ -2322,6 +2327,58 @@ export default function CalendarPage() {
     setNewCalendarProviderId("");
   }
 
+  async function handleCreateNewAgenda() {
+    if (!newAgendaName.trim()) return;
+    
+    setSavingAgenda(true);
+    try {
+      const response = await fetch("/api/providers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newAgendaName.trim(),
+          email: newAgendaEmail.trim() || null,
+          specialty: newAgendaSpecialty.trim() || null,
+        }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        console.error("Failed to create agenda:", data.error);
+        setSavingAgenda(false);
+        return;
+      }
+      
+      const data = await response.json();
+      const newProvider = data.provider;
+      
+      // Add to providers list
+      setProviders((prev) => [...prev, { id: newProvider.id, name: newProvider.name }]);
+      
+      // Also add to doctor calendars
+      setDoctorCalendars((prev) => {
+        const nextCalendar: DoctorCalendar = {
+          id: newProvider.id,
+          providerId: newProvider.id,
+          name: newProvider.name || "Unnamed doctor",
+          color: getCalendarColorForIndex(prev.length),
+          selected: true,
+        };
+        return [...prev, nextCalendar];
+      });
+      
+      // Reset form
+      setNewAgendaName("");
+      setNewAgendaEmail("");
+      setNewAgendaSpecialty("");
+      setIsCreatingAgenda(false);
+    } catch (err) {
+      console.error("Error creating agenda:", err);
+    } finally {
+      setSavingAgenda(false);
+    }
+  }
+
   // Handle drag-to-create appointment
   function handleDragCreateStart(date: Date, totalMinutes: number, doctorCalendarId?: string | null) {
     setIsDraggingCreate(true);
@@ -3601,22 +3658,31 @@ export default function CalendarPage() {
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  const providerIdsWithCalendars = new Set(
-                    doctorCalendars.map((calendar) => calendar.providerId),
-                  );
-                  const nextProvider = providers.find(
-                    (provider) => !providerIdsWithCalendars.has(provider.id),
-                  );
-                  setNewCalendarProviderId(nextProvider?.id ?? "");
-                  setIsCreatingCalendar(true);
-                }}
-                className="inline-flex items-center rounded-full border border-dashed border-sky-300 bg-sky-50 px-3 py-1.5 text-[11px] font-medium text-sky-700 hover:bg-sky-100"
-              >
-                {t("sidebar.newCalendar")}
-              </button>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const providerIdsWithCalendars = new Set(
+                      doctorCalendars.map((calendar) => calendar.providerId),
+                    );
+                    const nextProvider = providers.find(
+                      (provider) => !providerIdsWithCalendars.has(provider.id),
+                    );
+                    setNewCalendarProviderId(nextProvider?.id ?? "");
+                    setIsCreatingCalendar(true);
+                  }}
+                  className="inline-flex items-center rounded-full border border-dashed border-sky-300 bg-sky-50 px-3 py-1.5 text-[11px] font-medium text-sky-700 hover:bg-sky-100"
+                >
+                  {t("sidebar.newCalendar")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingAgenda(true)}
+                  className="inline-flex items-center rounded-full border border-dashed border-emerald-300 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                >
+                  + New Agenda
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -5668,6 +5734,113 @@ export default function CalendarPage() {
             </div>
           </div>
         ) : null}
+
+        {/* New Agenda Modal */}
+        {isCreatingAgenda && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !savingAgenda) {
+                setIsCreatingAgenda(false);
+                setNewAgendaName("");
+                setNewAgendaEmail("");
+                setNewAgendaSpecialty("");
+              }
+            }}
+          >
+            <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xl">
+              <div className="flex items-start justify-between gap-2 mb-4">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Add New Agenda</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Create a new doctor calendar for the agenda</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!savingAgenda) {
+                      setIsCreatingAgenda(false);
+                      setNewAgendaName("");
+                      setNewAgendaEmail("");
+                      setNewAgendaSpecialty("");
+                    }
+                  }}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                >
+                  <svg className="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 5l10 10" />
+                    <path d="M15 5L5 15" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                    Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newAgendaName}
+                    onChange={(e) => setNewAgendaName(e.target.value)}
+                    placeholder="e.g. Dr. John Smith"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                    Email <span className="text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={newAgendaEmail}
+                    onChange={(e) => setNewAgendaEmail(e.target.value)}
+                    placeholder="e.g. doctor@clinic.com"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                    Specialty <span className="text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newAgendaSpecialty}
+                    onChange={(e) => setNewAgendaSpecialty(e.target.value)}
+                    placeholder="e.g. Dermatology"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreatingAgenda(false);
+                    setNewAgendaName("");
+                    setNewAgendaEmail("");
+                    setNewAgendaSpecialty("");
+                  }}
+                  disabled={savingAgenda}
+                  className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {tCommon("cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleCreateNewAgenda()}
+                  disabled={savingAgenda || !newAgendaName.trim()}
+                  className="inline-flex items-center rounded-full border border-emerald-500/80 bg-emerald-500 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingAgenda ? "Creating..." : "Create Agenda"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
