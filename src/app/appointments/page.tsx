@@ -2689,6 +2689,7 @@ export default function CalendarPage() {
             providerIds,
             serviceIds,
             serviceQuantities,
+            customServiceText: serviceIds.length === 0 ? serviceSearch.trim() : undefined,
             startTime: startIso,
             endTime: endIso,
             occurrences: repeatAppointment ? occurrences : undefined,
@@ -2764,7 +2765,8 @@ export default function CalendarPage() {
         const service = serviceOptions.find(
           (option) => option.id === selectedServiceId,
         );
-        const serviceName = service?.name ?? "";
+        // Use selected service name, or custom typed text, or fall back to title/Appointment
+        const serviceName = service?.name ?? serviceSearch.trim();
         const baseReason = serviceName || draftTitle || "Appointment";
         const selectedCalendar = doctorCalendars.find(
           (calendar) => calendar.id === createDoctorCalendarId,

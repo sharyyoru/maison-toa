@@ -8,6 +8,7 @@ export async function POST(request: Request) {
       providerIds,
       serviceIds,
       serviceQuantities,
+      customServiceText,
       startTime,
       endTime,
       occurrences,
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
     // Generate unique group ID for this multi-doctor appointment
     const appointmentGroupId = crypto.randomUUID();
     
-    // Fetch service names if services are provided
+    // Fetch service names if services are provided, or use custom text
     let serviceText = '';
     if (serviceIds && serviceIds.length > 0) {
       const { data: services } = await supabase
@@ -111,6 +112,9 @@ export async function POST(request: Request) {
           return quantity > 1 ? `${serviceName} (×${quantity})` : serviceName;
         })
         .join(', ');
+    } else if (customServiceText && typeof customServiceText === 'string' && customServiceText.trim()) {
+      // Use custom free-form service text when no service IDs are selected
+      serviceText = customServiceText.trim();
     }
     
     // Fetch provider names
