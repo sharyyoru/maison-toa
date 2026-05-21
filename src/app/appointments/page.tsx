@@ -1866,40 +1866,42 @@ export default function CalendarPage() {
 
     appointments.forEach((appt) => {
       if (hasAnyCalendars && selectedCalendars.length > 0) {
-        const doctorFromReason = getDoctorNameFromReason(appt.reason);
-        const providerName = (appt.provider?.name ?? "").trim().toLowerCase();
-        const reasonLower = (appt.reason ?? "").toLowerCase();
-        const doctorKey = (doctorFromReason ?? providerName).trim().toLowerCase();
-        
-        // Match by provider_id first (most reliable)
-        const matchesByProviderId = appt.provider_id && selectedProviderIds.includes(appt.provider_id);
-        
-        // Match by doctor key (from [Doctor:] tag or provider.name)
-        const matchesByDoctorKey = doctorKey && selectedDoctorNames.some((selectedName) => 
-          doctorKey.includes(selectedName) || selectedName.includes(doctorKey)
-        );
-        
-        // Also search the entire reason field for doctor name mentions
-        const matchesByReasonText = selectedDoctorNames.some((selectedName) => {
-          const nameParts = selectedName.split(/\s+/);
-          return nameParts.some((part) => part.length > 2 && reasonLower.includes(part));
-        });
-        
-        // Skip only if no match found by any method
-        if (!matchesByProviderId && !matchesByDoctorKey && !matchesByReasonText) {
-          skippedCount++;
-          return;
-        }
-        matchedCount++;
+        // STRICT matching: if appointment has provider_id, ONLY use provider_id for matching
+        if (appt.provider_id) {
+          // Match strictly by provider_id
+          if (!selectedProviderIds.includes(appt.provider_id)) {
+            skippedCount++;
+            return;
+          }
+          matchedCount++;
 
-        // Filter by active doctor tab if one is selected
-        if (activeTabCalendar) {
-          const matchesActiveTabById = appt.provider_id && appt.provider_id === activeTabProviderId;
-          const matchesActiveTabByName = activeTabDoctorName && doctorKey && 
-            (doctorKey.includes(activeTabDoctorName) || activeTabDoctorName.includes(doctorKey));
-          const activeTabParts = (activeTabDoctorName ?? "").split(/\s+/);
-          const matchesActiveTabByReason = activeTabParts.some((part) => part.length > 2 && reasonLower.includes(part));
-          if (!matchesActiveTabById && !matchesActiveTabByName && !matchesActiveTabByReason) return;
+          // Filter by active doctor tab if one is selected
+          if (activeTabCalendar) {
+            if (appt.provider_id !== activeTabProviderId) return;
+          }
+        } else {
+          // Legacy fallback for appointments without provider_id: use doctor name in reason
+          const doctorFromReason = getDoctorNameFromReason(appt.reason);
+          if (doctorFromReason) {
+            const doctorKey = doctorFromReason.trim().toLowerCase();
+            const matchesByDoctorKey = selectedDoctorNames.some((selectedName) => 
+              doctorKey.includes(selectedName) || selectedName.includes(doctorKey)
+            );
+            if (!matchesByDoctorKey) {
+              skippedCount++;
+              return;
+            }
+            matchedCount++;
+
+            // Filter by active doctor tab if one is selected
+            if (activeTabCalendar && activeTabDoctorName) {
+              if (!(doctorKey.includes(activeTabDoctorName) || activeTabDoctorName.includes(doctorKey))) return;
+            }
+          } else {
+            // No provider_id and no doctor in reason - skip
+            skippedCount++;
+            return;
+          }
         }
       }
 
@@ -4577,22 +4579,22 @@ export default function CalendarPage() {
                             // Filter appointments for this doctor column
                             const columnAppointments = doctorCol 
                               ? dayAppointments.filter((appt) => {
+                                  // STRICT matching: prioritize provider_id, only fallback to name if no provider_id
+                                  
+                                  // If appointment has provider_id, ONLY match by provider_id
+                                  if (appt.provider_id) {
+                                    return doctorCol.providerId === appt.provider_id;
+                                  }
+                                  
+                                  // Fallback for legacy appointments without provider_id: match by doctor name in reason
                                   const doctorFromReason = getDoctorNameFromReason(appt.reason);
-                                  const providerName = (appt.provider?.name ?? "").trim().toLowerCase();
-                                  const reasonLower = (appt.reason ?? "").toLowerCase();
-                                  const doctorKey = (doctorFromReason ?? providerName).trim().toLowerCase();
-                                  const calName = doctorCol.name.trim().toLowerCase();
+                                  if (doctorFromReason) {
+                                    const doctorKey = doctorFromReason.trim().toLowerCase();
+                                    const calName = doctorCol.name.trim().toLowerCase();
+                                    return doctorKey.includes(calName) || calName.includes(doctorKey);
+                                  }
                                   
-                                  // Match by provider_id first
-                                  if (appt.provider_id && doctorCol.providerId === appt.provider_id) return true;
-                                  
-                                  // Match by doctor key
-                                  if (doctorKey && (doctorKey.includes(calName) || calName.includes(doctorKey))) return true;
-                                  
-                                  // Match by reason text
-                                  const nameParts = calName.split(/\s+/);
-                                  if (nameParts.some((part) => part.length > 2 && reasonLower.includes(part))) return true;
-                                  
+                                  // No provider_id and no doctor in reason - don't show in any specific column
                                   return false;
                                 })
                               : dayAppointments;
