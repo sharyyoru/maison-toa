@@ -2860,9 +2860,13 @@ export default function CalendarPage() {
       
       if (useMultiAPI) {
         // Use new multi-appointment creation API
+        // Convert calendar IDs to provider IDs
         const providerIds = selectedDoctorIds.length > 0 
-          ? selectedDoctorIds 
-          : (createDoctorCalendarId ? [createDoctorCalendarId] : []);
+          ? selectedDoctorIds.map(calId => {
+              const calendar = doctorCalendars.find(c => c.id === calId);
+              return calendar?.providerId ?? calId;
+            }).filter(Boolean)
+          : (createDoctorCalendarId ? [doctorCalendars.find(c => c.id === createDoctorCalendarId)?.providerId ?? createDoctorCalendarId].filter(Boolean) : []);
         
         const serviceIds = selectedServiceIds.length > 0 
           ? selectedServiceIds 
@@ -3255,20 +3259,27 @@ export default function CalendarPage() {
       }
     }
     
-    // For cross-agenda paste: don't auto-select original doctor
-    // Let user choose which doctor(s) to assign the pasted appointment to
-    // If multiple calendars are visible, don't pre-select any
+    // For cross-agenda paste: smart doctor selection
     const visibleCalendars = doctorCalendars.filter(c => c.selected);
+    const originalProviderId = copiedAppointment.provider_id;
+    const originalCalendar = originalProviderId 
+      ? doctorCalendars.find(c => c.providerId === originalProviderId)
+      : null;
+    
     if (visibleCalendars.length > 1) {
-      // Multiple doctors visible - let user choose
+      // Multiple doctors visible - don't pre-select, let user choose
       setSelectedDoctorIds([]);
       setCreateDoctorCalendarId("");
     } else if (visibleCalendars.length === 1) {
       // Single doctor visible - use that one
       setSelectedDoctorIds([visibleCalendars[0].id]);
       setCreateDoctorCalendarId(visibleCalendars[0].id);
+    } else if (originalCalendar) {
+      // No calendars selected but we know the original doctor - use that
+      setSelectedDoctorIds([originalCalendar.id]);
+      setCreateDoctorCalendarId(originalCalendar.id);
     } else {
-      // No doctors selected - use original or first available
+      // Fallback to first available calendar
       const defaultCalendar = doctorCalendars[0] || null;
       if (defaultCalendar?.id) {
         setSelectedDoctorIds([defaultCalendar.id]);
@@ -3289,9 +3300,21 @@ export default function CalendarPage() {
     // Fill form with copied data
     handlePasteAppointment();
     
-    // Override with target doctor and time
-    setSelectedDoctorIds([doctorId]);
-    setCreateDoctorCalendarId(doctorId);
+    // Override with target doctor and time (if a valid doctor column was clicked)
+    if (doctorId) {
+      setSelectedDoctorIds([doctorId]);
+      setCreateDoctorCalendarId(doctorId);
+    } else {
+      // No specific doctor column - try to use the original appointment's doctor
+      const originalProviderId = copiedAppointment.provider_id;
+      if (originalProviderId) {
+        const originalCalendar = doctorCalendars.find(c => c.providerId === originalProviderId);
+        if (originalCalendar) {
+          setSelectedDoctorIds([originalCalendar.id]);
+          setCreateDoctorCalendarId(originalCalendar.id);
+        }
+      }
+    }
     
     // Set date and time
     setDraftDate(formatYmd(date));
@@ -3341,9 +3364,23 @@ export default function CalendarPage() {
     setDropTargetMinutes(null);
   }
 
-  async function handleColumnDrop(e: React.DragEvent, targetDoctorId: string, targetDate: Date, targetMinutes: number) {
+  async function handleColumnDrop(e: React.DragEvent, targetCalendarId: string, targetDate: Date, targetMinutes: number) {
     e.preventDefault();
     if (!draggedAppointment) return;
+
+    // Convert calendar ID to provider ID
+    const targetCalendar = doctorCalendars.find(c => c.id === targetCalendarId);
+    const targetProviderId = targetCalendar?.providerId;
+    
+    // If no valid provider ID found and we're in single-column view, keep the original
+    const effectiveProviderId = targetProviderId || draggedAppointment.provider_id;
+    if (!effectiveProviderId) {
+      console.error("Cannot move appointment: no target provider");
+      setDraggedAppointment(null);
+      setDropTargetDoctorId(null);
+      setDropTargetMinutes(null);
+      return;
+    }
 
     const appt = draggedAppointment;
     const originalDoctorId = appt.provider_id;
@@ -3367,7 +3404,7 @@ export default function CalendarPage() {
     // Optimistic update
     setAppointments(prev => prev.map(a => 
       a.id === appt.id 
-        ? { ...a, provider_id: targetDoctorId, start_time: newStartTime, end_time: newEndTime }
+        ? { ...a, provider_id: effectiveProviderId, start_time: newStartTime, end_time: newEndTime }
         : a
     ));
 
@@ -3382,7 +3419,7 @@ export default function CalendarPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          provider_id: targetDoctorId,
+          provider_id: effectiveProviderId,
           start_time: newStartTime,
           end_time: newEndTime,
         }),
