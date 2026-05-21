@@ -3260,6 +3260,21 @@ export default function CalendarPage() {
     resetCreateRecurrence();
   }
 
+  // Refs for resize to avoid stale closures
+  const resizingAppointmentRef = useRef<CalendarAppointment | null>(null);
+  const resizeStartYRef = useRef<number>(0);
+  const resizeOriginalEndMinutesRef = useRef<number>(0);
+  const appointmentHistoryRef = useRef<typeof appointmentHistory>([]);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    resizingAppointmentRef.current = resizingAppointment;
+  }, [resizingAppointment]);
+
+  useEffect(() => {
+    appointmentHistoryRef.current = appointmentHistory;
+  }, [appointmentHistory]);
+
   // Appointment resize handlers
   function handleResizeStart(e: React.MouseEvent, appt: CalendarAppointment) {
     e.preventDefault();
@@ -3271,124 +3286,115 @@ export default function CalendarPage() {
     const { hour: endH, minute: endM } = getSwissHourMinute(end);
     const endMinutes = endH * 60 + endM;
     
+    // Store in refs for event handlers
+    resizingAppointmentRef.current = appt;
+    resizeStartYRef.current = e.clientY;
+    resizeOriginalEndMinutesRef.current = endMinutes;
+    
     setResizingAppointment(appt);
     setResizeStartY(e.clientY);
     setResizeOriginalEndMinutes(endMinutes);
   }
 
-  async function handleResizeEnd() {
-    if (!resizingAppointment) return;
-
-    const appt = resizingAppointment;
-    setResizingAppointment(null);
-
-    // Get the updated appointment from state
-    const updatedAppt = appointments.find(a => a.id === appt.id);
-    if (!updatedAppt || !updatedAppt.end_time) return;
-
-    // Calculate the new end time
-    const originalEnd = appt.end_time;
-    const newEnd = updatedAppt.end_time;
-
-    // Only save if the end time actually changed
-    if (originalEnd === newEnd) return;
-
-    // Save to history for undo
-    setAppointmentHistory(prev => [...prev, {
-      appointmentId: appt.id,
-      previousEndTime: originalEnd ?? "",
-      newEndTime: newEnd,
-    }]);
-
-    // Save to database
-    try {
-      const response = await fetch(`/api/appointments/${appt.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ end_time: newEnd }),
-      });
-
-      if (!response.ok) {
-        console.error("Failed to save resize");
-        // Revert on failure
-        setAppointments(prev => prev.map(a => 
-          a.id === appt.id ? { ...a, end_time: originalEnd } : a
-        ));
-        setAppointmentHistory(prev => prev.slice(0, -1));
-      }
-    } catch (err) {
-      console.error("Error saving resize:", err);
-      // Revert on error
-      setAppointments(prev => prev.map(a => 
-        a.id === appt.id ? { ...a, end_time: originalEnd } : a
-      ));
-      setAppointmentHistory(prev => prev.slice(0, -1));
-    }
-  }
-
-  function handleResizeMove(e: MouseEvent) {
-    if (!resizingAppointment) return;
-
-    const deltaY = e.clientY - resizeStartY;
-    const deltaMinutes = Math.round(deltaY / DAY_VIEW_SLOT_HEIGHT) * DAY_VIEW_SLOT_MINUTES;
-    
-    // Calculate new end time (minimum 15 minutes from start)
-    const start = new Date(resizingAppointment.start_time);
-    const { hour: startH, minute: startM } = getSwissHourMinute(start);
-    const startMinutes = startH * 60 + startM;
-    
-    const newEndMinutes = Math.max(
-      startMinutes + 15, // Minimum 15 min duration
-      Math.min(resizeOriginalEndMinutes + deltaMinutes, DAY_VIEW_END_MINUTES)
-    );
-    
-    // Build new end time
-    const newEndHours = Math.floor(newEndMinutes / 60);
-    const newEndMins = newEndMinutes % 60;
-    const dateStr = formatYmd(start);
-    const newEndTime = `${dateStr}T${String(newEndHours).padStart(2, "0")}:${String(newEndMins).padStart(2, "0")}:00`;
-
-    // Update appointment in state (optimistic)
-    setAppointments(prev => prev.map(a => 
-      a.id === resizingAppointment.id 
-        ? { ...a, end_time: newEndTime }
-        : a
-    ));
-  }
-
-  async function handleUndo() {
-    if (appointmentHistory.length === 0) return;
-
-    const lastChange = appointmentHistory[appointmentHistory.length - 1];
-    
-    // Revert in state
-    setAppointments(prev => prev.map(a => 
-      a.id === lastChange.appointmentId 
-        ? { ...a, end_time: lastChange.previousEndTime }
-        : a
-    ));
-
-    // Remove from history
-    setAppointmentHistory(prev => prev.slice(0, -1));
-
-    // Save revert to database
-    try {
-      await fetch(`/api/appointments/${lastChange.appointmentId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ end_time: lastChange.previousEndTime }),
-      });
-    } catch (err) {
-      console.error("Error undoing resize:", err);
-    }
-  }
-
   // Global mouse event listeners for resize
   useEffect(() => {
-    if (!resizingAppointment) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const appt = resizingAppointmentRef.current;
+      if (!appt) return;
 
-    const handleMouseMove = (e: MouseEvent) => handleResizeMove(e);
-    const handleMouseUp = () => handleResizeEnd();
+      const deltaY = e.clientY - resizeStartYRef.current;
+      const deltaMinutes = Math.round(deltaY / DAY_VIEW_SLOT_HEIGHT) * DAY_VIEW_SLOT_MINUTES;
+      
+      // Calculate new end time (minimum 15 minutes from start)
+      const start = new Date(appt.start_time);
+      const { hour: startH, minute: startM } = getSwissHourMinute(start);
+      const startMinutes = startH * 60 + startM;
+      
+      const newEndMinutes = Math.max(
+        startMinutes + 15, // Minimum 15 min duration
+        Math.min(resizeOriginalEndMinutesRef.current + deltaMinutes, DAY_VIEW_END_MINUTES)
+      );
+      
+      // Build new end time
+      const newEndHours = Math.floor(newEndMinutes / 60);
+      const newEndMins = newEndMinutes % 60;
+      const dateStr = formatYmd(start);
+      const newEndTime = `${dateStr}T${String(newEndHours).padStart(2, "0")}:${String(newEndMins).padStart(2, "0")}:00`;
+
+      // Update appointment in state (optimistic)
+      setAppointments(prev => prev.map(a => 
+        a.id === appt.id 
+          ? { ...a, end_time: newEndTime }
+          : a
+      ));
+    };
+
+    const handleMouseUp = async () => {
+      const appt = resizingAppointmentRef.current;
+      if (!appt) return;
+
+      // Clear the resizing state
+      resizingAppointmentRef.current = null;
+      setResizingAppointment(null);
+
+      // Get current appointments to find the updated end time
+      // We need to read from DOM or use a different approach
+      // For now, calculate the final end time based on current mouse position would be complex
+      // Instead, we'll save what we have in state
+      
+      // The appointments state has been updated by handleMouseMove
+      // We need to get the current value - use a timeout to ensure state is updated
+      setTimeout(async () => {
+        // Find the appointment in current state
+        const currentAppts = await new Promise<CalendarAppointment[]>((resolve) => {
+          setAppointments(prev => {
+            resolve(prev);
+            return prev;
+          });
+        });
+        
+        const updatedAppt = currentAppts.find(a => a.id === appt.id);
+        if (!updatedAppt || !updatedAppt.end_time) return;
+
+        const originalEnd = appt.end_time;
+        const newEnd = updatedAppt.end_time;
+
+        // Only save if the end time actually changed
+        if (originalEnd === newEnd) return;
+
+        // Save to history for undo
+        setAppointmentHistory(prev => [...prev, {
+          appointmentId: appt.id,
+          previousEndTime: originalEnd ?? "",
+          newEndTime: newEnd,
+        }]);
+
+        // Save to database
+        try {
+          const response = await fetch(`/api/appointments/${appt.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ end_time: newEnd }),
+          });
+
+          if (!response.ok) {
+            console.error("Failed to save resize");
+            // Revert on failure
+            setAppointments(prev => prev.map(a => 
+              a.id === appt.id ? { ...a, end_time: originalEnd } : a
+            ));
+            setAppointmentHistory(prev => prev.slice(0, -1));
+          }
+        } catch (err) {
+          console.error("Error saving resize:", err);
+          // Revert on error
+          setAppointments(prev => prev.map(a => 
+            a.id === appt.id ? { ...a, end_time: originalEnd } : a
+          ));
+          setAppointmentHistory(prev => prev.slice(0, -1));
+        }
+      }, 0);
+    };
 
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
@@ -3397,20 +3403,45 @@ export default function CalendarPage() {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [resizingAppointment, resizeStartY, resizeOriginalEndMinutes]);
+  }, []);
 
   // Keyboard shortcut for undo (Ctrl+Z / Cmd+Z)
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        const history = appointmentHistoryRef.current;
+        if (history.length === 0) return;
+
         e.preventDefault();
-        handleUndo();
+        
+        const lastChange = history[history.length - 1];
+        
+        // Revert in state
+        setAppointments(prev => prev.map(a => 
+          a.id === lastChange.appointmentId 
+            ? { ...a, end_time: lastChange.previousEndTime }
+            : a
+        ));
+
+        // Remove from history
+        setAppointmentHistory(prev => prev.slice(0, -1));
+
+        // Save revert to database
+        try {
+          await fetch(`/api/appointments/${lastChange.appointmentId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ end_time: lastChange.previousEndTime }),
+          });
+        } catch (err) {
+          console.error("Error undoing resize:", err);
+        }
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [appointmentHistory]);
+  }, []);
 
   async function handleSaveEditAppointment() {
     if (!editingAppointment || savingEdit) return;
@@ -4540,25 +4571,17 @@ export default function CalendarPage() {
                                             </div>
                                           )}
                                         </button>
-                                        {/* Resize handle at bottom */}
+                                        {/* Resize handle at bottom - always visible */}
                                         <div
                                           onMouseDown={(e) => handleResizeStart(e, appt)}
-                                          className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                          title="Drag to resize"
+                                          className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize flex items-center justify-center hover:h-3 hover:bg-slate-900/10 transition-all rounded-b-md"
+                                          title="Drag to resize duration"
                                         >
-                                          <div className="w-8 h-1 bg-slate-400/60 rounded-full" />
-                                          <svg 
-                                            className="absolute h-2.5 w-2.5 text-slate-500"
-                                            viewBox="0 0 24 24" 
-                                            fill="none" 
-                                            stroke="currentColor" 
-                                            strokeWidth="2.5"
-                                            strokeLinecap="round" 
-                                            strokeLinejoin="round"
-                                          >
-                                            <path d="M12 5v14" />
-                                            <path d="m19 12-7 7-7-7" />
-                                          </svg>
+                                          <div className="flex gap-0.5">
+                                            <div className="w-1 h-1 bg-slate-500/50 rounded-full" />
+                                            <div className="w-1 h-1 bg-slate-500/50 rounded-full" />
+                                            <div className="w-1 h-1 bg-slate-500/50 rounded-full" />
+                                          </div>
                                         </div>
                                         {/* Hover tooltip - position based on column location */}
                                         <div className={`pointer-events-none absolute top-0 z-[100] hidden min-w-[280px] rounded-lg border border-slate-200 bg-white p-3 text-[11px] shadow-xl group-hover:block ${tooltipPositionClass}`}>
