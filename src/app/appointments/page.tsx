@@ -2063,14 +2063,8 @@ export default function CalendarPage() {
   // reflects any categories created/edited via the Services page.
   const categoryOptionNames = useMemo(() => {
     const seen = new Set<string>();
-    const merged: string[] = [];
-    for (const name of APPOINTMENT_CATEGORY_OPTIONS) {
-      const key = name.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        merged.push(name);
-      }
-    }
+    const merged: string[] = ["No selection"];
+    seen.add("no selection");
     for (const cat of dbCategories) {
       const name = cat.name?.trim();
       if (!name) continue;
