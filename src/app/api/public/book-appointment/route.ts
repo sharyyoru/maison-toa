@@ -110,7 +110,8 @@ function generatePatientConfirmationEmail(
   service: string,
   location: string | null,
   language: string,
-  appointmentId?: string
+  appointmentId?: string,
+  formUrl?: string
 ): string {
   const isFrench = language === "fr";
   const salutation = getSalutation(lastName, gender, language);
@@ -130,6 +131,8 @@ function generatePatientConfirmationEmail(
       cancel: "Cancel my appointment",
       closing: "We look forward to welcoming you.",
       clinicAddress: "Voie du Chariot 6<br>1003 Lausanne",
+      prepareVisit: "To prepare your visit in the best conditions, please confirm your attendance and complete your patient information form prior to your appointment via the link below.",
+      confirmAndComplete: "Confirm my appointment & complete my file",
     },
     fr: {
       subject: "Votre rendez-vous au sein de Maison Tóā",
@@ -144,6 +147,8 @@ function generatePatientConfirmationEmail(
       cancel: "Annuler mon rendez-vous",
       closing: "Dans l'attente du plaisir de vous accueillir, nous vous prions d'agréer nos salutations distinguées.",
       clinicAddress: "Voie du Chariot 6<br>1003 Lausanne",
+      prepareVisit: "Afin de préparer votre venue dans les meilleures conditions, nous vous invitons à confirmer votre présence et à compléter votre fiche patient avant votre rendez-vous via le lien ci-dessous.",
+      confirmAndComplete: "Confirmer ma présence & compléter ma fiche patient",
     },
   };
 
@@ -167,6 +172,16 @@ function generatePatientConfirmationEmail(
     <p style="margin: 0 0 20px 0; color: #4a4742;">${texts.confirmed}</p>
     <p style="margin: 0 0 8px 0; color: #8a8578; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;">${texts.yourAppointment}</p>
     ${infoTable(rows)}
+    ${formUrl ? `
+    <p style="margin: 24px 0 16px 0; color: #4a4742;">${texts.prepareVisit}</p>
+    <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin: 0 0 24px 0;">
+      <tr>
+        <td>
+          <a href="${formUrl}" style="display: block; background-color: #0ea5e9; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 600;">${texts.confirmAndComplete}</a>
+        </td>
+      </tr>
+    </table>
+    ` : ''}
     <p style="margin: 16px 0; color: #4a4742;">${texts.manageAppointment}</p>
     <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin: 24px 0;">
       <tr>
@@ -578,6 +593,36 @@ export async function POST(request: Request) {
       ? `Votre rendez-vous au sein de Maison Tóā`
       : `Your appointment at Maison Tóā`;
 
+    // Auto-create patient information form and get the URL
+    let formUrl: string | undefined;
+    const isFrench = language === "fr";
+    try {
+      const formId = isFrench ? "patient-information-fr" : "patient-information-en";
+      const formName = isFrench ? "Informations patient" : "Patient Information Form";
+      
+      // Create form submission record
+      const { data: formSubmission, error: formError } = await supabase
+        .from("patient_form_submissions")
+        .insert({
+          patient_id: patientId,
+          form_id: formId,
+          form_name: formName,
+          status: "pending",
+          submission_data: {},
+        })
+        .select("id, token")
+        .single();
+      
+      if (!formError && formSubmission) {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
+        formUrl = `${appUrl}/form/${formId}?token=${formSubmission.token}`;
+        console.log("✓ Patient form created with URL:", formUrl);
+      }
+    } catch (formErr) {
+      console.error("Error creating patient form:", formErr);
+      // Continue without form - non-critical
+    }
+
     try {
       const patientEmailHtml = generatePatientConfirmationEmail(
         lastName,
@@ -587,7 +632,8 @@ export async function POST(request: Request) {
         service,
         location || null,
         language,
-        appointment.id
+        appointment.id,
+        formUrl
       );
       await sendEmail(email, emailSubject, patientEmailHtml);
       console.log("✓ Patient confirmation email sent successfully to:", email);
