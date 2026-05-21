@@ -51,6 +51,15 @@ export default function PatientMedicalNotes({ patientId }: Props) {
     debouncedSave(field, html);
   }, [debouncedSave]);
 
+  // Convert plain text (with newlines) to HTML for display
+  function toHtml(text: string): string {
+    if (!text) return '';
+    // If already contains HTML tags, return as-is
+    if (/<[a-z][\s\S]*>/i.test(text)) return text;
+    // Otherwise convert newlines to <br>
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+  }
+
   if (loading) return null;
 
   const fieldStyle = "w-full rounded-md border border-slate-200 bg-slate-50/60 px-2.5 py-2 text-xs text-slate-700 min-h-[80px] max-h-[250px] overflow-y-scroll whitespace-pre-wrap";
@@ -73,7 +82,7 @@ export default function PatientMedicalNotes({ patientId }: Props) {
             onBlur={() => setEditingField(null)}
             onInput={() => handleInput("ap_content", apRef)}
             className={`${fieldStyle} ${editingField === "ap" ? "border-sky-400 ring-1 ring-sky-400 bg-white" : "cursor-text hover:border-slate-300"} focus:outline-none transition-colors`}
-            dangerouslySetInnerHTML={{ __html: apContent || '<span class="text-slate-400 italic">Click to add AP notes...</span>' }}
+            dangerouslySetInnerHTML={{ __html: toHtml(apContent) || '<span class="text-slate-400 italic">Click to add AP notes...</span>' }}
           />
         </div>
         {/* Notes */}
@@ -87,7 +96,7 @@ export default function PatientMedicalNotes({ patientId }: Props) {
             onBlur={() => setEditingField(null)}
             onInput={() => handleInput("notes_content", notesRef)}
             className={`${fieldStyle} ${editingField === "notes" ? "border-sky-400 ring-1 ring-sky-400 bg-white" : "cursor-text hover:border-slate-300"} focus:outline-none transition-colors`}
-            dangerouslySetInnerHTML={{ __html: notesContent || '<span class="text-slate-400 italic">Click to add notes...</span>' }}
+            dangerouslySetInnerHTML={{ __html: toHtml(notesContent) || '<span class="text-slate-400 italic">Click to add notes...</span>' }}
           />
         </div>
       </div>
