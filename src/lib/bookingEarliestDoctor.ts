@@ -2,7 +2,6 @@ import { ALL_WEEK_SLOTS, DOCTOR_AVAILABILITY } from "@/lib/doctorAvailability";
 import {
   formatSwissYmd,
   getSwissDayOfWeek,
-  getSwissDayRange,
   getSwissSlotString,
   getSwissToday,
 } from "@/lib/swissTimezone";
@@ -78,6 +77,10 @@ async function getDoctorAvailability(doctor: EarliestBookingDoctor): Promise<Day
   return DOCTOR_AVAILABILITY[doctor.slug]?.lausanne ?? ALL_WEEK_SLOTS;
 }
 
+/**
+ * Optimized: fetch all appointments for the next N days in a single API call,
+ * then process them client-side to find the first open slot.
+ */
 async function getFirstOpenSlot(
   doctor: EarliestBookingDoctor,
   durationMinutes: number,
@@ -85,7 +88,46 @@ async function getFirstOpenSlot(
 ): Promise<EarliestDoctorResult | null> {
   const availability = await getDoctorAvailability(doctor);
   const today = getSwissToday();
+  
+  // Batch fetch: get all booked slots for the next maxDaysAhead days in one call
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() + 1);
+  const endDate = new Date(today);
+  endDate.setDate(today.getDate() + maxDaysAhead + 1);
+  
+  // Format as ISO strings for the API
+  const rangeStart = new Date(startDate);
+  rangeStart.setHours(0, 0, 0, 0);
+  const rangeEnd = new Date(endDate);
+  rangeEnd.setHours(23, 59, 59, 999);
+  
+  let allBookedSlots: Map<string, string[]> = new Map(); // dateString -> bookedSlots[]
+  
+  try {
+    const res = await fetch(
+      `/api/appointments/check-availability?start=${rangeStart.toISOString()}&end=${rangeEnd.toISOString()}&doctor=${encodeURIComponent(doctor.name)}&slug=${doctor.slug}`
+    );
+    const data = await res.json();
+    
+    // Group fullSlots by date
+    if (data.fullSlots && Array.isArray(data.fullSlots)) {
+      data.fullSlots.forEach((isoTime: string) => {
+        const slotDate = new Date(isoTime);
+        const dateStr = formatSwissYmd(slotDate);
+        const timeStr = getSwissSlotString(slotDate);
+        
+        if (!allBookedSlots.has(dateStr)) {
+          allBookedSlots.set(dateStr, []);
+        }
+        allBookedSlots.get(dateStr)!.push(timeStr);
+      });
+    }
+  } catch (error) {
+    console.error("Failed to fetch batch availability:", error);
+    // Continue anyway - will assume all slots are open
+  }
 
+  // Now iterate through days to find the first open slot
   for (let dayOffset = 1; dayOffset <= maxDaysAhead; dayOffset++) {
     const date = new Date(today);
     date.setDate(today.getDate() + dayOffset);
@@ -94,23 +136,13 @@ async function getFirstOpenSlot(
     const slots = generateTimeSlots(dayOfWeek, availability[dayOfWeek]);
     if (slots.length === 0) continue;
 
-    try {
-      const dateString = formatSwissYmd(date);
-      const { start, end } = getSwissDayRange(dateString);
-      const res = await fetch(
-        `/api/appointments/check-availability?start=${start}&end=${end}&doctor=${encodeURIComponent(doctor.name)}&slug=${doctor.slug}`
-      );
-      const data = await res.json();
-      const bookedSlots: string[] = data.fullSlots
-        ? data.fullSlots.map((isoTime: string) => getSwissSlotString(new Date(isoTime)))
-        : [];
-      const openSlot = slots.find((slot) => !slotConflicts(slot, durationMinutes, bookedSlots));
+    const dateString = formatSwissYmd(date);
+    const bookedSlots = allBookedSlots.get(dateString) || [];
+    
+    const openSlot = slots.find((slot) => !slotConflicts(slot, durationMinutes, bookedSlots));
 
-      if (openSlot) {
-        return { doctor, date: dateString, time: openSlot };
-      }
-    } catch (error) {
-      console.error("Failed to check doctor slot availability:", error);
+    if (openSlot) {
+      return { doctor, date: dateString, time: openSlot };
     }
   }
 
@@ -120,13 +152,24 @@ async function getFirstOpenSlot(
 export async function findEarliestAvailableDoctor(
   doctors: EarliestBookingDoctor[],
   durationMinutes = 60,
-  maxDaysAhead = 90
+  maxDaysAhead = 30 // Reduced from 90 to 30 for faster initial search
 ): Promise<EarliestDoctorResult | null> {
+  // Search all doctors in parallel
   const results = await Promise.all(
     doctors.map((doctor) => getFirstOpenSlot(doctor, durationMinutes, maxDaysAhead))
   );
 
-  return results
-    .filter((result): result is EarliestDoctorResult => result !== null)
-    .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0] ?? null;
+  const validResults = results.filter((result): result is EarliestDoctorResult => result !== null);
+  
+  if (validResults.length === 0) {
+    // If no results in first 30 days, try extended search (60 more days)
+    const extendedResults = await Promise.all(
+      doctors.map((doctor) => getFirstOpenSlot(doctor, durationMinutes, 90))
+    );
+    return extendedResults
+      .filter((result): result is EarliestDoctorResult => result !== null)
+      .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0] ?? null;
+  }
+
+  return validResults.sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0];
 }
