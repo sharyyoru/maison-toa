@@ -4518,7 +4518,7 @@ export default function CalendarPage() {
                                     return (
                                       <div
                                         key={`${ymd}-${doctorCol?.id ?? "all"}-${appt.id}`}
-                                        className="group absolute"
+                                        className={`absolute ${resizingAppointment?.id === appt.id ? '' : 'group'}`}
                                         style={{
                                           top,
                                           height,
@@ -4528,8 +4528,12 @@ export default function CalendarPage() {
                                       >
                                         <button
                                           type="button"
-                                          onClick={() => openEditModalForAppointment(appt)}
-                                          className={`w-full h-full rounded-md px-1 py-0.5 text-[10px] text-left shadow-sm overflow-hidden ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColor(category)}`}
+                                          onClick={() => {
+                                            if (!resizingAppointment) {
+                                              openEditModalForAppointment(appt);
+                                            }
+                                          }}
+                                          className={`w-full h-full rounded-md px-1 py-0.5 text-[10px] text-left shadow-sm overflow-hidden ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColor(category)} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
                                         >
                                           <div className="flex items-center gap-1 truncate font-medium text-slate-800">
                                             {dayStatusIcon && <span className="flex-shrink-0">{dayStatusIcon}</span>}
@@ -4565,13 +4569,17 @@ export default function CalendarPage() {
                                         {/* Resize handle at bottom - always visible */}
                                         <div
                                           onMouseDown={(e) => handleResizeStart(e, appt)}
-                                          className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize flex items-center justify-center hover:h-3 hover:bg-slate-900/10 transition-all rounded-b-md"
+                                          className={`absolute bottom-0 left-0 right-0 cursor-ns-resize flex items-center justify-center rounded-b-md transition-all ${
+                                            resizingAppointment?.id === appt.id 
+                                              ? 'h-3 bg-sky-500/30' 
+                                              : 'h-2 hover:h-3 hover:bg-slate-900/10'
+                                          }`}
                                           title="Drag to resize duration"
                                         >
                                           <div className="flex gap-0.5">
-                                            <div className="w-1 h-1 bg-slate-500/50 rounded-full" />
-                                            <div className="w-1 h-1 bg-slate-500/50 rounded-full" />
-                                            <div className="w-1 h-1 bg-slate-500/50 rounded-full" />
+                                            <div className={`w-1 h-1 rounded-full ${resizingAppointment?.id === appt.id ? 'bg-sky-600' : 'bg-slate-500/50'}`} />
+                                            <div className={`w-1 h-1 rounded-full ${resizingAppointment?.id === appt.id ? 'bg-sky-600' : 'bg-slate-500/50'}`} />
+                                            <div className={`w-1 h-1 rounded-full ${resizingAppointment?.id === appt.id ? 'bg-sky-600' : 'bg-slate-500/50'}`} />
                                           </div>
                                         </div>
                                         {/* Hover tooltip - position based on column location */}
