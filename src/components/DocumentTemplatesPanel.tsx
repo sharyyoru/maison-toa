@@ -137,7 +137,7 @@ export default function DocumentTemplatesPanel({
       console.log('Opening document from path:', downloadPath);
       
       // Download document blob via API endpoint
-      const downloadResponse = await fetch(`/api/documents/download?bucket=patient_document&path=${encodeURIComponent(downloadPath)}`);
+      const downloadResponse = await fetch(`/api/documents/download?bucket=patient-documents&path=${encodeURIComponent(downloadPath)}`);
       
       if (!downloadResponse.ok) {
         const errorData = await downloadResponse.json().catch(() => ({}));
@@ -170,7 +170,7 @@ export default function DocumentTemplatesPanel({
       // Upload modified blob via API endpoint
       const formData = new FormData();
       formData.append('file', blob);
-      formData.append('bucket', 'patient_document');
+      formData.append('bucket', 'patient-documents');
       formData.append('path', uploadPath);
       
       const uploadResponse = await fetch('/api/documents/upload', {
@@ -219,7 +219,7 @@ export default function DocumentTemplatesPanel({
         const downloadPath = data.storagePath || `${patientId}/${data.fileName}`;
         console.log('Downloading from path:', downloadPath);
         
-        const downloadResponse = await fetch(`/api/documents/download?bucket=patient_document&path=${encodeURIComponent(downloadPath)}`);
+        const downloadResponse = await fetch(`/api/documents/download?bucket=patient-documents&path=${encodeURIComponent(downloadPath)}`);
         
         if (downloadResponse.ok) {
           const fileData = await downloadResponse.blob();
