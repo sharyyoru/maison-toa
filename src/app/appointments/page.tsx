@@ -833,6 +833,7 @@ export default function CalendarPage() {
   const [newAgendaName, setNewAgendaName] = useState("");
   const [newAgendaEmail, setNewAgendaEmail] = useState("");
   const [newAgendaSpecialty, setNewAgendaSpecialty] = useState("");
+  const [newAgendaShortCode, setNewAgendaShortCode] = useState("");
   const [savingAgenda, setSavingAgenda] = useState(false);
   const [view, setView] = useState<CalendarView>("day");
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
@@ -2407,6 +2408,8 @@ export default function CalendarPage() {
           name: newAgendaName.trim(),
           email: newAgendaEmail.trim() || null,
           specialty: newAgendaSpecialty.trim() || null,
+          short_code: newAgendaShortCode.trim() || null,
+          role: "doctor",
         }),
       });
       
@@ -2444,6 +2447,7 @@ export default function CalendarPage() {
       setNewAgendaName("");
       setNewAgendaEmail("");
       setNewAgendaSpecialty("");
+      setNewAgendaShortCode("");
       setIsCreatingAgenda(false);
     } catch (err) {
       console.error("Error creating agenda:", err);
@@ -5820,6 +5824,7 @@ export default function CalendarPage() {
                 setNewAgendaName("");
                 setNewAgendaEmail("");
                 setNewAgendaSpecialty("");
+                setNewAgendaShortCode("");
               }
             }}
           >
@@ -5837,6 +5842,7 @@ export default function CalendarPage() {
                       setNewAgendaName("");
                       setNewAgendaEmail("");
                       setNewAgendaSpecialty("");
+                      setNewAgendaShortCode("");
                     }
                   }}
                   className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
@@ -5888,6 +5894,21 @@ export default function CalendarPage() {
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                    Short Code <span className="text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newAgendaShortCode}
+                    onChange={(e) => setNewAgendaShortCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. WA"
+                    maxLength={4}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 uppercase"
+                  />
+                  <p className="mt-1 text-[10px] text-slate-400">Used for calendar initials (max 4 characters)</p>
+                </div>
               </div>
 
               <div className="mt-5 flex items-center justify-end gap-2">
@@ -5898,6 +5919,7 @@ export default function CalendarPage() {
                     setNewAgendaName("");
                     setNewAgendaEmail("");
                     setNewAgendaSpecialty("");
+                    setNewAgendaShortCode("");
                   }}
                   disabled={savingAgenda}
                   className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"

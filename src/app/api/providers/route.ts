@@ -34,11 +34,15 @@ export async function POST(req: Request) {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const body = await req.json();
     
-    const { name, email, specialty } = body;
+    const { name, email, specialty, role, short_code } = body;
     
     if (!name || typeof name !== 'string' || !name.trim()) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
+    
+    // Validate role - must be one of the allowed values
+    const validRoles = ['billing_entity', 'doctor', 'nurse', 'technician'];
+    const providerRole = role && validRoles.includes(role) ? role : 'doctor';
     
     const { data, error } = await supabase
       .from('providers')
@@ -46,9 +50,10 @@ export async function POST(req: Request) {
         name: name.trim(),
         email: email || null,
         specialty: specialty || null,
-        role: 'provider',
+        role: providerRole,
+        short_code: short_code?.trim() || null,
       })
-      .select('id, name, email, specialty, role')
+      .select('id, name, email, specialty, role, short_code')
       .single();
     
     if (error) {
