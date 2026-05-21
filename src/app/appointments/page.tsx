@@ -3264,13 +3264,10 @@ export default function CalendarPage() {
   const resizingAppointmentRef = useRef<CalendarAppointment | null>(null);
   const resizeStartYRef = useRef<number>(0);
   const resizeOriginalEndMinutesRef = useRef<number>(0);
+  const resizeCurrentEndTimeRef = useRef<string>(""); // Track current end time during drag
   const appointmentHistoryRef = useRef<typeof appointmentHistory>([]);
 
-  // Keep refs in sync with state
-  useEffect(() => {
-    resizingAppointmentRef.current = resizingAppointment;
-  }, [resizingAppointment]);
-
+  // Keep history ref in sync
   useEffect(() => {
     appointmentHistoryRef.current = appointmentHistory;
   }, [appointmentHistory]);
@@ -3290,10 +3287,13 @@ export default function CalendarPage() {
     resizingAppointmentRef.current = appt;
     resizeStartYRef.current = e.clientY;
     resizeOriginalEndMinutesRef.current = endMinutes;
+    resizeCurrentEndTimeRef.current = appt.end_time ?? "";
     
     setResizingAppointment(appt);
-    setResizeStartY(e.clientY);
-    setResizeOriginalEndMinutes(endMinutes);
+    
+    // Add resize cursor to body during drag
+    document.body.style.cursor = "ns-resize";
+    document.body.style.userSelect = "none";
   }
 
   // Global mouse event listeners for resize
@@ -3302,8 +3302,12 @@ export default function CalendarPage() {
       const appt = resizingAppointmentRef.current;
       if (!appt) return;
 
+      // Calculate delta in pixels and convert to minutes
+      // Using smaller divisor for more responsive dragging
       const deltaY = e.clientY - resizeStartYRef.current;
-      const deltaMinutes = Math.round(deltaY / DAY_VIEW_SLOT_HEIGHT) * DAY_VIEW_SLOT_MINUTES;
+      // Each 14 pixels = 15 minutes (half of slot height for smoother feel)
+      const pixelsPerSlot = DAY_VIEW_SLOT_HEIGHT / 2;
+      const deltaMinutes = Math.round(deltaY / pixelsPerSlot) * DAY_VIEW_SLOT_MINUTES;
       
       // Calculate new end time (minimum 15 minutes from start)
       const start = new Date(appt.start_time);
@@ -3311,7 +3315,7 @@ export default function CalendarPage() {
       const startMinutes = startH * 60 + startM;
       
       const newEndMinutes = Math.max(
-        startMinutes + 15, // Minimum 15 min duration
+        startMinutes + DAY_VIEW_SLOT_MINUTES, // Minimum 15 min duration
         Math.min(resizeOriginalEndMinutesRef.current + deltaMinutes, DAY_VIEW_END_MINUTES)
       );
       
@@ -3320,6 +3324,9 @@ export default function CalendarPage() {
       const newEndMins = newEndMinutes % 60;
       const dateStr = formatYmd(start);
       const newEndTime = `${dateStr}T${String(newEndHours).padStart(2, "0")}:${String(newEndMins).padStart(2, "0")}:00`;
+
+      // Store current end time in ref for mouseup
+      resizeCurrentEndTimeRef.current = newEndTime;
 
       // Update appointment in state (optimistic)
       setAppointments(prev => prev.map(a => 
@@ -3333,67 +3340,51 @@ export default function CalendarPage() {
       const appt = resizingAppointmentRef.current;
       if (!appt) return;
 
+      const originalEnd = appt.end_time ?? "";
+      const newEnd = resizeCurrentEndTimeRef.current;
+
       // Clear the resizing state
       resizingAppointmentRef.current = null;
       setResizingAppointment(null);
-
-      // Get current appointments to find the updated end time
-      // We need to read from DOM or use a different approach
-      // For now, calculate the final end time based on current mouse position would be complex
-      // Instead, we'll save what we have in state
       
-      // The appointments state has been updated by handleMouseMove
-      // We need to get the current value - use a timeout to ensure state is updated
-      setTimeout(async () => {
-        // Find the appointment in current state
-        const currentAppts = await new Promise<CalendarAppointment[]>((resolve) => {
-          setAppointments(prev => {
-            resolve(prev);
-            return prev;
-          });
+      // Reset cursor
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+
+      // Only save if the end time actually changed
+      if (originalEnd === newEnd || !newEnd) return;
+
+      // Save to history for undo
+      setAppointmentHistory(prev => [...prev, {
+        appointmentId: appt.id,
+        previousEndTime: originalEnd,
+        newEndTime: newEnd,
+      }]);
+
+      // Save to database
+      try {
+        const response = await fetch(`/api/appointments/${appt.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ end_time: newEnd }),
         });
-        
-        const updatedAppt = currentAppts.find(a => a.id === appt.id);
-        if (!updatedAppt || !updatedAppt.end_time) return;
 
-        const originalEnd = appt.end_time;
-        const newEnd = updatedAppt.end_time;
-
-        // Only save if the end time actually changed
-        if (originalEnd === newEnd) return;
-
-        // Save to history for undo
-        setAppointmentHistory(prev => [...prev, {
-          appointmentId: appt.id,
-          previousEndTime: originalEnd ?? "",
-          newEndTime: newEnd,
-        }]);
-
-        // Save to database
-        try {
-          const response = await fetch(`/api/appointments/${appt.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ end_time: newEnd }),
-          });
-
-          if (!response.ok) {
-            console.error("Failed to save resize");
-            // Revert on failure
-            setAppointments(prev => prev.map(a => 
-              a.id === appt.id ? { ...a, end_time: originalEnd } : a
-            ));
-            setAppointmentHistory(prev => prev.slice(0, -1));
-          }
-        } catch (err) {
-          console.error("Error saving resize:", err);
-          // Revert on error
+        if (!response.ok) {
+          console.error("Failed to save resize");
+          // Revert on failure
           setAppointments(prev => prev.map(a => 
             a.id === appt.id ? { ...a, end_time: originalEnd } : a
           ));
           setAppointmentHistory(prev => prev.slice(0, -1));
         }
-      }, 0);
+      } catch (err) {
+        console.error("Error saving resize:", err);
+        // Revert on error
+        setAppointments(prev => prev.map(a => 
+          a.id === appt.id ? { ...a, end_time: originalEnd } : a
+        ));
+        setAppointmentHistory(prev => prev.slice(0, -1));
+      }
     };
 
     document.addEventListener("mousemove", handleMouseMove);
