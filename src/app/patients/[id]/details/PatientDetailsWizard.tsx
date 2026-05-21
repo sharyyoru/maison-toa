@@ -299,6 +299,7 @@ export default function PatientDetailsWizard({
     const caseNumber = (formData.get("case_number") as string | null)?.trim() || null;
     const accidentDate = (formData.get("accident_date") as string | null)?.trim() || null;
     const insurerId = (formData.get("insurer_id") as string | null)?.trim() || null;
+    const insurerGln = (formData.get("gln") as string | null)?.trim() || null;
     const isPrimary = formData.get("is_primary") === "on";
 
     if (!providerName) {
@@ -321,6 +322,7 @@ export default function PatientDetailsWizard({
       case_number: caseNumber,
       accident_date: accidentDate || null,
       insurer_id: insurerId || null,
+      insurer_gln: insurerGln || null,
       is_primary: isPrimary,
     };
 
@@ -753,7 +755,7 @@ export default function PatientDetailsWizard({
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
                     <label htmlFor="ins_provider_name" className="block text-xs font-medium text-slate-700">
-                      Provider name <span className="text-red-500">*</span>
+                      Insurance provider <span className="text-red-500">*</span>
                     </label>
                     {swissInsurers.length > 0 ? (
                       <select
@@ -762,11 +764,15 @@ export default function PatientDetailsWizard({
                         onChange={(e) => {
                           const selected = swissInsurers.find((s) => s.id === e.target.value);
                           const nameInput = document.getElementById("ins_provider_name") as HTMLInputElement | null;
-                          if (nameInput && selected) nameInput.value = selected.name;
+                          const glnInput = document.getElementById("ins_gln") as HTMLInputElement | null;
+                          if (selected) {
+                            if (nameInput) nameInput.value = selected.name;
+                            if (glnInput) glnInput.value = selected.gln || "";
+                          }
                         }}
                         className="block w-full rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                       >
-                        <option value="">Select insurer (optional)</option>
+                        <option value="">Select insurer...</option>
                         {swissInsurers.map((ins) => (
                           <option key={ins.id} value={ins.id}>
                             {ins.name} ({ins.gln})
@@ -778,18 +784,20 @@ export default function PatientDetailsWizard({
                       id="ins_provider_name"
                       name="provider_name"
                       type="text"
-                      placeholder="Insurance provider name"
+                      placeholder="Or type provider name manually"
                       className="block w-full rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
+                    <input id="ins_gln" name="gln" type="hidden" />
                   </div>
                   <div className="space-y-1">
                     <label htmlFor="ins_policy_number" className="block text-xs font-medium text-slate-700">
-                      Policy number
+                      No de carte (No CADA)
                     </label>
                     <input
                       id="ins_policy_number"
                       name="policy_number"
                       type="text"
+                      placeholder="80756..."
                       className="block w-full rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                   </div>
@@ -798,12 +806,13 @@ export default function PatientDetailsWizard({
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1">
                     <label htmlFor="ins_card_number" className="block text-xs font-medium text-slate-700">
-                      Card number
+                      No d&apos;assuré
                     </label>
                     <input
                       id="ins_card_number"
                       name="card_number"
                       type="text"
+                      placeholder="Member/policy number"
                       className="block w-full rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                   </div>
@@ -816,11 +825,9 @@ export default function PatientDetailsWizard({
                       name="insurance_type"
                       className="block w-full rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     >
-                      <option value="">Select</option>
-                      <option value="basic">Basic</option>
-                      <option value="supplementary">Supplementary</option>
-                      <option value="private">Private</option>
+                      <option value="basic">Basic (LaMal)</option>
                       <option value="semi-private">Semi-private</option>
+                      <option value="private">Private</option>
                     </select>
                   </div>
                   <div className="space-y-1">
@@ -832,17 +839,16 @@ export default function PatientDetailsWizard({
                       name="law_type"
                       className="block w-full rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     >
-                      <option value="">Select</option>
                       <option value="KVG">KVG</option>
+                      <option value="VVG">VVG</option>
                       <option value="UVG">UVG</option>
                       <option value="IVG">IVG</option>
                       <option value="MVG">MVG</option>
-                      <option value="VVG">VVG</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1">
                     <label htmlFor="ins_billing_type" className="block text-xs font-medium text-slate-700">
                       Billing type
@@ -859,7 +865,7 @@ export default function PatientDetailsWizard({
                   </div>
                   <div className="space-y-1">
                     <label htmlFor="ins_avs_number" className="block text-xs font-medium text-slate-700">
-                      AVS number
+                      No AVS
                     </label>
                     <input
                       id="ins_avs_number"
@@ -869,9 +875,6 @@ export default function PatientDetailsWizard({
                       className="block w-full rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                   </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
                     <label htmlFor="ins_case_number" className="block text-xs font-medium text-slate-700">
                       Case number
@@ -883,9 +886,12 @@ export default function PatientDetailsWizard({
                       className="block w-full rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                   </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
                     <label htmlFor="ins_accident_date" className="block text-xs font-medium text-slate-700">
-                      Accident date
+                      Accident date (UVG only)
                     </label>
                     <input
                       id="ins_accident_date"
@@ -894,18 +900,19 @@ export default function PatientDetailsWizard({
                       className="block w-full rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
                   </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    id="ins_is_primary"
-                    name="is_primary"
-                    type="checkbox"
-                    className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                  />
-                  <label htmlFor="ins_is_primary" className="text-xs text-slate-700">
-                    Primary insurance
-                  </label>
+                  <div className="flex items-end pb-1">
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="ins_is_primary"
+                        name="is_primary"
+                        type="checkbox"
+                        className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                      />
+                      <label htmlFor="ins_is_primary" className="text-xs text-slate-700">
+                        Primary insurance
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-1">
