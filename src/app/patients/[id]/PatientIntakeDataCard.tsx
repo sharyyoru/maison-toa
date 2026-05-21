@@ -85,7 +85,11 @@ type PatientInsurance = {
   patient_id?: string;
   provider_name: string | null;
   card_number: string | null;
+  policy_number: string | null;
   insurance_type: string | null;
+  law_type: string | null;
+  insurer_id: string | null;
+  insurer_gln: string | null;
 };
 
 type ConsultationData = {
@@ -158,6 +162,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
   const [editMeasurements, setEditMeasurements] = useState<Measurements | null>(null);
   const [editTreatmentPrefs, setEditTreatmentPrefs] = useState<TreatmentPreferences | null>(null);
   const [editInsurance, setEditInsurance] = useState<PatientInsurance | null>(null);
+  const [swissInsurers, setSwissInsurers] = useState<{ id: string; name: string; gln: string }[]>([]);
 
   const loadIntakeData = useCallback(async () => {
     setLoading(true);
@@ -304,6 +309,9 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
 
   useEffect(() => {
     loadIntakeData();
+    supabaseClient.from("swiss_insurers").select("id, name, gln").eq("is_active", true).order("name").then(({ data }) => {
+      if (data) setSwissInsurers(data);
+    });
   }, [loadIntakeData]);
 
   if (loading) {
@@ -403,7 +411,11 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
       const saveData = {
         provider_name: data.provider_name || null,
         card_number: data.card_number || null,
+        policy_number: data.policy_number || null,
         insurance_type: data.insurance_type || null,
+        law_type: data.law_type || null,
+        insurer_id: data.insurer_id || null,
+        insurer_gln: data.insurer_gln || null,
       };
 
       if (insurance?.id) {
@@ -740,7 +752,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
             </div>
             <h4 className="font-medium text-slate-900">{t("insuranceInfo")}</h4>
             <EditButton onClick={() => {
-              setEditInsurance(insurance || { provider_name: "", card_number: "", insurance_type: "" });
+              setEditInsurance(insurance || { provider_name: "", card_number: "", policy_number: "", insurance_type: "basic", law_type: "KVG", insurer_id: null, insurer_gln: null });
               setEditingSection("insurance");
             }} />
           </div>
@@ -748,21 +760,51 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
           {editingSection === "insurance" && editInsurance ? (
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-slate-500">{t("providerName")}</label>
-                <input type="text" value={editInsurance.provider_name || ""} onChange={(e) => setEditInsurance({ ...editInsurance, provider_name: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" placeholder={t("providerName")} />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">{t("cardNumber")}</label>
-                <input type="text" value={editInsurance.card_number || ""} onChange={(e) => setEditInsurance({ ...editInsurance, card_number: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" placeholder={t("cardNumber")} />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500">{t("insuranceType")}</label>
-                <select value={editInsurance.insurance_type || ""} onChange={(e) => setEditInsurance({ ...editInsurance, insurance_type: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black">
-                  <option value="">{t("selectType")}</option>
-                  <option value="private">{t("private")}</option>
-                  <option value="semi-private">{t("semiPrivate")}</option>
-                  <option value="basic">{t("basic")}</option>
+                <label className="text-xs text-slate-500">Insurance provider</label>
+                <select
+                  value={editInsurance.insurer_id || ""}
+                  onChange={(e) => {
+                    const sel = swissInsurers.find((s) => s.id === e.target.value);
+                    setEditInsurance({ ...editInsurance, insurer_id: sel?.id || null, insurer_gln: sel?.gln || null, provider_name: sel?.name || editInsurance.provider_name });
+                  }}
+                  className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black"
+                >
+                  <option value="">Select insurer...</option>
+                  {swissInsurers.map((ins) => (
+                    <option key={ins.id} value={ins.id}>{ins.name}</option>
+                  ))}
                 </select>
+                <input type="text" value={editInsurance.provider_name || ""} onChange={(e) => setEditInsurance({ ...editInsurance, provider_name: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" placeholder="Or type name manually" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-500">No de carte (No CADA)</label>
+                  <input type="text" value={editInsurance.policy_number || ""} onChange={(e) => setEditInsurance({ ...editInsurance, policy_number: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" placeholder="80756..." />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500">No d&apos;assuré</label>
+                  <input type="text" value={editInsurance.card_number || ""} onChange={(e) => setEditInsurance({ ...editInsurance, card_number: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" placeholder="Member number" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-500">{t("insuranceType")}</label>
+                  <select value={editInsurance.insurance_type || "basic"} onChange={(e) => setEditInsurance({ ...editInsurance, insurance_type: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black">
+                    <option value="basic">Basic (LaMal)</option>
+                    <option value="semi-private">Semi-private</option>
+                    <option value="private">Private</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500">Law type</label>
+                  <select value={editInsurance.law_type || "KVG"} onChange={(e) => setEditInsurance({ ...editInsurance, law_type: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black">
+                    <option value="KVG">KVG</option>
+                    <option value="VVG">VVG</option>
+                    <option value="UVG">UVG</option>
+                    <option value="IVG">IVG</option>
+                    <option value="MVG">MVG</option>
+                  </select>
+                </div>
               </div>
               <div className="flex gap-2 pt-2">
                 <button onClick={() => saveInsurance(editInsurance)} disabled={saving} className="px-4 py-2 bg-black text-white text-xs rounded-lg hover:bg-slate-800 disabled:opacity-50">{saving ? t("saving") : t("save")}</button>
@@ -772,8 +814,10 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
           ) : insurance ? (
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-slate-500">{t("provider")}</span><span className="text-slate-900 font-medium">{insurance.provider_name || "N/A"}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">{t("cardNumber")}</span><span className="text-slate-900 font-medium">{insurance.card_number || "N/A"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">No CADA</span><span className="text-slate-900 font-medium">{insurance.policy_number || "N/A"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">No d&apos;assuré</span><span className="text-slate-900 font-medium">{insurance.card_number || "N/A"}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">{t("type")}</span><span className="text-slate-900 font-medium">{insurance.insurance_type || "N/A"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Law</span><span className="text-slate-900 font-medium">{insurance.law_type || "N/A"}</span></div>
             </div>
           ) : (
             <p className="text-sm text-slate-400 italic">{t("noInsurance")}</p>
