@@ -20,9 +20,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Read template from local filesystem (public/aesthetic-templates)
+    // Read template from local filesystem (public/documents)
     const templateFileName = templatePath || `${title}.docx`;
-    const localTemplatePath = path.join(process.cwd(), "public", "aesthetic-templates", templateFileName);
+    const localTemplatePath = path.join(process.cwd(), "public", "documents", templateFileName);
     
     console.log("Reading template from:", localTemplatePath);
     

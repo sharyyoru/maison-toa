@@ -7,8 +7,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
 
-    // Read templates from local filesystem (public/aesthetic-templates)
-    const templatesDir = path.join(process.cwd(), "public", "aesthetic-templates");
+    // Read templates from local filesystem (public/documents)
+    const templatesDir = path.join(process.cwd(), "public", "documents");
     
     let files: string[] = [];
     try {
