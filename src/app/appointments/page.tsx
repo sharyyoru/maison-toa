@@ -835,6 +835,14 @@ export default function CalendarPage() {
   const [newAgendaSpecialty, setNewAgendaSpecialty] = useState("");
   const [newAgendaShortCode, setNewAgendaShortCode] = useState("");
   const [savingAgenda, setSavingAgenda] = useState(false);
+  // Edit/delete agenda state
+  const [isEditingAgenda, setIsEditingAgenda] = useState(false);
+  const [editingAgendaId, setEditingAgendaId] = useState<string | null>(null);
+  const [editAgendaName, setEditAgendaName] = useState("");
+  const [editAgendaEmail, setEditAgendaEmail] = useState("");
+  const [editAgendaSpecialty, setEditAgendaSpecialty] = useState("");
+  const [editAgendaShortCode, setEditAgendaShortCode] = useState("");
+  const [deletingAgendaId, setDeletingAgendaId] = useState<string | null>(null);
   const [view, setView] = useState<CalendarView>("day");
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [rangeEndDate, setRangeEndDate] = useState<Date | null>(null);
@@ -2386,6 +2394,102 @@ export default function CalendarPage() {
     }
   }
 
+  function handleOpenEditAgenda(calendar: DoctorCalendar) {
+    setEditingAgendaId(calendar.providerId);
+    setEditAgendaName(calendar.name);
+    setEditAgendaEmail("");
+    setEditAgendaSpecialty("");
+    setEditAgendaShortCode(calendar.initials || "");
+    setIsEditingAgenda(true);
+  }
+
+  async function handleSaveEditAgenda() {
+    if (!editingAgendaId || !editAgendaName.trim()) return;
+    
+    setSavingAgenda(true);
+    try {
+      const response = await fetch("/api/providers", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingAgendaId,
+          name: editAgendaName.trim(),
+          email: editAgendaEmail.trim() || null,
+          specialty: editAgendaSpecialty.trim() || null,
+          short_code: editAgendaShortCode.trim() || null,
+        }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        console.error("Failed to update agenda:", data.error);
+        setSavingAgenda(false);
+        return;
+      }
+      
+      const data = await response.json();
+      const updatedProvider = data.provider;
+      
+      // Update providers list
+      setProviders((prev) => prev.map((p) => 
+        p.id === updatedProvider.id ? { ...p, name: updatedProvider.name } : p
+      ));
+      
+      // Update doctor calendars
+      setDoctorCalendars((prev) => prev.map((calendar) => {
+        if (calendar.providerId === updatedProvider.id) {
+          const newName = updatedProvider.name || "Unnamed doctor";
+          return {
+            ...calendar,
+            name: newName,
+            initials: updatedProvider.short_code || getInitialsForName(newName),
+          };
+        }
+        return calendar;
+      }));
+      
+      // Reset form
+      setEditingAgendaId(null);
+      setEditAgendaName("");
+      setEditAgendaEmail("");
+      setEditAgendaSpecialty("");
+      setEditAgendaShortCode("");
+      setIsEditingAgenda(false);
+    } catch (err) {
+      console.error("Error updating agenda:", err);
+    } finally {
+      setSavingAgenda(false);
+    }
+  }
+
+  async function handleDeleteAgenda(providerId: string) {
+    setDeletingAgendaId(providerId);
+    try {
+      const response = await fetch(`/api/providers?id=${providerId}`, {
+        method: "DELETE",
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to delete agenda");
+        setDeletingAgendaId(null);
+        return;
+      }
+      
+      // Remove from providers list
+      setProviders((prev) => prev.filter((p) => p.id !== providerId));
+      
+      // Remove from doctor calendars
+      setDoctorCalendars((prev) => prev.filter((calendar) => calendar.providerId !== providerId));
+      
+    } catch (err) {
+      console.error("Error deleting agenda:", err);
+      alert("Failed to delete agenda");
+    } finally {
+      setDeletingAgendaId(null);
+    }
+  }
+
   // Handle drag-to-create appointment
   function handleDragCreateStart(date: Date, totalMinutes: number, doctorCalendarId?: string | null) {
     setIsDraggingCreate(true);
@@ -3587,25 +3691,54 @@ export default function CalendarPage() {
               return (
                 <>
                   {calendarsToShow.map((calendar) => (
-                    <label
+                    <div
                       key={calendar.id}
-                      className="flex cursor-pointer items-center gap-2 text-[11px] text-slate-700"
+                      className="group flex items-center gap-2 text-[11px] text-slate-700"
                     >
-                      <input
-                        type="checkbox"
-                        checked={calendar.selected}
-                        onChange={() => handleToggleCalendarSelected(calendar.id)}
-                        className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                      />
-                      <span className="inline-flex items-center gap-1.5">
-                        <span
-                          className="inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded bg-slate-200 px-1 text-[9px] font-bold text-slate-600"
-                        >
-                          {calendar.initials}
+                      <label className="flex flex-1 cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={calendar.selected}
+                          onChange={() => handleToggleCalendarSelected(calendar.id)}
+                          className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                        />
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            className="inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded bg-slate-200 px-1 text-[9px] font-bold text-slate-600"
+                          >
+                            {calendar.initials}
+                          </span>
+                          <span className="truncate">{calendar.name}</span>
                         </span>
-                        <span className="truncate">{calendar.name}</span>
-                      </span>
-                    </label>
+                      </label>
+                      <div className="hidden gap-0.5 group-hover:flex">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditAgenda(calendar)}
+                          className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                          title="Edit"
+                        >
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Delete "${calendar.name}"? This cannot be undone.`)) {
+                              void handleDeleteAgenda(calendar.providerId);
+                            }
+                          }}
+                          disabled={deletingAgendaId === calendar.providerId}
+                          className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                          title="Delete"
+                        >
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
                   ))}
                   {otherCalendars.length > 0 && (
                     <button
@@ -5854,6 +5987,134 @@ export default function CalendarPage() {
                   className="inline-flex items-center rounded-full border border-emerald-500/80 bg-emerald-500 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {savingAgenda ? "Creating..." : "Create Agenda"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Agenda Modal */}
+        {isEditingAgenda && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !savingAgenda) {
+                setIsEditingAgenda(false);
+                setEditingAgendaId(null);
+                setEditAgendaName("");
+                setEditAgendaEmail("");
+                setEditAgendaSpecialty("");
+                setEditAgendaShortCode("");
+              }
+            }}
+          >
+            <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xl">
+              <div className="flex items-start justify-between gap-2 mb-4">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Edit Agenda</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Update doctor calendar details</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!savingAgenda) {
+                      setIsEditingAgenda(false);
+                      setEditingAgendaId(null);
+                      setEditAgendaName("");
+                      setEditAgendaEmail("");
+                      setEditAgendaSpecialty("");
+                      setEditAgendaShortCode("");
+                    }
+                  }}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                >
+                  <svg className="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 5l10 10" />
+                    <path d="M15 5L5 15" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                    Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editAgendaName}
+                    onChange={(e) => setEditAgendaName(e.target.value)}
+                    placeholder="e.g. Dr. John Smith"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                    Email <span className="text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={editAgendaEmail}
+                    onChange={(e) => setEditAgendaEmail(e.target.value)}
+                    placeholder="e.g. doctor@clinic.com"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                    Specialty <span className="text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editAgendaSpecialty}
+                    onChange={(e) => setEditAgendaSpecialty(e.target.value)}
+                    placeholder="e.g. Dermatology"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                    Short Code <span className="text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editAgendaShortCode}
+                    onChange={(e) => setEditAgendaShortCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. WA"
+                    maxLength={4}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 uppercase"
+                  />
+                  <p className="mt-1 text-[10px] text-slate-400">Used for calendar initials (max 4 characters)</p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditingAgenda(false);
+                    setEditingAgendaId(null);
+                    setEditAgendaName("");
+                    setEditAgendaEmail("");
+                    setEditAgendaSpecialty("");
+                    setEditAgendaShortCode("");
+                  }}
+                  disabled={savingAgenda}
+                  className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {tCommon("cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveEditAgenda()}
+                  disabled={savingAgenda || !editAgendaName.trim()}
+                  className="inline-flex items-center rounded-full border border-sky-500/80 bg-sky-500 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingAgenda ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             </div>
