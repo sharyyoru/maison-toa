@@ -12,6 +12,9 @@ export default function PatientMedicalNotes({ patientId }: Props) {
   const [saving, setSaving] = useState(false);
   const [editingField, setEditingField] = useState<"ap" | "notes" | null>(null);
 
+  const apRef = useRef<HTMLDivElement>(null);
+  const notesRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     async function load() {
       try {
@@ -41,27 +44,16 @@ export default function PatientMedicalNotes({ patientId }: Props) {
     }, 1000)
   ).current;
 
-  const handleChange = useCallback((field: "ap_content" | "notes_content", value: string) => {
-    if (field === "ap_content") setApContent(value);
-    else setNotesContent(value);
-    debouncedSave(field, value);
+  const handleInput = useCallback((field: "ap_content" | "notes_content", ref: React.RefObject<HTMLDivElement | null>) => {
+    const html = ref.current?.innerHTML || "";
+    if (field === "ap_content") setApContent(html);
+    else setNotesContent(html);
+    debouncedSave(field, html);
   }, [debouncedSave]);
-
-  const apRef = useRef<HTMLTextAreaElement>(null);
-  const notesRef = useRef<HTMLTextAreaElement>(null);
-
-  // Auto-resize textarea to match content
-  useEffect(() => {
-    const ref = editingField === "ap" ? apRef.current : editingField === "notes" ? notesRef.current : null;
-    if (ref) {
-      ref.style.height = "auto";
-      ref.style.height = Math.max(80, ref.scrollHeight) + "px";
-    }
-  }, [editingField, apContent, notesContent]);
 
   if (loading) return null;
 
-  const fieldStyle = "w-full rounded-md border border-slate-200 bg-slate-50/60 px-2.5 py-2 text-xs text-slate-700 min-h-[80px] max-h-[250px] overflow-y-scroll";
+  const fieldStyle = "w-full rounded-md border border-slate-200 bg-slate-50/60 px-2.5 py-2 text-xs text-slate-700 min-h-[80px] max-h-[250px] overflow-y-scroll whitespace-pre-wrap";
 
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
@@ -73,42 +65,30 @@ export default function PatientMedicalNotes({ patientId }: Props) {
         {/* AP */}
         <div>
           <label className="text-[10px] font-medium text-slate-500 mb-1 block">AP</label>
-          {editingField === "ap" ? (
-            <textarea
-              ref={apRef}
-              value={apContent}
-              onChange={(e) => { handleChange("ap_content", e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
-              onBlur={() => setEditingField(null)}
-              autoFocus
-              className={`${fieldStyle} resize-none focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 bg-white`}
-            />
-          ) : (
-            <div
-              onClick={() => setEditingField("ap")}
-              className={`${fieldStyle} cursor-text hover:border-slate-300 transition-colors whitespace-pre-wrap`}
-              dangerouslySetInnerHTML={{ __html: apContent || '<span class="text-slate-400 italic">Click to add AP notes...</span>' }}
-            />
-          )}
+          <div
+            ref={apRef}
+            contentEditable
+            suppressContentEditableWarning
+            onFocus={() => setEditingField("ap")}
+            onBlur={() => setEditingField(null)}
+            onInput={() => handleInput("ap_content", apRef)}
+            className={`${fieldStyle} ${editingField === "ap" ? "border-sky-400 ring-1 ring-sky-400 bg-white" : "cursor-text hover:border-slate-300"} focus:outline-none transition-colors`}
+            dangerouslySetInnerHTML={{ __html: apContent || '<span class="text-slate-400 italic">Click to add AP notes...</span>' }}
+          />
         </div>
         {/* Notes */}
         <div>
           <label className="text-[10px] font-medium text-slate-500 mb-1 block">Notes</label>
-          {editingField === "notes" ? (
-            <textarea
-              ref={notesRef}
-              value={notesContent}
-              onChange={(e) => { handleChange("notes_content", e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
-              onBlur={() => setEditingField(null)}
-              autoFocus
-              className={`${fieldStyle} resize-none focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 bg-white`}
-            />
-          ) : (
-            <div
-              onClick={() => setEditingField("notes")}
-              className={`${fieldStyle} cursor-text hover:border-slate-300 transition-colors whitespace-pre-wrap`}
-              dangerouslySetInnerHTML={{ __html: notesContent || '<span class="text-slate-400 italic">Click to add notes...</span>' }}
-            />
-          )}
+          <div
+            ref={notesRef}
+            contentEditable
+            suppressContentEditableWarning
+            onFocus={() => setEditingField("notes")}
+            onBlur={() => setEditingField(null)}
+            onInput={() => handleInput("notes_content", notesRef)}
+            className={`${fieldStyle} ${editingField === "notes" ? "border-sky-400 ring-1 ring-sky-400 bg-white" : "cursor-text hover:border-slate-300"} focus:outline-none transition-colors`}
+            dangerouslySetInnerHTML={{ __html: notesContent || '<span class="text-slate-400 italic">Click to add notes...</span>' }}
+          />
         </div>
       </div>
     </div>
