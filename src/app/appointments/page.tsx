@@ -3271,37 +3271,66 @@ export default function CalendarPage() {
     // If no match by provider_id, try to match by doctor name from reason
     if (!originalCalendar) {
       const doctorNameFromReason = getDoctorNameFromReason(copiedAppointment.reason);
+      console.log('[Paste] Doctor name from reason:', doctorNameFromReason, 'provider_id:', originalProviderId);
+      console.log('[Paste] Available calendars:', doctorCalendars.map(c => ({ id: c.id, name: c.name, providerId: c.providerId })));
+      
       if (doctorNameFromReason) {
-        const doctorNameLower = doctorNameFromReason.trim().toLowerCase();
+        // Remove common prefixes like "Dr", "Dr.", "Doctor" and normalize
+        const cleanedDoctorName = doctorNameFromReason
+          .replace(/^(dr\.?|doctor)\s+/i, '')
+          .trim()
+          .toLowerCase();
+        
+        // Extract significant words (length > 2) from the doctor name
+        const doctorWords = cleanedDoctorName.split(/\s+/).filter(w => w.length > 2);
+        
+        console.log('[Paste] Cleaned doctor name:', cleanedDoctorName, 'words:', doctorWords);
+        
         originalCalendar = doctorCalendars.find(c => {
           const calName = c.name.trim().toLowerCase();
-          return calName.includes(doctorNameLower) || doctorNameLower.includes(calName);
+          const cleanedCalName = calName.replace(/^(dr\.?|doctor)\s+/i, '').trim();
+          const calWords = cleanedCalName.split(/\s+/).filter(w => w.length > 2);
+          
+          // Match if any significant word matches
+          const hasMatchingWord = doctorWords.some(dw => 
+            calWords.some(cw => cw.includes(dw) || dw.includes(cw))
+          );
+          
+          // Also try full name matching
+          const fullMatch = cleanedCalName.includes(cleanedDoctorName) || cleanedDoctorName.includes(cleanedCalName);
+          
+          return hasMatchingWord || fullMatch;
         });
         console.log('[Paste] Matched doctor by name:', doctorNameFromReason, '->', originalCalendar?.name);
       }
     }
     
+    console.log('[Paste] Doctor selection - visibleCalendars:', visibleCalendars.length, 'originalCalendar:', originalCalendar?.name);
+    
     if (visibleCalendars.length > 1) {
       // Multiple doctors visible - don't pre-select, let user choose
+      console.log('[Paste] BRANCH: Multiple calendars visible, clearing selection');
       setSelectedDoctorIds([]);
       setCreateDoctorCalendarId("");
     } else if (visibleCalendars.length === 1) {
       // Single doctor visible - use that one
+      console.log('[Paste] BRANCH: Single calendar visible, using:', visibleCalendars[0].name, visibleCalendars[0].id);
       setSelectedDoctorIds([visibleCalendars[0].id]);
       setCreateDoctorCalendarId(visibleCalendars[0].id);
     } else if (originalCalendar) {
       // No calendars selected but we know the original doctor - use that
-      console.log('[Paste] Using original doctor:', originalCalendar.name, originalCalendar.id);
+      console.log('[Paste] BRANCH: Using original doctor:', originalCalendar.name, originalCalendar.id);
       setSelectedDoctorIds([originalCalendar.id]);
       setCreateDoctorCalendarId(originalCalendar.id);
     } else {
       // Fallback to first available calendar
       const defaultCalendar = doctorCalendars[0] || null;
-      console.log('[Paste] Fallback to first calendar:', defaultCalendar?.name, defaultCalendar?.id);
+      console.log('[Paste] BRANCH: Fallback to first calendar:', defaultCalendar?.name, defaultCalendar?.id);
       if (defaultCalendar?.id) {
         setSelectedDoctorIds([defaultCalendar.id]);
         setCreateDoctorCalendarId(defaultCalendar.id);
       } else {
+        console.log('[Paste] BRANCH: No calendars available, clearing selection');
         setSelectedDoctorIds([]);
         setCreateDoctorCalendarId("");
       }
