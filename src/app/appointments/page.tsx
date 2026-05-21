@@ -1081,14 +1081,6 @@ export default function CalendarPage() {
   const [editWorkflowStatus, setEditWorkflowStatus] =
     useState<WorkflowStatus>("pending");
   const [copiedAppointment, setCopiedAppointment] = useState<CalendarAppointment | null>(null);
-  // Context menu state for right-click paste
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    date: Date;
-    minutes: number;
-    doctorId: string | null;
-  } | null>(null);
   const [editDate, setEditDate] = useState("");
   const [editTime, setEditTime] = useState("");
   const [editConsultationDuration, setEditConsultationDuration] = useState(15);
@@ -3124,23 +3116,7 @@ export default function CalendarPage() {
     setCopiedAppointment(appt);
   }
 
-  function handleContextMenuOpen(e: React.MouseEvent, date: Date, minutes: number, doctorId: string | null) {
-    e.preventDefault();
-    if (!copiedAppointment) return; // Only show context menu if there's something to paste
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      date,
-      minutes,
-      doctorId,
-    });
-  }
-
-  function handleContextMenuClose() {
-    setContextMenu(null);
-  }
-
-  function handlePasteAppointment(targetDate?: Date, targetMinutes?: number, targetDoctorId?: string | null) {
+  function handlePasteAppointment() {
     if (!copiedAppointment) return;
 
     console.log('[Paste] Copied appointment:', copiedAppointment);
@@ -3256,11 +3232,10 @@ export default function CalendarPage() {
       }
     }
     
-    // Initialize multi-select doctors - use target doctor if provided, otherwise from copied appointment
-    const doctorIdToUse = targetDoctorId ?? copiedAppointment.provider_id;
-    if (doctorIdToUse) {
-      setSelectedDoctorIds([doctorIdToUse]);
-      setCreateDoctorCalendarId(doctorIdToUse);
+    // Initialize multi-select doctors from copied appointment
+    if (copiedAppointment.provider_id) {
+      setSelectedDoctorIds([copiedAppointment.provider_id]);
+      setCreateDoctorCalendarId(copiedAppointment.provider_id);
     } else {
       const defaultCalendar = doctorCalendars.find((calendar) => calendar.selected) || doctorCalendars[0] || null;
       if (defaultCalendar?.id) {
@@ -3273,20 +3248,6 @@ export default function CalendarPage() {
     }
     setDoctorConflicts({});
     resetCreateRecurrence();
-
-    // Set date and time if provided (from right-click context)
-    if (targetDate && targetMinutes !== undefined) {
-      const dateStr = formatYmd(targetDate);
-      setDraftDate(dateStr);
-      const hours = Math.floor(targetMinutes / 60);
-      const mins = targetMinutes % 60;
-      const timeStr = `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
-      setDraftTime(timeStr);
-      setTimeSearch(timeStr);
-    }
-
-    // Open the create modal
-    setCreateModalOpen(true);
   }
 
   async function handleSaveEditAppointment() {
@@ -3545,7 +3506,7 @@ export default function CalendarPage() {
             Create
           </button>
           {copiedAppointment && (
-            <div className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[10px] text-emerald-700">
+            <div className="flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[10px] text-sky-700">
               <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
@@ -3555,7 +3516,7 @@ export default function CalendarPage() {
               <button
                 type="button"
                 onClick={() => setCopiedAppointment(null)}
-                className="ml-auto flex-shrink-0 rounded-full p-0.5 hover:bg-emerald-100"
+                className="ml-auto flex-shrink-0 rounded-full p-0.5 hover:bg-sky-100"
                 title="Clear"
               >
                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -3563,9 +3524,6 @@ export default function CalendarPage() {
                 </svg>
               </button>
             </div>
-          )}
-          {copiedAppointment && (
-            <p className="text-[9px] text-slate-400 text-center">Right-click on calendar to paste</p>
           )}
         </div>
         {/* Mini month */}
@@ -4292,12 +4250,9 @@ export default function CalendarPage() {
                                     <div
                                       key={totalMinutes}
                                       onMouseDown={(e) => {
-                                        if (e.button === 0) { // Left click only
-                                          e.preventDefault();
-                                          handleDragCreateStart(date, totalMinutes, doctorCol?.id);
-                                        }
+                                        e.preventDefault();
+                                        handleDragCreateStart(date, totalMinutes, doctorCol?.id);
                                       }}
-                                      onContextMenu={(e) => handleContextMenuOpen(e, date, totalMinutes, doctorCol?.id ?? null)}
                                       onMouseEnter={() => {
                                         if (isDraggingCreate && dragDate && formatYmd(dragDate) === ymd) {
                                           handleDragCreateMove(totalMinutes);
@@ -5023,34 +4978,57 @@ export default function CalendarPage() {
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] font-medium text-slate-600">{t("modal.fields.patient")}</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewPatientFirstName("");
-                        setNewPatientLastName("");
-                        setNewPatientEmail("");
-                        setNewPatientPhone("");
-                        setNewPatientGender("");
-                        setNewPatientSource("manual");
-                        setNewPatientError(null);
-                        setSavingNewPatient(false);
-                        setNewPatientModalOpen(true);
-                      }}
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-300 bg-emerald-50 text-emerald-600 shadow-sm hover:bg-emerald-100"
-                    >
-                      <svg
-                        className="h-3 w-3"
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                    <div className="flex items-center gap-1">
+                      {copiedAppointment && (
+                        <button
+                          type="button"
+                          onClick={() => handlePasteAppointment()}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-sky-300 bg-sky-50 text-sky-600 shadow-sm hover:bg-sky-100"
+                          title={`Paste: ${copiedAppointment.patient ? `${copiedAppointment.patient.first_name ?? ""} ${copiedAppointment.patient.last_name ?? ""}`.trim() : "Copied appointment"}`}
+                        >
+                          <svg
+                            className="h-3 w-3"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+                            <rect x="9" y="3" width="6" height="4" rx="1" />
+                          </svg>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewPatientFirstName("");
+                          setNewPatientLastName("");
+                          setNewPatientEmail("");
+                          setNewPatientPhone("");
+                          setNewPatientGender("");
+                          setNewPatientSource("manual");
+                          setNewPatientError(null);
+                          setSavingNewPatient(false);
+                          setNewPatientModalOpen(true);
+                        }}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-300 bg-emerald-50 text-emerald-600 shadow-sm hover:bg-emerald-100"
                       >
-                        <path d="M10 4v12" />
-                        <path d="M4 10h12" />
-                      </svg>
-                    </button>
+                        <svg
+                          className="h-3 w-3"
+                          viewBox="0 0 20 20"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M10 4v12" />
+                          <path d="M4 10h12" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                   <div className="relative">
                     <input
@@ -6167,63 +6145,6 @@ export default function CalendarPage() {
           </div>
         )}
 
-        {/* Right-click Context Menu for Paste */}
-        {contextMenu && copiedAppointment && (
-          <>
-            {/* Backdrop to close menu */}
-            <div
-              className="fixed inset-0 z-[60]"
-              onClick={handleContextMenuClose}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                handleContextMenuClose();
-              }}
-            />
-            {/* Context menu */}
-            <div
-              className="fixed z-[61] min-w-[180px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
-              style={{
-                left: Math.min(contextMenu.x, window.innerWidth - 200),
-                top: Math.min(contextMenu.y, window.innerHeight - 100),
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  handlePasteAppointment(contextMenu.date, contextMenu.minutes, contextMenu.doctorId);
-                  handleContextMenuClose();
-                }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-              >
-                <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                <div>
-                  <div className="font-medium">Paste appointment</div>
-                  <div className="text-[10px] text-slate-500 truncate max-w-[140px]">
-                    {copiedAppointment.patient 
-                      ? `${copiedAppointment.patient.first_name ?? ""} ${copiedAppointment.patient.last_name ?? ""}`.trim()
-                      : "Copied appointment"}
-                  </div>
-                </div>
-              </button>
-              <div className="my-1 border-t border-slate-100" />
-              <button
-                type="button"
-                onClick={() => {
-                  setCopiedAppointment(null);
-                  handleContextMenuClose();
-                }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-500 hover:bg-slate-50"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                Clear clipboard
-              </button>
-            </div>
-          </>
-        )}
       </div>
     </div>
   );
