@@ -868,6 +868,20 @@ export default function CalendarPage() {
   const [dragDate, setDragDate] = useState<Date | null>(null);
   const [dragDoctorCalendarId, setDragDoctorCalendarId] = useState<string | null>(null);
   
+  // Drag-to-move appointment between doctors state
+  const [draggedAppointment, setDraggedAppointment] = useState<CalendarAppointment | null>(null);
+  const [dropTargetDoctorId, setDropTargetDoctorId] = useState<string | null>(null);
+  const [dropTargetMinutes, setDropTargetMinutes] = useState<number | null>(null);
+  
+  // Context menu for paste
+  const [pasteContextMenu, setPasteContextMenu] = useState<{
+    x: number;
+    y: number;
+    doctorId: string;
+    minutes: number;
+    date: Date;
+  } | null>(null);
+  
   // Refs for touch event handling on iPad/tablets
   const dayViewContainerRef = useRef<HTMLDivElement>(null);
   const touchDragInfoRef = useRef<{
@@ -3239,12 +3253,21 @@ export default function CalendarPage() {
       }
     }
     
-    // Initialize multi-select doctors from copied appointment
-    if (copiedAppointment.provider_id) {
-      setSelectedDoctorIds([copiedAppointment.provider_id]);
-      setCreateDoctorCalendarId(copiedAppointment.provider_id);
+    // For cross-agenda paste: don't auto-select original doctor
+    // Let user choose which doctor(s) to assign the pasted appointment to
+    // If multiple calendars are visible, don't pre-select any
+    const visibleCalendars = doctorCalendars.filter(c => c.selected);
+    if (visibleCalendars.length > 1) {
+      // Multiple doctors visible - let user choose
+      setSelectedDoctorIds([]);
+      setCreateDoctorCalendarId("");
+    } else if (visibleCalendars.length === 1) {
+      // Single doctor visible - use that one
+      setSelectedDoctorIds([visibleCalendars[0].id]);
+      setCreateDoctorCalendarId(visibleCalendars[0].id);
     } else {
-      const defaultCalendar = doctorCalendars.find((calendar) => calendar.selected) || doctorCalendars[0] || null;
+      // No doctors selected - use original or first available
+      const defaultCalendar = doctorCalendars[0] || null;
       if (defaultCalendar?.id) {
         setSelectedDoctorIds([defaultCalendar.id]);
         setCreateDoctorCalendarId(defaultCalendar.id);
@@ -3256,6 +3279,156 @@ export default function CalendarPage() {
     setDoctorConflicts({});
     resetCreateRecurrence();
   }
+
+  // Cross-agenda paste: paste to specific doctor and time slot
+  function handlePasteToSlot(doctorId: string, date: Date, minutes: number) {
+    if (!copiedAppointment) return;
+
+    // Fill form with copied data
+    handlePasteAppointment();
+    
+    // Override with target doctor and time
+    setSelectedDoctorIds([doctorId]);
+    setCreateDoctorCalendarId(doctorId);
+    
+    // Set date and time
+    setDraftDate(formatYmd(date));
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    setDraftTime(`${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`);
+    
+    // Open create modal
+    setCreateModalOpen(true);
+    setPasteContextMenu(null);
+  }
+
+  // Drag-to-move appointment handlers
+  function handleAppointmentDragStart(e: React.DragEvent, appt: CalendarAppointment) {
+    e.stopPropagation();
+    setDraggedAppointment(appt);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", appt.id);
+    
+    // Create a custom drag image
+    const dragImage = document.createElement("div");
+    dragImage.className = "bg-sky-100 border border-sky-300 rounded px-2 py-1 text-xs shadow-lg";
+    dragImage.textContent = `${appt.patient?.first_name ?? ""} ${appt.patient?.last_name ?? ""}`.trim() || "Appointment";
+    dragImage.style.position = "absolute";
+    dragImage.style.top = "-1000px";
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, 0, 0);
+    setTimeout(() => document.body.removeChild(dragImage), 0);
+  }
+
+  function handleAppointmentDragEnd() {
+    setDraggedAppointment(null);
+    setDropTargetDoctorId(null);
+    setDropTargetMinutes(null);
+  }
+
+  function handleColumnDragOver(e: React.DragEvent, doctorId: string, minutes: number) {
+    if (!draggedAppointment) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropTargetDoctorId(doctorId);
+    setDropTargetMinutes(minutes);
+  }
+
+  function handleColumnDragLeave() {
+    setDropTargetDoctorId(null);
+    setDropTargetMinutes(null);
+  }
+
+  async function handleColumnDrop(e: React.DragEvent, targetDoctorId: string, targetDate: Date, targetMinutes: number) {
+    e.preventDefault();
+    if (!draggedAppointment) return;
+
+    const appt = draggedAppointment;
+    const originalDoctorId = appt.provider_id;
+    const originalStartTime = appt.start_time;
+    
+    // Calculate duration
+    const start = new Date(appt.start_time);
+    const end = appt.end_time ? new Date(appt.end_time) : null;
+    const durationMinutes = end ? Math.round((end.getTime() - start.getTime()) / 60000) : 30;
+    
+    // Build new times
+    const newStartHours = Math.floor(targetMinutes / 60);
+    const newStartMins = targetMinutes % 60;
+    const newStartTime = `${formatYmd(targetDate)}T${String(newStartHours).padStart(2, "0")}:${String(newStartMins).padStart(2, "0")}:00`;
+    
+    const newEndMinutes = targetMinutes + durationMinutes;
+    const newEndHours = Math.floor(newEndMinutes / 60);
+    const newEndMins = newEndMinutes % 60;
+    const newEndTime = `${formatYmd(targetDate)}T${String(newEndHours).padStart(2, "0")}:${String(newEndMins).padStart(2, "0")}:00`;
+
+    // Optimistic update
+    setAppointments(prev => prev.map(a => 
+      a.id === appt.id 
+        ? { ...a, provider_id: targetDoctorId, start_time: newStartTime, end_time: newEndTime }
+        : a
+    ));
+
+    // Clear drag state
+    setDraggedAppointment(null);
+    setDropTargetDoctorId(null);
+    setDropTargetMinutes(null);
+
+    // Save to database
+    try {
+      const response = await fetch(`/api/appointments/${appt.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider_id: targetDoctorId,
+          start_time: newStartTime,
+          end_time: newEndTime,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error("Failed to move appointment");
+        // Revert on failure
+        setAppointments(prev => prev.map(a => 
+          a.id === appt.id 
+            ? { ...a, provider_id: originalDoctorId, start_time: originalStartTime, end_time: appt.end_time }
+            : a
+        ));
+      }
+    } catch (err) {
+      console.error("Error moving appointment:", err);
+      // Revert on error
+      setAppointments(prev => prev.map(a => 
+        a.id === appt.id 
+          ? { ...a, provider_id: originalDoctorId, start_time: originalStartTime, end_time: appt.end_time }
+          : a
+      ));
+    }
+  }
+
+  // Context menu handler for paste
+  function handleSlotContextMenu(e: React.MouseEvent, doctorId: string, date: Date, minutes: number) {
+    if (!copiedAppointment) return;
+    e.preventDefault();
+    setPasteContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      doctorId,
+      minutes,
+      date,
+    });
+  }
+
+  // Close context menu on click outside
+  useEffect(() => {
+    function handleClick() {
+      setPasteContextMenu(null);
+    }
+    if (pasteContextMenu) {
+      document.addEventListener("click", handleClick);
+      return () => document.removeEventListener("click", handleClick);
+    }
+  }, [pasteContextMenu]);
 
   // Refs for resize to avoid stale closures
   const resizingAppointmentRef = useRef<CalendarAppointment | null>(null);
@@ -3393,9 +3566,16 @@ export default function CalendarPage() {
     };
   }, []);
 
-  // Keyboard shortcut for undo (Ctrl+Z / Cmd+Z)
+  // Keyboard shortcuts: undo (Ctrl+Z), copy (Ctrl+C), paste (Ctrl+V)
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
+      // Skip if user is typing in an input field
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        return;
+      }
+
+      // Ctrl/Cmd + Z = Undo resize
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         const history = appointmentHistoryRef.current;
         if (history.length === 0) return;
@@ -3425,11 +3605,27 @@ export default function CalendarPage() {
           console.error("Error undoing resize:", err);
         }
       }
+
+      // Ctrl/Cmd + V = Paste appointment
+      if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        if (copiedAppointment && !createModalOpen && !editModalOpen) {
+          e.preventDefault();
+          handlePasteAppointment();
+          setCreateModalOpen(true);
+        }
+      }
+
+      // Escape = Clear copied appointment or close context menu
+      if (e.key === "Escape") {
+        if (pasteContextMenu) {
+          setPasteContextMenu(null);
+        }
+      }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [copiedAppointment, createModalOpen, editModalOpen, pasteContextMenu]);
 
   async function handleSaveEditAppointment() {
     if (!editingAppointment || savingEdit) return;
@@ -4442,8 +4638,16 @@ export default function CalendarPage() {
                                       onTouchStart={(e) => {
                                         handleTouchStart(e, date, totalMinutes, doctorCol?.id ?? null, e.currentTarget);
                                       }}
+                                      onContextMenu={(e) => handleSlotContextMenu(e, doctorCol?.id ?? "", date, totalMinutes)}
+                                      onDragOver={(e) => handleColumnDragOver(e, doctorCol?.id ?? "", totalMinutes)}
+                                      onDragLeave={handleColumnDragLeave}
+                                      onDrop={(e) => handleColumnDrop(e, doctorCol?.id ?? "", date, totalMinutes)}
                                       className={`block w-full border-t border-slate-100 cursor-pointer hover:bg-sky-50 transition-colors ${
                                         isInDragRange ? "bg-sky-100" : ""
+                                      } ${
+                                        dropTargetDoctorId === (doctorCol?.id ?? "") && dropTargetMinutes === totalMinutes
+                                          ? "bg-sky-200 ring-2 ring-sky-400 ring-inset"
+                                          : ""
                                       }`}
                                       style={{ height: DAY_VIEW_SLOT_HEIGHT, touchAction: 'none' }}
                                     />
@@ -4515,22 +4719,25 @@ export default function CalendarPage() {
                                     return (
                                       <div
                                         key={`${ymd}-${doctorCol?.id ?? "all"}-${appt.id}`}
-                                        className={`absolute ${resizingAppointment?.id === appt.id ? '' : 'group'}`}
+                                        className={`absolute ${resizingAppointment?.id === appt.id ? '' : 'group'} ${draggedAppointment?.id === appt.id ? 'opacity-50' : ''}`}
                                         style={{
                                           top,
                                           height,
                                           left: `calc(${leftPercent}% + 2px)`,
                                           width: `calc(${widthPercent}% - 4px)`,
                                         }}
+                                        draggable
+                                        onDragStart={(e) => handleAppointmentDragStart(e, appt)}
+                                        onDragEnd={handleAppointmentDragEnd}
                                       >
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            if (!resizingAppointment) {
+                                            if (!resizingAppointment && !draggedAppointment) {
                                               openEditModalForAppointment(appt);
                                             }
                                           }}
-                                          className={`w-full h-full rounded-md px-1 py-0.5 text-[10px] text-left shadow-sm overflow-hidden ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColor(category)} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
+                                          className={`w-full h-full rounded-md px-1 py-0.5 text-[10px] text-left shadow-sm overflow-hidden cursor-grab active:cursor-grabbing ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColor(category)} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
                                         >
                                           <div className="flex items-center gap-1 truncate font-medium text-slate-800">
                                             {dayStatusIcon && <span className="flex-shrink-0">{dayStatusIcon}</span>}
@@ -4616,6 +4823,52 @@ export default function CalendarPage() {
             </div>
           </div>
         )}
+
+        {/* Context menu for paste */}
+        {pasteContextMenu && copiedAppointment && (
+          <div
+            className="fixed z-[200] min-w-[200px] rounded-lg border border-slate-200 bg-white py-1 shadow-xl"
+            style={{ left: pasteContextMenu.x, top: pasteContextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-3 py-1.5 text-[10px] text-slate-400 uppercase tracking-wide border-b border-slate-100">
+              Paste Appointment
+            </div>
+            <button
+              type="button"
+              onClick={() => handlePasteToSlot(pasteContextMenu.doctorId, pasteContextMenu.date, pasteContextMenu.minutes)}
+              className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-sky-50 flex items-center gap-2"
+            >
+              <svg className="h-4 w-4 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <div>
+                <div className="font-medium">Paste here</div>
+                <div className="text-[10px] text-slate-500">
+                  {`${copiedAppointment.patient?.first_name ?? ""} ${copiedAppointment.patient?.last_name ?? ""}`.trim() || "Appointment"} → {doctorCalendars.find(c => c.id === pasteContextMenu.doctorId)?.name ?? "Doctor"}
+                </div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                handlePasteAppointment();
+                setCreateModalOpen(true);
+                setPasteContextMenu(null);
+              }}
+              className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
+            >
+              <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              <div>
+                <div className="font-medium">Paste & Edit</div>
+                <div className="text-[10px] text-slate-500">Open in form to modify</div>
+              </div>
+            </button>
+          </div>
+        )}
+
         {editModalOpen && editingAppointment ? (
           <div 
             className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40"
