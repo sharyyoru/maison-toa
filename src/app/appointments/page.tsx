@@ -3307,21 +3307,22 @@ export default function CalendarPage() {
     
     console.log('[Paste] Doctor selection - visibleCalendars:', visibleCalendars.length, 'originalCalendar:', originalCalendar?.name);
     
-    if (visibleCalendars.length > 1) {
-      // Multiple doctors visible - don't pre-select, let user choose
-      console.log('[Paste] BRANCH: Multiple calendars visible, clearing selection');
-      setSelectedDoctorIds([]);
-      setCreateDoctorCalendarId("");
-    } else if (visibleCalendars.length === 1) {
-      // Single doctor visible - use that one
-      console.log('[Paste] BRANCH: Single calendar visible, using:', visibleCalendars[0].name, visibleCalendars[0].id);
-      setSelectedDoctorIds([visibleCalendars[0].id]);
-      setCreateDoctorCalendarId(visibleCalendars[0].id);
-    } else if (originalCalendar) {
-      // No calendars selected but we know the original doctor - use that
+    // Priority: Use the original doctor from the copied appointment if we found a match
+    if (originalCalendar) {
+      // We found the original doctor - use it (this is the most common case for paste)
       console.log('[Paste] BRANCH: Using original doctor:', originalCalendar.name, originalCalendar.id);
       setSelectedDoctorIds([originalCalendar.id]);
       setCreateDoctorCalendarId(originalCalendar.id);
+    } else if (visibleCalendars.length === 1) {
+      // Single doctor visible and no original found - use that one
+      console.log('[Paste] BRANCH: Single calendar visible, using:', visibleCalendars[0].name, visibleCalendars[0].id);
+      setSelectedDoctorIds([visibleCalendars[0].id]);
+      setCreateDoctorCalendarId(visibleCalendars[0].id);
+    } else if (visibleCalendars.length > 1) {
+      // Multiple doctors visible and no original found - use first visible
+      console.log('[Paste] BRANCH: Multiple calendars, using first visible:', visibleCalendars[0].name, visibleCalendars[0].id);
+      setSelectedDoctorIds([visibleCalendars[0].id]);
+      setCreateDoctorCalendarId(visibleCalendars[0].id);
     } else {
       // Fallback to first available calendar
       const defaultCalendar = doctorCalendars[0] || null;
