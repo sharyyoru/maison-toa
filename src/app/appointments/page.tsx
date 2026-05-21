@@ -3262,9 +3262,24 @@ export default function CalendarPage() {
     // For cross-agenda paste: smart doctor selection
     const visibleCalendars = doctorCalendars.filter(c => c.selected);
     const originalProviderId = copiedAppointment.provider_id;
-    const originalCalendar = originalProviderId 
+    
+    // Try to find calendar by provider_id first
+    let originalCalendar = originalProviderId 
       ? doctorCalendars.find(c => c.providerId === originalProviderId)
       : null;
+    
+    // If no match by provider_id, try to match by doctor name from reason
+    if (!originalCalendar) {
+      const doctorNameFromReason = getDoctorNameFromReason(copiedAppointment.reason);
+      if (doctorNameFromReason) {
+        const doctorNameLower = doctorNameFromReason.trim().toLowerCase();
+        originalCalendar = doctorCalendars.find(c => {
+          const calName = c.name.trim().toLowerCase();
+          return calName.includes(doctorNameLower) || doctorNameLower.includes(calName);
+        });
+        console.log('[Paste] Matched doctor by name:', doctorNameFromReason, '->', originalCalendar?.name);
+      }
+    }
     
     if (visibleCalendars.length > 1) {
       // Multiple doctors visible - don't pre-select, let user choose
@@ -3276,11 +3291,13 @@ export default function CalendarPage() {
       setCreateDoctorCalendarId(visibleCalendars[0].id);
     } else if (originalCalendar) {
       // No calendars selected but we know the original doctor - use that
+      console.log('[Paste] Using original doctor:', originalCalendar.name, originalCalendar.id);
       setSelectedDoctorIds([originalCalendar.id]);
       setCreateDoctorCalendarId(originalCalendar.id);
     } else {
       // Fallback to first available calendar
       const defaultCalendar = doctorCalendars[0] || null;
+      console.log('[Paste] Fallback to first calendar:', defaultCalendar?.name, defaultCalendar?.id);
       if (defaultCalendar?.id) {
         setSelectedDoctorIds([defaultCalendar.id]);
         setCreateDoctorCalendarId(defaultCalendar.id);
@@ -3304,17 +3321,9 @@ export default function CalendarPage() {
     if (doctorId) {
       setSelectedDoctorIds([doctorId]);
       setCreateDoctorCalendarId(doctorId);
-    } else {
-      // No specific doctor column - try to use the original appointment's doctor
-      const originalProviderId = copiedAppointment.provider_id;
-      if (originalProviderId) {
-        const originalCalendar = doctorCalendars.find(c => c.providerId === originalProviderId);
-        if (originalCalendar) {
-          setSelectedDoctorIds([originalCalendar.id]);
-          setCreateDoctorCalendarId(originalCalendar.id);
-        }
-      }
     }
+    // Note: If doctorId is empty, handlePasteAppointment already sets the doctor
+    // based on visible calendars, provider_id, or doctor name from reason
     
     // Set date and time
     setDraftDate(formatYmd(date));
