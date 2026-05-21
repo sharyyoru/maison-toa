@@ -3305,8 +3305,11 @@ export default function CalendarPage() {
       }
     }
     
-    // Only set doctor if not skipping (caller will set the target doctor)
-    if (!skipDoctorSelection) {
+    // Only set doctor if not skipping AND no doctor is already selected
+    // This preserves the user's doctor selection when using paste button inside modal
+    const doctorAlreadySelected = selectedDoctorIds.length > 0 || createDoctorCalendarId;
+    
+    if (!skipDoctorSelection && !doctorAlreadySelected) {
       console.log('[Paste] Doctor selection - visibleCalendars:', visibleCalendars.length, 'originalCalendar:', originalCalendar?.name);
       
       // Priority: Use the original doctor from the copied appointment if we found a match
@@ -3338,6 +3341,8 @@ export default function CalendarPage() {
           setCreateDoctorCalendarId("");
         }
       }
+    } else if (doctorAlreadySelected) {
+      console.log('[Paste] Keeping existing doctor selection:', selectedDoctorIds, createDoctorCalendarId);
     } else {
       console.log('[Paste] Skipping doctor selection (caller will set target doctor)');
     }
