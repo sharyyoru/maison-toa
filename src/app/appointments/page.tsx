@@ -3379,7 +3379,15 @@ export default function CalendarPage() {
 
   // Drag-to-move appointment handlers
   function handleAppointmentDragStart(e: React.DragEvent, appt: CalendarAppointment) {
+    // Prevent any parent elements from also handling this drag
     e.stopPropagation();
+    
+    // Only allow dragging this specific appointment
+    if (draggedAppointment && draggedAppointment.id !== appt.id) {
+      e.preventDefault();
+      return;
+    }
+    
     setDraggedAppointment(appt);
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", appt.id);
@@ -3390,6 +3398,8 @@ export default function CalendarPage() {
     dragImage.textContent = `${appt.patient?.first_name ?? ""} ${appt.patient?.last_name ?? ""}`.trim() || "Appointment";
     dragImage.style.position = "absolute";
     dragImage.style.top = "-1000px";
+    dragImage.style.left = "-1000px";
+    dragImage.style.zIndex = "9999";
     document.body.appendChild(dragImage);
     e.dataTransfer.setDragImage(dragImage, 0, 0);
     setTimeout(() => document.body.removeChild(dragImage), 0);
@@ -4743,9 +4753,43 @@ export default function CalendarPage() {
                                   );
                                 })}
 
+                                {/* Drag preview ghost - shows where appointment will land */}
+                                {draggedAppointment && dropTargetDoctorId === (doctorCol?.id ?? "") && dropTargetMinutes !== null && (() => {
+                                  const dragStart = new Date(draggedAppointment.start_time);
+                                  const dragEnd = draggedAppointment.end_time ? new Date(draggedAppointment.end_time) : null;
+                                  const dragDuration = dragEnd ? Math.round((dragEnd.getTime() - dragStart.getTime()) / 60000) : 30;
+                                  const previewTop = ((dropTargetMinutes - DAY_VIEW_START_MINUTES) / DAY_VIEW_SLOT_MINUTES) * DAY_VIEW_SLOT_HEIGHT;
+                                  const previewHeight = (dragDuration / DAY_VIEW_SLOT_MINUTES) * DAY_VIEW_SLOT_HEIGHT;
+                                  const patientName = `${draggedAppointment.patient?.first_name ?? ""} ${draggedAppointment.patient?.last_name ?? ""}`.trim();
+                                  
+                                  return (
+                                    <div
+                                      className="absolute left-0 right-0 mx-1 bg-sky-200 border-2 border-dashed border-sky-500 rounded-md opacity-70 pointer-events-none z-20 flex items-center justify-center"
+                                      style={{
+                                        top: previewTop,
+                                        height: Math.max(previewHeight, 24),
+                                      }}
+                                    >
+                                      <span className="text-xs font-medium text-sky-700 truncate px-1">
+                                        {patientName || "Move here"}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
+
                                 {/* Appointments for this doctor column */}
                                 {(() => {
-                                  const overlapMap = calculateOverlapPositions(columnAppointments);
+                                  // Exclude dragged appointment from overlap calculation to prevent layout shifts
+                                  const appointmentsForOverlap = draggedAppointment 
+                                    ? columnAppointments.filter(a => a.id !== draggedAppointment.id)
+                                    : columnAppointments;
+                                  const overlapMap = calculateOverlapPositions(appointmentsForOverlap);
+                                  
+                                  // For the dragged appointment, calculate its own position without affecting others
+                                  if (draggedAppointment && columnAppointments.some(a => a.id === draggedAppointment.id)) {
+                                    overlapMap.set(draggedAppointment.id, { id: draggedAppointment.id, columnIndex: 0, totalColumns: 1 });
+                                  }
+                                  
                                   return columnAppointments.map((appt) => {
                                     const start = new Date(appt.start_time);
                                     if (Number.isNaN(start.getTime())) return null;
