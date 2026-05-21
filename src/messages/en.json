@@ -148,6 +148,7 @@
         "frequency": "Frequency",
         "daily": "Daily",
         "weekly": "Weekly",
+        "biweekly": "Bi-weekly",
         "monthly": "Monthly",
         "yearly": "Yearly",
         "ends": "Ends",

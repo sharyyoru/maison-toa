@@ -28,7 +28,7 @@ type AppointmentStatus =
   | "no_show";
 
 type WorkflowStatus = "pending" | "approved" | "rescheduled" | "cancelled";
-type RecurrenceFrequency = "none" | "daily" | "weekly" | "monthly" | "yearly";
+type RecurrenceFrequency = "none" | "daily" | "weekly" | "biweekly" | "monthly" | "yearly";
 type RecurrenceEndMode = "after" | "on";
 
 type AppointmentOccurrence = {
@@ -80,6 +80,8 @@ function getNextRecurrenceDate(dateStr: string, frequency: RecurrenceFrequency):
       return addDaysToYmd(dateStr, 1);
     case "weekly":
       return addDaysToYmd(dateStr, 7);
+    case "biweekly":
+      return addDaysToYmd(dateStr, 14);
     case "monthly":
       return addMonthsClamped(dateStr, 1);
     case "yearly":
@@ -5261,6 +5263,7 @@ export default function CalendarPage() {
                           >
                             <option value="daily">{t("modal.recurrence.daily")}</option>
                             <option value="weekly">{t("modal.recurrence.weekly")}</option>
+                            <option value="biweekly">{t("modal.recurrence.biweekly")}</option>
                             <option value="monthly">{t("modal.recurrence.monthly")}</option>
                             <option value="yearly">{t("modal.recurrence.yearly")}</option>
                           </select>
