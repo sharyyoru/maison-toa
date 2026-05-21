@@ -1298,10 +1298,11 @@ export default function CalendarPage() {
         setProvidersLoading(true);
         setProvidersError(null);
 
-        // Load from providers table (appointments reference provider_id from this table)
+        // Load from providers table - filter by role to show doctors/nurses/technicians (not billing entities)
         const { data, error } = await supabaseClient
           .from("providers")
-          .select("id, name, email")
+          .select("id, name, email, role")
+          .in("role", ["doctor", "nurse", "technician"])
           .order("name", { ascending: true });
 
         if (!isMounted) return;
@@ -1311,83 +1312,12 @@ export default function CalendarPage() {
           setProviders([]);
           setProvidersError(error?.message ?? "Failed to load providers.");
         } else {
-          // Filter to only show Maison Toa doctors - exact names only
-          const MAISON_TOA_DOCTOR_NAMES = [
-            // Standard format
-            "dr. sophie nordback",
-            "dr. alexandra miles",
-            "dr. reda benani",
-            "dr. adnan plakalo",
-            "dr. natalia koltunova",
-            "laetitia guarino",
-            "louise goerig",
-            "juliette le mentec",
-            "gwendoline boursault",
-            "claire balbo",
-            "ophélie perrin",
-            "ophelie perrin",
-            // Agenda resources
-            "mélissa",
-            "melissa",
-            "sandra",
-            "giulia",
-            "jessica",
-            "non présence",
-            "non presence",
-            "bloc",
-            "cabine 1",
-            "cabine 3",
-            // Without Dr. prefix
-            "sophie nordback",
-            "alexandra miles",
-            "reda benani",
-            "adnan plakalo",
-            "natalia koltunova",
-            // Reversed format (LastName FirstName)
-            "nordback sophie",
-            "miles alexandra",
-            "benani reda",
-            "plakalo adnan",
-            "koltunova natalia",
-            "guarino laetitia",
-            "goerig louise",
-            "le mentec juliette",
-            "boursault gwendoline",
-            "balbo claire",
-            "perrin ophélie",
-            "perrin ophelie",
-          ];
-          
-          const maisontoaDoctors = (data as any[]).filter((row) => {
-            const providerName = (row.name as string | null) ?? null;
-            if (!providerName) return false;
-            
-            const normalizedProviderName = providerName.toLowerCase().trim();
-            
-            // Match exact Maison Toa doctor names OR partial match with key names
-            const isExactMatch = MAISON_TOA_DOCTOR_NAMES.includes(normalizedProviderName);
-            const isPartialMatch = (
-              (normalizedProviderName.includes('sophie') && normalizedProviderName.includes('nordback')) ||
-              (normalizedProviderName.includes('alexandra') && normalizedProviderName.includes('miles')) ||
-              (normalizedProviderName.includes('reda') && normalizedProviderName.includes('benani')) ||
-              (normalizedProviderName.includes('adnan') && normalizedProviderName.includes('plakalo')) ||
-              (normalizedProviderName.includes('natalia') && normalizedProviderName.includes('koltunova')) ||
-              (normalizedProviderName.includes('laetitia') && normalizedProviderName.includes('guarino')) ||
-              (normalizedProviderName.includes('louise') && normalizedProviderName.includes('goerig')) ||
-              (normalizedProviderName.includes('juliette') && normalizedProviderName.includes('mentec')) ||
-              (normalizedProviderName.includes('gwendoline') && normalizedProviderName.includes('boursault')) ||
-              (normalizedProviderName.includes('claire') && normalizedProviderName.includes('balbo')) ||
-              (normalizedProviderName.includes('ophelie') && normalizedProviderName.includes('perrin')) ||
-              (normalizedProviderName.includes('ophélie') && normalizedProviderName.includes('perrin'))
-            );
-            
-            return isExactMatch || isPartialMatch;
-          });
-          
           // Deduplicate by keeping only one entry per doctor (prefer "Dr." prefix version)
           const seenDoctors = new Set<string>();
-          const uniqueDoctors = maisontoaDoctors.filter((row) => {
+          const uniqueDoctors = (data as any[]).filter((row) => {
             const providerName = (row.name as string | null) ?? "";
+            if (!providerName.trim()) return false;
+            
             const normalized = providerName.toLowerCase().trim();
             
             // Create a key based on the core name (without prefix)
@@ -3766,15 +3696,6 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Booking pages / Other calendars placeholders */}
-        <div className="mt-4 space-y-2 text-[10px] text-slate-500">
-          <p className="font-semibold">{t("sidebar.bookingPages")}</p>
-          <p className="text-slate-400">{t("sidebar.comingSoon")}</p>
-        </div>
-        <div className="mt-4 space-y-2 text-[10px] text-slate-500">
-          <p className="font-semibold">{t("sidebar.otherCalendars")}</p>
-          <p className="text-slate-400">{t("sidebar.comingSoon")}</p>
-        </div>
       </aside>
 
       {/* Main month view */}
