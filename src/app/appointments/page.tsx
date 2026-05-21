@@ -157,6 +157,7 @@ type AppointmentPatient = {
   last_name: string | null;
   email: string | null;
   phone: string | null;
+  date_of_birth?: string | null;
   is_vip?: boolean | null;
   language_preference?: string | null;
 };
@@ -1099,7 +1100,7 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, date_of_birth, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -4271,6 +4272,11 @@ export default function CalendarPage() {
                     {editingAppointment.patient?.phone && (
                       <p className="text-[10px] text-slate-500">
                         {editingAppointment.patient.phone}
+                      </p>
+                    )}
+                    {editingAppointment.patient?.date_of_birth && (
+                      <p className="text-[10px] text-slate-500">
+                        📅 {new Date(editingAppointment.patient.date_of_birth + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
                       </p>
                     )}
                   </div>
