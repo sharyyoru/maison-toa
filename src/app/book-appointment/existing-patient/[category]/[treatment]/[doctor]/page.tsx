@@ -146,6 +146,7 @@ function DoctorBookingContent() {
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [dbAvailability, setDbAvailability] = useState<DayAvailability | null>(null);
+  const [blockedDates, setBlockedDates] = useState<Set<string>>(new Set());
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -251,16 +252,37 @@ function DoctorBookingContent() {
     fetchTreatment();
   }, [treatmentId]);
 
+  // Fetch blocked dates on mount
+  useEffect(() => {
+    async function fetchBlockedDates() {
+      try {
+        const res = await fetch("/api/settings/blocked-dates");
+        if (res.ok) {
+          const data = await res.json();
+          const blocked = new Set<string>(
+            (data.blockedDates || []).map((bd: { blocked_date: string }) => bd.blocked_date)
+          );
+          setBlockedDates(blocked);
+        }
+      } catch (err) {
+        console.error("Failed to fetch blocked dates:", err);
+      }
+    }
+    fetchBlockedDates();
+  }, []);
+
   useEffect(() => {
     if (locationId && doctorSlug && doctor) {
       setIsLoadingDates(true);
       const dates = getAvailableDates(doctorSlug, locationId, 90, dbAvailability);
-      setAvailableDatesSet(new Set(dates));
+      // Filter out blocked dates
+      const filteredDates = dates.filter((d) => !blockedDates.has(d));
+      setAvailableDatesSet(new Set(filteredDates));
 
       // Find the first date that actually has open slots (not just doctor schedule)
       const findFirstAvailableDate = async () => {
         const doctorName = doctor.name;
-        for (const dateStr of dates) {
+        for (const dateStr of filteredDates) {
           try {
             const { start, end } = getSwissDayRange(dateStr);
             const res = await fetch(
@@ -295,7 +317,7 @@ function DoctorBookingContent() {
 
       findFirstAvailableDate();
     }
-  }, [locationId, doctorSlug, dbAvailability, doctor]);
+  }, [locationId, doctorSlug, dbAvailability, doctor, blockedDates]);
 
   useEffect(() => {
     if (selectedDate && locationId && doctor) {

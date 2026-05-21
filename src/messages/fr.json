@@ -1350,8 +1350,23 @@
       "externalLabs": "Laboratoires externes",
       "doctorScheduling": "Planification des médecins",
       "calendarDefaults": "Calendriers par défaut",
+      "blockedDates": "Dates bloquées",
       "medidata": "Connexion MediData",
       "bookingCategories": "Catégories de réservation"
+    },
+    "blockedDates": {
+      "blockTitle": "Bloquer une date",
+      "blockDescription": "Bloquez les dates lorsque la clinique est fermée. Ces dates ne seront pas disponibles pour les réservations.",
+      "dateLabel": "Date à bloquer",
+      "reasonLabel": "Raison (optionnel)",
+      "reasonPlaceholder": "ex. : Jour férié, Maintenance",
+      "addButton": "Ajouter date bloquée",
+      "adding": "Ajout en cours…",
+      "listTitle": "Dates bloquées",
+      "loading": "Chargement des dates bloquées…",
+      "noDates": "Aucune date bloquée configurée.",
+      "remove": "Supprimer",
+      "clinicClosed": "La clinique est fermée ce jour-là. Veuillez sélectionner une autre date."
     },
     "common": {
       "loading": "Chargement\u2026",

@@ -9,6 +9,7 @@ const TABS = [
   { id: "external-labs", label: "External Labs" },
   { id: "doctor-scheduling", label: "Doctor Scheduling" },
   { id: "calendar-defaults", label: "Calendar Defaults" },
+  { id: "blocked-dates", label: "Blocked Dates" },
   { id: "medidata", label: "MediData Connection" },
   { id: "booking-categories", label: "Booking Categories" },
 ] as const;
@@ -44,6 +45,7 @@ export default function SettingsPage() {
     "external-labs": t("tabs.externalLabs"),
     "doctor-scheduling": t("tabs.doctorScheduling"),
     "calendar-defaults": t("tabs.calendarDefaults"),
+    "blocked-dates": t("tabs.blockedDates"),
     "medidata": t("tabs.medidata"),
     "booking-categories": t("tabs.bookingCategories"),
   };
@@ -80,6 +82,7 @@ export default function SettingsPage() {
         {activeTab === "external-labs" && <ExternalLabsTab />}
         {activeTab === "doctor-scheduling" && <DoctorSchedulingTab />}
         {activeTab === "calendar-defaults" && <CalendarDefaultsTab />}
+        {activeTab === "blocked-dates" && <BlockedDatesTab />}
         {activeTab === "medidata" && <MediDataConnectionTab />}
         {activeTab === "booking-categories" && <BookingCategoriesTab />}
       </div>
@@ -2343,6 +2346,197 @@ function DoctorAssignmentsView({ mode, entityId, entityName, doctors, onBack }: 
         >
           {saving ? tc("saving") : t("saveAssignments")}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Blocked Dates Tab
+// ---------------------------------------------------------------------------
+
+interface BlockedDate {
+  id: string;
+  blocked_date: string;
+  reason: string | null;
+  created_at: string;
+}
+
+function BlockedDatesTab() {
+  const t = useTranslations("settingsPage");
+  const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [newDate, setNewDate] = useState("");
+  const [newReason, setNewReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadBlockedDates() {
+      try {
+        const res = await fetch("/api/settings/blocked-dates");
+        if (res.ok) {
+          const data = await res.json();
+          setBlockedDates(data.blockedDates || []);
+        }
+      } catch (err) {
+        console.error("Failed to load blocked dates:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadBlockedDates();
+  }, []);
+
+  async function handleAddDate() {
+    if (!newDate) {
+      setError("Please select a date to block.");
+      return;
+    }
+
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/settings/blocked-dates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          blocked_date: newDate,
+          reason: newReason || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to add blocked date.");
+        return;
+      }
+
+      const data = await res.json();
+      setBlockedDates((prev) => [...prev, data.blockedDate].sort((a, b) =>
+        a.blocked_date.localeCompare(b.blocked_date)
+      ));
+      setNewDate("");
+      setNewReason("");
+    } catch (err) {
+      setError("Failed to add blocked date.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteDate(id: string) {
+    setSaving(true);
+    try {
+      await fetch(`/api/settings/blocked-dates?id=${id}`, { method: "DELETE" });
+      setBlockedDates((prev) => prev.filter((d) => d.id !== id));
+    } catch (err) {
+      console.error("Failed to delete blocked date:", err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function formatDate(dateStr: string): string {
+    const date = new Date(dateStr + "T12:00:00");
+    return date.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+
+  return (
+    <div className="max-w-3xl space-y-6">
+      {/* Add new blocked date */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-800">{t("blockedDates.blockTitle")}</h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {t("blockedDates.blockDescription")}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-600">
+              {t("blockedDates.dateLabel")} <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="date"
+              value={newDate}
+              onChange={(e) => setNewDate(e.target.value)}
+              min={today}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-600">
+              {t("blockedDates.reasonLabel")}
+            </label>
+            <input
+              type="text"
+              value={newReason}
+              onChange={(e) => setNewReason(e.target.value)}
+              placeholder={t("blockedDates.reasonPlaceholder")}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            />
+          </div>
+        </div>
+
+        {error && <p className="text-xs text-red-500">{error}</p>}
+
+        <div className="flex justify-end">
+          <button
+            onClick={handleAddDate}
+            disabled={saving || !newDate}
+            className="rounded-lg bg-sky-500 px-4 py-2 text-xs font-medium text-white hover:bg-sky-600 transition-colors disabled:opacity-50"
+          >
+            {saving ? t("blockedDates.adding") : t("blockedDates.addButton")}
+          </button>
+        </div>
+      </div>
+
+      {/* List of blocked dates */}
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="border-b border-slate-200 px-5 py-3">
+          <h3 className="text-sm font-semibold text-slate-800">{t("blockedDates.listTitle")}</h3>
+        </div>
+
+        {loading ? (
+          <div className="px-5 py-8 text-center text-xs text-slate-400">
+            {t("blockedDates.loading")}
+          </div>
+        ) : blockedDates.length === 0 ? (
+          <div className="px-5 py-8 text-center text-xs text-slate-400">
+            {t("blockedDates.noDates")}
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {blockedDates.map((bd) => (
+              <div key={bd.id} className="flex items-center justify-between px-5 py-3">
+                <div>
+                  <div className="text-sm font-medium text-slate-800">
+                    {formatDate(bd.blocked_date)}
+                  </div>
+                  {bd.reason && (
+                    <div className="text-xs text-slate-500 mt-0.5">{bd.reason}</div>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleDeleteDate(bd.id)}
+                  disabled={saving}
+                  className="px-3 py-1 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {t("blockedDates.remove")}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

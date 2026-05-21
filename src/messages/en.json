@@ -1350,8 +1350,23 @@
       "externalLabs": "External Labs",
       "doctorScheduling": "Doctor Scheduling",
       "calendarDefaults": "Calendar Defaults",
+      "blockedDates": "Blocked Dates",
       "medidata": "MediData Connection",
       "bookingCategories": "Booking Categories"
+    },
+    "blockedDates": {
+      "blockTitle": "Block a Date",
+      "blockDescription": "Block dates when the clinic is closed. These dates will not be available for booking by any doctor.",
+      "dateLabel": "Date to Block",
+      "reasonLabel": "Reason (optional)",
+      "reasonPlaceholder": "e.g., Holiday, Maintenance",
+      "addButton": "Add Blocked Date",
+      "adding": "Adding…",
+      "listTitle": "Blocked Dates",
+      "loading": "Loading blocked dates…",
+      "noDates": "No blocked dates configured.",
+      "remove": "Remove",
+      "clinicClosed": "The clinic is closed on this date. Please select another date."
     },
     "common": {
       "loading": "Loading\u2026",
