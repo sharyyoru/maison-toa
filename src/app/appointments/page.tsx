@@ -409,14 +409,79 @@ const DAY_VIEW_END_MINUTES = 20 * 60; // 8 PM
 const DAY_VIEW_SLOT_MINUTES = 15;
 const DAY_VIEW_SLOT_HEIGHT = 28;
 
-// Priority doctors to show first in the list
-const PRIORITY_DOCTOR_NAMES = [
-  "Dr. Sophie Nordback",
-  "Dr. Alexandra Miles", 
-  "Dr. Reda Benani",
-  "Dr. Adnan Plakalo",
-  "Dr. Natalia Koltunova",
+// Agenda order and initials mapping - matches the official clinic list
+const AGENDA_ORDER: { name: string; initials: string }[] = [
+  { name: "Dr Alexandra Miles", initials: "AM" },
+  { name: "Dr Sophie Nordback", initials: "SN" },
+  { name: "Dr Reda Benani", initials: "RB" },
+  { name: "Dr Laetitia Guarino", initials: "LAG" },
+  { name: "Dr Natalia Koltunova", initials: "NK" },
+  { name: "Dr Adnan Plakalo", initials: "AP" },
+  { name: "Claire", initials: "CB" },
+  { name: "Gwendoline", initials: "GB" },
+  { name: "Juliette", initials: "JLM" },
+  { name: "Ophélie", initials: "OP" },
+  { name: "Louise", initials: "LG" },
+  { name: "Giulia", initials: "GG" },
+  { name: "Jessica", initials: "JG" },
+  { name: "Sandra", initials: "SD" },
+  { name: "Lyne", initials: "LY" },
+  { name: "Bloc", initials: "B" },
+  { name: "Cabine 1", initials: "C1" },
+  { name: "Cabine 3", initials: "C3" },
+  { name: "Non présence", initials: "OFF" },
 ];
+
+// Helper to get initials for a calendar name
+function getInitialsForName(name: string): string {
+  const normalized = name
+    .toLowerCase()
+    .replace(/^(mme|mr|mrs|ms|dr|prof)\.?\s*/i, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  
+  for (const entry of AGENDA_ORDER) {
+    const entryNorm = entry.name
+      .toLowerCase()
+      .replace(/^(mme|mr|mrs|ms|dr|prof)\.?\s*/i, "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+    if (normalized.includes(entryNorm) || entryNorm.includes(normalized)) {
+      return entry.initials;
+    }
+  }
+  // Fallback: first letters of each word
+  const words = name.replace(/^(Dr\.?|Mme\.?|Mr\.?)\s*/i, "").split(/\s+/);
+  return words.map(w => w[0]?.toUpperCase() || "").join("").slice(0, 3) || "?";
+}
+
+// Helper to get sort order for a calendar name (returns index in AGENDA_ORDER or 999 for unknown)
+function getAgendaOrder(name: string): number {
+  const normalized = name
+    .toLowerCase()
+    .replace(/^(mme|mr|mrs|ms|dr|prof)\.?\s*/i, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  
+  for (let i = 0; i < AGENDA_ORDER.length; i++) {
+    const entryNorm = AGENDA_ORDER[i].name
+      .toLowerCase()
+      .replace(/^(mme|mr|mrs|ms|dr|prof)\.?\s*/i, "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+    if (normalized.includes(entryNorm) || entryNorm.includes(normalized)) {
+      return i;
+    }
+  }
+  return 999; // Unknown entries go to the end
+}
+
+// Priority doctors to show first in the list (extract names from AGENDA_ORDER)
+const PRIORITY_DOCTOR_NAMES = AGENDA_ORDER.map(a => a.name);
 
 type ProviderOption = {
   id: string;
@@ -433,6 +498,7 @@ type DoctorCalendar = {
   id: string;
   providerId: string;
   name: string;
+  initials: string;
   color: string;
   selected: boolean;
 };
@@ -1435,6 +1501,7 @@ export default function CalendarPage() {
           id: provider.id,
           providerId: provider.id,
           name: trimmedName,
+          initials: getInitialsForName(trimmedName),
           color: getCalendarColorForIndex(index),
           selected,
         };
@@ -1453,15 +1520,12 @@ export default function CalendarPage() {
         }
       }
 
-      const xavierIndex = baseCalendars.findIndex((calendar) => {
-        const value = calendar.name.toLowerCase();
-        return value.includes("xavier") && value.includes("tenorio");
+      // Sort calendars by the official AGENDA_ORDER
+      baseCalendars.sort((a, b) => {
+        const orderA = getAgendaOrder(a.name);
+        const orderB = getAgendaOrder(b.name);
+        return orderA - orderB;
       });
-
-      if (xavierIndex > 0) {
-        const [xavier] = baseCalendars.splice(xavierIndex, 1);
-        baseCalendars.unshift(xavier);
-      }
 
       return baseCalendars;
     });
@@ -2316,11 +2380,15 @@ export default function CalendarPage() {
         id: provider.id,
         providerId: provider.id,
         name: trimmedName,
+        initials: getInitialsForName(trimmedName),
         color: getCalendarColorForIndex(prev.length),
         selected: true,
       };
 
-      return [...prev, nextCalendar];
+      // Insert at correct position based on AGENDA_ORDER
+      const newList = [...prev, nextCalendar];
+      newList.sort((a, b) => getAgendaOrder(a.name) - getAgendaOrder(b.name));
+      return newList;
     });
 
     setIsCreatingCalendar(false);
@@ -2357,14 +2425,19 @@ export default function CalendarPage() {
       
       // Also add to doctor calendars
       setDoctorCalendars((prev) => {
+        const calendarName = newProvider.name || "Unnamed doctor";
         const nextCalendar: DoctorCalendar = {
           id: newProvider.id,
           providerId: newProvider.id,
-          name: newProvider.name || "Unnamed doctor",
+          name: calendarName,
+          initials: getInitialsForName(calendarName),
           color: getCalendarColorForIndex(prev.length),
           selected: true,
         };
-        return [...prev, nextCalendar];
+        // Insert at correct position based on AGENDA_ORDER
+        const newList = [...prev, nextCalendar];
+        newList.sort((a, b) => getAgendaOrder(a.name) - getAgendaOrder(b.name));
+        return newList;
       });
       
       // Reset form
@@ -3590,10 +3663,12 @@ export default function CalendarPage() {
                         onChange={() => handleToggleCalendarSelected(calendar.id)}
                         className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                       />
-                      <span className="inline-flex items-center gap-1">
+                      <span className="inline-flex items-center gap-1.5">
                         <span
-                          className={`h-2 w-2 rounded-sm ${calendar.color}`}
-                        />
+                          className="inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded bg-slate-200 px-1 text-[9px] font-bold text-slate-600"
+                        >
+                          {calendar.initials}
+                        </span>
                         <span className="truncate">{calendar.name}</span>
                       </span>
                     </label>
