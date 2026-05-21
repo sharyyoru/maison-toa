@@ -6,60 +6,70 @@ import { debounce } from "lodash";
 type Props = { patientId: string };
 
 export default function PatientMedicalNotes({ patientId }: Props) {
+  const [apContent, setApContent] = useState("");
+  const [notesContent, setNotesContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingField, setEditingField] = useState<"ap" | "notes" | null>(null);
-  const [initialLoaded, setInitialLoaded] = useState(false);
 
-  const apRef = useRef<HTMLTextAreaElement>(null);
-  const notesRef = useRef<HTMLTextAreaElement>(null);
-
+  // Load initial data
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch(`/api/medical-records?patientId=${patientId}`);
         const data = await res.json();
         if (data.record) {
-          // Set initial values directly on the DOM elements
-          if (apRef.current) {
-            apRef.current.value = data.record.ap_content || "";
-          }
-          if (notesRef.current) {
-            notesRef.current.value = data.record.notes_content || "";
-          }
+          setApContent(data.record.ap_content || "");
+          setNotesContent(data.record.notes_content || "");
         }
-      } catch {}
+      } catch (err) {
+        console.error("Failed to load medical notes:", err);
+      }
       setLoading(false);
-      setInitialLoaded(true);
     }
     if (patientId) load();
   }, [patientId]);
 
-  const debouncedSave = useRef(
-    debounce(async (field: string, content: string) => {
+  // Debounced save function - recreate when patientId changes
+  const saveToServer = useCallback(
+    debounce(async (field: string, content: string, pid: string) => {
       setSaving(true);
       try {
-        await fetch("/api/medical-records", {
+        const res = await fetch("/api/medical-records", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ patientId, field, content, editedByName: "User" }),
+          body: JSON.stringify({ patientId: pid, field, content, editedByName: "User" }),
         });
-      } catch {}
+        if (!res.ok) {
+          console.error("Failed to save:", await res.text());
+        }
+      } catch (err) {
+        console.error("Error saving medical note:", err);
+      }
       setSaving(false);
-    }, 1000)
-  ).current;
+    }, 800),
+    []
+  );
 
-  const handleApChange = useCallback(() => {
-    const content = apRef.current?.value || "";
-    debouncedSave("ap_content", content);
-  }, [debouncedSave]);
+  const handleApChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setApContent(value);
+    saveToServer("ap_content", value, patientId);
+  };
 
-  const handleNotesChange = useCallback(() => {
-    const content = notesRef.current?.value || "";
-    debouncedSave("notes_content", content);
-  }, [debouncedSave]);
+  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setNotesContent(value);
+    saveToServer("notes_content", value, patientId);
+  };
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
+        <div className="text-xs text-slate-400">Loading notes...</div>
+      </div>
+    );
+  }
 
   const fieldStyle = "w-full rounded-md border border-slate-200 bg-slate-50/60 px-2.5 py-2 text-xs text-slate-700 min-h-[80px] max-h-[250px] overflow-y-auto resize-none";
 
@@ -74,8 +84,8 @@ export default function PatientMedicalNotes({ patientId }: Props) {
         <div>
           <label className="text-[10px] font-medium text-slate-500 mb-1 block">AP</label>
           <textarea
-            ref={apRef}
             dir="ltr"
+            value={apContent}
             onFocus={() => setEditingField("ap")}
             onBlur={() => setEditingField(null)}
             onChange={handleApChange}
@@ -87,8 +97,8 @@ export default function PatientMedicalNotes({ patientId }: Props) {
         <div>
           <label className="text-[10px] font-medium text-slate-500 mb-1 block">Notes</label>
           <textarea
-            ref={notesRef}
             dir="ltr"
+            value={notesContent}
             onFocus={() => setEditingField("notes")}
             onBlur={() => setEditingField(null)}
             onChange={handleNotesChange}
