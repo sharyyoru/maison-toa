@@ -1172,7 +1172,7 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, date_of_birth, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
