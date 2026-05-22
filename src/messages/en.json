@@ -246,7 +246,6 @@
       "documents": "Documents",
       "rendezvous": "Rendezvous",
       "forms": "Forms",
-      "documentForms": "Document Forms",
       "crm": "CRM"
     },
     "details": {
@@ -587,21 +586,6 @@
       "cancel": "Cancel",
       "errDateTime": "Please select a date and time.",
       "errInvalidDateTime": "Invalid date or time."
-    },
-    "documentFormsTab": {
-      "title": "Document Forms",
-      "loading": "Loading forms...",
-      "loadError": "Failed to load document forms",
-      "previewError": "Failed to preview document",
-      "noForms": "No document forms available",
-      "noFormsHint": "Document forms will appear here when added to the patient-forms folder.",
-      "noResults": "No forms match your search",
-      "noResultsHint": "Try adjusting your search query.",
-      "searchPlaceholder": "Search forms...",
-      "edit": "Edit",
-      "preview": "Preview",
-      "close": "Close",
-      "dismiss": "Dismiss"
     },
     "templatesTab": {
       "title": "Document Templates",

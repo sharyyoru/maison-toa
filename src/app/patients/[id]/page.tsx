@@ -25,7 +25,6 @@ import PatientCockpitDetails from "./PatientCockpitDetails";
 import PatientMedicalNotes from "./PatientMedicalNotes";
 import PatientPageClientWrapper from "./PatientPageClientWrapper";
 import PatientFormsTab from "./PatientFormsTab";
-import PatientDocumentFormsTab from "./PatientDocumentFormsTab";
 import PatientTabRegistrar from "./PatientTabRegistrar";
 import VipToggle from "./VipToggle";
 import PatientNotesDrawer from "@/components/PatientNotesDrawer";
@@ -47,7 +46,6 @@ type MedicalTab =
   | "3d"
   | "patient_information"
   | "documents"
-  | "document_forms"
   | "rendezvous"
   | "forms"
   | "crm"
@@ -305,7 +303,6 @@ export default async function PatientPage({
       rawMedicalTab === "3d" ||
       rawMedicalTab === "patient_information" ||
       rawMedicalTab === "documents" ||
-      rawMedicalTab === "document_forms" ||
       rawMedicalTab === "rendezvous" ||
       rawMedicalTab === "forms" ||
       rawMedicalTab === "crm" ||
@@ -714,13 +711,6 @@ export default async function PatientPage({
 
         {medicalTab === "rendezvous" ? (
           <PatientRendezvousTab patientId={patient.id} />
-        ) : null}
-
-        {medicalTab === "document_forms" ? (
-          <PatientDocumentFormsTab
-            patientId={patient.id}
-            patientName={`${patient.first_name} ${patient.last_name}`}
-          />
         ) : null}
 
         {medicalTab === "forms" ? (

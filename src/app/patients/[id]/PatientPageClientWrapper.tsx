@@ -16,7 +16,6 @@ type MedicalTab =
   | "3d"
   | "patient_information"
   | "documents"
-  | "document_forms"
   | "rendezvous"
   | "forms"
   | "crm"
@@ -44,7 +43,6 @@ export default function PatientPageClientWrapper({
     { id: "3d", label: t("threeD") },
     { id: "patient_information", label: t("patientInformation") },
     { id: "documents", label: t("documents") },
-    { id: "document_forms", label: t("documentForms") },
     { id: "rendezvous", label: t("rendezvous") },
     { id: "forms", label: t("forms") },
     { id: "crm", label: t("crm") },

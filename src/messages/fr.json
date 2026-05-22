@@ -246,7 +246,6 @@
       "documents": "Documents",
       "rendezvous": "Rendez-vous",
       "forms": "Formulaires",
-      "documentForms": "Documents",
       "crm": "CRM"
     },
     "details": {
@@ -587,21 +586,6 @@
       "cancel": "Annuler",
       "errDateTime": "Veuillez sélectionner une date et une heure.",
       "errInvalidDateTime": "Date ou heure invalide."
-    },
-    "documentFormsTab": {
-      "title": "Documents",
-      "loading": "Chargement des documents...",
-      "loadError": "Échec du chargement des documents",
-      "previewError": "Échec de l'aperçu du document",
-      "noForms": "Aucun document disponible",
-      "noFormsHint": "Les documents apparaîtront ici lorsqu'ils seront ajoutés au dossier patient-forms.",
-      "noResults": "Aucun document ne correspond à votre recherche",
-      "noResultsHint": "Essayez d'ajuster votre requête de recherche.",
-      "searchPlaceholder": "Rechercher des documents...",
-      "edit": "Modifier",
-      "preview": "Aperçu",
-      "close": "Fermer",
-      "dismiss": "Ignorer"
     },
     "templatesTab": {
       "title": "Modèles de documents",
