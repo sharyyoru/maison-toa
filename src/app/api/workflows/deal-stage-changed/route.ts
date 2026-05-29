@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
 
 export const runtime = "nodejs";
 
 // Sales team users for round-robin assignment
 const SALES_TEAM_NAMES = ["Charline", "Elite", "Audrey", "Bubuque", "Victoria"];
 
-const mailgunApiKey = process.env.MAILGUN_API_KEY;
-const mailgunDomain = process.env.MAILGUN_DOMAIN;
-const mailgunFromEmail = process.env.MAILGUN_FROM_EMAIL;
-const mailgunFromName = process.env.MAILGUN_FROM_NAME || "Clinic";
-const mailgunApiBaseUrl =
-  process.env.MAILGUN_API_BASE_URL || "https://api.mailgun.net";
+const emailFromAddress = process.env.EMAIL_FROM_ADDRESS || "info@maisontoa.com";
+const emailFromName = process.env.EMAIL_FROM_NAME || "Maison Toa";
+const replyDomain = process.env.EMAIL_REPLY_DOMAIN || "maisontoa.com";
 
 type DealStageChangedPayload = {
   dealId: string;
@@ -818,19 +816,19 @@ export async function POST(request: Request) {
               });
             }
 
-            if (!mailgunApiKey || !mailgunDomain) {
+            if (!isEmailConfigured()) {
               return;
             }
 
-            // Mailgun only allows scheduling up to 3 days (72 hours = 4320 minutes) in advance
+            // Resend allows scheduling up to 72 hours in advance
             // For longer delays, store in scheduled_emails table for cron job processing
-            const maxMailgunDelayMs = 72 * 60 * 60 * 1000; // 72 hours in ms
+            const maxResendDelayMs = 72 * 60 * 60 * 1000; // 72 hours in ms
             const delayMs = effectiveDate.getTime() - now.getTime();
-            const useDatabaseScheduling = isFuture && delayMs > maxMailgunDelayMs;
+            const useDatabaseScheduling = isFuture && delayMs > maxResendDelayMs;
 
             if (useDatabaseScheduling) {
               // Store in scheduled_emails table for cron job to send later
-              console.log(`Delay exceeds Mailgun 72h limit (${Math.round(delayMs / 1000 / 60 / 60)} hours), using database scheduling`);
+              console.log(`Delay exceeds Resend 72h limit (${Math.round(delayMs / 1000 / 60 / 60)} hours), using database scheduling`);
               const { error: scheduleError } = await supabaseAdmin
                 .from("scheduled_emails")
                 .insert({
@@ -852,53 +850,31 @@ export async function POST(request: Request) {
             }
 
             try {
-              const domain = mailgunDomain as string;
               const emailId = (inserted as any).id as string;
-              const replyAlias = emailId ? `reply+${emailId}@${domain}` : null;
+              const replyAlias = emailId ? `reply+${emailId}@${replyDomain}` : undefined;
 
-              const fromAddress = mailgunFromEmail || `no-reply@${domain}`;
+              const result = await sendEmailViaResend({
+                to: recipientEmail as string,
+                subject,
+                html: bodyHtml,
+                from: emailFromAddress,
+                fromName: emailFromName,
+                replyTo: replyAlias,
+                scheduledAt: isFuture ? effectiveDate : undefined,
+                tags: emailId ? [{ name: "email_id", value: emailId }] : undefined,
+              });
 
-              const params = new URLSearchParams();
-              params.append("from", `${mailgunFromName} <${fromAddress}>`);
-              params.append("to", recipientEmail as string);
-              params.append("subject", subject);
-              params.append("html", bodyHtml);
-
-              if (replyAlias) {
-                params.append("h:Reply-To", replyAlias);
-              }
-
-              if (isFuture) {
-                // Use Mailgun scheduling for delays up to 72 hours
-                params.append("o:deliverytime", effectiveDate.toUTCString());
-                console.log(`Email scheduled via Mailgun for ${effectiveDate.toUTCString()}`);
-              }
-
-              const auth = Buffer.from(`api:${mailgunApiKey}`).toString("base64");
-
-              const response = await fetch(
-                `${mailgunApiBaseUrl}/v3/${domain}/messages`,
-                {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Basic ${auth}`,
-                    "Content-Type": "application/x-www-form-urlencoded",
-                  },
-                  body: params.toString(),
-                },
-              );
-
-              if (!response.ok) {
-                const text = await response.text().catch(() => "");
+              if (!result.success) {
                 console.error(
-                  "Error sending workflow email via Mailgun",
-                  response.status,
-                  text,
+                  "Error sending workflow email via Resend",
+                  result.error,
                 );
+              } else if (isFuture) {
+                console.log(`Email scheduled via Resend for ${effectiveDate.toISOString()}`);
               }
             } catch (sendError) {
               console.error(
-                "Unexpected error sending workflow email via Mailgun",
+                "Unexpected error sending workflow email via Resend",
                 sendError,
               );
             }

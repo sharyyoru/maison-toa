@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
-
-const mailgunApiKey = process.env.MAILGUN_API_KEY;
-const mailgunDomain = process.env.MAILGUN_DOMAIN;
-const mailgunFromEmail = process.env.MAILGUN_FROM_EMAIL;
-const mailgunFromName = process.env.MAILGUN_FROM_NAME || "Maison Toa";
-const mailgunApiBaseUrl = process.env.MAILGUN_API_BASE_URL || "https://api.mailgun.net";
+import { sendEmail, isEmailConfigured } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   const { patientEmail, patientFirstName, patientLastName, stripeUrl, invoiceNumber, serviceName, depositAmount } = await req.json();
 
   if (!patientEmail || !stripeUrl) return NextResponse.json({ error: "Missing fields" }, { status: 400 });
-  if (!mailgunApiKey || !mailgunDomain) return NextResponse.json({ error: "Mailgun not configured" }, { status: 500 });
+  if (!isEmailConfigured()) return NextResponse.json({ error: "Email service not configured" }, { status: 500 });
 
   const html = brandedEmail(`
     <p style="margin:0 0 16px">Chère Madame / Cher Monsieur <strong>${patientLastName}</strong>,</p>
@@ -31,19 +26,12 @@ export async function POST(req: NextRequest) {
     </div>
   `);
 
-  const formData = new FormData();
-  formData.append("from", `${mailgunFromName} <${mailgunFromEmail || `no-reply@${mailgunDomain}`}>`);
-  formData.append("to", patientEmail);
-  formData.append("subject", `Acompte de consultation – Maison Tóā`);
-  formData.append("html", html);
-
-  const auth = Buffer.from(`api:${mailgunApiKey}`).toString("base64");
-  const res = await fetch(`${mailgunApiBaseUrl}/v3/${mailgunDomain}/messages`, {
-    method: "POST",
-    headers: { Authorization: `Basic ${auth}` },
-    body: formData,
+  const result = await sendEmail({
+    to: patientEmail,
+    subject: `Acompte de consultation – Maison Tóā`,
+    html,
   });
 
-  if (!res.ok) return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
+  if (!result.success) return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
   return NextResponse.json({ sent: true });
 }

@@ -2385,7 +2385,7 @@ export default function PatientActivityCard({
 
         console.log("/api/emails/send response", response.status, payload);
 
-        // Store Message-ID from Mailgun for reply tracking
+        // Store Message-ID from email provider for reply tracking
         if (payload?.messageId) {
           await supabaseClient
             .from("emails")

@@ -1,54 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-
-const mailgunApiKey = process.env.MAILGUN_API_KEY;
-const mailgunDomain = process.env.MAILGUN_DOMAIN;
-const mailgunFromEmail = process.env.MAILGUN_FROM_EMAIL;
-const mailgunFromName = process.env.MAILGUN_FROM_NAME || "Clinic";
-const mailgunApiBaseUrl =
-  process.env.MAILGUN_API_BASE_URL || "https://api.mailgun.net";
+import { sendEmail, isEmailConfigured, sanitizeTelLinks, addTrackingPixel, type EmailAttachment } from "@/lib/email";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-function sanitizeTelLinks(html: string): string {
-  // First, decode any URL-encoded tel: protocols (tel%3A -> tel:)
-  let result = html.replace(/href\s*=\s*(["'])tel%3A/gi, 'href=$1tel:');
-  
-  // Also handle %2B (URL-encoded +) at the start of phone numbers
-  result = result.replace(/href\s*=\s*(["'])tel:%2B/gi, 'href=$1tel:+');
-  
-  // Now handle all tel: links and clean the phone numbers for iPhone compatibility
-  result = result.replace(
-    /href\s*=\s*["']tel:([^"']+)["']/gi,
-    (_match, phoneNumber) => {
-      // Decode any remaining URL encoding in the phone number
-      let decoded = phoneNumber;
-      try {
-        decoded = decodeURIComponent(phoneNumber);
-      } catch {
-        // If decoding fails, use original
-      }
-      // Remove HTML entities first
-      decoded = decoded
-        .replace(/&nbsp;/gi, '')  // HTML nbsp entity
-        .replace(/&#160;/g, '')   // Numeric nbsp entity
-        .replace(/&amp;/gi, '&')  // Ampersand entity
-        .replace(/&plus;/gi, '+') // Plus entity
-        .replace(/\u00A0/g, '');  // Unicode nbsp
-      
-      // CRITICAL FOR iPHONE: Keep ONLY digits and leading + sign
-      // Remove everything else (letters, spaces, dashes, dots, parens, etc.)
-      const cleaned = decoded.replace(/[^0-9+]/g, '');
-      
-      return `href="tel:${cleaned}"`;
-    }
-  );
-  
-  return result;
-}
-
-// Environment check moved to runtime in POST handler
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
+const replyDomain = process.env.EMAIL_REPLY_DOMAIN || "maisontoa.com";
 
 type EmailAttachmentRow = {
   id: string;
@@ -69,7 +26,7 @@ type InlineAttachment = {
 export async function POST(request: Request) {
   try {
     // Runtime check for required environment variables
-    if (!mailgunApiKey || !mailgunDomain) {
+    if (!isEmailConfigured()) {
       return NextResponse.json(
         { error: "Email service not configured" },
         { status: 503 },
@@ -105,17 +62,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const domain = mailgunDomain as string;
-
-    // Use the user's email if provided (must be verified in Mailgun)
-    // Otherwise fall back to the default Mailgun from email
-    let fromAddress = mailgunFromEmail || `clinic@${domain}`;
-    let fromName = mailgunFromName;
+    // Determine sender info
+    let fromAddress: string | undefined;
+    let fromName: string | undefined;
     
     if (fromUserEmail && fromUserEmail.trim().length > 0) {
-      // Use user's actual email as sender
       fromAddress = fromUserEmail.trim();
-      // Use provided name or extract from email
       if (fromUserName && fromUserName.trim().length > 0) {
         fromName = fromUserName.trim();
       } else {
@@ -124,64 +76,34 @@ export async function POST(request: Request) {
       }
     }
 
-    // Use FormData to support file attachments
-    const formData = new FormData();
-    formData.append("from", `${fromName} <${fromAddress}>`);
-    formData.append("to", trimmedTo);
-    formData.append("subject", trimmedSubject);
-    
     // Sanitize tel: links for iPhone compatibility
-    const sanitizedHtml = sanitizeTelLinks(trimmedHtml);
+    let processedHtml = sanitizeTelLinks(trimmedHtml);
     
-    // Add tracking pixel to the email HTML for read tracking
-    let htmlWithTracking = sanitizedHtml;
+    // Add tracking pixel if emailId is provided
     if (emailId) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
-      const trackingPixel = `<img src="${appUrl}/api/emails/track?id=${emailId}" width="1" height="1" style="display:none;visibility:hidden;width:1px;height:1px;opacity:0;" alt="" />`;
-      // Insert tracking pixel before closing </body> tag, or at the end if no </body>
-      if (htmlWithTracking.includes("</body>")) {
-        htmlWithTracking = htmlWithTracking.replace("</body>", `${trackingPixel}</body>`);
-      } else {
-        htmlWithTracking = `${htmlWithTracking}${trackingPixel}`;
-      }
+      processedHtml = addTrackingPixel(processedHtml, emailId, appUrl);
     }
-    formData.append("html", htmlWithTracking);
-    
-    // Create a unique reply-to address with embedded email ID for tracking
-    // Format: reply+{emailId}+{patientId}@mg.domain.com
-    // This allows us to track which email the reply is for
-    let replyToAddress = `clinic@${domain}`;
+
+    // Create reply-to address for tracking
+    let replyToAddress = `clinic@${replyDomain}`;
     if (emailId && patientId) {
-      replyToAddress = `reply+${emailId}+${patientId}@${domain}`;
+      replyToAddress = `reply+${emailId}+${patientId}@${replyDomain}`;
     } else if (emailId) {
-      replyToAddress = `reply+${emailId}@${domain}`;
+      replyToAddress = `reply+${emailId}@${replyDomain}`;
     }
-    formData.append("h:Reply-To", replyToAddress);
-    
-    // NOTE: Do NOT CC the tracking address - it causes an infinite loop in the webhook!
-    // The Reply-To header is sufficient for capturing patient replies.
-    
-    // Add custom headers for reply tracking and metadata
-    if (emailId) {
-      formData.append("v:email-id", emailId);
-    }
-    if (patientId) {
-      formData.append("v:patient-id", patientId);
-    }
-    if (fromUserEmail && fromUserEmail.trim().length > 0) {
-      formData.append("v:sent-by", fromUserEmail.trim());
-    }
+
+    // Collect attachments
+    const attachments: EmailAttachment[] = [];
 
     // Handle inline attachments (base64 encoded files passed directly in request)
     if (inlineAttachments && inlineAttachments.length > 0) {
       for (const att of inlineAttachments) {
         try {
-          // Convert base64 to buffer
-          const buffer = Buffer.from(att.content, (att.encoding as BufferEncoding) || "base64");
-          const file = new File([buffer], att.filename, {
-            type: att.contentType || "application/octet-stream",
+          attachments.push({
+            filename: att.filename,
+            content: att.content,
+            contentType: att.contentType || "application/octet-stream",
           });
-          formData.append("attachment", file, att.filename);
         } catch (attError) {
           console.error("Error processing inline attachment:", att.filename, attError);
         }
@@ -193,24 +115,27 @@ export async function POST(request: Request) {
       try {
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
         
-        const { data: attachments, error: attachmentsError } = await supabase
+        const { data: dbAttachments, error: attachmentsError } = await supabase
           .from("email_attachments")
           .select("id, email_id, file_name, storage_path, mime_type, file_size")
           .eq("email_id", emailId);
 
-        if (!attachmentsError && attachments && attachments.length > 0) {
-          for (const att of attachments as EmailAttachmentRow[]) {
+        if (!attachmentsError && dbAttachments && dbAttachments.length > 0) {
+          for (const att of dbAttachments as EmailAttachmentRow[]) {
             try {
               const { data: fileData, error: downloadError } = await supabase.storage
                 .from("email-attachments")
                 .download(att.storage_path);
 
               if (!downloadError && fileData) {
-                // Convert Blob to File for FormData
-                const file = new File([fileData], att.file_name, {
-                  type: att.mime_type || "application/octet-stream",
+                // Convert Blob to base64
+                const arrayBuffer = await fileData.arrayBuffer();
+                const base64Content = Buffer.from(arrayBuffer).toString("base64");
+                attachments.push({
+                  filename: att.file_name,
+                  content: base64Content,
+                  contentType: att.mime_type || "application/octet-stream",
                 });
-                formData.append("attachment", file, att.file_name);
               } else {
                 console.error("Error downloading attachment:", att.file_name, downloadError);
               }
@@ -236,7 +161,7 @@ export async function POST(request: Request) {
           .insert({
             patient_id: patientId,
             to_address: trimmedTo,
-            from_address: fromAddress,
+            from_address: fromAddress || process.env.EMAIL_FROM_ADDRESS || "info@maisontoa.com",
             subject: trimmedSubject,
             body: trimmedHtml,
             direction: "outbound",
@@ -248,8 +173,10 @@ export async function POST(request: Request) {
 
         if (!insertError && insertedEmail) {
           createdEmailId = insertedEmail.id;
-          // Update formData with the new email ID for tracking
-          formData.append("v:email-id", createdEmailId || "");
+          // Add tracking pixel with the new email ID
+          if (createdEmailId) {
+            processedHtml = addTrackingPixel(processedHtml, createdEmailId, appUrl);
+          }
         } else {
           console.error("Error creating email record:", insertError);
         }
@@ -258,20 +185,23 @@ export async function POST(request: Request) {
       }
     }
 
-    const auth = Buffer.from(`api:${mailgunApiKey}`).toString("base64");
-
-    const response = await fetch(`${mailgunApiBaseUrl}/v3/${domain}/messages`, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${auth}`,
-      },
-      body: formData,
+    // Send email via Resend
+    const result = await sendEmail({
+      to: trimmedTo,
+      subject: trimmedSubject,
+      html: processedHtml,
+      from: fromAddress,
+      fromName,
+      replyTo: replyToAddress,
+      attachments: attachments.length > 0 ? attachments : undefined,
+      tags: [
+        ...(emailId ? [{ name: "email_id", value: emailId }] : []),
+        ...(patientId ? [{ name: "patient_id", value: patientId }] : []),
+        ...(fromUserEmail ? [{ name: "sent_by", value: fromUserEmail }] : []),
+      ],
     });
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      console.error("Error sending email via Mailgun", response.status, text);
-      
+    if (!result.success) {
       // If we created an email record, mark it as failed
       if (createdEmailId && supabaseUrl && supabaseServiceKey) {
         try {
@@ -286,22 +216,18 @@ export async function POST(request: Request) {
       }
       
       return NextResponse.json(
-        {
-          error: "Failed to send email via Mailgun",
-          mailgunStatus: response.status,
-          mailgunBody: text,
-        },
+        { error: result.error || "Failed to send email" },
         { status: 502 },
       );
     }
 
-    // Get the Message-ID from Mailgun response for reply tracking
-    const mailgunResponse = await response.json();
-    const messageId = mailgunResponse.id || null;
-
-    return NextResponse.json({ ok: true, messageId, emailId: createdEmailId || emailId });
+    return NextResponse.json({ 
+      ok: true, 
+      messageId: result.messageId, 
+      emailId: createdEmailId || emailId 
+    });
   } catch (error) {
-    console.error("Error sending email via Mailgun", error);
+    console.error("Error sending email:", error);
     return NextResponse.json(
       { error: "Failed to send email" },
       { status: 500 },

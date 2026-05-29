@@ -1,47 +1,28 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const mailgunApiKey = process.env.MAILGUN_API_KEY;
-const mailgunDomain = process.env.MAILGUN_DOMAIN;
-const mailgunFromEmail = process.env.MAILGUN_FROM_EMAIL;
-const mailgunFromName = process.env.MAILGUN_FROM_NAME || "Clinic";
-const mailgunApiBaseUrl = process.env.MAILGUN_API_BASE_URL || "https://api.mailgun.net";
 
 // Verify cron secret to prevent unauthorized access
 const CRON_SECRET = process.env.CRON_SECRET;
 
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
-  if (!mailgunApiKey || !mailgunDomain) {
-    console.log("Mailgun not configured, skipping email send");
+  if (!isEmailConfigured()) {
+    console.log("Resend not configured, skipping email send");
     return false;
   }
 
-  const domain = mailgunDomain as string;
-  const fromAddress = mailgunFromEmail || `no-reply@${domain}`;
-
-  const formData = new FormData();
-  formData.append("from", `${mailgunFromName} <${fromAddress}>`);
-  formData.append("to", to);
-  formData.append("subject", subject);
-  formData.append("html", html);
-
-  const auth = Buffer.from(`api:${mailgunApiKey}`).toString("base64");
-
   try {
-    const response = await fetch(`${mailgunApiBaseUrl}/v3/${domain}/messages`, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${auth}`,
-      },
-      body: formData,
+    const result = await sendEmailViaResend({
+      to,
+      subject,
+      html,
     });
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      console.error("Error sending email via Mailgun", response.status, text);
+    if (!result.success) {
+      console.error("Error sending email via Resend:", result.error);
       return false;
     }
 
@@ -108,7 +89,7 @@ export async function GET(request: Request) {
             .update({
               status: newStatus,
               sent_at: success ? new Date().toISOString() : null,
-              error: success ? null : "Failed to send via Mailgun",
+              error: success ? null : "Failed to send via Resend",
             })
             .eq("id", email.id);
 

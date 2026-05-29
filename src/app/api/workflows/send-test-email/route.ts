@@ -185,7 +185,7 @@ export async function POST(request: Request) {
         {
           error:
             payload?.error ||
-            "Failed to send test email via provider. Check MAILGUN configuration.",
+            "Failed to send test email via provider. Check RESEND_API_KEY configuration.",
         },
         { status: 502 },
       );

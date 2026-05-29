@@ -2,15 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { parseSwissDateTimeLocal } from "@/lib/swissTimezone";
 import { brandedEmail, infoRow, infoTable } from "@/utils/emailTemplate";
+import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const mailgunApiKey = process.env.MAILGUN_API_KEY;
-const mailgunDomain = process.env.MAILGUN_DOMAIN;
-const mailgunFromEmail = process.env.MAILGUN_FROM_EMAIL;
-const mailgunFromName = process.env.MAILGUN_FROM_NAME || "Clinic";
-const mailgunApiBaseUrl = process.env.MAILGUN_API_BASE_URL || "https://api.mailgun.net";
 
 type CreateAppointmentPayload = {
   patientId: string;
@@ -27,8 +22,8 @@ type CreateAppointmentPayload = {
   appointmentType?: "appointment" | "operation";
 };
 
-// Mailgun only allows scheduling emails up to 24 hours in advance
-const MAILGUN_MAX_SCHEDULE_HOURS = 24;
+// Resend allows scheduling emails up to 72 hours in advance
+const RESEND_MAX_SCHEDULE_HOURS = 72;
 
 async function sendEmail(
   to: string,
@@ -36,49 +31,33 @@ async function sendEmail(
   html: string,
   scheduledFor?: Date | null
 ): Promise<{ sent: boolean; scheduled: boolean; reason?: string }> {
-  if (!mailgunApiKey || !mailgunDomain) {
-    console.log("Mailgun not configured, skipping email send");
-    return { sent: false, scheduled: false, reason: "Mailgun not configured" };
+  if (!isEmailConfigured()) {
+    console.log("Resend not configured, skipping email send");
+    return { sent: false, scheduled: false, reason: "Email service not configured" };
   }
 
-  const domain = mailgunDomain as string;
-  const fromAddress = mailgunFromEmail || `no-reply@${domain}`;
-
-  const formData = new FormData();
-  formData.append("from", `${mailgunFromName} <${fromAddress}>`);
-  formData.append("to", to);
-  formData.append("subject", subject);
-  formData.append("html", html);
-
-  // Check if we can use Mailgun's scheduled delivery (must be within 24 hours)
+  // Check if we can use Resend's scheduled delivery (must be within 72 hours)
   const now = Date.now();
-  const maxScheduleTime = now + MAILGUN_MAX_SCHEDULE_HOURS * 60 * 60 * 1000;
+  const maxScheduleTime = now + RESEND_MAX_SCHEDULE_HOURS * 60 * 60 * 1000;
   
   if (scheduledFor && scheduledFor.getTime() > now) {
-    if (scheduledFor.getTime() <= maxScheduleTime) {
-      // Within 24 hours - use Mailgun's scheduled delivery
-      formData.append("o:deliverytime", scheduledFor.toUTCString());
-    } else {
-      // Beyond 24 hours - don't send now, will be handled by cron job from scheduled_emails table
-      console.log(`Email scheduled for ${scheduledFor.toISOString()} is beyond Mailgun's 24-hour limit. Will be sent by cron job.`);
-      return { sent: false, scheduled: true, reason: "Beyond 24-hour limit, stored for cron job" };
+    if (scheduledFor.getTime() > maxScheduleTime) {
+      // Beyond 72 hours - don't send now, will be handled by cron job from scheduled_emails table
+      console.log(`Email scheduled for ${scheduledFor.toISOString()} is beyond Resend's 72-hour limit. Will be sent by cron job.`);
+      return { sent: false, scheduled: true, reason: "Beyond 72-hour limit, stored for cron job" };
     }
   }
 
-  const auth = Buffer.from(`api:${mailgunApiKey}`).toString("base64");
-
-  const response = await fetch(`${mailgunApiBaseUrl}/v3/${domain}/messages`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${auth}`,
-    },
-    body: formData,
+  const result = await sendEmailViaResend({
+    to,
+    subject,
+    html,
+    scheduledAt: scheduledFor && scheduledFor.getTime() > now ? scheduledFor : undefined,
   });
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    console.error("Error sending email via Mailgun", response.status, text);
-    throw new Error(`Failed to send email: ${response.status}`);
+  if (!result.success) {
+    console.error("Error sending email via Resend:", result.error);
+    throw new Error(`Failed to send email: ${result.error}`);
   }
   
   return { sent: true, scheduled: !!scheduledFor };
@@ -400,7 +379,7 @@ export async function POST(request: Request) {
                   status: "pending",
                 });
 
-                // Try to send via Mailgun (will skip if beyond 24-hour limit)
+                // Try to send via Resend (will skip if beyond 24-hour limit)
                 const result = await sendEmail(
                   patientEmail,
                   `Reminder: Appointment Tomorrow - ${formatAppointmentDate(appointmentDateObj)}`,
@@ -408,7 +387,7 @@ export async function POST(request: Request) {
                   reminderDate
                 );
                 
-                // If Mailgun sent/scheduled it, mark as sent in DB
+                // If Resend sent/scheduled it, mark as sent in DB
                 if (result.sent) {
                   await supabase.from("scheduled_emails")
                     .update({ status: "sent" })
@@ -448,7 +427,7 @@ export async function POST(request: Request) {
                   status: "pending",
                 });
 
-                // Try to send via Mailgun (will skip if beyond 24-hour limit)
+                // Try to send via Resend (will skip if beyond 24-hour limit)
                 const result = await sendEmail(
                   assignedUserEmail,
                   `Reminder: Appointment with ${patientName} Tomorrow`,
@@ -456,7 +435,7 @@ export async function POST(request: Request) {
                   reminderDate
                 );
                 
-                // If Mailgun sent/scheduled it, mark as sent in DB
+                // If Resend sent/scheduled it, mark as sent in DB
                 if (result.sent) {
                   await supabase.from("scheduled_emails")
                     .update({ status: "sent" })

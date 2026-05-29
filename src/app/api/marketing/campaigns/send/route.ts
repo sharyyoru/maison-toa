@@ -7,6 +7,7 @@ import {
   type PatientRow,
   MAX_CAMPAIGN_RECIPIENTS,
 } from "@/lib/marketingFilters";
+import { sendEmail as sendEmailViaResend, isEmailConfigured, addTrackingPixel } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -21,73 +22,55 @@ type SendRequestBody = {
   userId?: string | null;
 };
 
-const mailgunApiKey = process.env.MAILGUN_API_KEY;
-const mailgunDomain = process.env.MAILGUN_DOMAIN;
-const mailgunApiBaseUrl =
-  process.env.MAILGUN_API_BASE_URL || "https://api.mailgun.net";
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maisontoa.vercel.app";
 
 // Marketing emails ALWAYS come from the clinic's branded address for
 // deliverability (DKIM/SPF alignment) and consistent branding.
-const MARKETING_FROM_EMAIL = "info@maisontoa.ch";
-const MARKETING_FROM_NAME = "Maison Toa";
+const MARKETING_FROM_EMAIL = process.env.EMAIL_FROM_ADDRESS || "info@maisontoa.com";
+const MARKETING_FROM_NAME = process.env.EMAIL_FROM_NAME || "Maison Toa";
 
-type MailgunSendArgs = {
+type ResendSendArgs = {
   to: string;
   subject: string;
   html: string;
   emailIdForTracking?: string | null;
 };
 
-async function sendViaMailgun(args: MailgunSendArgs): Promise<{ ok: boolean; error?: string; messageId?: string; status?: number }> {
-  if (!mailgunApiKey || !mailgunDomain) {
-    return { ok: false, error: "Mailgun not configured (missing MAILGUN_API_KEY or MAILGUN_DOMAIN)" };
+async function sendViaResend(args: ResendSendArgs): Promise<{ ok: boolean; error?: string; messageId?: string }> {
+  if (!isEmailConfigured()) {
+    return { ok: false, error: "Resend not configured (missing RESEND_API_KEY)" };
   }
-  const fromAddress = MARKETING_FROM_EMAIL;
-  const fromName = MARKETING_FROM_NAME;
 
   let html = args.html;
   if (args.emailIdForTracking) {
-    const pixel = `<img src="${appUrl}/api/emails/track?id=${args.emailIdForTracking}" width="1" height="1" style="display:none;visibility:hidden;width:1px;height:1px;opacity:0;" alt="" />`;
-    html = html.includes("</body>")
-      ? html.replace("</body>", `${pixel}</body>`)
-      : `${html}${pixel}`;
+    html = addTrackingPixel(html, args.emailIdForTracking, appUrl);
   }
 
-  const form = new FormData();
-  form.append("from", `${fromName} <${fromAddress}>`);
-  form.append("to", args.to);
-  form.append("subject", args.subject);
-  form.append("html", html);
-  form.append("h:List-Unsubscribe", `<mailto:unsubscribe@${mailgunDomain}?subject=unsubscribe>`);
-  if (args.emailIdForTracking) {
-    form.append("v:email-id", args.emailIdForTracking);
-    form.append("v:source", "marketing_campaign");
-  }
-
-  const auth = Buffer.from(`api:${mailgunApiKey}`).toString("base64");
   try {
-    const resp = await fetch(`${mailgunApiBaseUrl}/v3/${mailgunDomain}/messages`, {
-      method: "POST",
-      headers: { Authorization: `Basic ${auth}` },
-      body: form,
+    const result = await sendEmailViaResend({
+      to: args.to,
+      subject: args.subject,
+      html,
+      from: MARKETING_FROM_EMAIL,
+      fromName: MARKETING_FROM_NAME,
+      tags: [
+        ...(args.emailIdForTracking ? [{ name: "email_id", value: args.emailIdForTracking }] : []),
+        { name: "source", value: "marketing_campaign" },
+      ],
     });
-    const text = await resp.text().catch(() => "");
-    let json: { id?: string; message?: string } = {};
-    try { json = JSON.parse(text); } catch { /* non-JSON response */ }
-    if (!resp.ok) {
-      console.error("[marketing/send] Mailgun rejected send", {
-        status: resp.status,
+
+    if (!result.success) {
+      console.error("[marketing/send] Resend rejected send", {
         to: args.to,
-        from: `${fromName} <${fromAddress}>`,
-        body: text.slice(0, 500),
+        error: result.error,
       });
-      return { ok: false, status: resp.status, error: `Mailgun ${resp.status}: ${text.slice(0, 300)}` };
+      return { ok: false, error: result.error || "Resend send failed" };
     }
-    console.log("[marketing/send] Mailgun accepted", { to: args.to, messageId: json?.id });
-    return { ok: true, messageId: json?.id, status: resp.status };
+
+    console.log("[marketing/send] Resend accepted", { to: args.to, messageId: result.messageId });
+    return { ok: true, messageId: result.messageId };
   } catch (err) {
-    console.error("[marketing/send] Mailgun fetch threw", err);
+    console.error("[marketing/send] Resend fetch threw", err);
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
@@ -159,7 +142,7 @@ export async function POST(request: Request) {
         subject: `[TEST] ${subject}`,
         samplePatient: samplePatient.id,
       });
-      const result = await sendViaMailgun({
+      const result = await sendViaResend({
         to: body.testEmail.trim(),
         subject: `[TEST] ${subject}`,
         html,
@@ -268,7 +251,7 @@ export async function POST(request: Request) {
             console.warn("[marketing/send] emails row insert threw", err);
           }
 
-          const result = await sendViaMailgun({
+          const result = await sendViaResend({
             to: patient.email,
             subject: substitutePatientVariables(subjectToUse, patient),
             html: substitutePatientVariables(template.html, patient),
