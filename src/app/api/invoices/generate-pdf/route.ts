@@ -387,13 +387,22 @@ export async function POST(request: NextRequest) {
         .update({ pdf_path: filePath, [pdfColumn]: filePath, pdf_generated_at: new Date().toISOString() })
         .eq("id", invoiceId);
 
-      const { data: publicUrlData } = supabaseAdmin.storage
+      // Use signed URL for private bucket access (valid for 1 hour)
+      const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
         .from("invoice-pdfs")
-        .getPublicUrl(filePath);
+        .createSignedUrl(filePath, 3600);
+
+      if (signedUrlError || !signedUrlData?.signedUrl) {
+        console.error("[GeneratePDF] Failed to create signed URL:", signedUrlError);
+        return NextResponse.json({ 
+          error: "PDF generated but failed to create download URL",
+          pdfPath: filePath 
+        }, { status: 500 });
+      }
 
       return NextResponse.json({
         success: true,
-        pdfUrl: publicUrlData.publicUrl,
+        pdfUrl: signedUrlData.signedUrl,
         pdfPath: filePath,
         qrCodeType: "sumex1",
         sumex1Schema: sumexResult.usedSchema,
@@ -542,10 +551,23 @@ export async function POST(request: NextRequest) {
           if (!uploadError) {
             const pdfCol2 = invoiceType === "tg" ? "pdf_path_tg" : invoiceType === "tp" ? "pdf_path_tp" : invoiceType === "reminder" ? "pdf_path_reminder" : "pdf_path_receipt";
             await supabaseAdmin.from("invoices").update({ pdf_path: filePath, [pdfCol2]: filePath, pdf_generated_at: new Date().toISOString() }).eq("id", invoiceId);
-            const { data: publicUrlData } = supabaseAdmin.storage.from("invoice-pdfs").getPublicUrl(filePath);
+            
+            // Use signed URL for private bucket access (valid for 1 hour)
+            const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
+              .from("invoice-pdfs")
+              .createSignedUrl(filePath, 3600);
+            
+            if (signedUrlError || !signedUrlData?.signedUrl) {
+              console.error("[GeneratePDF] Failed to create signed URL:", signedUrlError);
+              return NextResponse.json({ 
+                error: "PDF generated but failed to create download URL",
+                pdfPath: filePath 
+              }, { status: 500 });
+            }
+            
             return NextResponse.json({ 
               success: true, 
-              pdfUrl: publicUrlData.publicUrl, 
+              pdfUrl: signedUrlData.signedUrl, 
               pdfPath: filePath, 
               qrCodeType: "sumex1-unified", 
               sumex1Schema: sumexResult2.usedSchema 

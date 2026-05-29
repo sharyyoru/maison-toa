@@ -2776,16 +2776,21 @@ export default function MedicalConsultationsCard({
     }
   }
 
-  function handleViewPdf(pdfPath: string) {
+  async function handleViewPdf(pdfPath: string) {
     try {
-      const { data } = supabaseClient.storage
+      // Use signed URL for private bucket access (valid for 1 hour)
+      const { data, error } = await supabaseClient.storage
         .from("invoice-pdfs")
-        .getPublicUrl(pdfPath);
-      const url = data?.publicUrl;
-      if (url) {
-        setPdfViewerUrl(url);
-        setPdfViewerOpen(true);
+        .createSignedUrl(pdfPath, 3600);
+      
+      if (error || !data?.signedUrl) {
+        console.error("Error creating signed URL:", error);
+        alert("Failed to load PDF. The file may not exist or access was denied.");
+        return;
       }
+      
+      setPdfViewerUrl(data.signedUrl);
+      setPdfViewerOpen(true);
     } catch (error) {
       console.error("Error viewing PDF:", error);
       alert("Failed to load PDF. Please try again.");
