@@ -757,6 +757,12 @@ export default function MedicalConsultationsCard({
   const editConsultationAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [invoiceFromConsultationSuccess, setInvoiceFromConsultationSuccess] = useState<string | null>(null);
 
+  // NEW CONSULTATION AUTOSAVE - Draft system like Notion/Google Docs
+  const [newConsultationDraftId, setNewConsultationDraftId] = useState<string | null>(null);
+  const [newConsultationAutosaveStatus, setNewConsultationAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved">("idle");
+  const newConsultationAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const newConsultationContentRef = useRef<HTMLDivElement>(null);
+
   const [axenitaPdfDocs, setAxenitaPdfDocs] = useState<AxenitaPdfDocument[]>([]);
   const [axenitaPdfLoading, setAxenitaPdfLoading] = useState(false);
   const [axenitaPdfError, setAxenitaPdfError] = useState<string | null>(null);
@@ -2435,6 +2441,138 @@ export default function MedicalConsultationsCard({
     }, 3000);
   }
 
+  // ========== NEW CONSULTATION AUTOSAVE ==========
+  // Creates a draft consultation on first input, then auto-saves every 3 seconds
+  
+  async function handleNewConsultationAutosave() {
+    // Only autosave for "notes" type (not invoices/prescriptions which have complex data)
+    if (consultationRecordType !== "notes") return;
+    if (!consultationDoctorId || !consultationDate) return;
+    
+    const htmlContent = newConsultationContentRef.current?.innerHTML || consultationContentHtml;
+    
+    // Need at least title or content to save
+    if (!consultationTitle.trim() && !htmlContent.replace(/<[^>]+>/g, "").trim()) return;
+    
+    setNewConsultationAutosaveStatus("saving");
+    
+    try {
+      // Build scheduled_at
+      const h = consultationHour || "00";
+      const m = consultationMinute || "00";
+      const scheduledAt = new Date(`${consultationDate}T${h}:${m}:00`).toISOString();
+      
+      // Find doctor name
+      const doctor = medicalStaffOptions.find((u) => u.id === consultationDoctorId);
+      const doctorName = doctor?.name || "Doctor";
+      
+      if (newConsultationDraftId) {
+        // UPDATE existing draft
+        const { error } = await supabaseClient
+          .from("consultations")
+          .update({
+            title: consultationTitle || "Draft",
+            content: htmlContent,
+            doctor_user_id: consultationDoctorId,
+            doctor_name: doctorName,
+            scheduled_at: scheduledAt,
+            diagnosis_code: consultationDiagnosisCode.trim() || null,
+            ref_icd10: consultationRefIcd10.trim() || null,
+          })
+          .eq("id", newConsultationDraftId);
+          
+        if (error) {
+          console.error("Autosave update failed:", error.message);
+          setNewConsultationAutosaveStatus("idle");
+          return;
+        }
+        
+        // Update local state
+        setConsultations((prev) =>
+          prev.map((row) =>
+            row.id === newConsultationDraftId
+              ? {
+                  ...row,
+                  title: consultationTitle || "Draft",
+                  content: htmlContent,
+                  doctor_user_id: consultationDoctorId,
+                  doctor_name: doctorName,
+                  scheduled_at: scheduledAt,
+                  diagnosis_code: consultationDiagnosisCode.trim() || null,
+                  ref_icd10: consultationRefIcd10.trim() || null,
+                }
+              : row
+          )
+        );
+      } else {
+        // CREATE new draft consultation
+        const { data, error } = await supabaseClient
+          .from("consultations")
+          .insert({
+            patient_id: patientId,
+            title: consultationTitle || "Draft",
+            content: htmlContent,
+            doctor_user_id: consultationDoctorId,
+            doctor_name: doctorName,
+            scheduled_at: scheduledAt,
+            diagnosis_code: consultationDiagnosisCode.trim() || null,
+            ref_icd10: consultationRefIcd10.trim() || null,
+            is_draft: true, // Mark as draft
+          })
+          .select()
+          .single();
+          
+        if (error) {
+          console.error("Autosave create failed:", error.message);
+          setNewConsultationAutosaveStatus("idle");
+          return;
+        }
+        
+        if (data) {
+          setNewConsultationDraftId(data.id);
+          // Note: We don't add to local state here - the form is still open
+          // The consultation will appear in the list after form is closed/saved
+        }
+      }
+      
+      setNewConsultationAutosaveStatus("saved");
+      setTimeout(() => setNewConsultationAutosaveStatus("idle"), 2000);
+    } catch (err) {
+      console.error("Autosave failed:", err);
+      setNewConsultationAutosaveStatus("idle");
+    }
+  }
+  
+  function triggerNewConsultationAutosave() {
+    // Only for notes type
+    if (consultationRecordType !== "notes") return;
+    
+    // Clear existing timer
+    if (newConsultationAutosaveTimerRef.current) {
+      clearTimeout(newConsultationAutosaveTimerRef.current);
+    }
+    
+    setNewConsultationAutosaveStatus("pending");
+    
+    // Set new timer for 3 seconds
+    newConsultationAutosaveTimerRef.current = setTimeout(() => {
+      void handleNewConsultationAutosave();
+    }, 3000);
+  }
+  
+  // Cleanup autosave timer when form closes
+  useEffect(() => {
+    if (!newConsultationOpen) {
+      if (newConsultationAutosaveTimerRef.current) {
+        clearTimeout(newConsultationAutosaveTimerRef.current);
+        newConsultationAutosaveTimerRef.current = null;
+      }
+      setNewConsultationAutosaveStatus("idle");
+      // Reset draft ID when form closes (draft becomes a real record or was discarded)
+      setNewConsultationDraftId(null);
+    }
+  }, [newConsultationOpen]);
+
   async function handleToggleInvoicePaid(
     invoiceId: string,
     currentPaid: boolean,
@@ -3494,6 +3632,34 @@ export default function MedicalConsultationsCard({
         </div>
         {newConsultationOpen ? (
           <div ref={creationFormRef} className="mb-3 rounded-lg border border-sky-200/70 bg-sky-50/60 p-3 text-xs">
+            {/* Autosave Status Indicator for Notes */}
+            {consultationRecordType === "notes" && (
+              <div className="flex items-center justify-end mb-2 text-[10px]">
+                {newConsultationAutosaveStatus === "pending" && (
+                  <span className="text-amber-600 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    Unsaved changes...
+                  </span>
+                )}
+                {newConsultationAutosaveStatus === "saving" && (
+                  <span className="text-sky-600 flex items-center gap-1">
+                    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Saving...
+                  </span>
+                )}
+                {newConsultationAutosaveStatus === "saved" && (
+                  <span className="text-emerald-600 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Auto-saved
+                  </span>
+                )}
+              </div>
+            )}
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -4867,7 +5033,7 @@ export default function MedicalConsultationsCard({
                   <input
                     type="text"
                     value={consultationTitle}
-                    onChange={(event) => setConsultationTitle(event.target.value)}
+                    onChange={(event) => { setConsultationTitle(event.target.value); triggerNewConsultationAutosave(); }}
                     placeholder="Consultation ID:"
                     className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
@@ -4917,7 +5083,7 @@ export default function MedicalConsultationsCard({
                     <input
                       type="text"
                       value={consultationDiagnosisCode}
-                      onChange={(e) => setConsultationDiagnosisCode(e.target.value)}
+                      onChange={(e) => { setConsultationDiagnosisCode(e.target.value); triggerNewConsultationAutosave(); }}
                       placeholder="e.g. L91.0"
                       className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
@@ -4929,7 +5095,7 @@ export default function MedicalConsultationsCard({
                     <input
                       type="text"
                       value={consultationRefIcd10}
-                      onChange={(e) => setConsultationRefIcd10(e.target.value)}
+                      onChange={(e) => { setConsultationRefIcd10(e.target.value); triggerNewConsultationAutosave(); }}
                       placeholder="e.g. Z42.1"
                       className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
@@ -4983,11 +5149,15 @@ export default function MedicalConsultationsCard({
                     </div>
                     <div className="relative">
                       <div
+                        ref={newConsultationContentRef}
                         className="min-h-[80px] max-h-64 overflow-y-auto px-2 py-1.5 text-[11px] text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
                         contentEditable
                         onInput={(event) => {
                           const html = (event.currentTarget as HTMLDivElement).innerHTML;
                           setConsultationContentHtml(html);
+                          
+                          // Trigger autosave
+                          triggerNewConsultationAutosave();
 
                           // Detect @ mentions
                           const text = (event.currentTarget as HTMLDivElement).textContent || "";
