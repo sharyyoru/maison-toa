@@ -328,12 +328,12 @@ export async function POST(request: NextRequest) {
 
       // Generate XML + PDF via Sumex1 server
       // Template options:
-      // - detail: multi-page with full service details (for insurance TP invoices)
-      // - summary: compact 1-page format with service list
+      // - detail: multi-page with full service details (verbose, can overflow to many pages)
+      // - summary: compact format with service list + QR-bill on same page where possible
       // - feeSummary: fee summary format (2 pages with QR-bill in v5.0)
-      // For TG patient invoices, use "summary" to get a single-page combined format
-      // For TP insurance invoices, use "detail" for full breakdown
-      const printTemplate = invoiceType === "tp" ? "detail" : "summary";
+      // Use "summary" for all invoice types to keep client invoice + QR-bill on same page
+      // The insurance copy (Facture TP) will still be a separate page
+      const printTemplate = "summary";
       // For non-TP types, force law=ORG (only template the server respects)
       if (invoiceType !== "tp") {
         sumexInput.lawType = mapSumexLaw("ORG");
@@ -529,8 +529,8 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        // Use "summary" template for single-page format with all details
-        const printTemplate2 = invoiceType === "tp" ? "detail" : "summary";
+        // Use "summary" template for compact format with service list + QR-bill on same page
+        const printTemplate2 = "summary";
         if (invoiceType !== "tp") {
           sumexInput2.lawType = mapSumexLaw("ORG");
         }
