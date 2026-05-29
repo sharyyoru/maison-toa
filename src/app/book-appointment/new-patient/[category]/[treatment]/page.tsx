@@ -6,7 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
-import { findEarliestAvailableDoctor } from "@/lib/bookingEarliestDoctor";
+import { findMultipleEarliestSlots, EarliestDoctorResult } from "@/lib/bookingEarliestDoctor";
 import { getLocalizedBookingName } from "@/lib/bookingLocalization";
 
 interface BookingDoctor {
@@ -38,6 +38,8 @@ export default function SelectDoctorPage() {
   const [loading, setLoading] = useState(true);
   const [autoSelecting, setAutoSelecting] = useState(false);
   const [autoSelectError, setAutoSelectError] = useState<string | null>(null);
+  const [earliestSlots, setEarliestSlots] = useState<EarliestDoctorResult[]>([]);
+  const [showSlotPicker, setShowSlotPicker] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -69,24 +71,40 @@ export default function SelectDoctorPage() {
     fetchData();
   }, [treatmentId, categorySlug]);
 
-  const handleAutoSelectDoctor = async () => {
+  const handleFindEarliestSlots = async () => {
     setAutoSelecting(true);
     setAutoSelectError(null);
+    setEarliestSlots([]);
 
     try {
-      const result = await findEarliestAvailableDoctor(doctors, treatment?.duration_minutes ?? 60);
-      if (!result) {
+      const slots = await findMultipleEarliestSlots(doctors, treatment?.duration_minutes ?? 60, 5);
+      if (slots.length === 0) {
         setAutoSelectError(t("doctor.noEarliestAvailable"));
         return;
       }
 
-      router.push(`/book-appointment/new-patient/${categorySlug}/${treatmentId}/${result.doctor.slug}`);
+      setEarliestSlots(slots);
+      setShowSlotPicker(true);
     } catch (error) {
-      console.error("Failed to auto select specialist:", error);
+      console.error("Failed to find earliest slots:", error);
       setAutoSelectError(t("doctor.autoSelectFailed"));
     } finally {
       setAutoSelecting(false);
     }
+  };
+
+  const handleSelectSlot = (slot: EarliestDoctorResult) => {
+    // Navigate to doctor page with pre-selected date and time
+    router.push(`/book-appointment/new-patient/${categorySlug}/${treatmentId}/${slot.doctor.slug}?date=${slot.date}&time=${slot.time}`);
+  };
+
+  const formatSlotDate = (dateStr: string) => {
+    const date = new Date(dateStr + "T00:00:00");
+    return date.toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
   };
 
   return (
@@ -238,18 +256,80 @@ export default function SelectDoctorPage() {
                 </Link>
               ))}
             </div>
-            <div className="mt-8 flex flex-col items-center gap-3">
-              <button
-                type="button"
-                onClick={handleAutoSelectDoctor}
-                disabled={autoSelecting || doctors.length === 0}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {autoSelecting && (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                )}
-                {autoSelecting ? t("doctor.findingEarliest") : t("doctor.autoSelectEarliest")}
-              </button>
+            {/* Earliest Slots Button and Picker */}
+            <div className="mt-8 flex flex-col items-center gap-4">
+              {!showSlotPicker ? (
+                <button
+                  type="button"
+                  onClick={handleFindEarliestSlots}
+                  disabled={autoSelecting || doctors.length === 0}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {autoSelecting && (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  )}
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  {autoSelecting ? t("doctor.findingEarliest") : t("doctor.autoSelectEarliest")}
+                </button>
+              ) : (
+                <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      {t("doctor.earliestSlotsTitle") || "Earliest Available Slots"}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowSlotPicker(false)}
+                      className="text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-4">
+                    {t("doctor.earliestSlotsDescription") || "Choose from the earliest available appointments across all specialists:"}
+                  </p>
+                  <div className="space-y-2">
+                    {earliestSlots.map((slot, index) => (
+                      <button
+                        key={`${slot.doctor.slug}-${slot.date}-${slot.time}-${index}`}
+                        type="button"
+                        onClick={() => handleSelectSlot(slot)}
+                        className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition-all group"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
+                            <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                          <div className="text-left">
+                            <p className="font-medium text-slate-900">
+                              {formatSlotDate(slot.date)} • {slot.time}
+                            </p>
+                            <p className="text-sm text-slate-500">{slot.doctor.name}</p>
+                          </div>
+                        </div>
+                        <svg className="w-5 h-5 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setShowSlotPicker(false)}
+                      className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                    >
+                      ← {t("doctor.backToAllDoctors") || "Back to all specialists"}
+                    </button>
+                  </div>
+                </div>
+              )}
               {autoSelectError && (
                 <p className="text-center text-sm text-amber-700">{autoSelectError}</p>
               )}

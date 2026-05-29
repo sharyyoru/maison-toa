@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, formatSwissDateWithWeekday, getSwissDayRange, getSwissSlotString, createSwissDateTime, SWISS_TIMEZONE } from "@/lib/swissTimezone";
 import { pushToDataLayer } from "@/components/GoogleTagManager";
@@ -126,11 +126,15 @@ interface Treatment {
 
 function DoctorBookingContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const categorySlug = params.category as string;
   const treatmentId = params.treatment as string;
   const doctorSlug = params.doctor as string;
+  const preselectedDate = searchParams.get("date");
+  const preselectedTime = searchParams.get("time");
   const [doctor, setDoctor] = useState<DoctorInfo | null>(null);
   const [doctorLoading, setDoctorLoading] = useState(true);
+  const [hasAppliedPreselection, setHasAppliedPreselection] = useState(false);
 
   const locationId = "lausanne";
   const locationLabel = "Lausanne";
@@ -323,7 +327,10 @@ function DoctorBookingContent() {
     if (selectedDate && locationId && doctor) {
       const slots = generateTimeSlots(doctorSlug, locationId, selectedDate, dbAvailability);
       setAvailableSlots(slots);
-      setSelectedTime("");
+      // Only clear time if not applying preselection
+      if (!preselectedTime || hasAppliedPreselection) {
+        setSelectedTime("");
+      }
       checkAvailability(selectedDate);
     } else if (!doctor) {
       // doctor not yet loaded — wait for it before checking availability
@@ -331,6 +338,23 @@ function DoctorBookingContent() {
       setAvailableSlots([]);
     }
   }, [selectedDate, locationId, doctorSlug, doctor]);
+
+  // Apply preselected date/time from URL params (from earliest slots picker)
+  useEffect(() => {
+    if (!hasAppliedPreselection && preselectedDate && !isLoadingDates && doctor) {
+      setSelectedDate(preselectedDate);
+      setHasAppliedPreselection(true);
+    }
+  }, [preselectedDate, isLoadingDates, doctor, hasAppliedPreselection]);
+
+  // Apply preselected time once slots are loaded
+  useEffect(() => {
+    if (hasAppliedPreselection && preselectedTime && availableSlots.length > 0 && !selectedTime) {
+      if (availableSlots.includes(preselectedTime)) {
+        setSelectedTime(preselectedTime);
+      }
+    }
+  }, [hasAppliedPreselection, preselectedTime, availableSlots, selectedTime]);
 
   async function checkAvailability(date: string) {
     try {

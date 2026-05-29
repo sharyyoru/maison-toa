@@ -173,3 +173,113 @@ export async function findEarliestAvailableDoctor(
 
   return validResults.sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0];
 }
+
+/**
+ * Find multiple earliest available slots across all doctors
+ * Returns up to `count` slots sorted by date/time
+ */
+export async function findMultipleEarliestSlots(
+  doctors: EarliestBookingDoctor[],
+  durationMinutes = 60,
+  count = 5,
+  maxDaysAhead = 30
+): Promise<EarliestDoctorResult[]> {
+  // Get all open slots for each doctor
+  const allSlots: EarliestDoctorResult[] = [];
+  
+  for (const doctor of doctors) {
+    const slots = await getMultipleOpenSlots(doctor, durationMinutes, count, maxDaysAhead);
+    allSlots.push(...slots);
+  }
+  
+  // Sort by date/time and return top N unique slots
+  const sorted = allSlots.sort((a, b) => 
+    `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`)
+  );
+  
+  // Return unique slots (different doctor/date/time combinations)
+  const seen = new Set<string>();
+  const unique: EarliestDoctorResult[] = [];
+  
+  for (const slot of sorted) {
+    const key = `${slot.doctor.slug}-${slot.date}-${slot.time}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(slot);
+      if (unique.length >= count) break;
+    }
+  }
+  
+  return unique;
+}
+
+/**
+ * Get multiple open slots for a single doctor
+ */
+async function getMultipleOpenSlots(
+  doctor: EarliestBookingDoctor,
+  durationMinutes: number,
+  count: number,
+  maxDaysAhead: number
+): Promise<EarliestDoctorResult[]> {
+  const availability = await getDoctorAvailability(doctor);
+  const today = getSwissToday();
+  
+  // Batch fetch: get all booked slots for the next maxDaysAhead days in one call
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() + 1);
+  const endDate = new Date(today);
+  endDate.setDate(today.getDate() + maxDaysAhead + 1);
+  
+  const rangeStart = new Date(startDate);
+  rangeStart.setHours(0, 0, 0, 0);
+  const rangeEnd = new Date(endDate);
+  rangeEnd.setHours(23, 59, 59, 999);
+  
+  let allBookedSlots: Map<string, string[]> = new Map();
+  
+  try {
+    const res = await fetch(
+      `/api/appointments/check-availability?start=${rangeStart.toISOString()}&end=${rangeEnd.toISOString()}&doctor=${encodeURIComponent(doctor.name)}&slug=${doctor.slug}`
+    );
+    const data = await res.json();
+    
+    if (data.fullSlots && Array.isArray(data.fullSlots)) {
+      data.fullSlots.forEach((isoTime: string) => {
+        const slotDate = new Date(isoTime);
+        const dateStr = formatSwissYmd(slotDate);
+        const timeStr = getSwissSlotString(slotDate);
+        
+        if (!allBookedSlots.has(dateStr)) {
+          allBookedSlots.set(dateStr, []);
+        }
+        allBookedSlots.get(dateStr)!.push(timeStr);
+      });
+    }
+  } catch (error) {
+    console.error("Failed to fetch batch availability:", error);
+  }
+
+  const results: EarliestDoctorResult[] = [];
+  
+  for (let dayOffset = 1; dayOffset <= maxDaysAhead && results.length < count; dayOffset++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + dayOffset);
+
+    const dayOfWeek = getSwissDayOfWeek(date);
+    const slots = generateTimeSlots(dayOfWeek, availability[dayOfWeek]);
+    if (slots.length === 0) continue;
+
+    const dateString = formatSwissYmd(date);
+    const bookedSlots = allBookedSlots.get(dateString) || [];
+    
+    for (const slot of slots) {
+      if (!slotConflicts(slot, durationMinutes, bookedSlots)) {
+        results.push({ doctor, date: dateString, time: slot });
+        if (results.length >= count) break;
+      }
+    }
+  }
+
+  return results;
+}
