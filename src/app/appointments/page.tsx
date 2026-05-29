@@ -2769,9 +2769,11 @@ export default function CalendarPage() {
 
     setCreateError(null);
 
-    // Check if at least one service is selected (either old single select or new multi-select)
-    if (!selectedServiceId && selectedServiceIds.length === 0) {
-      setCreateError("Please select a service. If you pasted an appointment, the service may not have matched - please select it manually from the dropdown.");
+    // Check if at least one service is selected OR custom text is entered
+    const hasServiceSelection = selectedServiceId || selectedServiceIds.length > 0;
+    const hasCustomServiceText = serviceSearch.trim().length > 0;
+    if (!hasServiceSelection && !hasCustomServiceText) {
+      setCreateError("Please select a service from the list or type a custom service name.");
       return;
     }
 
@@ -5975,13 +5977,31 @@ export default function CalendarPage() {
                               }
                             }, 200);
                           }}
-                          placeholder={selectedServiceIds.length === 0 ? (serviceOptionsLoading ? tCommon("loading") : t("modal.selectServices")) : ""}
+                          placeholder={selectedServiceIds.length === 0 ? (serviceOptionsLoading ? tCommon("loading") : "Select or type service...") : "Add more..."}
                           className="flex-1 min-w-[120px] bg-transparent outline-none placeholder:text-slate-400"
                         />
                       </div>
                     </div>
-                    {serviceDropdownOpen && filteredServiceOptions.length > 0 && (
+                    {serviceDropdownOpen && (
                       <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-xs shadow-lg">
+                        {/* Show "use custom text" option when user types something not in the list */}
+                        {serviceSearch.trim() && filteredServiceOptions.length === 0 && selectedServiceIds.length === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setServiceDropdownOpen(false);
+                              // Keep the text - it will be used as custom service on save
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-emerald-50 border-b border-slate-100"
+                          >
+                            <div className="flex items-center gap-2">
+                              <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              <span className="text-slate-700">Use &quot;<span className="font-medium text-emerald-700">{serviceSearch.trim()}</span>&quot; as custom service</span>
+                            </div>
+                          </button>
+                        )}
                         {filteredServiceOptions.map((service) => {
                           const isSelected = selectedServiceIds.includes(service.id);
                           const quantity = serviceQuantities[service.id] || 1;
@@ -6038,6 +6058,15 @@ export default function CalendarPage() {
                       </div>
                     )}
                   </div>
+                  {/* Show indicator when using custom service text */}
+                  {serviceSearch.trim() && selectedServiceIds.length === 0 && !filteredServiceOptions.some(s => s.name.toLowerCase() === serviceSearch.trim().toLowerCase()) && (
+                    <div className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-1.5 text-[10px] flex items-center gap-1.5">
+                      <svg className="h-3 w-3 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-emerald-700">Custom service: <span className="font-medium">&quot;{serviceSearch.trim()}&quot;</span></span>
+                    </div>
+                  )}
                   {selectedServiceIds.length > 0 && (
                     <div className="rounded-md bg-slate-50 px-2 py-1 text-[10px]">
                       <span className="font-medium text-slate-700">{t("modal.totalDuration")}</span>
