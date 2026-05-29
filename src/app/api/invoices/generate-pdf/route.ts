@@ -327,17 +327,13 @@ export async function POST(request: NextRequest) {
       };
 
       // Generate XML + PDF via Sumex1 server
-      // Template per CHM:
-      // - TG patient invoice: feeSummary (1-page "Facture d'honoraires") with law=ORG
-      // - TP insurance: detail (multi-page for healthcare company)
-      // - Reminder: summary (1-page with reminder header)
-      // - Receipt: summary (1-page "Justificatif de remboursement")
-      // Templates per CHM:
-      // - TG: feeSummary + ORG = "Note d'honoraires" (2 pages in v5.0)
-      // - TP: detail = multi-page insurance invoice
-      // - Receipt: feeSummary + ORG = same compact format as TG
-      // - Reminder: feeSummary + ORG + Reminder = "Rappel: Note d'honoraires"
-      const printTemplate = invoiceType === "tp" ? "detail" : "feeSummary";
+      // Template options:
+      // - detail: multi-page with full service details (for insurance TP invoices)
+      // - summary: compact 1-page format with service list
+      // - feeSummary: fee summary format (2 pages with QR-bill in v5.0)
+      // For TG patient invoices, use "summary" to get a single-page combined format
+      // For TP insurance invoices, use "detail" for full breakdown
+      const printTemplate = invoiceType === "tp" ? "detail" : "summary";
       // For non-TP types, force law=ORG (only template the server respects)
       if (invoiceType !== "tp") {
         sumexInput.lawType = mapSumexLaw("ORG");
@@ -533,7 +529,8 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        const printTemplate2 = invoiceType === "tp" ? "detail" : "feeSummary";
+        // Use "summary" template for single-page format with all details
+        const printTemplate2 = invoiceType === "tp" ? "detail" : "summary";
         if (invoiceType !== "tp") {
           sumexInput2.lawType = mapSumexLaw("ORG");
         }
