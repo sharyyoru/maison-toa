@@ -7,7 +7,7 @@ import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email"
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-const fromEmail = process.env.EMAIL_FROM_ADDRESS || "info@maisontoa.com";
+const fromEmail = process.env.EMAIL_FROM_ADDRESS || "info@mail.maisontoa.com";
 
 type SendConfirmationPayload = {
   appointmentId: string;

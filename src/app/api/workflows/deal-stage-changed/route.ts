@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 // Sales team users for round-robin assignment
 const SALES_TEAM_NAMES = ["Charline", "Elite", "Audrey", "Bubuque", "Victoria"];
 
-const emailFromAddress = process.env.EMAIL_FROM_ADDRESS || "info@maisontoa.com";
+const emailFromAddress = process.env.EMAIL_FROM_ADDRESS || "info@mail.maisontoa.com";
 const emailFromName = process.env.EMAIL_FROM_NAME || "Maison Toa";
 const replyDomain = process.env.EMAIL_REPLY_DOMAIN || "maisontoa.com";
 

@@ -18,7 +18,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_API_URL = "https://api.resend.com/emails";
 
 // Default sender configuration
-const DEFAULT_FROM_EMAIL = process.env.EMAIL_FROM_ADDRESS || "info@maisontoa.com";
+const DEFAULT_FROM_EMAIL = process.env.EMAIL_FROM_ADDRESS || "info@mail.maisontoa.com";
 const DEFAULT_FROM_NAME = process.env.EMAIL_FROM_NAME || "Maison Toa";
 
 export type EmailAttachment = {

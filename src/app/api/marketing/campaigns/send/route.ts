@@ -26,7 +26,7 @@ const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maisontoa.vercel.app"
 
 // Marketing emails ALWAYS come from the clinic's branded address for
 // deliverability (DKIM/SPF alignment) and consistent branding.
-const MARKETING_FROM_EMAIL = process.env.EMAIL_FROM_ADDRESS || "info@maisontoa.com";
+const MARKETING_FROM_EMAIL = process.env.EMAIL_FROM_ADDRESS || "info@mail.maisontoa.com";
 const MARKETING_FROM_NAME = process.env.EMAIL_FROM_NAME || "Maison Toa";
 
 type ResendSendArgs = {

@@ -161,7 +161,7 @@ export async function POST(request: Request) {
           .insert({
             patient_id: patientId,
             to_address: trimmedTo,
-            from_address: fromAddress || process.env.EMAIL_FROM_ADDRESS || "info@maisontoa.com",
+            from_address: fromAddress || process.env.EMAIL_FROM_ADDRESS || "info@mail.maisontoa.com",
             subject: trimmedSubject,
             body: trimmedHtml,
             direction: "outbound",

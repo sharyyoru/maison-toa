@@ -17,10 +17,13 @@ Add these to your `.env.local` file:
 ```bash
 # Email service (Resend)
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
-EMAIL_FROM_ADDRESS=info@maisontoa.com
+EMAIL_FROM_ADDRESS=info@mail.maisontoa.com
 EMAIL_FROM_NAME=Maison Toa
-EMAIL_REPLY_DOMAIN=maisontoa.com
+EMAIL_REPLY_DOMAIN=mail.maisontoa.com
 ```
+
+> **Note**: The verified domain in Resend is `mail.maisontoa.com` (subdomain). 
+> Using a subdomain for sending is a best practice to protect the main domain's reputation.
 
 ## Domain Setup in Resend
 
