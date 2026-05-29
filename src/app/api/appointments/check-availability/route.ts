@@ -144,15 +144,23 @@ export async function GET(request: NextRequest) {
     });
 
     // ── Machine availability: mark slots as full if machine is at capacity ──
-    if (treatmentId) {
-      const { data: treatmentRow } = await supabase
+    if (treatmentId && treatmentId !== "none") {
+      console.log(`[CheckAvailability] Checking machine for treatmentId=${treatmentId}`);
+      
+      const { data: treatmentRow, error: treatmentError } = await supabase
         .from("booking_treatments")
-        .select("machine_id, linked_service_id")
+        .select("id, name, machine_id, linked_service_id")
         .eq("id", treatmentId)
         .single();
 
+      if (treatmentError) {
+        console.log(`[CheckAvailability] Treatment lookup error: ${treatmentError.message}`);
+      }
+      console.log(`[CheckAvailability] Treatment found: ${JSON.stringify(treatmentRow)}`);
+
       let machineId: string | null = null;
       let machineMax = 1;
+      let machineName = "";
 
       // First check direct machine_id on booking_treatments
       if (treatmentRow?.machine_id) {
@@ -164,6 +172,8 @@ export async function GET(request: NextRequest) {
           .single();
         if (machine) {
           machineMax = machine.max_concurrent ?? 1;
+          machineName = machine.name;
+          console.log(`[CheckAvailability] Machine found: ${machineName}, max=${machineMax}`);
         }
       } 
       // Fallback: check linked_service_id → service_machines
@@ -183,15 +193,24 @@ export async function GET(request: NextRequest) {
 
       // If a machine is required, check its availability for each slot
       if (machineId) {
-        const { data: machineAppts } = await supabase
+        console.log(`[CheckAvailability] Checking machine ${machineName} (${machineId}) availability`);
+        
+        const { data: machineAppts, error: machineError } = await supabase
           .from("appointments")
-          .select("id, appointment_group_id, start_time, end_time")
+          .select("id, appointment_group_id, start_time, end_time, status")
           .contains("machine_ids", [machineId])
           .lt("start_time", end)
           .gt("end_time", start)
           .not("status", "in", "(cancelled,no_show)");
 
+        console.log(`[CheckAvailability] Found ${machineAppts?.length || 0} machine appointments in range`);
+        if (machineError) {
+          console.log(`[CheckAvailability] Machine query error: ${machineError.message}`);
+        }
         if (machineAppts && machineAppts.length > 0) {
+          console.log(`[CheckAvailability] Machine appointments: ${JSON.stringify(machineAppts)}`);
+          
+          let slotsBlockedByMachine = 0;
           allSlots.forEach((slotStart) => {
             const slotIso = slotStart.toISOString();
             if (fullSlots.includes(slotIso)) return; // already full
@@ -202,9 +221,13 @@ export async function GET(request: NextRequest) {
             const uniqueUses = new Set(overlapping.map((a) => a.appointment_group_id || a.id));
             if (uniqueUses.size >= machineMax) {
               fullSlots.push(slotIso);
+              slotsBlockedByMachine++;
             }
           });
+          console.log(`[CheckAvailability] Blocked ${slotsBlockedByMachine} slots due to machine capacity`);
         }
+      } else {
+        console.log(`[CheckAvailability] No machine required for this treatment`);
       }
     }
 

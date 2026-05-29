@@ -84,7 +84,8 @@ async function getDoctorAvailability(doctor: EarliestBookingDoctor): Promise<Day
 async function getFirstOpenSlot(
   doctor: EarliestBookingDoctor,
   durationMinutes: number,
-  maxDaysAhead: number
+  maxDaysAhead: number,
+  treatmentId?: string
 ): Promise<EarliestDoctorResult | null> {
   const availability = await getDoctorAvailability(doctor);
   const today = getSwissToday();
@@ -104,8 +105,9 @@ async function getFirstOpenSlot(
   let allBookedSlots: Map<string, string[]> = new Map(); // dateString -> bookedSlots[]
   
   try {
+    const treatmentParam = treatmentId && treatmentId !== "none" ? `&treatmentId=${treatmentId}` : "";
     const res = await fetch(
-      `/api/appointments/check-availability?start=${rangeStart.toISOString()}&end=${rangeEnd.toISOString()}&doctor=${encodeURIComponent(doctor.name)}&slug=${doctor.slug}`
+      `/api/appointments/check-availability?start=${rangeStart.toISOString()}&end=${rangeEnd.toISOString()}&doctor=${encodeURIComponent(doctor.name)}&slug=${doctor.slug}${treatmentParam}`
     );
     const data = await res.json();
     
@@ -152,11 +154,12 @@ async function getFirstOpenSlot(
 export async function findEarliestAvailableDoctor(
   doctors: EarliestBookingDoctor[],
   durationMinutes = 60,
-  maxDaysAhead = 30 // Reduced from 90 to 30 for faster initial search
+  maxDaysAhead = 30, // Reduced from 90 to 30 for faster initial search
+  treatmentId?: string
 ): Promise<EarliestDoctorResult | null> {
   // Search all doctors in parallel
   const results = await Promise.all(
-    doctors.map((doctor) => getFirstOpenSlot(doctor, durationMinutes, maxDaysAhead))
+    doctors.map((doctor) => getFirstOpenSlot(doctor, durationMinutes, maxDaysAhead, treatmentId))
   );
 
   const validResults = results.filter((result): result is EarliestDoctorResult => result !== null);
@@ -164,7 +167,7 @@ export async function findEarliestAvailableDoctor(
   if (validResults.length === 0) {
     // If no results in first 30 days, try extended search (60 more days)
     const extendedResults = await Promise.all(
-      doctors.map((doctor) => getFirstOpenSlot(doctor, durationMinutes, 90))
+      doctors.map((doctor) => getFirstOpenSlot(doctor, durationMinutes, 90, treatmentId))
     );
     return extendedResults
       .filter((result): result is EarliestDoctorResult => result !== null)
@@ -182,13 +185,14 @@ export async function findMultipleEarliestSlots(
   doctors: EarliestBookingDoctor[],
   durationMinutes = 60,
   count = 5,
-  maxDaysAhead = 30
+  maxDaysAhead = 30,
+  treatmentId?: string
 ): Promise<EarliestDoctorResult[]> {
   // Get all open slots for each doctor
   const allSlots: EarliestDoctorResult[] = [];
   
   for (const doctor of doctors) {
-    const slots = await getMultipleOpenSlots(doctor, durationMinutes, count, maxDaysAhead);
+    const slots = await getMultipleOpenSlots(doctor, durationMinutes, count, maxDaysAhead, treatmentId);
     allSlots.push(...slots);
   }
   
@@ -220,7 +224,8 @@ async function getMultipleOpenSlots(
   doctor: EarliestBookingDoctor,
   durationMinutes: number,
   count: number,
-  maxDaysAhead: number
+  maxDaysAhead: number,
+  treatmentId?: string
 ): Promise<EarliestDoctorResult[]> {
   const availability = await getDoctorAvailability(doctor);
   const today = getSwissToday();
@@ -239,8 +244,9 @@ async function getMultipleOpenSlots(
   let allBookedSlots: Map<string, string[]> = new Map();
   
   try {
+    const treatmentParam = treatmentId && treatmentId !== "none" ? `&treatmentId=${treatmentId}` : "";
     const res = await fetch(
-      `/api/appointments/check-availability?start=${rangeStart.toISOString()}&end=${rangeEnd.toISOString()}&doctor=${encodeURIComponent(doctor.name)}&slug=${doctor.slug}`
+      `/api/appointments/check-availability?start=${rangeStart.toISOString()}&end=${rangeEnd.toISOString()}&doctor=${encodeURIComponent(doctor.name)}&slug=${doctor.slug}${treatmentParam}`
     );
     const data = await res.json();
     
