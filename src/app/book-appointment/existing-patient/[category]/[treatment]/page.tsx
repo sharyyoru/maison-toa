@@ -8,6 +8,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { findMultipleEarliestSlots, EarliestDoctorResult } from "@/lib/bookingEarliestDoctor";
 import { getLocalizedBookingName } from "@/lib/bookingLocalization";
+import { DescriptionReadMore } from "@/components/booking/DescriptionReadMore";
 
 interface BookingDoctor {
   id: string;
@@ -232,9 +233,14 @@ export default function SelectDoctorPage() {
                     <p className="text-sm text-slate-500 font-medium mb-2">
                       {doctor.specialty}
                     </p>
-                    <p className="text-sm text-slate-500 line-clamp-2 mb-3">
-                      {doctor.description}
-                    </p>
+                    <DescriptionReadMore
+                      description={doctor.description}
+                      doctorName={doctor.name}
+                      specialty={doctor.specialty}
+                      imageUrl={doctor.image_url}
+                      maxLines={2}
+                      className="mb-3"
+                    />
                     <div className="flex items-center gap-2 text-sm font-medium text-slate-900 group-hover:text-slate-700">
                       <span>{t("doctor.bookConsultation")}</span>
                       <svg
