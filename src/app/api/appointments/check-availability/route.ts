@@ -147,11 +147,27 @@ export async function GET(request: NextRequest) {
     if (treatmentId) {
       const { data: treatmentRow } = await supabase
         .from("booking_treatments")
-        .select("linked_service_id")
+        .select("machine_id, linked_service_id")
         .eq("id", treatmentId)
         .single();
 
-      if (treatmentRow?.linked_service_id) {
+      let machineId: string | null = null;
+      let machineMax = 1;
+
+      // First check direct machine_id on booking_treatments
+      if (treatmentRow?.machine_id) {
+        machineId = treatmentRow.machine_id;
+        const { data: machine } = await supabase
+          .from("machines")
+          .select("max_concurrent, name")
+          .eq("id", machineId)
+          .single();
+        if (machine) {
+          machineMax = machine.max_concurrent ?? 1;
+        }
+      } 
+      // Fallback: check linked_service_id → service_machines
+      else if (treatmentRow?.linked_service_id) {
         const { data: machineMapping } = await supabase
           .from("service_machines")
           .select("machine_id, machines(max_concurrent)")
@@ -160,32 +176,34 @@ export async function GET(request: NextRequest) {
           .single();
 
         if (machineMapping) {
-          const machineId = machineMapping.machine_id;
-          const machineMax = (machineMapping.machines as any)?.max_concurrent ?? 1;
+          machineId = machineMapping.machine_id;
+          machineMax = (machineMapping.machines as any)?.max_concurrent ?? 1;
+        }
+      }
 
-          // Fetch all appointments using this machine in the range
-          const { data: machineAppts } = await supabase
-            .from("appointments")
-            .select("id, appointment_group_id, start_time, end_time")
-            .contains("machine_ids", [machineId])
-            .lt("start_time", end)
-            .gt("end_time", start)
-            .not("status", "in", "(cancelled,no_show)");
+      // If a machine is required, check its availability for each slot
+      if (machineId) {
+        const { data: machineAppts } = await supabase
+          .from("appointments")
+          .select("id, appointment_group_id, start_time, end_time")
+          .contains("machine_ids", [machineId])
+          .lt("start_time", end)
+          .gt("end_time", start)
+          .not("status", "in", "(cancelled,no_show)");
 
-          if (machineAppts && machineAppts.length > 0) {
-            allSlots.forEach((slotStart) => {
-              const slotIso = slotStart.toISOString();
-              if (fullSlots.includes(slotIso)) return; // already full
-              const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
-              const overlapping = machineAppts.filter((a) => {
-                return new Date(a.start_time) < slotEnd && new Date(a.end_time) > slotStart;
-              });
-              const uniqueUses = new Set(overlapping.map((a) => a.appointment_group_id || a.id));
-              if (uniqueUses.size >= machineMax) {
-                fullSlots.push(slotIso);
-              }
+        if (machineAppts && machineAppts.length > 0) {
+          allSlots.forEach((slotStart) => {
+            const slotIso = slotStart.toISOString();
+            if (fullSlots.includes(slotIso)) return; // already full
+            const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
+            const overlapping = machineAppts.filter((a) => {
+              return new Date(a.start_time) < slotEnd && new Date(a.end_time) > slotStart;
             });
-          }
+            const uniqueUses = new Set(overlapping.map((a) => a.appointment_group_id || a.id));
+            if (uniqueUses.size >= machineMax) {
+              fullSlots.push(slotIso);
+            }
+          });
         }
       }
     }

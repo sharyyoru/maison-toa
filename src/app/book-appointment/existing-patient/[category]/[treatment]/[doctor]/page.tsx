@@ -290,7 +290,7 @@ function DoctorBookingContent() {
           try {
             const { start, end } = getSwissDayRange(dateStr);
             const res = await fetch(
-              `/api/appointments/check-availability?start=${start}&end=${end}&doctor=${encodeURIComponent(doctorName)}&slug=${doctorSlug}`
+              `/api/appointments/check-availability?start=${start}&end=${end}&doctor=${encodeURIComponent(doctorName)}&slug=${doctorSlug}&treatmentId=${treatmentId}`
             );
             const data = await res.json();
 
@@ -362,7 +362,7 @@ function DoctorBookingContent() {
       const doctorName = doctor?.name || "";
 
       const res = await fetch(
-        `/api/appointments/check-availability?start=${start}&end=${end}&doctor=${encodeURIComponent(doctorName)}&slug=${doctorSlug}`
+        `/api/appointments/check-availability?start=${start}&end=${end}&doctor=${encodeURIComponent(doctorName)}&slug=${doctorSlug}&treatmentId=${treatmentId}`
       );
       const data = await res.json();
 
