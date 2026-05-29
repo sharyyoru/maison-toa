@@ -2447,7 +2447,6 @@ export default function MedicalConsultationsCard({
   async function handleNewConsultationAutosave() {
     // Only autosave for "notes" type (not invoices/prescriptions which have complex data)
     if (consultationRecordType !== "notes") return;
-    if (!consultationDoctorId || !consultationDate) return;
     
     const htmlContent = newConsultationContentRef.current?.innerHTML || consultationContentHtml;
     
@@ -2457,14 +2456,15 @@ export default function MedicalConsultationsCard({
     setNewConsultationAutosaveStatus("saving");
     
     try {
-      // Build scheduled_at
+      // Build scheduled_at - default to today if no date selected
+      const dateToUse = consultationDate || new Date().toISOString().split('T')[0];
       const h = consultationHour || "00";
       const m = consultationMinute || "00";
-      const scheduledAt = new Date(`${consultationDate}T${h}:${m}:00`).toISOString();
+      const scheduledAt = new Date(`${dateToUse}T${h}:${m}:00`).toISOString();
       
-      // Find doctor name
-      const doctor = medicalStaffOptions.find((u) => u.id === consultationDoctorId);
-      const doctorName = doctor?.name || "Doctor";
+      // Find doctor name (optional for drafts)
+      const doctor = consultationDoctorId ? medicalStaffOptions.find((u) => u.id === consultationDoctorId) : null;
+      const doctorName = doctor?.name || null;
       
       if (newConsultationDraftId) {
         // UPDATE existing draft
@@ -2473,7 +2473,8 @@ export default function MedicalConsultationsCard({
           .update({
             title: consultationTitle || "Draft",
             content: htmlContent,
-            doctor_user_id: consultationDoctorId,
+            record_type: "notes",
+            doctor_user_id: consultationDoctorId || null,
             doctor_name: doctorName,
             scheduled_at: scheduledAt,
             diagnosis_code: consultationDiagnosisCode.trim() || null,
@@ -2512,13 +2513,14 @@ export default function MedicalConsultationsCard({
             patient_id: patientId,
             title: consultationTitle || "Draft",
             content: htmlContent,
-            doctor_user_id: consultationDoctorId,
+            record_type: "notes",
+            doctor_user_id: consultationDoctorId || null,
             doctor_name: doctorName,
             scheduled_at: scheduledAt,
             diagnosis_code: consultationDiagnosisCode.trim() || null,
             ref_icd10: consultationRefIcd10.trim() || null,
           })
-          .select()
+          .select("id, patient_id, consultation_id, title, content, record_type, doctor_user_id, doctor_name, scheduled_at, payment_method, duration_seconds, invoice_total_amount, invoice_is_complimentary, invoice_is_paid, invoice_status, invoice_paid_amount, cash_receipt_path, invoice_pdf_path, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, archived_at, diagnosis_code, ref_icd10")
           .single();
           
         if (error) {
@@ -2529,8 +2531,22 @@ export default function MedicalConsultationsCard({
         
         if (data) {
           setNewConsultationDraftId(data.id);
-          // Note: We don't add to local state here - the form is still open
-          // The consultation will appear in the list after form is closed/saved
+          // Add draft to local state so it appears in the list
+          const newRow: ConsultationRow = {
+            ...data,
+            invoice_id: null,
+            reference_number: null,
+            linked_invoice_id: null,
+            linked_invoice_status: null,
+            linked_invoice_number: null,
+            medidata_status: null,
+            invoice_pdf_path_tg: null,
+            invoice_pdf_path_tp: null,
+            invoice_pdf_path_reminder: null,
+            invoice_pdf_path_receipt: null,
+          };
+          setConsultations((prev) => [newRow, ...prev]);
+          console.log("Draft consultation created:", data.id);
         }
       }
       
@@ -3315,6 +3331,8 @@ export default function MedicalConsultationsCard({
                     setConsultationDurationSeconds(0);
                     setConsultationStopwatchStartedAt(null);
                     setConsultationStopwatchNow(Date.now());
+                    setNewConsultationDraftId(null); // Reset draft ID when starting fresh
+                    setNewConsultationAutosaveStatus("idle");
                     setPrescriptionLines([
                       { medicineId: "", dosageId: "" },
                     ]);
@@ -3488,6 +3506,8 @@ export default function MedicalConsultationsCard({
                     setConsultationDurationSeconds(0);
                     setConsultationStopwatchStartedAt(null);
                     setConsultationStopwatchNow(Date.now());
+                    setNewConsultationDraftId(null); // Reset draft ID when starting fresh
+                    setNewConsultationAutosaveStatus("idle");
                     setPrescriptionLines([]);
                     setInvoicePaymentMethod("");
                     setInvoiceMode("individual");
