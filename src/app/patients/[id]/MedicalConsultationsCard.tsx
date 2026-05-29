@@ -2517,7 +2517,6 @@ export default function MedicalConsultationsCard({
             scheduled_at: scheduledAt,
             diagnosis_code: consultationDiagnosisCode.trim() || null,
             ref_icd10: consultationRefIcd10.trim() || null,
-            is_draft: true, // Mark as draft
           })
           .select()
           .single();
@@ -4861,8 +4860,8 @@ export default function MedicalConsultationsCard({
                         return;
                       }
                     } else {
-                      // ── Non-invoice: insert into consultations table as before ──
-                      const insertPayload: Record<string, unknown> = {
+                      // ── Non-invoice: insert or update consultations table ──
+                      const consultationPayload: Record<string, unknown> = {
                         patient_id: patientId,
                         consultation_id: consultationId,
                         title: effectiveTitle,
@@ -4881,13 +4880,32 @@ export default function MedicalConsultationsCard({
                         ref_icd10: consultationRefIcd10.trim() || null,
                       };
 
-                      const { data, error } = await supabaseClient
-                        .from("consultations")
-                        .insert(insertPayload)
-                        .select(
-                          "id, patient_id, consultation_id, title, content, record_type, doctor_user_id, doctor_name, scheduled_at, payment_method, duration_seconds, invoice_total_amount, invoice_is_complimentary, invoice_is_paid, invoice_status, invoice_paid_amount, cash_receipt_path, invoice_pdf_path, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, archived_at, diagnosis_code, ref_icd10",
-                        )
-                        .single();
+                      let data: Record<string, unknown> | null = null;
+                      let error: { message: string } | null = null;
+
+                      // If we have a draft from autosave, update it instead of creating new
+                      if (newConsultationDraftId) {
+                        const result = await supabaseClient
+                          .from("consultations")
+                          .update(consultationPayload)
+                          .eq("id", newConsultationDraftId)
+                          .select(
+                            "id, patient_id, consultation_id, title, content, record_type, doctor_user_id, doctor_name, scheduled_at, payment_method, duration_seconds, invoice_total_amount, invoice_is_complimentary, invoice_is_paid, invoice_status, invoice_paid_amount, cash_receipt_path, invoice_pdf_path, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, archived_at, diagnosis_code, ref_icd10",
+                          )
+                          .single();
+                        data = result.data;
+                        error = result.error;
+                      } else {
+                        const result = await supabaseClient
+                          .from("consultations")
+                          .insert(consultationPayload)
+                          .select(
+                            "id, patient_id, consultation_id, title, content, record_type, doctor_user_id, doctor_name, scheduled_at, payment_method, duration_seconds, invoice_total_amount, invoice_is_complimentary, invoice_is_paid, invoice_status, invoice_paid_amount, cash_receipt_path, invoice_pdf_path, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, archived_at, diagnosis_code, ref_icd10",
+                          )
+                          .single();
+                        data = result.data;
+                        error = result.error;
+                      }
 
                       if (error || !data) {
                         setConsultationError(
@@ -4897,7 +4915,7 @@ export default function MedicalConsultationsCard({
                         return;
                       }
 
-                      const inserted: ConsultationRow = {
+                      const savedRow: ConsultationRow = {
                         ...(data as any),
                         invoice_id: null,
                         reference_number: null,
@@ -4908,7 +4926,18 @@ export default function MedicalConsultationsCard({
                         linked_invoice_number: null,
                         medidata_status: null,
                       };
-                      setConsultations((prev) => [inserted, ...prev]);
+                      
+                      // If we updated a draft, update in place; otherwise add to top
+                      if (newConsultationDraftId) {
+                        setConsultations((prev) =>
+                          prev.map((row) =>
+                            row.id === newConsultationDraftId ? savedRow : row
+                          )
+                        );
+                        setNewConsultationDraftId(null);
+                      } else {
+                        setConsultations((prev) => [savedRow, ...prev]);
+                      }
                     }
 
                     setConsultationSaving(false);
