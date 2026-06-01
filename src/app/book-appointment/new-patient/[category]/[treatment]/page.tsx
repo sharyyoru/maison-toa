@@ -295,9 +295,6 @@ export default function SelectDoctorPage() {
                       </svg>
                     </button>
                   </div>
-                  <p className="text-sm text-slate-600 mb-4">
-                    {t("doctor.earliestSlotsDescription") || "Choose from the earliest available appointments across all specialists:"}
-                  </p>
                   <div className="space-y-2">
                     {earliestSlots.map((slot, index) => (
                       <button
@@ -331,7 +328,7 @@ export default function SelectDoctorPage() {
                       onClick={() => setShowSlotPicker(false)}
                       className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
                     >
-                      ← {t("doctor.backToAllDoctors") || "Back to all specialists"}
+                      ← {t("doctor.backToAllDoctors") || "Back to specialist list"}
                     </button>
                   </div>
                 </div>

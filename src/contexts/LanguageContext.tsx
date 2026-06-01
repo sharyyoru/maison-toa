@@ -43,6 +43,8 @@ const translations: Record<Language, Record<string, string>> = {
     "doctor.bookConsultation": "Book Consultation",
     "doctor.autoSelectEarliest": "Book earliest available specialist",
     "doctor.findingEarliest": "Finding earliest availability...",
+    "doctor.earliestSlotsTitle": "Earliest slot available",
+    "doctor.backToAllDoctors": "Back to specialist list",
     "doctor.noEarliestAvailable": "No available specialist was found in the next 90 days.",
     "doctor.autoSelectFailed": "Could not find the earliest available specialist. Please select a specialist manually.",
     
@@ -130,6 +132,8 @@ const translations: Record<Language, Record<string, string>> = {
     "doctor.bookConsultation": "Réserver une consultation",
     "doctor.autoSelectEarliest": "Réserver le spécialiste disponible au plus tôt",
     "doctor.findingEarliest": "Recherche de la première disponibilité...",
+    "doctor.earliestSlotsTitle": "Premier créneau disponible",
+    "doctor.backToAllDoctors": "Retour à la liste des spécialistes",
     "doctor.noEarliestAvailable": "Aucun spécialiste disponible trouvé dans les 90 prochains jours.",
     "doctor.autoSelectFailed": "Impossible de trouver le spécialiste disponible au plus tôt. Veuillez sélectionner un spécialiste manuellement.",
     
