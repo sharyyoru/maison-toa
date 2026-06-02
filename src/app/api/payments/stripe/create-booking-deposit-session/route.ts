@@ -28,13 +28,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch treatment with linked service price
+    // Note: name_en is stored in site_settings translations, not in the table directly
     const { data: treatment, error: tErr } = await supabaseAdmin
       .from("booking_treatments")
-      .select("id, name, name_en, prepayment_required, linked_service_id, services:linked_service_id(id, name, base_price)")
+      .select("id, name, prepayment_required, linked_service_id, services:linked_service_id(id, name, base_price)")
       .eq("id", treatmentId)
       .single();
 
     if (tErr || !treatment) {
+      console.error("[Stripe] Treatment not found:", { treatmentId, error: tErr?.message, email });
       return NextResponse.json({ error: "Treatment not found" }, { status: 404 });
     }
 
@@ -48,9 +50,8 @@ export async function POST(req: NextRequest) {
     }
 
     const depositAmount = Math.round(svc.base_price * 0.5 * 100); // 50% in cents
-    const localizedTreatmentName =
-      treatmentName ||
-      (language === "en" && treatment.name_en ? treatment.name_en : treatment.name);
+    // Use the treatmentName from frontend (already localized) or fall back to DB name
+    const localizedTreatmentName = treatmentName || treatment.name;
 
     // Encode booking data in metadata (Stripe metadata values max 500 chars each)
     const metadata: Record<string, string> = {
