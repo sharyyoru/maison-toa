@@ -877,48 +877,53 @@ type ParsedTransaction = {
 
 function parseCamt054Xml(xmlText: string): ParsedTransaction[] {
   try {
-    // Use regex-based parsing to avoid XML namespace issues with querySelectorAll
+    const getFirstTag = (xml: string, tag: string): string => {
+      const re = new RegExp(`<(?:[^:>]+:)?${tag}[^>]*>([\\s\\S]*?)<\\/(?:[^:>]+:)?${tag}>`, "i");
+      const m = xml.match(re);
+      return m ? m[1].trim() : "";
+    };
     const getAllTags = (xml: string, tag: string): string[] => {
-      const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
+      const re = new RegExp(`<(?:[^:>]+:)?${tag}[^>]*>([\\s\\S]*?)<\\/(?:[^:>]+:)?${tag}>`, "gi");
       const results: string[] = [];
       let m;
       while ((m = re.exec(xml)) !== null) results.push(m[1]);
       return results;
-    };
-    const getTag = (xml: string, tag: string): string => {
-      const m = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
-      return m ? m[1].trim() : "";
-    };
-    const getAttrVal = (xml: string, tag: string, attr: string): string => {
-      const m = xml.match(new RegExp(`<${tag}[^>]*\\s${attr}="([^"]*)"`, "i"));
-      return m ? m[1] : "";
     };
 
     const transactions: ParsedTransaction[] = [];
     const entries = getAllTags(xmlText, "Ntry");
 
     for (const entry of entries) {
-      const date = getTag(getTag(entry, "BookgDt"), "Dt") || getTag(entry, "Dt");
-      const cdtDbtInd = getTag(entry, "CdtDbtInd");
+      const cdtDbtInd = getFirstTag(entry, "CdtDbtInd");
+      const date = getFirstTag(getFirstTag(entry, "BookgDt"), "Dt");
 
-      // Each Ntry may have multiple TxDtls — iterate all
       const txDtlsList = getAllTags(entry, "TxDtls");
       const blocks = txDtlsList.length > 0 ? txDtlsList : [entry];
 
       for (const tx of blocks) {
-        const amtEl = tx.match(/<Amt\s+Ccy="([^"]*)"[^>]*>([^<]*)<\/Amt>/i);
-        const amount = amtEl ? amtEl[2].trim() : getTag(entry, "Amt");
-        const currency = amtEl ? amtEl[1] : getAttrVal(entry, "Amt", "Ccy") || "CHF";
+        // Amount + currency
+        const amtEl = tx.match(/<(?:[^:>]+:)?Amt\s+Ccy="([^"]*)"[^>]*>([^<]*)<\/(?:[^:>]+:)?Amt>/i);
+        const amount = amtEl ? amtEl[2].trim() : "";
+        const currency = amtEl ? amtEl[1] : "CHF";
 
-        const debtor = getTag(getTag(getTag(tx, "RltdPties"), "Dbtr"), "Nm") ||
-                       getTag(getTag(getTag(tx, "RltdPties"), "Dbtr"), "AdrLine") ||
-                       "Unknown";
-        const ultimateDebtor = getTag(getTag(getTag(tx, "RltdPties"), "UltmtDbtr"), "Nm") ||
-                               getTag(getTag(getTag(tx, "RltdPties"), "UltmtDbtr"), "AdrLine") ||
+        // Debtor: prefer <Nm>, fall back to first <AdrLine>
+        const rltdPties = getFirstTag(tx, "RltdPties");
+        const dbtrBlock = getFirstTag(rltdPties, "Dbtr");
+        const debtor = getFirstTag(dbtrBlock, "Nm") ||
+                       getFirstTag(dbtrBlock, "AdrLine") ||
+                       "";
+
+        // UltmtDbtr: prefer <Nm>, fall back to first <AdrLine>
+        const ultmtDbtrBlock = getFirstTag(rltdPties, "UltmtDbtr");
+        const ultimateDebtor = getFirstTag(ultmtDbtrBlock, "Nm") ||
+                               getFirstTag(ultmtDbtrBlock, "AdrLine") ||
                                "";
-        const reference = getTag(getTag(getTag(tx, "RmtInf"), "Strd"), "Ref") ||
-                          getTag(getTag(tx, "Refs"), "EndToEndId") || "";
-        const description = getTag(entry, "AddtlNtryInf") || getTag(tx, "AddtlTxInf") || "";
+
+        const reference = getFirstTag(getFirstTag(getFirstTag(tx, "RmtInf"), "Strd"), "Ref") ||
+                          getFirstTag(getFirstTag(tx, "Refs"), "EndToEndId") || "";
+        const description = getFirstTag(tx, "AddtlTxInf") || getFirstTag(entry, "AddtlNtryInf") || "";
+
+        if (!amount) continue;
 
         transactions.push({
           date,
