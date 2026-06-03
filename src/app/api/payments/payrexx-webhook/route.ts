@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { isTransactionPaid, type PayrexxWebhookPayload, type PayrexxTransactionStatus } from "@/lib/payrexx";
+import { isTransactionPaid, verifyWebhookSignature, type PayrexxWebhookPayload, type PayrexxTransactionStatus } from "@/lib/payrexx";
 
 // Use service role for webhook processing (no user context)
 const supabaseAdmin = createClient(
@@ -15,12 +15,20 @@ export async function POST(request: NextRequest) {
     let payload: PayrexxWebhookPayload | null = null;
     let rawBody = "";
 
-    // Clone request to read body for logging
+    // Clone request to read body for signature verification
     try {
       rawBody = await request.clone().text();
-      console.log("Payrexx webhook raw body:", rawBody.substring(0, 500));
     } catch {
       // Ignore clone errors
+    }
+
+    // Verify webhook signature if PAYREXX_API_SECRET is configured
+    const signature = request.headers.get("x-payrexx-signature") || request.headers.get("payrexx-signature");
+    if (process.env.PAYREXX_API_SECRET && signature) {
+      if (!verifyWebhookSignature(rawBody, signature)) {
+        console.error("Payrexx webhook signature verification failed");
+        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+      }
     }
 
     if (contentType.includes("application/json")) {

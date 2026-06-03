@@ -1,12 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getAdminUser } from "@/lib/apiAuth";
 
 /**
  * POST /api/medidata/setup-tables
  * Creates medidata_responses and medidata_notifications_log tables if they don't exist.
  * Uses supabase rpc or direct table creation attempts.
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const adminUser = await getAdminUser(request);
+  if (!adminUser) {
+    return NextResponse.json({ error: "Unauthorized — admin access required" }, { status: 401 });
+  }
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;

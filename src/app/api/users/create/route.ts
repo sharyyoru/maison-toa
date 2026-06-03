@@ -1,8 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getAdminUser } from "@/lib/apiAuth";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const adminUser = await getAdminUser(request);
+    if (!adminUser) {
+      return NextResponse.json(
+        { error: "Unauthorized — admin access required" },
+        { status: 401 }
+      );
+    }
+
     const { email, password, role, firstName, lastName, designation } =
       await request.json();
 

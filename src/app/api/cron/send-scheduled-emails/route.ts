@@ -34,9 +34,13 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
 }
 
 export async function GET(request: Request) {
-  // Verify authorization
+  // Verify authorization — CRON_SECRET is required in production
   const authHeader = request.headers.get("authorization");
-  if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (!CRON_SECRET) {
+    console.error("CRON_SECRET environment variable is not set — rejecting cron request");
+    return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+  }
+  if (authHeader !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

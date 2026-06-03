@@ -1,12 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getAdminUser } from "@/lib/apiAuth";
 import crypto from "crypto";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const adminUser = await getAdminUser(request);
+    if (!adminUser) {
+      return NextResponse.json({ error: "Unauthorized — admin access required" }, { status: 401 });
+    }
+
     const { email } = await request.json();
 
     if (!email || typeof email !== "string") {
