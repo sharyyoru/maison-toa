@@ -19,6 +19,7 @@ interface Treatment {
   duration_minutes: number;
   order_index: number;
   enabled: boolean;
+  base_price?: number | null;
 }
 
 interface Category {
@@ -163,9 +164,16 @@ export default function ExistingPatientTreatmentsPage() {
                                   </p>
                                 )}
                                 <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
-                                  <span className="text-sm text-slate-500">
-                                    {formatDuration(treatment.duration_minutes)}
-                                  </span>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-sm text-slate-500">
+                                      {formatDuration(treatment.duration_minutes)}
+                                    </span>
+                                    {treatment.base_price != null && (
+                                      <span className="text-sm font-medium text-slate-700">
+                                        CHF {treatment.base_price}
+                                      </span>
+                                    )}
+                                  </div>
                                   <svg
                                     className="w-5 h-5 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-all"
                                     fill="none"

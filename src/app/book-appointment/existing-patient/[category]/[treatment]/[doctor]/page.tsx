@@ -122,6 +122,8 @@ interface Treatment {
   name: string;
   name_en?: string | null;
   duration_minutes: number;
+  prepayment_required?: boolean;
+  linked_service_id?: string | null;
 }
 
 function DoctorBookingContent() {
