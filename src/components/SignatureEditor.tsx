@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useMemo, useRef, useState } from "react";
+import { escapeHtml } from "@/utils/htmlUtils";
 import { createEditor, Descendant, Editor, Element as SlateElement, Transforms, BaseEditor } from "slate";
 import {
   Slate,
@@ -70,7 +71,7 @@ const serialize = (nodes: Descendant[]): string => {
       if ("text" in node) {
         let text = node.text;
         if (!text) return "";
-        text = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        text = escapeHtml(text);
         if (node.bold) text = `<strong>${text}</strong>`;
         if (node.italic) text = `<em>${text}</em>`;
         if (node.underline) text = `<u>${text}</u>`;

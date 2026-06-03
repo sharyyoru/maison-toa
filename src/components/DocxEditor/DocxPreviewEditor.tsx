@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { renderAsync } from 'docx-preview';
+import { escapeXml } from '@/utils/htmlUtils';
 
 interface PatientData {
   firstName?: string;
@@ -315,13 +316,7 @@ export default function DocxPreviewEditor({
     
     replacements.forEach((value, placeholder) => {
       if (value) {
-        // Escape XML special characters in the replacement value
-        const escapedValue = value
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&apos;');
+        const escapedValue = escapeXml(value);
         
         // First try simple replacement
         if (modifiedXml.includes(placeholder)) {

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { textToHtml } from "@/utils/htmlUtils";
+import { renderTemplate, sanitizeTelLinks } from "@/utils/templateRenderer";
 
 export const runtime = "nodejs";
 
@@ -9,88 +11,6 @@ type SendTestEmailRequestBody = {
   bodyHtmlTemplate?: string | null;
   useHtml?: boolean;
 };
-
-function resolvePath(object: unknown, path: string): unknown {
-  const parts = path.split(".").map((part) => part.trim()).filter(Boolean);
-
-  return parts.reduce<unknown>((current, key) => {
-    if (!current || typeof current !== "object") return undefined;
-    if (!(key in (current as Record<string, unknown>))) return undefined;
-    return (current as Record<string, unknown>)[key];
-  }, object);
-}
-
-function decodeHtmlEntities(str: string): string {
-  return str
-    .replace(/&#123;/g, "{")
-    .replace(/&#125;/g, "}")
-    .replace(/&lbrace;/g, "{")
-    .replace(/&rbrace;/g, "}")
-    .replace(/&#x7b;/gi, "{")
-    .replace(/&#x7d;/gi, "}");
-}
-
-function renderTemplate(template: string, context: unknown): string {
-  if (!template) return "";
-
-  // First decode any HTML-encoded curly braces (from Unlayer or other editors)
-  const decoded = decodeHtmlEntities(template);
-
-  return decoded.replace(/{{\s*([^}]+?)\s*}}/g, (_match, rawPath) => {
-    const value = resolvePath(context, String(rawPath));
-    if (value === undefined || value === null) return "";
-    return String(value);
-  });
-}
-
-function textToHtml(text: string): string {
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-
-  return escaped
-    .split(/\r?\n/g)
-    .map((line) => (line.length === 0 ? "<br />" : line))
-    .join("<br />");
-}
-
-function sanitizeTelLinks(html: string): string {
-  // First, decode any URL-encoded tel: protocols (tel%3A -> tel:)
-  let result = html.replace(/href\s*=\s*(["'])tel%3A/gi, 'href=$1tel:');
-  
-  // Also handle %2B (URL-encoded +) at the start of phone numbers
-  result = result.replace(/href\s*=\s*(["'])tel:%2B/gi, 'href=$1tel:+');
-  
-  // Now handle all tel: links and clean the phone numbers for iPhone compatibility
-  result = result.replace(
-    /href\s*=\s*["']tel:([^"']+)["']/gi,
-    (_match, phoneNumber) => {
-      // Decode any remaining URL encoding in the phone number
-      let decoded = phoneNumber;
-      try {
-        decoded = decodeURIComponent(phoneNumber);
-      } catch {
-        // If decoding fails, use original
-      }
-      // Remove HTML entities first
-      decoded = decoded
-        .replace(/&nbsp;/gi, '')  // HTML nbsp entity
-        .replace(/&#160;/g, '')   // Numeric nbsp entity
-        .replace(/&amp;/gi, '&')  // Ampersand entity
-        .replace(/&plus;/gi, '+') // Plus entity
-        .replace(/\u00A0/g, '');  // Unicode nbsp
-      
-      // CRITICAL FOR iPHONE: Keep ONLY digits and leading + sign
-      // Remove everything else (letters, spaces, dashes, dots, parens, etc.)
-      const cleaned = decoded.replace(/[^0-9+]/g, '');
-      
-      return `href="tel:${cleaned}"`;
-    }
-  );
-  
-  return result;
-}
 
 export async function POST(request: Request) {
   try {

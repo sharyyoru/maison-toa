@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { shouldCreateDeal } from "@/lib/dealDeduplication";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 // Sales team users who should be assigned tasks for new leads (round-robin)
 const SALES_TEAM_NAMES = ["Charline", "Elite", "Audrey", "Bubuque", "Victoria"];
@@ -27,8 +24,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get patient details
     const { data: patient, error: patientError } = await supabaseAdmin

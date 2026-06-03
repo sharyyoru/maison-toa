@@ -13,6 +13,7 @@
  */
 
 import { calculateSumexTardocPrice, SUMEX_TARDOC_CODES, type SwissCanton, CANTON_TAX_POINT_VALUES } from './tardoc';
+import { escapeXml } from '@/utils/htmlUtils';
 
 // Law types for Swiss healthcare billing
 export type SwissLawType = 'KVG' | 'UVG' | 'IVG' | 'MVG' | 'VVG';
@@ -339,18 +340,7 @@ export function generateSumexXml(request: MediDataInvoiceRequest): string {
   return xml;
 }
 
-/**
- * Escape special XML characters
- */
-function escapeXml(str: string): string {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
+
 
 /**
  * Generate ESR reference number for Swiss payment slips
