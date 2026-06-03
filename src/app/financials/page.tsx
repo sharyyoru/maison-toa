@@ -870,6 +870,7 @@ type ParsedTransaction = {
   amount: string;
   currency: string;
   debtor: string;
+  ultimateDebtor: string;
   reference: string;
   description: string;
 };
@@ -910,10 +911,11 @@ function parseCamt054Xml(xmlText: string): ParsedTransaction[] {
         const currency = amtEl ? amtEl[1] : getAttrVal(entry, "Amt", "Ccy") || "CHF";
 
         const debtor = getTag(getTag(getTag(tx, "RltdPties"), "Dbtr"), "Nm") ||
-                       getTag(getTag(getTag(tx, "RltdPties"), "UltmtDbtr"), "Nm") ||
-                       getTag(getTag(getTag(tx, "RltdPties"), "UltmtDbtr"), "AdrLine") ||
                        getTag(getTag(getTag(tx, "RltdPties"), "Dbtr"), "AdrLine") ||
                        "Unknown";
+        const ultimateDebtor = getTag(getTag(getTag(tx, "RltdPties"), "UltmtDbtr"), "Nm") ||
+                               getTag(getTag(getTag(tx, "RltdPties"), "UltmtDbtr"), "AdrLine") ||
+                               "";
         const reference = getTag(getTag(getTag(tx, "RmtInf"), "Strd"), "Ref") ||
                           getTag(getTag(tx, "Refs"), "EndToEndId") || "";
         const description = getTag(entry, "AddtlNtryInf") || getTag(tx, "AddtlTxInf") || "";
@@ -923,6 +925,7 @@ function parseCamt054Xml(xmlText: string): ParsedTransaction[] {
           amount: `${cdtDbtInd === "DBIT" ? "-" : ""}${amount}`,
           currency,
           debtor,
+          ultimateDebtor,
           reference,
           description,
         });
@@ -1360,6 +1363,7 @@ function BankPaymentReceipts() {
                           <th className="px-4 py-2.5 font-semibold text-slate-600">{t("dateCol")}</th>
                           <th className="px-4 py-2.5 font-semibold text-slate-600">{t("amountCol")}</th>
                           <th className="px-4 py-2.5 font-semibold text-slate-600">{t("debtorCol")}</th>
+                          <th className="px-4 py-2.5 font-semibold text-slate-600">{t("patientCol")}</th>
                           <th className="px-4 py-2.5 font-semibold text-slate-600">{t("referenceCol")}</th>
                           <th className="px-4 py-2.5 font-semibold text-slate-600">{t("descriptionCol")}</th>
                         </tr>
@@ -1379,6 +1383,9 @@ function BankPaymentReceipts() {
                             </td>
                             <td className="px-4 py-2.5 text-slate-700 max-w-[200px] truncate" title={tx.debtor}>
                               {tx.debtor}
+                            </td>
+                            <td className="px-4 py-2.5 text-slate-700 max-w-[160px] truncate" title={tx.ultimateDebtor}>
+                              {tx.ultimateDebtor || "-"}
                             </td>
                             <td className="px-4 py-2.5 text-slate-500 font-mono text-[10px] max-w-[180px] truncate" title={tx.reference}>
                               {tx.reference || "-"}
@@ -1460,6 +1467,7 @@ type ImportItem = {
   matched_invoice_id: string | null;
   matched_installment_id: string | null;
   matched_invoice_number: string | null;
+  matched_patient_name: string | null;
   previous_paid_amount: number | null;
   new_paid_amount: number | null;
 };
@@ -1490,10 +1498,16 @@ function PaymentImportHistory() {
     setItemsLoading(true);
     const { data } = await supabaseClient
       .from("bank_payment_import_items")
-      .select("*")
+      .select("*, matched_invoice:matched_invoice_id(patient:patient_id(first_name, last_name))")
       .eq("import_id", importId)
       .order("booking_date", { ascending: true });
-    setItems((data as ImportItem[]) || []);
+    const mapped = ((data as any[]) || []).map((item) => {
+      const p = item.matched_invoice?.patient;
+      const patientName = p ? [p.first_name, p.last_name].filter(Boolean).join(" ") : null;
+      const { matched_invoice: _, ...rest } = item;
+      return { ...rest, matched_patient_name: patientName } as ImportItem;
+    });
+    setItems(mapped);
     setItemsLoading(false);
   }
 
@@ -1624,6 +1638,7 @@ function PaymentImportHistory() {
                               <th className="px-3 py-2 font-semibold text-slate-600">{t("dateCol")}</th>
                               <th className="px-3 py-2 font-semibold text-slate-600">{t("amountCol")}</th>
                               <th className="px-3 py-2 font-semibold text-slate-600">{t("debtorCol")}</th>
+                              <th className="px-3 py-2 font-semibold text-slate-600">{t("patientCol")}</th>
                               <th className="px-3 py-2 font-semibold text-slate-600">{t("referenceCol")}</th>
                               <th className="px-3 py-2 font-semibold text-slate-600">{t("invoiceCol")}</th>
                               <th className="px-3 py-2 font-semibold text-slate-600">{t("notesCol")}</th>
@@ -1647,6 +1662,9 @@ function PaymentImportHistory() {
                                 </td>
                                 <td className="px-3 py-2 text-slate-700 max-w-[140px] truncate" title={item.debtor_name || item.ultimate_debtor_name || ""}>
                                   {item.ultimate_debtor_name || item.debtor_name || "-"}
+                                </td>
+                                <td className="px-3 py-2 text-slate-700 max-w-[140px] truncate" title={item.matched_patient_name || ""}>
+                                  {item.matched_patient_name || "-"}
                                 </td>
                                 <td className="px-3 py-2 text-slate-500 font-mono text-[9px] max-w-[140px] truncate" title={item.reference_number || ""}>
                                   {item.reference_number || "-"}

@@ -1579,6 +1579,7 @@
       "dateCol": "Date",
       "amountCol": "Amount",
       "debtorCol": "Debtor",
+      "patientCol": "Patient",
       "referenceCol": "Reference",
       "descriptionCol": "Description",
       "previewNotAvailable": "Preview not available for this file type.",
@@ -1606,6 +1607,7 @@
       "dateCol": "Date",
       "amountCol": "Amount",
       "debtorCol": "Debtor",
+      "patientCol": "Patient",
       "referenceCol": "Reference",
       "invoiceCol": "Invoice",
       "notesCol": "Notes"
