@@ -41,6 +41,7 @@ export default function SelectDoctorPage() {
   const [autoSelectError, setAutoSelectError] = useState<string | null>(null);
   const [earliestSlots, setEarliestSlots] = useState<EarliestDoctorResult[]>([]);
   const [showSlotPicker, setShowSlotPicker] = useState(false);
+  const [selectedDoctorSlug, setSelectedDoctorSlug] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -76,15 +77,17 @@ export default function SelectDoctorPage() {
     setAutoSelecting(true);
     setAutoSelectError(null);
     setEarliestSlots([]);
+    setSelectedDoctorSlug(null);
 
     try {
-      const slots = await findMultipleEarliestSlots(doctors, treatment?.duration_minutes ?? 60, 5, 30, treatmentId);
+      const slots = await findMultipleEarliestSlots(doctors, treatment?.duration_minutes ?? 60, 15, 90, treatmentId);
       if (slots.length === 0) {
         setAutoSelectError(t("doctor.noEarliestAvailable"));
         return;
       }
 
       setEarliestSlots(slots);
+      setSelectedDoctorSlug(slots[0].doctor.slug);
       setShowSlotPicker(true);
     } catch (error) {
       console.error("Failed to find earliest slots:", error);
@@ -107,6 +110,16 @@ export default function SelectDoctorPage() {
       month: "short",
     });
   };
+
+  const earliestSlotsByDoctor = doctors
+    .map((doctor) => ({
+      doctor,
+      slots: earliestSlots.filter((slot) => slot.doctor.slug === doctor.slug),
+    }))
+    .filter((group) => group.slots.length > 0);
+
+  const activeDoctorSlug = selectedDoctorSlug ?? earliestSlotsByDoctor[0]?.doctor.slug;
+  const activeSlotGroup = earliestSlotsByDoctor.find((group) => group.doctor.slug === activeDoctorSlug);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 relative">
@@ -295,32 +308,66 @@ export default function SelectDoctorPage() {
                       </svg>
                     </button>
                   </div>
-                  <div className="space-y-2">
-                    {earliestSlots.map((slot, index) => (
-                      <button
-                        key={`${slot.doctor.slug}-${slot.date}-${slot.time}-${index}`}
-                        type="button"
-                        onClick={() => handleSelectSlot(slot)}
-                        className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition-all group"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
-                            <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      {earliestSlotsByDoctor.map(({ doctor, slots }) => {
+                        const selected = doctor.slug === activeDoctorSlug;
+
+                        return (
+                          <button
+                            key={doctor.slug}
+                            type="button"
+                            onClick={() => setSelectedDoctorSlug(doctor.slug)}
+                            className={`w-full flex items-center justify-between gap-4 rounded-xl border p-4 text-left transition-all ${
+                              selected
+                                ? "border-slate-900 bg-slate-50"
+                                : "border-slate-200 hover:border-slate-400 hover:bg-slate-50"
+                            }`}
+                          >
+                            <div>
+                              <p className="font-medium text-slate-900">{doctor.name}</p>
+                              <p className="text-sm text-slate-500">{doctor.specialty}</p>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-slate-500">
+                              <span>{slots.length} {slots.length === 1 ? "slot" : "slots"}</span>
+                              <svg className={`w-5 h-5 transition-transform ${selected ? "rotate-90 text-slate-900" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {activeSlotGroup && (
+                      <div className="max-h-[46vh] space-y-2 overflow-y-auto pr-1">
+                        {activeSlotGroup.slots.map((slot, index) => (
+                          <button
+                            key={`${slot.doctor.slug}-${slot.date}-${slot.time}-${index}`}
+                            type="button"
+                            onClick={() => handleSelectSlot(slot)}
+                            className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition-all group"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
+                                <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                              </div>
+                              <div className="text-left">
+                                <p className="font-medium text-slate-900">
+                                  {formatSlotDate(slot.date)} • {slot.time}
+                                </p>
+                                <p className="text-sm text-slate-500">{activeSlotGroup.doctor.name}</p>
+                              </div>
+                            </div>
+                            <svg className="w-5 h-5 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                             </svg>
-                          </div>
-                          <div className="text-left">
-                            <p className="font-medium text-slate-900">
-                              {formatSlotDate(slot.date)} • {slot.time}
-                            </p>
-                            <p className="text-sm text-slate-500">{slot.doctor.name}</p>
-                          </div>
-                        </div>
-                        <svg className="w-5 h-5 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    ))}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="mt-4 pt-4 border-t border-slate-100">
                     <button

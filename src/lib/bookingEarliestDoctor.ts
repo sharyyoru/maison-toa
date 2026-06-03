@@ -102,7 +102,7 @@ async function getFirstOpenSlot(
   const rangeEnd = new Date(endDate);
   rangeEnd.setHours(23, 59, 59, 999);
   
-  let allBookedSlots: Map<string, string[]> = new Map(); // dateString -> bookedSlots[]
+  const allBookedSlots: Map<string, string[]> = new Map(); // dateString -> bookedSlots[]
   
   try {
     const treatmentParam = treatmentId && treatmentId !== "none" ? `&treatmentId=${treatmentId}` : "";
@@ -178,8 +178,8 @@ export async function findEarliestAvailableDoctor(
 }
 
 /**
- * Find multiple earliest available slots across all doctors
- * Returns up to `count` slots sorted by date/time
+ * Find multiple earliest available slots for each doctor.
+ * Returns up to `count` slots per doctor, preserving the incoming doctor order.
  */
 export async function findMultipleEarliestSlots(
   doctors: EarliestBookingDoctor[],
@@ -188,33 +188,11 @@ export async function findMultipleEarliestSlots(
   maxDaysAhead = 30,
   treatmentId?: string
 ): Promise<EarliestDoctorResult[]> {
-  // Get all open slots for each doctor
-  const allSlots: EarliestDoctorResult[] = [];
-  
-  for (const doctor of doctors) {
-    const slots = await getMultipleOpenSlots(doctor, durationMinutes, count, maxDaysAhead, treatmentId);
-    allSlots.push(...slots);
-  }
-  
-  // Sort by date/time and return top N unique slots
-  const sorted = allSlots.sort((a, b) => 
-    `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`)
+  const slotsByDoctor = await Promise.all(
+    doctors.map((doctor) => getMultipleOpenSlots(doctor, durationMinutes, count, maxDaysAhead, treatmentId))
   );
-  
-  // Return unique slots (different doctor/date/time combinations)
-  const seen = new Set<string>();
-  const unique: EarliestDoctorResult[] = [];
-  
-  for (const slot of sorted) {
-    const key = `${slot.doctor.slug}-${slot.date}-${slot.time}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      unique.push(slot);
-      if (unique.length >= count) break;
-    }
-  }
-  
-  return unique;
+
+  return slotsByDoctor.flat();
 }
 
 /**
@@ -241,7 +219,7 @@ async function getMultipleOpenSlots(
   const rangeEnd = new Date(endDate);
   rangeEnd.setHours(23, 59, 59, 999);
   
-  let allBookedSlots: Map<string, string[]> = new Map();
+  const allBookedSlots: Map<string, string[]> = new Map();
   
   try {
     const treatmentParam = treatmentId && treatmentId !== "none" ? `&treatmentId=${treatmentId}` : "";
