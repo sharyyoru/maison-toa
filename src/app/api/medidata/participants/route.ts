@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Error fetching participants:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to fetch participants", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

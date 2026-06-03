@@ -49,9 +49,12 @@ export async function GET() {
       });
 
       // Insert missing users (ignore conflicts in case of race conditions)
-      await supabaseAdmin
+      const { error: syncError } = await supabaseAdmin
         .from("users")
         .upsert(syncRecords, { onConflict: "id", ignoreDuplicates: true });
+      if (syncError) {
+        console.error("Failed to sync users to public.users:", syncError.message);
+      }
     }
 
     const users = data.users.map((user) => {
@@ -79,8 +82,9 @@ export async function GET() {
 
     return NextResponse.json(users);
   } catch (err) {
+    console.error("Unexpected error listing users:", err);
     return NextResponse.json(
-      { error: "Unexpected error listing users" },
+      { error: "Unexpected error listing users", details: err instanceof Error ? err.message : "Unknown error" },
       { status: 500 },
     );
   }

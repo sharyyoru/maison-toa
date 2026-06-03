@@ -55,8 +55,9 @@ export async function POST(request: Request) {
       role,
     });
   } catch (error) {
+    console.error("Unexpected error creating user:", error);
     return NextResponse.json(
-      { error: "Unexpected error creating user" },
+      { error: "Unexpected error creating user", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

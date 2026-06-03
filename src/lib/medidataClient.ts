@@ -285,16 +285,14 @@ export class MediDataClient {
       });
 
       if (!response.ok) {
-        console.error(`Failed to fetch participants: HTTP ${response.status}`);
-        return [];
+        throw new Error(`Failed to fetch participants: HTTP ${response.status}`);
       }
 
       const data = await response.json();
 
       // Parse participant list
       if (!Array.isArray(data)) {
-        console.error("Unexpected participants response format");
-        return [];
+        throw new Error("Unexpected participants response format: expected an array");
       }
 
       return data.map((p: Record<string, unknown>) => ({
@@ -314,7 +312,7 @@ export class MediDataClient {
       }));
     } catch (error) {
       console.error("Error fetching participants:", error);
-      return [];
+      throw error;
     }
   }
 
@@ -333,14 +331,13 @@ export class MediDataClient {
       });
 
       if (!response.ok) {
-        console.error(`Failed to fetch downloads: HTTP ${response.status}`);
-        return [];
+        throw new Error(`Failed to fetch downloads: HTTP ${response.status}`);
       }
 
       const data = await response.json();
 
       if (!Array.isArray(data)) {
-        return [];
+        throw new Error("Unexpected downloads response format: expected an array");
       }
 
       return data.map((d: Record<string, unknown>) => ({
@@ -354,7 +351,7 @@ export class MediDataClient {
       }));
     } catch (error) {
       console.error("Error fetching downloads:", error);
-      return [];
+      throw error;
     }
   }
 
@@ -373,10 +370,13 @@ export class MediDataClient {
         headers: this.getHeaders(),
       });
 
-      return response.ok;
+      if (!response.ok) {
+        throw new Error(`Failed to acknowledge download: HTTP ${response.status}`);
+      }
+      return true;
     } catch (error) {
       console.error("Error acknowledging download:", error);
-      return false;
+      throw error;
     }
   }
 

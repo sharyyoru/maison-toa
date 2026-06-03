@@ -152,8 +152,8 @@ export function EmailNotificationsProvider({ children }: { children: ReactNode }
         prev.map(n => n.id === id ? { ...n, read_at: nowIso } : n)
       );
       setUnreadCount(prev => Math.max(0, (prev ?? 0) - 1));
-    } catch {
-      // Silent fail
+    } catch (err) {
+      console.error("Failed to mark notification as read:", err);
     }
   };
 
@@ -172,8 +172,8 @@ export function EmailNotificationsProvider({ children }: { children: ReactNode }
         prev.map(n => ({ ...n, read_at: n.read_at || nowIso }))
       );
       setUnreadCount(0);
-    } catch {
-      // Silent fail
+    } catch (err) {
+      console.error("Failed to mark all notifications as read:", err);
     }
   }, [user]);
 

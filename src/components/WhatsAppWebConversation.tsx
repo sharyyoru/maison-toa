@@ -163,9 +163,17 @@ export default function WhatsAppWebConversation({
     try {
       const headers = await getAuthHeaders();
       setStatus('launching');
-      await fetch('/api/whatsapp-web/init', { method: 'POST', headers });
+      const res = await fetch('/api/whatsapp-web/init', { method: 'POST', headers });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error('WhatsApp init failed:', res.status, data);
+        setStatus('disconnected');
+        connectCalledRef.current = false;
+      }
     } catch (err) {
       console.error('Failed to connect:', err);
+      setStatus('disconnected');
+      connectCalledRef.current = false;
     }
   };
 

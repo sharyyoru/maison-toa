@@ -272,7 +272,7 @@ export async function POST(request: Request) {
     console.log("✓ Branded confirmation email sent to:", patientEmail);
 
     // Store email record in database
-    await supabase.from("emails").insert({
+    const { error: emailRecordError } = await supabase.from("emails").insert({
       patient_id: patientId,
       to_address: patientEmail,
       from_address: fromEmail,
@@ -282,6 +282,10 @@ export async function POST(request: Request) {
       status: "sent",
       sent_at: new Date().toISOString(),
     });
+
+    if (emailRecordError) {
+      console.error("Failed to store email record:", emailRecordError.message);
+    }
 
     return NextResponse.json({
       ok: true,

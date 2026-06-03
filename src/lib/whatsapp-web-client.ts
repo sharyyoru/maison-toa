@@ -106,7 +106,9 @@ export function removeEventListener(event: string, callback: Function) {
 }
 
 export async function getChats() {
-  if (!isReady || !client) return [];
+  if (!isReady || !client) {
+    throw new Error('WhatsApp Web is not ready');
+  }
   try {
     const chats = await client.getChats();
     return chats.map(chat => ({
@@ -119,12 +121,14 @@ export async function getChats() {
     }));
   } catch (error) {
     console.error('Error getting chats:', error);
-    return [];
+    throw error;
   }
 }
 
 export async function getMessages(chatId: string, limit: number = 50) {
-  if (!isReady || !client) return [];
+  if (!isReady || !client) {
+    throw new Error('WhatsApp Web is not ready');
+  }
   try {
     const chat = await client.getChatById(chatId);
     const messages = await chat.fetchMessages({ limit });
@@ -139,7 +143,7 @@ export async function getMessages(chatId: string, limit: number = 50) {
     }));
   } catch (error) {
     console.error('Error getting messages:', error);
-    return [];
+    throw error;
   }
 }
 
@@ -156,20 +160,19 @@ export async function sendMessage(chatId: string, message: string) {
 }
 
 export async function searchChats(query: string) {
-  if (!isReady || !client) return [];
-  try {
-    const chats = await getChats();
-    return chats.filter(chat => 
-      chat.name.toLowerCase().includes(query.toLowerCase())
-    );
-  } catch (error) {
-    console.error('Error searching chats:', error);
-    return [];
+  if (!isReady || !client) {
+    throw new Error('WhatsApp Web is not ready');
   }
+  const chats = await getChats();
+  return chats.filter(chat => 
+    chat.name.toLowerCase().includes(query.toLowerCase())
+  );
 }
 
 export async function getChatByPhoneNumber(phoneNumber: string) {
-  if (!isReady || !client) return null;
+  if (!isReady || !client) {
+    throw new Error('WhatsApp Web is not ready');
+  }
   try {
     const formattedNumber = phoneNumber.replace(/\D/g, '');
     const chatId = `${formattedNumber}@c.us`;
@@ -184,7 +187,7 @@ export async function getChatByPhoneNumber(phoneNumber: string) {
     };
   } catch (error) {
     console.error('Error getting chat by phone number:', error);
-    return null;
+    throw error;
   }
 }
 

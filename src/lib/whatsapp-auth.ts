@@ -22,11 +22,17 @@ export async function getAuthenticatedUserId(request: Request): Promise<string |
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
       const { data: { user }, error } = await supabase.auth.getUser(token);
       
-      if (user && !error) {
+      if (error) {
+        console.error('Auth token validation failed:', error.message);
+        return null;
+      }
+
+      if (user) {
         return user.id;
       }
     } catch (err) {
       console.error('Error getting user from token:', err);
+      throw err;
     }
   }
   
