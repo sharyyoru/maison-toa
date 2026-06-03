@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface DescriptionReadMoreProps {
   description: string;
@@ -19,8 +20,8 @@ export function DescriptionReadMore({
   maxLines = 2,
   className = "",
 }: DescriptionReadMoreProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [needsTruncation, setNeedsTruncation] = useState(false);
   const textRef = useRef<HTMLParagraphElement>(null);
 
@@ -43,6 +44,10 @@ export function DescriptionReadMore({
     setShowModal(false);
   };
 
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Handle escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -58,21 +63,95 @@ export function DescriptionReadMore({
     };
   }, [showModal]);
 
+  const modal = (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      onClick={handleCloseModal}
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity animate-fadeIn"
+      />
+
+      {/* Modal Content */}
+      <div
+        className="relative w-full sm:w-auto sm:max-w-lg sm:mx-4 bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl transform transition-all animate-slideUp sm:animate-scaleIn"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Drag Handle (Mobile) */}
+        <div className="sm:hidden flex justify-center pt-3 pb-2">
+          <div className="w-10 h-1 bg-slate-300 rounded-full" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-start gap-4 p-5 sm:p-6 border-b border-slate-100">
+          {imageUrl && (
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-gradient-to-br from-slate-100 to-slate-50 flex-shrink-0">
+              <img
+                src={imageUrl}
+                alt={doctorName}
+                className="w-full h-full object-cover object-top"
+              />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-1">
+              {doctorName}
+            </h3>
+            {specialty && (
+              <p className="text-sm text-slate-500 font-medium">
+                {specialty}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleCloseModal}
+            className="p-2 -m-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Description */}
+        <div className="p-5 sm:p-6 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto">
+          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            About
+          </h4>
+          <p className="text-sm sm:text-base text-slate-600 leading-relaxed whitespace-pre-wrap">
+            {description}
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 sm:p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl sm:rounded-b-2xl">
+          <button
+            type="button"
+            onClick={handleCloseModal}
+            className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-xl transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       {/* Truncated description with Read More */}
       <div className={`relative ${className}`}>
         <p
           ref={textRef}
-          className={`text-sm text-slate-500 ${
-            !isExpanded ? `line-clamp-${maxLines}` : ""
-          }`}
-          style={!isExpanded ? { 
+          className="text-sm text-slate-500"
+          style={{
             display: "-webkit-box",
             WebkitLineClamp: maxLines,
             WebkitBoxOrient: "vertical",
             overflow: "hidden"
-          } : undefined}
+          }}
         >
           {description}
         </p>
@@ -98,81 +177,7 @@ export function DescriptionReadMore({
       </div>
 
       {/* Modal/Bottom Sheet */}
-      {showModal && (
-        <div 
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-          onClick={handleCloseModal}
-        >
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity animate-fadeIn"
-          />
-          
-          {/* Modal Content */}
-          <div 
-            className="relative w-full sm:w-auto sm:max-w-lg sm:mx-4 bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl transform transition-all animate-slideUp sm:animate-scaleIn"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Drag Handle (Mobile) */}
-            <div className="sm:hidden flex justify-center pt-3 pb-2">
-              <div className="w-10 h-1 bg-slate-300 rounded-full" />
-            </div>
-
-            {/* Header */}
-            <div className="flex items-start gap-4 p-5 sm:p-6 border-b border-slate-100">
-              {imageUrl && (
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-gradient-to-br from-slate-100 to-slate-50 flex-shrink-0">
-                  <img 
-                    src={imageUrl} 
-                    alt={doctorName}
-                    className="w-full h-full object-cover object-top"
-                  />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-1">
-                  {doctorName}
-                </h3>
-                {specialty && (
-                  <p className="text-sm text-slate-500 font-medium">
-                    {specialty}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                className="p-2 -m-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Description */}
-            <div className="p-5 sm:p-6 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto">
-              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                About
-              </h4>
-              <p className="text-sm sm:text-base text-slate-600 leading-relaxed whitespace-pre-wrap">
-                {description}
-              </p>
-            </div>
-
-            {/* Footer */}
-            <div className="p-5 sm:p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl sm:rounded-b-2xl">
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-xl transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {showModal && isMounted && createPortal(modal, document.body)}
 
       {/* Animations */}
       <style jsx global>{`

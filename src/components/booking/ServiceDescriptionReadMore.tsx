@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface ServiceDescriptionReadMoreProps {
   description: string;
@@ -18,6 +19,7 @@ export function ServiceDescriptionReadMore({
   className = "",
 }: ServiceDescriptionReadMoreProps) {
   const [showModal, setShowModal] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [needsTruncation, setNeedsTruncation] = useState(false);
   const textRef = useRef<HTMLParagraphElement>(null);
 
@@ -46,6 +48,10 @@ export function ServiceDescriptionReadMore({
 
   // Handle escape key
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") setShowModal(false);
     };
@@ -58,6 +64,81 @@ export function ServiceDescriptionReadMore({
       document.body.style.overflow = "";
     };
   }, [showModal]);
+
+  const modal = (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      onClick={handleCloseModal}
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity animate-fadeIn"
+      />
+
+      {/* Modal Content */}
+      <div
+        className="relative w-full sm:w-auto sm:max-w-lg sm:mx-4 bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl transform transition-all animate-slideUp sm:animate-scaleIn"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Drag Handle (Mobile) */}
+        <div className="sm:hidden flex justify-center pt-3 pb-2">
+          <div className="w-10 h-1 bg-slate-300 rounded-full" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-start gap-4 p-5 sm:p-6 border-b border-slate-100">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex-shrink-0 flex items-center justify-center">
+            <svg className="w-6 h-6 sm:w-7 sm:h-7 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-1">
+              {serviceName}
+            </h3>
+            {duration && (
+              <p className="text-sm text-slate-500 font-medium flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {duration}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleCloseModal}
+            className="p-2 -m-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Description */}
+        <div className="p-5 sm:p-6 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto">
+          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            Description
+          </h4>
+          <p className="text-sm sm:text-base text-slate-600 leading-relaxed whitespace-pre-wrap">
+            {description}
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 sm:p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl sm:rounded-b-2xl">
+          <button
+            type="button"
+            onClick={handleCloseModal}
+            className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-xl transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -97,80 +178,7 @@ export function ServiceDescriptionReadMore({
       </div>
 
       {/* Modal/Bottom Sheet */}
-      {showModal && (
-        <div 
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-          onClick={handleCloseModal}
-        >
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity animate-fadeIn"
-          />
-          
-          {/* Modal Content */}
-          <div 
-            className="relative w-full sm:w-auto sm:max-w-lg sm:mx-4 bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl transform transition-all animate-slideUp sm:animate-scaleIn"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Drag Handle (Mobile) */}
-            <div className="sm:hidden flex justify-center pt-3 pb-2">
-              <div className="w-10 h-1 bg-slate-300 rounded-full" />
-            </div>
-
-            {/* Header */}
-            <div className="flex items-start gap-4 p-5 sm:p-6 border-b border-slate-100">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex-shrink-0 flex items-center justify-center">
-                <svg className="w-6 h-6 sm:w-7 sm:h-7 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-1">
-                  {serviceName}
-                </h3>
-                {duration && (
-                  <p className="text-sm text-slate-500 font-medium flex items-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {duration}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                className="p-2 -m-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Description */}
-            <div className="p-5 sm:p-6 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto">
-              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                Description
-              </h4>
-              <p className="text-sm sm:text-base text-slate-600 leading-relaxed whitespace-pre-wrap">
-                {description}
-              </p>
-            </div>
-
-            {/* Footer */}
-            <div className="p-5 sm:p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl sm:rounded-b-2xl">
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-xl transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {showModal && isMounted && createPortal(modal, document.body)}
 
       {/* Animations */}
       <style jsx global>{`
