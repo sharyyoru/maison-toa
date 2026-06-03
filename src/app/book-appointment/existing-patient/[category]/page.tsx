@@ -19,7 +19,7 @@ interface Treatment {
   duration_minutes: number;
   order_index: number;
   enabled: boolean;
-  base_price?: number | null;
+  display_price?: number | null;
 }
 
 interface Category {
@@ -168,9 +168,9 @@ export default function ExistingPatientTreatmentsPage() {
                                     <span className="text-sm text-slate-500">
                                       {formatDuration(treatment.duration_minutes)}
                                     </span>
-                                    {treatment.base_price != null && (
+                                    {treatment.display_price != null && (
                                       <span className="text-sm font-medium text-slate-700">
-                                        CHF {treatment.base_price}
+                                        CHF {treatment.display_price}
                                       </span>
                                     )}
                                   </div>

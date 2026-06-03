@@ -1066,6 +1066,7 @@ interface BookingTreatment {
   enabled: boolean;
   prepayment_required: boolean;
   linked_service_id: string | null;
+  display_price: number | null;
 }
 
 interface ServiceOption {
@@ -1366,6 +1367,7 @@ function BookingCategoriesTab() {
       enabled: true,
       prepayment_required: false,
       linked_service_id: null,
+      display_price: null,
     };
     setTreatments([...treatments, newTreatment]);
   };
@@ -1720,6 +1722,18 @@ function BookingCategoriesTab() {
                         </div>
                         {/* Prepayment row */}
                         <div className="mt-3 flex flex-wrap items-center gap-4">
+                          <label className="flex items-center gap-2 text-xs text-slate-500">
+                            <span>Display price (CHF):</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="—"
+                              value={treat.display_price ?? ""}
+                              onChange={(e) => updateTreatment(treat.id, "display_price", e.target.value === "" ? null : Number(e.target.value))}
+                              className="w-24 px-2 py-1 text-xs border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                            />
+                          </label>
                           <label className="flex items-center gap-2 text-xs text-slate-600">
                             <input
                               type="checkbox"

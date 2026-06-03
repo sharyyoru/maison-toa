@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("booking_treatments")
-      .select("*, service:linked_service_id(base_price)")
+      .select("*")
       .order("order_index", { ascending: true });
 
     if (categoryId) {
@@ -47,8 +47,6 @@ export async function GET(request: Request) {
 
     const treatments = (treatmentsResult.data || []).map((treatment: any) => ({
       ...treatment,
-      base_price: treatment.service?.base_price ?? null,
-      service: undefined,
       name_en: translations.treatments?.[treatment.id] || treatment.name_en || null,
       description_en: translations.treatmentDescriptions?.[treatment.id] || treatment.description_en || null,
     }));
@@ -117,6 +115,7 @@ export async function PUT(request: Request) {
           enabled: t.enabled,
           prepayment_required: t.prepayment_required ?? false,
           linked_service_id: t.linked_service_id || null,
+          display_price: t.display_price ?? null,
         }))
       );
 
