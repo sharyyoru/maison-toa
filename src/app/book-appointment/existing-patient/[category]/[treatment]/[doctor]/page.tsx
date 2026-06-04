@@ -465,6 +465,7 @@ function DoctorBookingContent() {
           location: locationLabel,
           patientType: "existing",
           treatmentId: treatmentId,
+          language,
         }),
       });
 

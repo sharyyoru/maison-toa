@@ -219,6 +219,82 @@ function generateDoctorNotificationEmail(
   return brandedEmail(body);
 }
 
+function generatePatientReminderEmail(
+  lastName: string,
+  gender: string | undefined,
+  appointmentDate: Date,
+  service: string,
+  language: string,
+  appointmentId: string
+): string {
+  const isFrench = language === "fr";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
+  const manageUrl = `${appUrl}/appointments/manage?id=${appointmentId}`;
+  const salutation = isFrench
+    ? gender === "female"
+      ? `Ch&egrave;re Madame ${lastName}`
+      : gender === "male"
+        ? `Cher Monsieur ${lastName}`
+        : "Madame, Monsieur,"
+    : gender === "female"
+      ? `Dear Madam ${lastName}`
+      : gender === "male"
+        ? `Dear Sir ${lastName}`
+        : "Dear Sir or Madam,";
+
+  const rows = isFrench
+    ? infoRow("Date", formatDate(appointmentDate, language)) +
+      infoRow("Heure", formatTime(appointmentDate, language)) +
+      infoRow("Soin", service)
+    : infoRow("Date", formatDate(appointmentDate, language)) +
+      infoRow("Time", formatTime(appointmentDate, language)) +
+      infoRow("Treatment", service);
+
+  const body = isFrench
+    ? `
+    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">${salutation}</p>
+    <p style="margin: 0 0 8px 0; color: #4a4742;">Nous souhaitions vous rappeler votre prochain rendez-vous au sein de Maison T&oacute;&#257;.</p>
+    ${infoTable(rows)}
+    <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin: 24px 0;">
+      <tr>
+        <td style="padding: 0 8px 8px 0;">
+          <a href="${manageUrl}&action=reschedule" style="display: block; background-color: #1a1a18; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500;">Modifier mon rendez-vous</a>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 0 8px 0 0;">
+          <a href="${manageUrl}&action=cancel" style="display: block; background-color: #f5f3ef; color: #1a1a18; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500; border: 1px solid #e8e3db;">Annuler mon rendez-vous</a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin: 24px 0 0 0; color: #4a4742;">Dans l&rsquo;attente du plaisir de vous accueillir,</p>
+    <p style="margin: 8px 0 0 0; color: #1a1a18; font-weight: 500;">Maison T&oacute;&#257;</p>
+    <img src="${LOGO_URL}" alt="Maison T&oacute;&#257;" width="80" style="display: block; width: 80px; height: auto; margin: 16px 0 0 0;">
+  `
+    : `
+    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">${salutation}</p>
+    <p style="margin: 0 0 8px 0; color: #4a4742;">This is a reminder of your upcoming appointment at Maison T&oacute;&#257;.</p>
+    ${infoTable(rows)}
+    <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin: 24px 0;">
+      <tr>
+        <td style="padding: 0 8px 8px 0;">
+          <a href="${manageUrl}&action=reschedule" style="display: block; background-color: #1a1a18; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500;">Reschedule my appointment</a>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 0 8px 0 0;">
+          <a href="${manageUrl}&action=cancel" style="display: block; background-color: #f5f3ef; color: #1a1a18; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500; border: 1px solid #e8e3db;">Cancel my appointment</a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin: 24px 0 0 0; color: #4a4742;">We look forward to welcoming you.</p>
+    <p style="margin: 8px 0 0 0; color: #1a1a18; font-weight: 500;">Maison T&oacute;&#257;</p>
+    <img src="${LOGO_URL}" alt="Maison T&oacute;&#257;" width="80" style="display: block; width: 80px; height: auto; margin: 16px 0 0 0;">
+  `;
+
+  return brandedEmail(body);
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as BookingPayload;
@@ -644,10 +720,48 @@ export async function POST(request: Request) {
       console.error("✗ Error sending doctor email:", err);
     }
 
+    let reminderScheduled = false;
+    const reminderDate = new Date(appointmentDateObj);
+    reminderDate.setDate(reminderDate.getDate() - 1);
+
+    if (reminderDate.getTime() > Date.now()) {
+      try {
+        const reminderHtml = generatePatientReminderEmail(
+          lastName,
+          patientGender,
+          appointmentDateObj,
+          service,
+          language,
+          appointment.id
+        );
+
+        const { error: reminderError } = await supabase.from("scheduled_emails").insert({
+          patient_id: patientId,
+          appointment_id: appointment.id,
+          recipient_type: "patient",
+          recipient_email: email,
+          subject: language === "fr" ? "Rappel de votre rendez-vous" : "Appointment reminder",
+          body: reminderHtml,
+          scheduled_for: reminderDate.toISOString(),
+          status: "pending",
+        });
+
+        if (reminderError) {
+          console.error("Error scheduling patient reminder email:", reminderError);
+        } else {
+          reminderScheduled = true;
+          console.log("✓ Patient reminder email scheduled for:", reminderDate.toISOString());
+        }
+      } catch (err) {
+        console.error("Error scheduling patient reminder email:", err);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       appointmentId: appointment.id,
       message: "Appointment booked successfully",
+      reminderScheduled,
     });
   } catch (error) {
     console.error("Error booking appointment:", error);
