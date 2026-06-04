@@ -65,7 +65,7 @@ export function DescriptionReadMore({
 
   const modal = (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4"
       onClick={handleCloseModal}
     >
       {/* Backdrop */}
@@ -75,16 +75,16 @@ export function DescriptionReadMore({
 
       {/* Modal Content */}
       <div
-        className="relative w-full sm:w-auto sm:max-w-lg sm:mx-4 bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl transform transition-all animate-slideUp sm:animate-scaleIn"
+        className="relative w-full sm:w-auto sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl transform transition-all animate-slideUp sm:animate-scaleIn max-h-[85vh] sm:max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Drag Handle (Mobile) */}
-        <div className="sm:hidden flex justify-center pt-3 pb-2">
+        <div className="sm:hidden flex justify-center pt-3 pb-2 flex-shrink-0">
           <div className="w-10 h-1 bg-slate-300 rounded-full" />
         </div>
 
         {/* Header */}
-        <div className="flex items-start gap-4 p-5 sm:p-6 border-b border-slate-100">
+        <div className="flex items-start gap-4 p-5 sm:p-6 border-b border-slate-100 flex-shrink-0">
           {imageUrl && (
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-gradient-to-br from-slate-100 to-slate-50 flex-shrink-0">
               <img
@@ -115,8 +115,8 @@ export function DescriptionReadMore({
           </button>
         </div>
 
-        {/* Description */}
-        <div className="p-5 sm:p-6 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto">
+        {/* Description - scrollable */}
+        <div className="p-5 sm:p-6 overflow-y-auto flex-1 min-h-0 overscroll-contain -webkit-overflow-scrolling-touch">
           <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
             About
           </h4>
@@ -126,7 +126,7 @@ export function DescriptionReadMore({
         </div>
 
         {/* Footer */}
-        <div className="p-5 sm:p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl sm:rounded-b-2xl">
+        <div className="p-5 sm:p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl sm:rounded-b-2xl flex-shrink-0">
           <button
             type="button"
             onClick={handleCloseModal}
@@ -159,7 +159,7 @@ export function DescriptionReadMore({
           <button
             type="button"
             onClick={handleReadMore}
-            className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-slate-900 transition-colors group"
+            className="relative z-10 mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-slate-900 transition-colors group py-1.5 px-1 -mx-1 cursor-pointer touch-manipulation"
           >
             <span className="underline decoration-slate-300 underline-offset-2 group-hover:decoration-slate-500">
               Read more

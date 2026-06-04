@@ -67,7 +67,7 @@ export function ServiceDescriptionReadMore({
 
   const modal = (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4"
       onClick={handleCloseModal}
     >
       {/* Backdrop */}
@@ -77,16 +77,16 @@ export function ServiceDescriptionReadMore({
 
       {/* Modal Content */}
       <div
-        className="relative w-full sm:w-auto sm:max-w-lg sm:mx-4 bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl transform transition-all animate-slideUp sm:animate-scaleIn"
+        className="relative w-full sm:w-auto sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl transform transition-all animate-slideUp sm:animate-scaleIn max-h-[85vh] sm:max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Drag Handle (Mobile) */}
-        <div className="sm:hidden flex justify-center pt-3 pb-2">
+        <div className="sm:hidden flex justify-center pt-3 pb-2 flex-shrink-0">
           <div className="w-10 h-1 bg-slate-300 rounded-full" />
         </div>
 
         {/* Header */}
-        <div className="flex items-start gap-4 p-5 sm:p-6 border-b border-slate-100">
+        <div className="flex items-start gap-4 p-5 sm:p-6 border-b border-slate-100 flex-shrink-0">
           <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex-shrink-0 flex items-center justify-center">
             <svg className="w-6 h-6 sm:w-7 sm:h-7 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
@@ -116,8 +116,8 @@ export function ServiceDescriptionReadMore({
           </button>
         </div>
 
-        {/* Description */}
-        <div className="p-5 sm:p-6 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto">
+        {/* Description - scrollable */}
+        <div className="p-5 sm:p-6 overflow-y-auto flex-1 min-h-0 overscroll-contain -webkit-overflow-scrolling-touch">
           <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
             Description
           </h4>
@@ -127,7 +127,7 @@ export function ServiceDescriptionReadMore({
         </div>
 
         {/* Footer */}
-        <div className="p-5 sm:p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl sm:rounded-b-2xl">
+        <div className="p-5 sm:p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl sm:rounded-b-2xl flex-shrink-0">
           <button
             type="button"
             onClick={handleCloseModal}
@@ -160,7 +160,7 @@ export function ServiceDescriptionReadMore({
           <button
             type="button"
             onClick={handleReadMore}
-            className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-slate-900 transition-colors group"
+            className="relative z-10 mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-slate-900 transition-colors group py-1.5 px-1 -mx-1 cursor-pointer touch-manipulation"
           >
             <span className="underline decoration-slate-300 underline-offset-2 group-hover:decoration-slate-500">
               Read more
