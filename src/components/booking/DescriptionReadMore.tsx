@@ -117,7 +117,17 @@ export function DescriptionReadMore({
 
         {/* Description - scrollable */}
         <div className="p-5 sm:p-6 overflow-y-auto flex-1 min-h-0 overscroll-contain -webkit-overflow-scrolling-touch">
-          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+          {specialty && (
+            <>
+              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Specialty
+              </h4>
+              <p className="text-sm sm:text-base text-slate-700 font-medium mb-4">
+                {specialty}
+              </p>
+            </>
+          )}
+          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
             About
           </h4>
           <p className="text-sm sm:text-base text-slate-600 leading-relaxed whitespace-pre-wrap">
