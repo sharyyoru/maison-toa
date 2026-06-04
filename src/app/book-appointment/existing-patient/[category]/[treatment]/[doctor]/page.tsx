@@ -159,6 +159,8 @@ function DoctorBookingContent() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [emailNotFoundError, setEmailNotFoundError] = useState(false);
+  const [emailChecking, setEmailChecking] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   const [availableDatesSet, setAvailableDatesSet] = useState<Set<string>>(new Set());
   const [nearestAvailableDate, setNearestAvailableDate] = useState<string | null>(null);
@@ -407,6 +409,20 @@ function DoctorBookingContent() {
     const phoneRegex = /^[+]?[\d\s()-]{7,20}$/;
     return phoneRegex.test(phone.trim());
   };
+
+  async function checkEmailExists(value: string) {
+    if (!isValidEmail(value)) return;
+    setEmailChecking(true);
+    try {
+      const res = await fetch(`/api/public/check-patient-email?email=${encodeURIComponent(value)}`);
+      const data = await res.json();
+      setEmailNotFoundError(!data.exists);
+    } catch {
+      // silently ignore — don't block booking on network error
+    } finally {
+      setEmailChecking(false);
+    }
+  }
 
   async function handleSubmit() {
     if (!doctor) return;
@@ -687,9 +703,29 @@ function DoctorBookingContent() {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 outline-none transition-all"
+                    onChange={(e) => { setEmail(e.target.value); setEmailNotFoundError(false); }}
+                    onBlur={(e) => checkEmailExists(e.target.value)}
+                    className={`w-full rounded-xl border px-4 py-3 text-slate-900 focus:ring-2 outline-none transition-all ${emailNotFoundError ? "border-amber-400 focus:border-amber-400 focus:ring-amber-100" : "border-slate-200 focus:border-slate-400 focus:ring-slate-200"}`}
                   />
+                  {emailChecking && <p className="text-xs text-slate-400 mt-1">Checking...</p>}
+                  {emailNotFoundError && (
+                    <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-xs text-amber-800 mb-2">
+                        {language === "fr"
+                          ? "Aucun compte trouvé avec cet email. Si vous êtes un nouveau patient, veuillez utiliser le formulaire nouveau patient."
+                          : "No account found with this email. If you are a new patient, please use the new patient booking form."}
+                      </p>
+                      <Link
+                        href={`/book-appointment/new-patient/${categorySlug}/${treatmentId}/${doctorSlug}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
+                      >
+                        {language === "fr" ? "Réserver en tant que nouveau patient" : "Book as new patient"}
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </Link>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">{t("booking.phone")}</label>

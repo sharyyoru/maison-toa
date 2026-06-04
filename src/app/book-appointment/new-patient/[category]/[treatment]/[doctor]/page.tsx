@@ -849,11 +849,22 @@ function DoctorBookingContent() {
                   />
                   {emailChecking && <p className="text-xs text-slate-400 mt-1">Checking...</p>}
                   {emailExistsError && (
-                    <p className="text-xs text-red-600 mt-1">
-                      {language === "fr"
-                        ? "Un compte existe déjà avec cet email. Veuillez utiliser le formulaire patient existant."
-                        : "An account already exists with this email. Please use the existing patient booking form."}
-                    </p>
+                    <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-xs text-amber-800 mb-2">
+                        {language === "fr"
+                          ? "Un compte existe déjà avec cet email. Veuillez utiliser le formulaire patient existant."
+                          : "An account already exists with this email. Please use the existing patient booking form."}
+                      </p>
+                      <Link
+                        href={`/book-appointment/existing-patient/${categorySlug}/${treatmentId}/${doctorSlug}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
+                      >
+                        {language === "fr" ? "Réserver en tant que patient existant" : "Book as existing patient"}
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </Link>
+                    </div>
                   )}
                 </div>
                 <div>
