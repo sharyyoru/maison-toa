@@ -8,6 +8,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { SectionRenderer } from "@/components/PageBuilder";
 import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
 import { getLocalizedBookingDescription, getLocalizedBookingName } from "@/lib/bookingLocalization";
+import { ServiceDescriptionReadMore } from "@/components/booking/ServiceDescriptionReadMore";
 
 interface Treatment {
   id: string;
@@ -159,9 +160,14 @@ export default function ExistingPatientTreatmentsPage() {
                                   {getLocalizedBookingName(treatment, language)}
                                 </h3>
                                 {description && (
-                                  <p className="text-sm text-slate-500 line-clamp-3 mb-4 flex-grow">
-                                    {description}
-                                  </p>
+                                  <ServiceDescriptionReadMore
+                                    description={description}
+                                    serviceName={getLocalizedBookingName(treatment, language)}
+                                    duration={formatDuration(treatment.duration_minutes)}
+                                    price={treatment.display_price != null ? `CHF ${treatment.display_price}` : undefined}
+                                    maxLines={3}
+                                    className="mb-4 flex-grow"
+                                  />
                                 )}
                                 <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
                                   <div className="flex items-center gap-3">

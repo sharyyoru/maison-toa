@@ -7,6 +7,7 @@ interface ServiceDescriptionReadMoreProps {
   description: string;
   serviceName: string;
   duration?: string;
+  price?: string;
   maxLines?: number;
   className?: string;
 }
@@ -15,6 +16,7 @@ export function ServiceDescriptionReadMore({
   description,
   serviceName,
   duration,
+  price,
   maxLines = 3,
   className = "",
 }: ServiceDescriptionReadMoreProps) {
@@ -96,13 +98,22 @@ export function ServiceDescriptionReadMore({
             <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-1">
               {serviceName}
             </h3>
-            {duration && (
-              <p className="text-sm text-slate-500 font-medium flex items-center gap-1.5">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {duration}
-              </p>
+            {(duration || price) && (
+              <div className="flex items-center gap-3 flex-wrap">
+                {duration && (
+                  <p className="text-sm text-slate-500 font-medium flex items-center gap-1.5">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {duration}
+                  </p>
+                )}
+                {price && (
+                  <p className="text-sm text-slate-700 font-semibold">
+                    {price}
+                  </p>
+                )}
+              </div>
             )}
           </div>
           <button

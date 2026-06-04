@@ -164,6 +164,7 @@ export default function NewPatientTreatmentsPage() {
                                     description={description}
                                     serviceName={getLocalizedBookingName(treatment, language)}
                                     duration={formatDuration(treatment.duration_minutes)}
+                                    price={treatment.display_price != null ? `CHF ${treatment.display_price}` : undefined}
                                     maxLines={3}
                                     className="mb-4 flex-grow"
                                   />
