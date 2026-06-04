@@ -29,6 +29,7 @@ interface Category {
   name_en?: string | null;
   slug: string;
   skip_treatment?: boolean;
+  patient_type?: string;
 }
 
 export default function ExistingPatientTreatmentsPage() {
@@ -49,6 +50,8 @@ export default function ExistingPatientTreatmentsPage() {
         const catData = await catRes.json();
         const categories = catData.categories || [];
         const foundCategory = categories.find(
+          (c: Category) => c.slug === categorySlug && c.patient_type === "existing"
+        ) || categories.find(
           (c: Category) => c.slug === categorySlug
         );
 
