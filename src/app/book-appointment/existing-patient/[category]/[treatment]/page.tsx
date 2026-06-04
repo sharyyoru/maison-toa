@@ -52,7 +52,7 @@ export default function SelectDoctorPage() {
             : Promise.resolve(null),
           treatmentId !== "none"
             ? fetch(`/api/settings/booking-doctors?treatment_id=${treatmentId}`)
-            : fetch(`/api/settings/booking-doctors?category_slug=${categorySlug}`),
+            : fetch(`/api/settings/booking-doctors?category_slug=${categorySlug}&patient_type=existing`),
         ]);
 
         if (treatRes) {

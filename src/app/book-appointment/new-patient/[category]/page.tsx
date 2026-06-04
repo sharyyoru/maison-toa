@@ -52,7 +52,7 @@ export default function NewPatientTreatmentsPage() {
         const foundCategory = categories.find(
           (c: Category) => c.slug === categorySlug && c.patient_type === "new"
         ) || categories.find(
-          (c: Category) => c.slug === categorySlug
+          (c: Category) => c.slug === categorySlug && !c.patient_type
         );
 
         if (foundCategory) {

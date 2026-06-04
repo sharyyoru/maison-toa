@@ -28,12 +28,18 @@ export async function GET(request: NextRequest) {
       }
       // Fall through to return all enabled doctors
     } else if (categorySlug) {
-      // Look up category by slug
-      const { data: category } = await supabaseAdmin
+      // Look up category by slug (with patient_type if provided to disambiguate)
+      const patientType = searchParams.get("patient_type");
+      let categoryQuery = supabaseAdmin
         .from("booking_categories")
         .select("id")
-        .eq("slug", categorySlug)
-        .single();
+        .eq("slug", categorySlug);
+
+      if (patientType) {
+        categoryQuery = categoryQuery.eq("patient_type", patientType);
+      }
+
+      const { data: category } = await categoryQuery.limit(1).single();
 
       if (category) {
         const { data: assignments } = await supabaseAdmin

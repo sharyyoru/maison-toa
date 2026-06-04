@@ -52,7 +52,7 @@ export default function ExistingPatientTreatmentsPage() {
         const foundCategory = categories.find(
           (c: Category) => c.slug === categorySlug && c.patient_type === "existing"
         ) || categories.find(
-          (c: Category) => c.slug === categorySlug
+          (c: Category) => c.slug === categorySlug && !c.patient_type
         );
 
         if (foundCategory) {
