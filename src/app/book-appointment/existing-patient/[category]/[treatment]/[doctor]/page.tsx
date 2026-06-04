@@ -716,7 +716,7 @@ function DoctorBookingContent() {
                           : "No account found with this email. If you are a new patient, please use the new patient booking form."}
                       </p>
                       <Link
-                        href={`/book-appointment/new-patient/${categorySlug}/${treatmentId}/${doctorSlug}`}
+                        href="/book-appointment/new-patient"
                         className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
                       >
                         {language === "fr" ? "Réserver en tant que nouveau patient" : "Book as new patient"}
