@@ -151,6 +151,7 @@ function slotConflicts(time: string, durationMinutes: number, bookedSlots: strin
 }
 
 type DayAvailability = Record<number, { start: string; end: string }>;
+type AvailableSlot = { date: string; time: string };
 
 function generateTimeSlots(doctorSlug: string, locationId: string, dateStr: string, dbAvail?: DayAvailability | null): string[] {
   const date = parseLocalDate(dateStr);
@@ -269,7 +270,7 @@ function DoctorBookingContent() {
   const [selectedDate, setSelectedDate] = useState("");
   const [availableDatesSet, setAvailableDatesSet] = useState<Set<string>>(new Set());
   const [nearestAvailableDate, setNearestAvailableDate] = useState<string | null>(null);
-  const [nearestAvailableTime, setNearestAvailableTime] = useState<string | null>(null);
+  const [nextAvailableSlots, setNextAvailableSlots] = useState<AvailableSlot[]>([]);
   const [isLoadingDates, setIsLoadingDates] = useState(true);
   const [selectedTime, setSelectedTime] = useState("");
   const [notes, setNotes] = useState("");
@@ -393,9 +394,11 @@ function DoctorBookingContent() {
       const filteredDates = dates.filter((d) => !blockedDates.has(d));
       setAvailableDatesSet(new Set(filteredDates));
 
-      // Find the first date that actually has open slots (not just doctor schedule)
-      const findFirstAvailableDate = async () => {
+      // Find the next actual open slots, not just dates in the doctor's schedule.
+      const findNextAvailableSlots = async () => {
         const doctorName = doctor.name;
+        const slotsToShow: AvailableSlot[] = [];
+
         for (const dateStr of filteredDates) {
           try {
             const { start, end } = getSwissDayRange(dateStr);
@@ -413,23 +416,29 @@ function DoctorBookingContent() {
             const openSlots = allSlots.filter(time => !slotConflicts(time, duration, blockedSlots));
             
             if (openSlots.length > 0) {
-              setNearestAvailableDate(dateStr);
-              setNearestAvailableTime(openSlots[0]);
-              setSelectedDate(dateStr);
-              setIsLoadingDates(false);
-              return;
+              for (const time of openSlots) {
+                slotsToShow.push({ date: dateStr, time });
+                if (slotsToShow.length >= 15) break;
+              }
+
+              if (slotsToShow.length >= 15) break;
             }
           } catch (err) {
             console.error("Error checking availability for", dateStr, err);
           }
         }
-        // No available dates found
-        setNearestAvailableDate(null);
-        setNearestAvailableTime(null);
+
+        setNextAvailableSlots(slotsToShow);
+        if (slotsToShow.length > 0) {
+          setNearestAvailableDate(slotsToShow[0].date);
+          setSelectedDate(slotsToShow[0].date);
+        } else {
+          setNearestAvailableDate(null);
+        }
         setIsLoadingDates(false);
       };
 
-      findFirstAvailableDate();
+      findNextAvailableSlots();
     }
   }, [locationId, doctorSlug, dbAvailability, doctorLoading, doctor, blockedDates]);
 
@@ -437,10 +446,6 @@ function DoctorBookingContent() {
     if (selectedDate && locationId && doctor) {
       const slots = generateTimeSlots(doctorSlug, locationId, selectedDate, dbAvailability);
       setAvailableSlots(slots);
-      // Only clear time if not applying preselection
-      if (!preselectedTime || hasAppliedPreselection) {
-        setSelectedTime("");
-      }
       checkAvailability(selectedDate);
     } else if (!doctor) {
       // doctor not yet loaded — wait for it before checking availability
@@ -490,15 +495,10 @@ function DoctorBookingContent() {
       const duration = treatment?.duration_minutes ?? 60;
       const openSlots = currentSlots.filter(time => !slotConflicts(time, duration, blockedSlots));
       if (openSlots.length > 0) {
-        setSelectedTime(openSlots[0]);
-        if (date === nearestAvailableDate) {
-          setNearestAvailableTime(openSlots[0]);
-        }
+        const nextTime = selectedTime && openSlots.includes(selectedTime) ? selectedTime : openSlots[0];
+        setSelectedTime(nextTime);
       } else {
         setSelectedTime("");
-        if (date === nearestAvailableDate) {
-          setNearestAvailableTime(null);
-        }
       }
     } catch (err) {
       console.error("Error checking availability:", err);
@@ -905,16 +905,39 @@ function DoctorBookingContent() {
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-600"></div>
                     <p className="text-sm text-slate-600">Checking availability...</p>
                   </div>
-                ) : nearestAvailableDate && nearestAvailableTime ? (
-                  <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                    <svg className="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <p className="text-sm text-emerald-700">
-                      <span className="font-medium">Earliest availability:</span>{" "}
-                      {new Date(nearestAvailableDate + "T12:00:00").toLocaleDateString("en-US", { timeZone: "Europe/Zurich", weekday: "long", month: "long", day: "numeric" })}
-                      {` at ${nearestAvailableTime}`}
-                    </p>
+                ) : nextAvailableSlots.length > 0 ? (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                    <div className="flex items-center gap-2 mb-3">
+                      <svg className="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <p className="text-sm font-medium text-emerald-700">Next 15 available slots</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {nextAvailableSlots.map((slot) => {
+                        const isSelected = selectedDate === slot.date && selectedTime === slot.time;
+                        return (
+                          <button
+                            key={`${slot.date}-${slot.time}`}
+                            type="button"
+                            onClick={() => {
+                              setSelectedDate(slot.date);
+                              setSelectedTime(slot.time);
+                            }}
+                            className={`rounded-lg border px-3 py-2 text-left text-sm font-medium transition-all ${
+                              isSelected
+                                ? "border-slate-900 bg-slate-900 text-white"
+                                : "border-emerald-200 bg-white text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100"
+                            }`}
+                          >
+                            <span className="block">
+                              {new Date(slot.date + "T12:00:00").toLocaleDateString("en-US", { timeZone: "Europe/Zurich", weekday: "short", month: "short", day: "numeric" })}
+                            </span>
+                            <span className={isSelected ? "text-white" : "text-emerald-700"}>{slot.time}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : nearestAvailableDate === null && !isLoadingDates ? (
                   <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
