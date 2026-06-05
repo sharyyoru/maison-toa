@@ -3656,34 +3656,6 @@ export default function MedicalConsultationsCard({
         </div>
         {newConsultationOpen ? (
           <div ref={creationFormRef} className="mb-3 rounded-lg border border-sky-200/70 bg-sky-50/60 p-3 text-xs">
-            {/* Autosave Status Indicator for Notes */}
-            {consultationRecordType === "notes" && (
-              <div className="flex items-center justify-end mb-2 text-[10px]">
-                {newConsultationAutosaveStatus === "pending" && (
-                  <span className="text-amber-600 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                    Unsaved changes...
-                  </span>
-                )}
-                {newConsultationAutosaveStatus === "saving" && (
-                  <span className="text-sky-600 flex items-center gap-1">
-                    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Saving...
-                  </span>
-                )}
-                {newConsultationAutosaveStatus === "saved" && (
-                  <span className="text-emerald-600 flex items-center gap-1">
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    Auto-saved
-                  </span>
-                )}
-              </div>
-            )}
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -5273,6 +5245,34 @@ export default function MedicalConsultationsCard({
                         );
                       })()}
                     </div>
+                    {/* Autosave Status Indicator - below content editor */}
+                    {consultationRecordType === "notes" && (
+                      <div className="flex items-center justify-end px-2 py-1 border-t border-slate-100 text-[10px]">
+                        {newConsultationAutosaveStatus === "pending" && (
+                          <span className="text-amber-600 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            Unsaved changes...
+                          </span>
+                        )}
+                        {newConsultationAutosaveStatus === "saving" && (
+                          <span className="text-sky-600 flex items-center gap-1">
+                            <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Saving...
+                          </span>
+                        )}
+                        {newConsultationAutosaveStatus === "saved" && (
+                          <span className="text-emerald-600 flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            Auto-saved
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : null}
@@ -8596,32 +8596,6 @@ export default function MedicalConsultationsCard({
             <div className="border-b border-slate-200 px-6 py-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-slate-900">Edit Consultation</h3>
-                {/* Autosave Status Indicator */}
-                <div className="flex items-center gap-1.5 text-[10px]">
-                  {editConsultationAutosaveStatus === "pending" && (
-                    <span className="text-amber-600 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                      Unsaved changes...
-                    </span>
-                  )}
-                  {editConsultationAutosaveStatus === "saving" && (
-                    <span className="text-sky-600 flex items-center gap-1">
-                      <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Saving...
-                    </span>
-                  )}
-                  {editConsultationAutosaveStatus === "saved" && (
-                    <span className="text-emerald-600 flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                      Saved
-                    </span>
-                  )}
-                </div>
               </div>
               <p className="mt-1 text-xs text-slate-600">
                 {editConsultationTarget.record_type.toUpperCase()} • {editConsultationTarget.consultation_id}
@@ -8764,6 +8738,32 @@ export default function MedicalConsultationsCard({
                     onInput={() => triggerEditConsultationAutosave()}
                     className="min-h-[120px] max-h-64 overflow-y-auto px-3 py-2 text-xs text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
                   />
+                  {/* Autosave Status Indicator - below content editor */}
+                  <div className="flex items-center justify-end px-3 py-1.5 border-t border-slate-100 text-[10px]">
+                    {editConsultationAutosaveStatus === "pending" && (
+                      <span className="text-amber-600 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        Unsaved changes...
+                      </span>
+                    )}
+                    {editConsultationAutosaveStatus === "saving" && (
+                      <span className="text-sky-600 flex items-center gap-1">
+                        <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Saving...
+                      </span>
+                    )}
+                    {editConsultationAutosaveStatus === "saved" && (
+                      <span className="text-emerald-600 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Saved
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
