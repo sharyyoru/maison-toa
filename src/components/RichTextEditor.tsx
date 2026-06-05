@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useCallback, useEffect, useState } from "react";
+import { escapeHtml } from "@/utils/htmlUtils";
 
 type RichTextEditorProps = {
   value: string;
@@ -100,11 +101,7 @@ export default function RichTextEditor({
       const textContent = clipboardData.getData("text/plain");
       if (textContent) {
         // Convert plain text to HTML with line breaks
-        const htmlText = textContent
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/\n/g, "<br>");
+        const htmlText = escapeHtml(textContent).replace(/\n/g, "<br>");
         document.execCommand("insertHTML", false, htmlText);
       }
     }

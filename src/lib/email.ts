@@ -227,35 +227,5 @@ export function addTrackingPixel(html: string, emailId: string, appUrl: string):
   return `${html}${trackingPixel}`;
 }
 
-/**
- * Sanitize tel: links for iPhone compatibility
- */
-export function sanitizeTelLinks(html: string): string {
-  // Decode any URL-encoded tel: protocols
-  let result = html.replace(/href\s*=\s*(["'])tel%3A/gi, 'href=$1tel:');
-  result = result.replace(/href\s*=\s*(["'])tel:%2B/gi, 'href=$1tel:+');
-  
-  // Clean phone numbers for iPhone compatibility
-  result = result.replace(
-    /href\s*=\s*["']tel:([^"']+)["']/gi,
-    (_match, phoneNumber) => {
-      let decoded = phoneNumber;
-      try {
-        decoded = decodeURIComponent(phoneNumber);
-      } catch {
-        // If decoding fails, use original
-      }
-      decoded = decoded
-        .replace(/&nbsp;/gi, '')
-        .replace(/&#160;/g, '')
-        .replace(/&amp;/gi, '&')
-        .replace(/&plus;/gi, '+')
-        .replace(/\u00A0/g, '');
-      
-      const cleaned = decoded.replace(/[^0-9+]/g, '');
-      return `href="tel:${cleaned}"`;
-    }
-  );
-  
-  return result;
-}
+// Re-export from shared utility for backward compatibility
+export { sanitizeTelLinks } from "@/utils/templateRenderer";

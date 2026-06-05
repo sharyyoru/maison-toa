@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { textToHtml } from "@/utils/htmlUtils";
 
 export const runtime = "nodejs";
 
@@ -7,17 +8,6 @@ function extractFirstEmail(input: string | null): string | null {
   if (!input) return null;
   const match = input.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   return match ? match[0] : null;
-}
-
-function textToHtml(text: string): string {
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  return escaped
-    .split(/\r?\n/g)
-    .map((line) => (line.length === 0 ? "<br />" : line))
-    .join("<br />");
 }
 
 export async function POST(request: Request) {

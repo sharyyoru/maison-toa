@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { readFile } from "fs/promises";
 import path from "path";
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(request: NextRequest) {
   try {

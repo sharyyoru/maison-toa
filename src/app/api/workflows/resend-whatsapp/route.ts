@@ -1,37 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { renderTemplate } from "@/utils/templateRenderer";
 
 export const runtime = "nodejs";
-
-function resolvePath(object: unknown, path: string): unknown {
-  const parts = path.split(".").map((part) => part.trim()).filter(Boolean);
-  return parts.reduce<unknown>((current, key) => {
-    if (!current || typeof current !== "object") return undefined;
-    if (!(key in (current as Record<string, unknown>))) return undefined;
-    return (current as Record<string, unknown>)[key];
-  }, object);
-}
-
-function decodeHtmlEntities(str: string): string {
-  return str
-    .replace(/&#123;/g, "{")
-    .replace(/&#125;/g, "}")
-    .replace(/&lbrace;/g, "{")
-    .replace(/&rbrace;/g, "}")
-    .replace(/&#x7b;/gi, "{")
-    .replace(/&#x7d;/gi, "}");
-}
-
-function renderTemplate(template: string, context: unknown): string {
-  if (!template) return "";
-  const decoded = decodeHtmlEntities(template);
-  return decoded.replace(/{{\s*([^}]+?)\s*}}/g, (_match, rawPath) => {
-    const path = rawPath.trim();
-    const value = resolvePath(context, path);
-    if (value === undefined || value === null) return "";
-    return String(value);
-  });
-}
 
 type ResendPayload = {
   deals: { id: string; patient_id: string; owner_id?: string }[];
