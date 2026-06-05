@@ -2506,11 +2506,21 @@ export default function MedicalConsultationsCard({
           )
         );
       } else {
-        // CREATE new draft consultation
+        // CREATE new draft consultation — need to generate consultation_id first
+        const { data: generatedId, error: rpcError } = await supabaseClient
+          .rpc('generate_invoice_number');
+        
+        if (rpcError || !generatedId) {
+          console.error("Autosave: failed to generate consultation_id:", rpcError?.message);
+          setNewConsultationAutosaveStatus("idle");
+          return;
+        }
+
         const { data, error } = await supabaseClient
           .from("consultations")
           .insert({
             patient_id: patientId,
+            consultation_id: generatedId as string,
             title: consultationTitle || "Draft",
             content: htmlContent,
             record_type: "notes",
