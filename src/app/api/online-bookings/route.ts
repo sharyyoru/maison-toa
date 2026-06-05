@@ -152,6 +152,16 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
+  const { error: reminderDeleteError } = await supabase
+    .from("scheduled_emails")
+    .delete()
+    .eq("appointment_id", id);
+
+  if (reminderDeleteError) {
+    console.error("Error deleting booking reminders:", reminderDeleteError);
+    return NextResponse.json({ error: "Failed to delete booking reminders" }, { status: 500 });
+  }
+
   const { error } = await supabase
     .from("appointments")
     .delete()

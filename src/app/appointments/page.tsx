@@ -3853,6 +3853,17 @@ export default function CalendarPage() {
       setDeletingAppointment(true);
       setEditError(null);
 
+      const { error: reminderDeleteError } = await supabaseClient
+        .from("scheduled_emails")
+        .delete()
+        .eq("appointment_id", editingAppointment.id);
+
+      if (reminderDeleteError) {
+        setEditError(reminderDeleteError.message ?? "Failed to delete appointment reminders.");
+        setDeletingAppointment(false);
+        return;
+      }
+
       const { error } = await supabaseClient
         .from("appointments")
         .delete()
