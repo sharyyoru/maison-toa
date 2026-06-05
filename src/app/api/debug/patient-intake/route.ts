@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getAdminUser } from "@/lib/apiAuth";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -7,6 +8,11 @@ const supabaseAdmin = createClient(
 );
 
 export async function GET(req: NextRequest) {
+  const adminUser = await getAdminUser(req);
+  if (!adminUser) {
+    return NextResponse.json({ error: "Unauthorized — admin access required" }, { status: 401 });
+  }
+
   const patientId = req.nextUrl.searchParams.get("patient_id");
   const email = req.nextUrl.searchParams.get("email");
 

@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getAdminUser } from "@/lib/apiAuth";
 
 function generateSwissReference(invoiceId: string): string {
   let numericPart = invoiceId.replace(/\D/g, "");
@@ -17,7 +18,12 @@ function generateSwissReference(invoiceId: string): string {
   return padded + ((10 - carry) % 10).toString();
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const adminUser = await getAdminUser(request);
+  if (!adminUser) {
+    return NextResponse.json({ error: "Unauthorized — admin access required" }, { status: 401 });
+  }
+
   try {
     // Fetch all invoices without a reference_number
     const { data: invoices, error } = await supabaseAdmin

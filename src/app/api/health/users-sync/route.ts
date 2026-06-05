@@ -1,7 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getAdminUser } from "@/lib/apiAuth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const adminUser = await getAdminUser(request);
+  if (!adminUser) {
+    return NextResponse.json({ error: "Unauthorized — admin access required" }, { status: 401 });
+  }
   try {
     // Load auth.users (source of truth for IDs)
     const { data: authList, error: authError } =

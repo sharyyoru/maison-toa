@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getAuthenticatedUser } from "@/lib/apiAuth";
 import { randomBytes } from "crypto";
 
 export async function POST(req: NextRequest) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { invoiceId } = await req.json();
   if (!invoiceId) return NextResponse.json({ error: "Missing invoiceId" }, { status: 400 });
 
