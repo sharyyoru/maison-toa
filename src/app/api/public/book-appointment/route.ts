@@ -24,6 +24,20 @@ type BookingPayload = {
   treatmentId?: string;
 };
 
+type TreatmentBookingDetails = {
+  duration_minutes?: number | null;
+  linked_service_id?: string | null;
+  services?: {
+    service_categories?: {
+      name?: string | null;
+      color?: string | null;
+    } | null;
+  } | null;
+  booking_categories?: {
+    name?: string | null;
+  } | null;
+};
+
 async function sendEmail(to: string, subject: string, html: string) {
   if (!isEmailConfigured()) {
     console.log("Resend not configured, skipping email send");
@@ -384,17 +398,31 @@ export async function POST(request: Request) {
     const MULTI_CAPACITY_DOCTORS = ["xavier-tenorio", "cesar-rodriguez"];
     const maxCapacity = MULTI_CAPACITY_DOCTORS.includes(doctorSlug) ? 3 : 1;
 
-    // Look up treatment duration; fall back to 60 min if not found
+    // Look up treatment duration and category metadata; fall back to 60 min if not found
     let durationMinutes = 60;
+    let categoryName: string | null = null;
     if (treatmentId) {
       const { data: treatmentData } = await supabase
         .from("booking_treatments")
-        .select("duration_minutes")
+        .select(`
+          duration_minutes,
+          linked_service_id,
+          services:linked_service_id(
+            service_categories(name, color)
+          ),
+          booking_categories(name)
+        `)
         .eq("id", treatmentId)
-        .single();
+        .single<TreatmentBookingDetails>();
+
       if (treatmentData?.duration_minutes) {
         durationMinutes = treatmentData.duration_minutes;
       }
+
+      categoryName =
+        treatmentData?.services?.service_categories?.name?.trim() ||
+        treatmentData?.booking_categories?.name?.trim() ||
+        null;
     }
 
     // Check if time slot has capacity for this doctor using full overlap detection.
@@ -593,8 +621,9 @@ export async function POST(request: Request) {
       console.log("Using provider:", providerId, "for doctor:", doctorName);
     }
 
-    // Build reason field - include [Doctor: Name], [Online Booking], and [Lang: xx] for downstream use
-    const reason = `${service}${notes ? ` - ${notes}` : ""} [Doctor: ${doctorName.replace("Dr. ", "")}] [Online Booking] [Lang: ${language}]`;
+    // Build reason field - include [Doctor: Name], [Online Booking], [Lang: xx], and category for downstream use
+    const categoryTag = categoryName ? ` [Category: ${categoryName}]` : "";
+    const reason = `${service}${notes ? ` - ${notes}` : ""} [Doctor: ${doctorName.replace("Dr. ", "")}] [Online Booking] [Lang: ${language}]${categoryTag}`;
 
     // Create the appointment
     const { data: appointment, error: appointmentError } = await supabase
