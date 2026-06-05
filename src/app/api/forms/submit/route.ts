@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { sendEmail, isEmailConfigured } from "@/lib/email";
+import { brandedEmail, LOGO_URL } from "@/utils/emailTemplate";
 
 // POST /api/forms/submit - Submit form data using token
 export async function POST(request: Request) {
@@ -103,6 +105,73 @@ export async function POST(request: Request) {
           console.error("Error updating patient record:", patientUpdateError);
           // Don't fail the whole submission, just log the error
         }
+      }
+    }
+
+    // Send confirmation email to patient
+    if (isEmailConfigured()) {
+      try {
+        const { data: patient } = await supabaseAdmin
+          .from("patients")
+          .select("first_name, last_name, email, language_preference")
+          .eq("id", submission.patient_id)
+          .single();
+
+        if (patient?.email) {
+          const lang = patient.language_preference || "fr";
+          const isFrench = lang === "fr";
+          const firstName = patient.first_name || "";
+
+          const subject = isFrench
+            ? "Confirmation – Votre formulaire a bien été reçu"
+            : "Confirmation – Your form has been received";
+
+          const salutation = isFrench
+            ? (firstName ? `Bonjour ${firstName},` : "Bonjour,")
+            : (firstName ? `Hello ${firstName},` : "Hello,");
+
+          const body = `
+            <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">${salutation}</p>
+            <p style="margin: 0 0 20px 0; color: #4a4742;">
+              ${isFrench
+                ? "Nous vous confirmons que votre formulaire patient a bien été reçu et enregistré."
+                : "We confirm that your patient form has been successfully received and recorded."}
+            </p>
+            <p style="margin: 0 0 20px 0; color: #4a4742;">
+              ${isFrench
+                ? "Notre équipe dispose désormais de vos informations et se tient à votre disposition pour toute question."
+                : "Our team now has your information and is available for any questions you may have."}
+            </p>
+            <p style="margin: 24px 0 0 0; color: #4a4742;">
+              ${isFrench
+                ? "Nous nous réjouissons de vous accueillir prochainement."
+                : "We look forward to welcoming you soon."}
+            </p>
+            <p style="margin: 8px 0 0 0; color: #1a1a18; font-weight: 500;">Maison Tóā</p>
+            <img src="${LOGO_URL}" alt="Maison Tóā" width="80" style="display: block; width: 80px; height: auto; margin: 16px 0 0 0;">
+          `;
+
+          await sendEmail({
+            to: patient.email,
+            subject,
+            html: brandedEmail(body),
+          });
+
+          // Store email record
+          await supabaseAdmin.from("emails").insert({
+            patient_id: submission.patient_id,
+            to_address: patient.email,
+            from_address: process.env.EMAIL_FROM_ADDRESS || "info@mail.maisontoa.com",
+            subject,
+            body: brandedEmail(body),
+            direction: "outbound",
+            status: "sent",
+            sent_at: new Date().toISOString(),
+          });
+        }
+      } catch (emailErr) {
+        console.error("Error sending form confirmation email:", emailErr);
+        // Non-critical — don't fail the submission
       }
     }
 
