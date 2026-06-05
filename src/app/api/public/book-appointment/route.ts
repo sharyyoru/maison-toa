@@ -27,6 +27,11 @@ type BookingPayload = {
 type TreatmentBookingDetails = {
   duration_minutes?: number | null;
   linked_service_id?: string | null;
+  service_category_id?: string | null;
+  assigned_service_categories?: {
+    name?: string | null;
+    color?: string | null;
+  } | null;
   services?: {
     service_categories?: {
       name?: string | null;
@@ -407,6 +412,8 @@ export async function POST(request: Request) {
         .select(`
           duration_minutes,
           linked_service_id,
+          service_category_id,
+          assigned_service_categories:service_category_id(name, color),
           services:linked_service_id(
             service_categories(name, color)
           ),
@@ -420,6 +427,7 @@ export async function POST(request: Request) {
       }
 
       categoryName =
+        treatmentData?.assigned_service_categories?.name?.trim() ||
         treatmentData?.services?.service_categories?.name?.trim() ||
         treatmentData?.booking_categories?.name?.trim() ||
         null;

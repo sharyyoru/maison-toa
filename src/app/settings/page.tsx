@@ -1066,7 +1066,14 @@ interface BookingTreatment {
   enabled: boolean;
   prepayment_required: boolean;
   linked_service_id: string | null;
+  service_category_id: string | null;
   display_price: number | null;
+}
+
+interface ServiceCategoryOption {
+  id: string;
+  name: string;
+  color: string | null;
 }
 
 interface ServiceOption {
@@ -1213,6 +1220,84 @@ function ServicePicker({
   );
 }
 
+function ServiceCategorySelect({
+  categories,
+  value,
+  onChange,
+}: {
+  categories: ServiceCategoryOption[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = categories.find((category) => category.id === value) ?? null;
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left text-sm text-slate-800 outline-none focus:ring-1 focus:ring-sky-400"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {selected?.color ? (
+            <span className={`h-3 w-3 shrink-0 rounded-sm border border-slate-200 ${selected.color}`} />
+          ) : (
+            <span className="h-3 w-3 shrink-0 rounded-sm border border-slate-200 bg-white" />
+          )}
+          <span className="truncate">{selected?.name ?? "No assigned category"}</span>
+        </span>
+        <svg className="h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 max-h-64 w-full min-w-80 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          <button
+            type="button"
+            onClick={() => {
+              onChange(null);
+              setOpen(false);
+            }}
+            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-sky-50 ${!value ? "bg-sky-50" : ""}`}
+          >
+            <span className="h-3 w-3 shrink-0 rounded-sm border border-slate-200 bg-white" />
+            <span className="truncate font-medium text-slate-800">No assigned category</span>
+          </button>
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => {
+                onChange(category.id);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-sky-50 ${category.id === value ? "bg-sky-50" : ""}`}
+            >
+              {category.color ? (
+                <span className={`h-3 w-3 shrink-0 rounded-sm border border-slate-200 ${category.color}`} />
+              ) : (
+                <span className="h-3 w-3 shrink-0 rounded-sm border border-slate-200 bg-white" />
+              )}
+              <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{category.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BookingCategoriesTab() {
   const t = useTranslations("settingsPage.booking");
   const tc = useTranslations("settingsPage.common");
@@ -1220,6 +1305,7 @@ function BookingCategoriesTab() {
   const [treatments, setTreatments] = useState<BookingTreatment[]>([]);
   const [doctors, setDoctors] = useState<BookingDoctor[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
+  const [serviceCategories, setServiceCategories] = useState<ServiceCategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<"new" | "existing">("new");
@@ -1233,11 +1319,12 @@ function BookingCategoriesTab() {
 
   const fetchData = async () => {
     try {
-      const [catRes, treatRes, docRes, servRes] = await Promise.all([
+      const [catRes, treatRes, docRes, servRes, serviceCategoriesResult] = await Promise.all([
         fetch("/api/settings/booking-categories"),
         fetch("/api/settings/booking-treatments"),
         fetch("/api/settings/booking-doctors"),
         fetch("/api/services?active=true"),
+        supabaseClient.from("service_categories").select("id, name, color").order("name", { ascending: true }),
       ]);
       const catData = await catRes.json();
       const treatData = await treatRes.json();
@@ -1247,6 +1334,7 @@ function BookingCategoriesTab() {
       setTreatments(treatData.treatments || []);
       setDoctors(docData.doctors || []);
       setServices(servData.services || []);
+      setServiceCategories(serviceCategoriesResult.data || []);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -1367,6 +1455,7 @@ function BookingCategoriesTab() {
       enabled: true,
       prepayment_required: false,
       linked_service_id: null,
+      service_category_id: null,
       display_price: null,
     };
     setTreatments([...treatments, newTreatment]);
@@ -1692,6 +1781,14 @@ function BookingCategoriesTab() {
                               value={treat.duration_minutes}
                               onChange={(e) => updateTreatment(treat.id, "duration_minutes", parseInt(e.target.value) || 0)}
                               className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                            />
+                          </div>
+                          <div className="md:col-span-3">
+                            <label className="block text-[10px] font-medium text-slate-500 mb-1">Service category</label>
+                            <ServiceCategorySelect
+                              categories={serviceCategories}
+                              value={treat.service_category_id ?? null}
+                              onChange={(id) => updateTreatment(treat.id, "service_category_id", id)}
                             />
                           </div>
                           <div className="md:col-span-1">

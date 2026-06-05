@@ -115,6 +115,7 @@ export async function PUT(request: Request) {
           enabled: t.enabled,
           prepayment_required: t.prepayment_required ?? false,
           linked_service_id: t.linked_service_id || null,
+          service_category_id: t.service_category_id || null,
           display_price: t.display_price ?? null,
         }))
       );
@@ -157,7 +158,7 @@ export async function PUT(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { category_id, name, description, duration_minutes, order_index, enabled } = body;
+    const { category_id, name, description, duration_minutes, order_index, enabled, service_category_id } = body;
 
     if (!category_id || !name) {
       return NextResponse.json(
@@ -175,6 +176,7 @@ export async function POST(request: Request) {
         duration_minutes: duration_minutes || 30,
         order_index: order_index || 0,
         enabled: enabled ?? true,
+        service_category_id: service_category_id || null,
       })
       .select()
       .single();
