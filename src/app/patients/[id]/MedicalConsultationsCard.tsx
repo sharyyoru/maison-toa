@@ -7982,6 +7982,15 @@ export default function MedicalConsultationsCard({
                                     return;
                                   }
                                   navigator.clipboard.writeText(paymentLink).then(() => alert("Payment link copied!")).catch(() => alert("Failed to copy link"));
+                                  // Start 48hr deposit deadline if this invoice is linked to an appointment
+                                  // and the deadline hasn't been set yet (first copy wins)
+                                  if (row.invoice_id) {
+                                    fetch("/api/payments/stripe/set-deposit-deadline", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ invoiceId: row.invoice_id }),
+                                    }).catch(() => {});
+                                  }
                                 }}
                                 className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-100 transition-colors"
                               >
