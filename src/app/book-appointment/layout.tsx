@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { GoogleTagManager, GoogleTagManagerNoScript } from "@/components/GoogleTagManager";
+import { GoogleTagManager, GoogleTagManagerNoScript, TrackingParamsCapture } from "@/components/GoogleTagManager";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 
 export const metadata: Metadata = {
@@ -18,6 +18,7 @@ export default function BookingLayout({
     <LanguageProvider>
       <GoogleTagManager />
       <GoogleTagManagerNoScript />
+      <TrackingParamsCapture />
       {children}
     </LanguageProvider>
   );

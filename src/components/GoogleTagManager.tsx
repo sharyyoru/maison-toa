@@ -1,8 +1,12 @@
 "use client";
 
 import Script from "next/script";
+import { useEffect } from "react";
 
-const GTM_ID = "GTM-KP9GM9QG";
+const GTM_ID = "GTM-KL5RWZP";
+
+const UTM_PARAMS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "gclid", "fbclid"];
+const SESSION_KEY = "booking_tracking_params";
 
 export function GoogleTagManager() {
   return (
@@ -37,11 +41,49 @@ export function GoogleTagManagerNoScript() {
   );
 }
 
+// Captures UTM/gclid/fbclid from URL on first landing and persists them in
+// sessionStorage so they survive SPA navigation across booking steps.
+// Also pushes them into the dataLayer on every page so GTM can read them.
+export function TrackingParamsCapture() {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const stored = sessionStorage.getItem(SESSION_KEY);
+    const existing: Record<string, string> = stored ? JSON.parse(stored) : {};
+
+    // Capture any tracking params present in this URL
+    let updated = false;
+    for (const key of UTM_PARAMS) {
+      const val = params.get(key);
+      if (val && !existing[key]) {
+        existing[key] = val;
+        updated = true;
+      }
+    }
+    if (updated) {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(existing));
+    }
+
+    // Push all stored tracking params into dataLayer on every page
+    if (Object.keys(existing).length > 0) {
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({ event: "tracking_params", ...existing });
+    }
+  }, []);
+
+  return null;
+}
+
 // Helper function to push events to dataLayer
 export function pushToDataLayer(event: string, data?: Record<string, unknown>) {
   if (typeof window !== "undefined") {
+    // Enrich every event with stored tracking params
+    const stored = sessionStorage.getItem(SESSION_KEY);
+    const trackingParams: Record<string, string> = stored ? JSON.parse(stored) : {};
+
     window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push({ event, ...data });
+    window.dataLayer.push({ event, ...trackingParams, ...data });
   }
 }
 

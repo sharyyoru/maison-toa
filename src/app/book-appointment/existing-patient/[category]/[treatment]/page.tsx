@@ -9,6 +9,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { findMultipleEarliestSlots, EarliestDoctorResult } from "@/lib/bookingEarliestDoctor";
 import { getLocalizedBookingName } from "@/lib/bookingLocalization";
 import { DescriptionReadMore } from "@/components/booking/DescriptionReadMore";
+import { pushToDataLayer } from "@/components/GoogleTagManager";
 
 interface BookingDoctor {
   id: string;
@@ -98,6 +99,11 @@ export default function SelectDoctorPage() {
   };
 
   const handleSelectSlot = (slot: EarliestDoctorResult) => {
+    pushToDataLayer("SELECT_AGENDA", {
+      agenda_name: slot.doctor.name,
+      practitioner_name: slot.doctor.name,
+      practitioner_id: slot.doctor.slug,
+    });
     router.push(`/book-appointment/existing-patient/${categorySlug}/${treatmentId}/${slot.doctor.slug}?date=${slot.date}&time=${slot.time}`);
   };
 
@@ -227,6 +233,11 @@ export default function SelectDoctorPage() {
                 <Link
                   key={doctor.slug}
                   href={`/book-appointment/existing-patient/${categorySlug}/${treatmentId}/${doctor.slug}`}
+                  onClick={() => pushToDataLayer("SELECT_AGENDA", {
+                    agenda_name: doctor.name,
+                    practitioner_name: doctor.name,
+                    practitioner_id: doctor.slug,
+                  })}
                   className="group bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-xl hover:border-slate-300 transition-all duration-300 hover:scale-[1.02]"
                 >
                   <div className="relative h-40 sm:h-48 bg-gradient-to-br from-slate-100 to-slate-50 overflow-hidden">

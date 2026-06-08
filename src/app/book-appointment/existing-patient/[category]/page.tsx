@@ -9,6 +9,7 @@ import { SectionRenderer } from "@/components/PageBuilder";
 import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
 import { getLocalizedBookingDescription, getLocalizedBookingName } from "@/lib/bookingLocalization";
 import { ServiceDescriptionReadMore } from "@/components/booking/ServiceDescriptionReadMore";
+import { pushToDataLayer } from "@/components/GoogleTagManager";
 
 interface Treatment {
   id: string;
@@ -41,6 +42,11 @@ export default function ExistingPatientTreatmentsPage() {
 
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Fire SELECT_BOOKABLE when user arrives at treatment selection (entered the funnel)
+  useEffect(() => {
+    pushToDataLayer("SELECT_BOOKABLE");
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {

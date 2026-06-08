@@ -1,8 +1,17 @@
 "use client";
 import Link from "next/link";
 import Image from "next/image";
+import { useEffect } from "react";
+import { pushToDataLayer } from "@/components/GoogleTagManager";
 
 export default function BookingPaymentSuccess() {
+  // Fire BOOKING_SUCCESS once when the payment confirmation page loads
+  useEffect(() => {
+    pushToDataLayer("BOOKING_SUCCESS", {
+      currency: "CHF",
+    });
+  }, []);
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-xl p-8 max-w-md w-full text-center border border-slate-200">

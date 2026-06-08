@@ -608,10 +608,25 @@ function DoctorBookingContent() {
         throw new Error(data.error || "Failed to book appointment");
       }
 
-      pushToDataLayer("aliice_form_submit");
+      pushToDataLayer("BOOKING_SUCCESS", {
+        booking_id: data.appointmentId ?? data.id ?? undefined,
+        service_id: treatmentId,
+        service_name: selectedService,
+        practitioner_id: doctorSlug,
+        practitioner_name: doctor.name,
+        appointment_date: selectedDate,
+        appointment_time: selectedTime,
+        currency: "CHF",
+      });
       setSuccess(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to book appointment");
+      const errorMessage = err instanceof Error ? err.message : "Failed to book appointment";
+      setError(errorMessage);
+      pushToDataLayer("BOOKING_ERROR", {
+        error_code: "booking_failed",
+        error_message: errorMessage,
+        step_name: "confirmation",
+      });
     } finally {
       setLoading(false);
     }
@@ -934,6 +949,11 @@ function DoctorBookingContent() {
                             onClick={() => {
                               setSelectedDate(slot.date);
                               setSelectedTime(slot.time);
+                              pushToDataLayer("SELECT_SLOT", {
+                                service_name: selectedService,
+                                practitioner_name: doctor?.name,
+                                slot_start_time: `${slot.date}T${slot.time}:00`,
+                              });
                             }}
                             className={`rounded-lg border px-3 py-2 text-left text-sm font-medium transition-all ${
                               isSelected
@@ -995,7 +1015,14 @@ function DoctorBookingContent() {
                         {openSlots.map((time: string) => (
                           <button
                             key={time}
-                            onClick={() => setSelectedTime(time)}
+                            onClick={() => {
+                              setSelectedTime(time);
+                              pushToDataLayer("SELECT_SLOT", {
+                                service_name: selectedService,
+                                practitioner_name: doctor?.name,
+                                slot_start_time: `${selectedDate}T${time}:00`,
+                              });
+                            }}
                             className={`py-3 rounded-xl text-sm font-medium transition-all ${
                               selectedTime === time
                                 ? "bg-slate-900 text-white"
