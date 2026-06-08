@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
 import { sendEmail, isEmailConfigured } from "@/lib/email";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(req: NextRequest) {
-  const { patientEmail, patientFirstName, patientLastName, stripeUrl, invoiceNumber, serviceName, depositAmount } = await req.json();
+  const { patientEmail, patientFirstName, patientLastName, stripeUrl, invoiceNumber, serviceName, depositAmount, invoiceId } = await req.json();
 
   if (!patientEmail || !stripeUrl) return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   if (!isEmailConfigured()) return NextResponse.json({ error: "Email service not configured" }, { status: 500 });
@@ -33,5 +34,24 @@ export async function POST(req: NextRequest) {
   });
 
   if (!result.success) return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
+
+  // Set deposit_deadline_at = now() + 48h if conditions are met (only for linked-appointment deposits)
+  if (invoiceId) {
+    const { data: inv } = await supabaseAdmin
+      .from("invoices")
+      .select("status, appointment_id, deposit_deadline_at")
+      .eq("id", invoiceId)
+      .single();
+
+    if (inv?.status === "OPEN" && inv?.appointment_id && !inv?.deposit_deadline_at) {
+      const deadline = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+      await supabaseAdmin
+        .from("invoices")
+        .update({ deposit_deadline_at: deadline })
+        .eq("id", invoiceId)
+        .is("deposit_deadline_at", null);
+    }
+  }
+
   return NextResponse.json({ sent: true });
 }

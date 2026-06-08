@@ -15,6 +15,14 @@ interface Provider {
   specialty?: string | null;
 }
 
+interface Appointment {
+  id: string;
+  start_time: string;
+  reason: string | null;
+  title: string | null;
+  status: string;
+}
+
 export default function PrepaymentInvoiceButton({ patientId, patientEmail, patientFirstName, patientLastName }: {
   patientId: string;
   patientEmail?: string | null;
@@ -24,27 +32,33 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
   const [open, setOpen] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [medicalStaff, setMedicalStaff] = useState<Provider[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [serviceId, setServiceId] = useState("");
   const [doctorId, setDoctorId] = useState("");
+  const [appointmentId, setAppointmentId] = useState("");
   const [serviceQuery, setServiceQuery] = useState("");
   const [serviceDropOpen, setServiceDropOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ invoiceId: string; stripeUrl: string; invoiceNumber: string } | null>(null);
+  const [result, setResult] = useState<{ invoiceId: string; stripeUrl: string; invoiceNumber: string; appointmentId: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [deadlineSet, setDeadlineSet] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     Promise.all([
       fetch("/api/services?category_id=20fdd180-860c-43fc-a5d3-caf5372ef07c").then(r => r.json()),
       fetch("/api/providers?role=doctor,nurse,technician").then(r => r.json()),
-    ]).then(([sData, staffData]) => {
+      // Fetch upcoming scheduled appointments for this patient
+      fetch(`/api/patients/${patientId}/appointments?status=scheduled&upcoming=true`).then(r => r.json()).catch(() => ({ appointments: [] })),
+    ]).then(([sData, staffData, apptData]) => {
       setServices(sData.services || []);
       setMedicalStaff(staffData.providers || []);
+      setAppointments(apptData.appointments || []);
     });
-  }, [open]);
+  }, [open, patientId]);
 
   const selectedService = services.find(s => s.id === serviceId);
   const deposit = selectedService?.base_price ? selectedService.base_price * 0.5 : null;
@@ -56,15 +70,36 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
       )
     : services;
 
+  // Trigger the 48hr deadline (only fires if appointment is linked and deadline not yet set)
+  async function triggerDeadline(invoiceId: string) {
+    if (!invoiceId || deadlineSet) return;
+    try {
+      const res = await fetch("/api/payments/stripe/set-deposit-deadline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId }),
+      });
+      const data = await res.json();
+      if (data.success) setDeadlineSet(true);
+    } catch {
+      // non-blocking — don't surface to staff
+    }
+  }
+
   async function handleCreate() {
-    if (!serviceId) { setError("Please select a service."); return; }
+    if (!serviceId) { setError("Veuillez sélectionner un service."); return; }
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/payments/stripe/create-prepayment-invoice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientId, serviceId, doctorId: doctorId || null }),
+        body: JSON.stringify({
+          patientId,
+          serviceId,
+          doctorId: doctorId || null,
+          appointmentId: appointmentId || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
@@ -74,6 +109,15 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleCopy() {
+    if (!result) return;
+    navigator.clipboard.writeText(result.stripeUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    // Start the 48hr clock when the link is copied (first trigger wins)
+    await triggerDeadline(result.invoiceId);
   }
 
   async function handleSendEmail() {
@@ -91,14 +135,24 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
           invoiceNumber: result.invoiceNumber,
           serviceName: selectedService?.name,
           depositAmount: deposit,
+          invoiceId: result.invoiceId,
         }),
       });
       setEmailSent(true);
+      setDeadlineSet(true); // email route also sets it server-side
     } catch {
       // ignore
     } finally {
       setSendingEmail(false);
     }
+  }
+
+  function formatApptDate(iso: string) {
+    return new Date(iso).toLocaleString("fr-CH", {
+      weekday: "short", day: "numeric", month: "short",
+      hour: "2-digit", minute: "2-digit",
+      timeZone: "Europe/Zurich",
+    });
   }
 
   function reset() {
@@ -107,8 +161,10 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
     setError(null);
     setServiceId("");
     setDoctorId("");
+    setAppointmentId("");
     setServiceQuery("");
     setEmailSent(false);
+    setDeadlineSet(false);
   }
 
   return (
@@ -193,6 +249,38 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
                   )}
                 </div>
 
+                {/* Appointment picker */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Lier à un rendez-vous
+                    <span className="ml-1 text-slate-400 font-normal">(optionnel — active l'annulation automatique à 48h)</span>
+                  </label>
+                  {appointments.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">Aucun rendez-vous à venir pour ce patient.</p>
+                  ) : (
+                    <select
+                      value={appointmentId}
+                      onChange={e => setAppointmentId(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-amber-400"
+                    >
+                      <option value="">— aucun —</option>
+                      {appointments.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {formatApptDate(a.start_time)}{a.title ? ` — ${a.title}` : a.reason ? ` — ${a.reason}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {appointmentId && (
+                    <p className="mt-1.5 text-[11px] text-amber-600 flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Le chrono 48h démarrera dès l'envoi ou la copie du lien
+                    </p>
+                  )}
+                </div>
+
                 {/* Doctor */}
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Médecin / Personnel médical</label>
@@ -224,6 +312,22 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
                   <div>
                     <div className="text-sm font-semibold text-emerald-800">Facture #{result.invoiceNumber} créée</div>
                     <div className="text-xs text-emerald-600">Acompte CHF {deposit?.toFixed(2)}</div>
+                    {result.appointmentId && (
+                      <div className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Lié au rendez-vous · annulation auto à 48h dès envoi
+                      </div>
+                    )}
+                    {deadlineSet && (
+                      <div className="text-xs text-orange-600 mt-0.5 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Chrono 48h démarré
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -232,8 +336,10 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
                   <div className="flex gap-2">
                     <input readOnly value={result.stripeUrl}
                       className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-700 truncate" />
-                    <button onClick={() => { navigator.clipboard.writeText(result.stripeUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                      className="px-3 py-2 text-xs rounded-xl bg-slate-900 text-white hover:bg-slate-700 shrink-0">
+                    <button
+                      onClick={handleCopy}
+                      className="px-3 py-2 text-xs rounded-xl bg-slate-900 text-white hover:bg-slate-700 shrink-0"
+                    >
                       {copied ? "✓ Copié" : "Copier"}
                     </button>
                   </div>

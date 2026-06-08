@@ -6,7 +6,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.verc
 
 export async function POST(req: NextRequest) {
   try {
-    const { patientId, serviceId, doctorId } = await req.json();
+    const { patientId, serviceId, doctorId, appointmentId } = await req.json();
     if (!patientId || !serviceId) return NextResponse.json({ error: "Missing patientId or serviceId" }, { status: 400 });
 
     // Fetch service price
@@ -72,6 +72,8 @@ export async function POST(req: NextRequest) {
     const nowIso = new Date().toISOString();
 
     // Create invoice (OPEN — not paid yet, Stripe will confirm)
+    // appointment_id is stored only if provided; deposit_deadline_at is set later
+    // when the link is actually sent/copied to the patient.
     const { data: invoice, error: invErr } = await supabaseAdmin
       .from("invoices")
       .insert({
@@ -93,6 +95,7 @@ export async function POST(req: NextRequest) {
         status: "OPEN",
         payment_method: "online",
         payment_link_token: paymentLinkToken,
+        appointment_id: appointmentId ?? null,
         is_archived: false,
         is_demo: false,
       })
@@ -117,6 +120,7 @@ export async function POST(req: NextRequest) {
       invoiceId: invoice.id,
       invoiceNumber,
       stripeUrl: payUrl,
+      appointmentId: appointmentId ?? null,
     });
   } catch (err: any) {
     console.error("[create-prepayment-invoice]", err);

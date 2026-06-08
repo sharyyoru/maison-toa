@@ -243,6 +243,29 @@ export default async function RootLayout({
                 </div>
                 <div className="border-b border-slate-100/80">
                   <Link
+                    href="/deposits"
+                    className="group flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-sky-50/80 hover:text-slate-900 sm:text-sm"
+                  >
+                    <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/70 text-slate-500 shadow-[0_6px_18px_rgba(15,23,42,0.18)] backdrop-blur group-hover:bg-sky-500/90 group-hover:text-white">
+                      <svg
+                        className="h-3.5 w-3.5"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 8v4l2 2" />
+                      </svg>
+                    </span>
+                    <span>Acomptes 50%</span>
+                  </Link>
+                </div>
+                <div className="border-b border-slate-100/80">
+                  <Link
                     href="/medidata"
                     className="group flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-sky-50/80 hover:text-slate-900 sm:text-sm"
                   >
