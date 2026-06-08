@@ -18,6 +18,10 @@ export interface EarliestDoctorResult {
 }
 
 type DayAvailability = Record<number, { start: string; end: string }>;
+type DoctorAvailabilityResult = {
+  availability: DayAvailability;
+  hasDatabaseSchedule: boolean;
+};
 
 function slotConflicts(time: string, durationMinutes: number, bookedSlots: string[]): boolean {
   const [h, m] = time.split(":").map(Number);
@@ -54,7 +58,7 @@ function generateTimeSlots(dayOfWeek: number, availability?: { start: string; en
   return slots;
 }
 
-async function getDoctorAvailability(doctor: EarliestBookingDoctor): Promise<DayAvailability> {
+async function getDoctorAvailability(doctor: EarliestBookingDoctor): Promise<DoctorAvailabilityResult> {
   try {
     const res = await fetch(`/api/public/doctor-availability?doctorSlug=${encodeURIComponent(doctor.slug)}`);
     if (!res.ok) throw new Error("Failed to fetch doctor availability");
@@ -68,13 +72,19 @@ async function getDoctorAvailability(doctor: EarliestBookingDoctor): Promise<Day
           availability[Number(day)] = { start: entry.start, end: entry.end };
         }
       });
-      return availability;
+      return {
+        availability,
+        hasDatabaseSchedule: true,
+      };
     }
   } catch (error) {
     console.error("Failed to load doctor availability:", error);
   }
 
-  return DOCTOR_AVAILABILITY[doctor.slug]?.lausanne ?? ALL_WEEK_SLOTS;
+  return {
+    availability: DOCTOR_AVAILABILITY[doctor.slug]?.lausanne ?? ALL_WEEK_SLOTS,
+    hasDatabaseSchedule: false,
+  };
 }
 
 /**
@@ -87,7 +97,7 @@ async function getFirstOpenSlot(
   maxDaysAhead: number,
   treatmentId?: string
 ): Promise<EarliestDoctorResult | null> {
-  const availability = await getDoctorAvailability(doctor);
+  const { availability } = await getDoctorAvailability(doctor);
   const today = getSwissToday();
   
   // Batch fetch: get all booked slots for the next maxDaysAhead days in one call
@@ -205,7 +215,7 @@ async function getMultipleOpenSlots(
   maxDaysAhead: number,
   treatmentId?: string
 ): Promise<EarliestDoctorResult[]> {
-  const availability = await getDoctorAvailability(doctor);
+  const { availability } = await getDoctorAvailability(doctor);
   const today = getSwissToday();
   
   // Batch fetch: get all booked slots for the next maxDaysAhead days in one call
