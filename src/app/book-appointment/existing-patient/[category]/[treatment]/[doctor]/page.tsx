@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabaseClient";
-import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, formatSwissDateWithWeekday, getSwissDayRange, getSwissSlotString, createSwissDateTime, SWISS_TIMEZONE } from "@/lib/swissTimezone";
+import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, formatSwissDateWithWeekday, getSwissDayRange, createSwissDateTime, SWISS_TIMEZONE } from "@/lib/swissTimezone";
 import { pushToDataLayer } from "@/components/GoogleTagManager";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
 import { getLocalizedBookingName } from "@/lib/bookingLocalization";
+import { fetchAvailabilityWindow, getNextOpenSlots, type BlockedSlotsByDate, type AvailableSlot } from "@/lib/bookingAvailability";
 
 interface DoctorInfo {
   name: string;
@@ -41,8 +42,6 @@ const DEFAULT_WEEK_SLOTS = {
 };
 
 type DayAvailability = Record<number, { start: string; end: string }>;
-type AvailableSlot = { date: string; time: string };
-
 function parseLocalDate(dateStr: string): Date {
   return parseSwissDate(dateStr);
 }
@@ -153,7 +152,9 @@ function DoctorBookingContent() {
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [dbAvailability, setDbAvailability] = useState<DayAvailability | null>(null);
+  const [dbAvailabilityLoaded, setDbAvailabilityLoaded] = useState(false);
   const [blockedDates, setBlockedDates] = useState<Set<string>>(new Set());
+  const [blockedDatesLoaded, setBlockedDatesLoaded] = useState(false);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -165,9 +166,12 @@ function DoctorBookingContent() {
   const [availableDatesSet, setAvailableDatesSet] = useState<Set<string>>(new Set());
   const [nearestAvailableDate, setNearestAvailableDate] = useState<string | null>(null);
   const [nextAvailableSlots, setNextAvailableSlots] = useState<AvailableSlot[]>([]);
+  const [availabilityWindow, setAvailabilityWindow] = useState<{ startDate: string; endDate: string; blockedSlotsByDate: BlockedSlotsByDate } | null>(null);
   const [isLoadingDates, setIsLoadingDates] = useState(true);
   const [selectedTime, setSelectedTime] = useState("");
   const [notes, setNotes] = useState("");
+  const availabilityRequestSeq = useRef(0);
+  const selectedDateRequestSeq = useRef(0);
 
   const selectedService = treatment ? getLocalizedBookingName(treatment, language) : "General Consultation";
   const bookingFormElement = pageConfig.sections
@@ -224,6 +228,8 @@ function DoctorBookingContent() {
 
   useEffect(() => {
     if (!doctor) return;
+    setDbAvailability(null);
+    setDbAvailabilityLoaded(false);
     const fetchDbAvailability = async () => {
       try {
         const res = await fetch(`/api/public/doctor-availability?doctorSlug=${encodeURIComponent(doctorSlug)}`);
@@ -240,6 +246,8 @@ function DoctorBookingContent() {
         }
       } catch (err) {
         console.error("Failed to fetch doctor availability:", err);
+      } finally {
+        setDbAvailabilityLoaded(true);
       }
     };
     fetchDbAvailability();
@@ -275,66 +283,88 @@ function DoctorBookingContent() {
         }
       } catch (err) {
         console.error("Failed to fetch blocked dates:", err);
+      } finally {
+        setBlockedDatesLoaded(true);
       }
     }
     fetchBlockedDates();
   }, []);
 
   useEffect(() => {
-    if (locationId && doctorSlug && doctor) {
+    if (locationId && doctorSlug && doctor && treatment && dbAvailabilityLoaded && blockedDatesLoaded) {
       setIsLoadingDates(true);
+      setAvailabilityWindow(null);
       const dates = getAvailableDates(doctorSlug, locationId, 90, dbAvailability);
       // Filter out blocked dates
       const filteredDates = dates.filter((d) => !blockedDates.has(d));
       setAvailableDatesSet(new Set(filteredDates));
+      const abortController = new AbortController();
 
       // Find the next actual open slots, not just dates in the doctor's schedule.
       const findNextAvailableSlots = async () => {
-        const doctorName = doctor.name;
-        const slotsToShow: AvailableSlot[] = [];
+        const requestSeq = ++availabilityRequestSeq.current;
 
-        for (const dateStr of filteredDates) {
-          try {
-            const { start, end } = getSwissDayRange(dateStr);
-            const res = await fetch(
-              `/api/appointments/check-availability?start=${start}&end=${end}&doctor=${encodeURIComponent(doctorName)}&slug=${doctorSlug}&treatmentId=${treatmentId}`
-            );
-            const data = await res.json();
+        if (filteredDates.length === 0) {
+          setNextAvailableSlots([]);
+          setNearestAvailableDate(null);
+          setIsLoadingDates(false);
+          return;
+        }
 
-            const blockedSlots: string[] = data.fullSlots
-              ? data.fullSlots.map((isoTime: string) => getSwissSlotString(new Date(isoTime)))
-              : [];
+        try {
+          const firstRange = getSwissDayRange(filteredDates[0]);
+          const lastRange = getSwissDayRange(filteredDates[filteredDates.length - 1]);
+          const blockedSlotsByDate = await fetchAvailabilityWindow({
+            start: firstRange.start,
+            end: lastRange.end,
+            doctorName: doctor.name,
+            doctorSlug,
+            treatmentId,
+            signal: abortController.signal,
+          });
 
-            const allSlots = generateTimeSlots(doctorSlug, locationId, dateStr, dbAvailability);
-            const duration = treatment?.duration_minutes ?? 60;
-            const openSlots = allSlots.filter(time => !slotConflicts(time, duration, blockedSlots));
-            
-            if (openSlots.length > 0) {
-              for (const time of openSlots) {
-                slotsToShow.push({ date: dateStr, time });
-                if (slotsToShow.length >= 15) break;
-              }
+          if (requestSeq !== availabilityRequestSeq.current) return;
 
-              if (slotsToShow.length >= 15) break;
-            }
-          } catch (err) {
-            console.error("Error checking availability for", dateStr, err);
+          const slotsToShow = getNextOpenSlots({
+            dates: filteredDates,
+            blockedSlotsByDate,
+            durationMinutes: treatment?.duration_minutes ?? 60,
+            generateTimeSlots: (date) => generateTimeSlots(doctorSlug, locationId, date, dbAvailability),
+            slotConflicts,
+          });
+
+          setAvailabilityWindow({
+            startDate: filteredDates[0],
+            endDate: filteredDates[filteredDates.length - 1],
+            blockedSlotsByDate,
+          });
+          setNextAvailableSlots(slotsToShow);
+          if (slotsToShow.length > 0) {
+            setNearestAvailableDate(slotsToShow[0].date);
+            setSelectedDate(slotsToShow[0].date);
+          } else {
+            setNearestAvailableDate(null);
+          }
+        } catch (err) {
+          if (!abortController.signal.aborted) {
+            console.error("Error checking availability window:", err);
+            setNextAvailableSlots([]);
+            setNearestAvailableDate(null);
+          }
+        } finally {
+          if (requestSeq === availabilityRequestSeq.current) {
+            setIsLoadingDates(false);
           }
         }
-
-        setNextAvailableSlots(slotsToShow);
-        if (slotsToShow.length > 0) {
-          setNearestAvailableDate(slotsToShow[0].date);
-          setSelectedDate(slotsToShow[0].date);
-        } else {
-          setNearestAvailableDate(null);
-        }
-        setIsLoadingDates(false);
       };
 
       findNextAvailableSlots();
+      return () => {
+        availabilityRequestSeq.current += 1;
+        abortController.abort();
+      };
     }
-  }, [locationId, doctorSlug, dbAvailability, doctor, blockedDates]);
+  }, [locationId, doctorSlug, dbAvailability, dbAvailabilityLoaded, doctor, blockedDates, blockedDatesLoaded, treatment, treatmentId]);
 
   useEffect(() => {
     if (selectedDate && locationId && doctor) {
@@ -346,7 +376,7 @@ function DoctorBookingContent() {
     } else {
       setAvailableSlots([]);
     }
-  }, [selectedDate, locationId, doctorSlug, doctor]);
+  }, [selectedDate, locationId, doctorSlug, doctor, dbAvailability, availabilityWindow]);
 
   // Apply preselected date/time from URL params (from earliest slots picker)
   useEffect(() => {
@@ -366,24 +396,24 @@ function DoctorBookingContent() {
   }, [hasAppliedPreselection, preselectedTime, availableSlots, selectedTime]);
 
   async function checkAvailability(date: string) {
+    const requestSeq = ++selectedDateRequestSeq.current;
     try {
-      const { start, end } = getSwissDayRange(date);
       const doctorName = doctor?.name || "";
-
-      const res = await fetch(
-        `/api/appointments/check-availability?start=${start}&end=${end}&doctor=${encodeURIComponent(doctorName)}&slug=${doctorSlug}&treatmentId=${treatmentId}`
-      );
-      const data = await res.json();
-
-      let blockedSlots: string[] = [];
-      if (data.fullSlots) {
-        blockedSlots = data.fullSlots.map((isoTime: string) => {
-          return getSwissSlotString(new Date(isoTime));
+      const isDateInCachedWindow = !!availabilityWindow && date >= availabilityWindow.startDate && date <= availabilityWindow.endDate;
+      let blockedSlots = isDateInCachedWindow ? (availabilityWindow.blockedSlotsByDate[date] || []) : null;
+      if (!blockedSlots) {
+        const { start, end } = getSwissDayRange(date);
+        const blockedSlotsByDate = await fetchAvailabilityWindow({
+          start,
+          end,
+          doctorName,
+          doctorSlug,
+          treatmentId,
         });
-        setBookedSlots(blockedSlots);
-      } else {
-        setBookedSlots([]);
+        blockedSlots = blockedSlotsByDate[date] || [];
       }
+      if (requestSeq !== selectedDateRequestSeq.current) return;
+      setBookedSlots(blockedSlots);
       
       const currentSlots = generateTimeSlots(doctorSlug, locationId || "", date, dbAvailability);
       const duration = treatment?.duration_minutes ?? 60;
