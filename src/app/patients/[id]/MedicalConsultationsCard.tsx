@@ -608,6 +608,10 @@ export default function MedicalConsultationsCard({
   // Tracks whether the user has manually picked a billing entity for this form session.
   // Reset when the doctor changes so auto-prefill kicks in again.
   const [billingEntityOverride, setBillingEntityOverride] = useState(false);
+  // Appointment linking for deposit invoices — hidden unless staff explicitly enables it
+  const [invoiceApptLinkEnabled, setInvoiceApptLinkEnabled] = useState(false);
+  const [invoiceAppointmentId, setInvoiceAppointmentId] = useState<string>("");
+  const [invoicePatientAppointments, setInvoicePatientAppointments] = useState<{ id: string; start_time: string; reason: string | null; title: string | null }[]>([]);
   const [invoiceMode, setInvoiceMode] = useState<"group" | "individual" | "tardoc" | "flatrate">(
     "individual", // default to Individual Services
   );
@@ -1516,6 +1520,15 @@ export default function MedicalConsultationsCard({
       document.body.style.paddingRight = originalPaddingRight;
     };
   }, [invoiceModalOpen]);
+
+  // Fetch upcoming appointments for appointment-link toggle
+  useEffect(() => {
+    if (!invoiceApptLinkEnabled || invoicePatientAppointments.length > 0) return;
+    fetch(`/api/patients/${patientId}/appointments?status=scheduled&upcoming=true`)
+      .then(r => r.json())
+      .then(d => setInvoicePatientAppointments(d.appointments || []))
+      .catch(() => {});
+  }, [invoiceApptLinkEnabled, patientId, invoicePatientAppointments.length]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2858,6 +2871,14 @@ export default function MedicalConsultationsCard({
         setBillingEntityOverride(true);
         setInvoicePaymentMethod(inv.payment_method || "");
         setInvoiceExtraOption(inv.is_complimentary ? "complimentary" : null);
+        // Restore appointment link if one was previously saved
+        if (inv.appointment_id) {
+          setInvoiceApptLinkEnabled(true);
+          setInvoiceAppointmentId(inv.appointment_id);
+        } else {
+          setInvoiceApptLinkEnabled(false);
+          setInvoiceAppointmentId("");
+        }
         setInvoiceCanton((inv.treatment_canton as SwissCanton) || DEFAULT_CANTON);
         setInvoiceLawType(inv.health_insurance_law || "KVG");
         setInvoiceAccidentDate(inv.accident_date || "");
@@ -4514,6 +4535,7 @@ export default function MedicalConsultationsCard({
                             total_amount: invoiceTotalAmountForInsert || 0,
                             is_complimentary: invoiceIsComplimentaryForInsert,
                             payment_method: paymentMethod,
+                            appointment_id: invoiceApptLinkEnabled && invoiceAppointmentId ? invoiceAppointmentId : null,
                         };
 
                         // Add TARDOC-specific invoice fields
@@ -4644,6 +4666,8 @@ export default function MedicalConsultationsCard({
                           setInvoicePaymentMethod("");
                           setInvoiceProviderId("");
                           setInvoiceMode("individual");
+                          setInvoiceApptLinkEnabled(false);
+                          setInvoiceAppointmentId("");
                           setInvoiceGroupId("");
                           setInvoicePaymentTerm("full");
                           setInvoiceExtraOption(null);
@@ -4957,6 +4981,8 @@ export default function MedicalConsultationsCard({
                     setInvoicePaymentMethod("");
                     setInvoiceProviderId("");
                     setInvoiceMode("individual");
+                    setInvoiceApptLinkEnabled(false);
+                    setInvoiceAppointmentId("");
                     setInvoiceGroupId("");
                     setInvoicePaymentTerm("full");
                     setInvoiceExtraOption(null);
@@ -5528,6 +5554,68 @@ export default function MedicalConsultationsCard({
                           );
                         })()}
                       </div>
+                    </div>
+
+                    {/* ── Appointment link (optional, for deposit invoices) ── */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
+                      <label className="flex cursor-pointer items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={invoiceApptLinkEnabled}
+                          onChange={e => {
+                            setInvoiceApptLinkEnabled(e.target.checked);
+                            if (!e.target.checked) setInvoiceAppointmentId("");
+                          }}
+                          className="h-3.5 w-3.5 rounded border-slate-300 text-amber-500 focus:ring-amber-400"
+                        />
+                        <span className="text-[11px] font-medium text-slate-700">
+                          Lier à un rendez-vous
+                        </span>
+                        <span className="ml-auto text-[10px] text-slate-400">
+                          Optionnel — active l'annulation auto à 48h si acompte 50% impayé
+                        </span>
+                      </label>
+
+                      {invoiceApptLinkEnabled && (
+                        <div className="mt-2.5 space-y-1.5">
+                          <p className="text-[10px] text-slate-500 leading-relaxed">
+                            Sélectionnez le rendez-vous associé à cette facture. Le chrono de 48h démarrera
+                            lorsque le lien de paiement sera copié ou envoyé au patient. Sans paiement,
+                            le rendez-vous et la facture seront annulés automatiquement.
+                          </p>
+                          {invoicePatientAppointments.length === 0 ? (
+                            <p className="text-[11px] text-slate-400 italic">
+                              Aucun rendez-vous à venir pour ce patient.
+                            </p>
+                          ) : (
+                            <select
+                              value={invoiceAppointmentId}
+                              onChange={e => setInvoiceAppointmentId(e.target.value)}
+                              className="block w-full rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            >
+                              <option value="">— sélectionner un rendez-vous —</option>
+                              {invoicePatientAppointments.map(a => (
+                                <option key={a.id} value={a.id}>
+                                  {new Date(a.start_time).toLocaleString("fr-CH", {
+                                    weekday: "short", day: "numeric", month: "short",
+                                    hour: "2-digit", minute: "2-digit",
+                                    timeZone: "Europe/Zurich",
+                                  })}
+                                  {(a.title || a.reason) ? ` — ${(a.title || a.reason)!.substring(0, 50)}` : ""}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {invoiceApptLinkEnabled && invoiceAppointmentId && (
+                            <p className="flex items-center gap-1 text-[10px] text-amber-600">
+                              <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Rendez-vous lié — chrono 48h démarrera à l'envoi du lien de paiement
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)]">
