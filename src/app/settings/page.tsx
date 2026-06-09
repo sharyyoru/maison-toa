@@ -73,8 +73,8 @@ export default function SettingsPage() {
       </p>
 
       {/* Tab navigation */}
-      <div className="mt-6 border-b border-slate-200">
-        <nav className="-mb-px flex gap-6" aria-label="Settings tabs">
+      <div className="mt-6 border-b border-slate-200 overflow-x-auto">
+        <nav className="-mb-px flex gap-6 min-w-max" aria-label="Settings tabs">
           {TABS.map((tab) => (
             <button
               key={tab.id}
