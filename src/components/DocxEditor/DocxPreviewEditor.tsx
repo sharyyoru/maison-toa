@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { renderAsync } from 'docx-preview';
+import { sanitizeDocxForPreview } from '@/lib/docxPreviewSanitizer';
 
 interface PatientData {
   firstName?: string;
@@ -52,10 +53,17 @@ export default function DocxPreviewEditor({
   useEffect(() => {
     if (!containerRef.current || !documentBlob) return;
 
+    let isCancelled = false;
     setIsLoading(true);
+    setError(null);
     setOriginalBlob(documentBlob);
+    containerRef.current.innerHTML = '';
 
-    renderAsync(documentBlob, containerRef.current, undefined, {
+    sanitizeDocxForPreview(documentBlob)
+      .then((previewBlob) => {
+        if (isCancelled || !containerRef.current) return;
+
+        return renderAsync(previewBlob, containerRef.current, undefined, {
       className: 'docx-preview',
       inWrapper: true,
       ignoreWidth: false,
@@ -70,8 +78,10 @@ export default function DocxPreviewEditor({
       renderFooters: true,
       renderFootnotes: true,
       renderEndnotes: true,
-    })
+        });
+      })
       .then(() => {
+        if (isCancelled) return;
         setIsLoading(false);
         // Extract placeholders from rendered content
         extractPlaceholders();
@@ -82,10 +92,15 @@ export default function DocxPreviewEditor({
         }
       })
       .catch((err) => {
+        if (isCancelled) return;
         console.error('Error rendering DOCX:', err);
         setError('Failed to render document');
         setIsLoading(false);
       });
+
+    return () => {
+      isCancelled = true;
+    };
   }, [documentBlob]);
 
   // Extract placeholders and auto-fill with patient data

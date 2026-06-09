@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { renderAsync } from 'docx-preview';
+import { sanitizeDocxForPreview } from '@/lib/docxPreviewSanitizer';
 
 interface DocxPreviewProps {
   url: string;
@@ -25,6 +26,7 @@ export default function DocxPreview({ url, fileName }: DocxPreviewProps) {
         if (!response.ok) throw new Error('Failed to fetch document');
         return response.blob();
       })
+      .then(blob => sanitizeDocxForPreview(blob))
       .then(blob => {
         if (!containerRef.current) return;
         
