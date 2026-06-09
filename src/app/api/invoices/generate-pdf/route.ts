@@ -214,6 +214,34 @@ export async function POST(request: NextRequest) {
         insurerZip = insurerRow.address_postal_code || "";
         insurerCity = insurerRow.address_city || "";
       }
+      // Fallback: look up patient's primary insurance from patient_insurances
+      if (!insurerRow && invoiceData.patient_id) {
+        const { data: patIns } = await supabaseAdmin
+          .from("patient_insurances")
+          .select("insurer_gln, insurer_id, provider_name, law_type")
+          .eq("patient_id", invoiceData.patient_id)
+          .eq("is_primary", true)
+          .limit(1)
+          .maybeSingle();
+        if (patIns) {
+          const patInsurerGln = (patIns as any).insurer_gln || "";
+          if (patInsurerGln) insurerRow = await fetchInsurerRow({ col: "gln", val: patInsurerGln });
+          if (!insurerRow && (patIns as any).insurer_id)
+            insurerRow = await fetchInsurerRow({ col: "id", val: (patIns as any).insurer_id });
+          if (insurerRow) {
+            insurerGln = insurerRow.gln || "";
+            insurerName = insurerRow.name || "";
+            receiverGln = insurerRow.receiver_gln || insurerGln;
+            insurerStreet = insurerRow.address_street || "";
+            insurerZip = insurerRow.address_postal_code || "";
+            insurerCity = insurerRow.address_city || "";
+          } else if (patInsurerGln) {
+            // GLN known but not in swiss_insurers yet — use GLN directly
+            insurerGln = patInsurerGln;
+            insurerName = (patIns as any).provider_name || "";
+          }
+        }
+      }
       // If insurer GLN not yet resolved, use invoice field directly
       if (!insurerGln && invoiceData.insurance_gln) insurerGln = invoiceData.insurance_gln;
       if (!insurerName && invoiceData.insurance_name) insurerName = invoiceData.insurance_name;
