@@ -521,7 +521,7 @@ async function reqPost<T = Record<string, unknown>>(
       const abortCode = err.abortCode ?? "";
       const abortText = (err.pbstrAbort as string) || (err.errorText as string) || "";
       const errText = abortText || (err.errorCode as string) || `${res.status}`;
-      const bodyDebug = method === "AddServiceEx" ? ` [code=${(body as any).bstrCode} dUnitMT=${(body as any).dUnitMT} dAmountMT=${(body as any).dAmountMT} dUnitTT=${(body as any).dUnitTT} dAmountTT=${(body as any).dAmountTT}]` : "";
+      const bodyDebug = method === "AddServiceEx" ? ` [code=${(body as any).bstrCode} dUnitMT=${(body as any).dUnitMT} dUnitTT=${(body as any).dUnitTT}]` : "";
       console.error(`${LOG_PREFIX} POST ${iface}/${method} FAILED: code=${abortCode} ${errText}${bodyDebug}`);
       throw new Error(`Sumex Request POST ${iface}/${method} failed: [${abortCode}] ${errText}${bodyDebug}`);
     }
@@ -1267,7 +1267,7 @@ export async function buildInvoiceRequest(
           const extFactorTT = 1;
           const computedAmountTT = isArCode ? 0 : Math.round(svc.quantity * unitTT * unitFactorTT * 1 * extFactorTT * 100) / 100;
 
-          console.log(`${LOG_PREFIX} [v5-arfix] AddServiceEx ${svc.code}: isAR=${isArCode} → dUnitMT=${unitMT} dAmountMT=${computedAmountMT} dUnitTT=${unitTT} dAmountTT=${computedAmountTT}`);
+          console.log(`${LOG_PREFIX} AddServiceEx ${svc.code}: isAR=${isArCode} dUnitMT=${unitMT} dAmountMT=${computedAmountMT} dUnitTT=${unitTT} dAmountTT=${computedAmountTT}`);
 
           const addRes = await reqPost<{ plID: number; pbStatus: boolean }>(
             "IGeneralInvoiceRequest",

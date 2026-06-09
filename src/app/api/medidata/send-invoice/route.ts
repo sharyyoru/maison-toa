@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
         consultationData = cons as unknown as ConsultationData;
       }
     } else {
-      return NextResponse.json({ error: "invoiceId is required", _v: "ar-fix-v5" }, { status: 400 });
+      return NextResponse.json({ error: "invoiceId is required" }, { status: 400 });
     }
 
     const patientId = bodyPatientId
