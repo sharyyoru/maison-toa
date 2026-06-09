@@ -420,7 +420,8 @@ const AGENDA_ORDER: { name: string; initials: string }[] = [
   { name: "Dr Natalia Koltunova", initials: "NK" },
   { name: "Dr Adnan Plakalo", initials: "AP" },
   { name: "Claire", initials: "CB" },
-  { name: "Gwendoline", initials: "GB" },
+  { name: "Gwendoline Boursault", initials: "GB" },
+  { name: "Gwendolyn Boursault", initials: "GB" },
   { name: "Juliette", initials: "JLM" },
   { name: "Ophélie", initials: "OP" },
   { name: "Louise", initials: "LG" },
@@ -484,6 +485,8 @@ function getAgendaOrder(name: string): number {
 
 // Priority doctors to show first in the list (extract names from AGENDA_ORDER)
 const PRIORITY_DOCTOR_NAMES = AGENDA_ORDER.map(a => a.name);
+
+const AGENDA_PROVIDER_NAME_EXCEPTIONS = ["Gwendoline Boursault", "Gwendolyn Boursault"];
 
 type ProviderOption = {
   id: string;
@@ -1336,7 +1339,9 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("providers")
           .select("id, name, email, role")
-          .in("role", ["doctor", "nurse", "technician"])
+          .or(
+            `role.in.(${["doctor", "nurse", "technician"].join(",")}),name.in.(${AGENDA_PROVIDER_NAME_EXCEPTIONS.join(",")})`,
+          )
           .order("name", { ascending: true });
 
         if (!isMounted) return;
@@ -1356,7 +1361,7 @@ export default function CalendarPage() {
             
             // Create a key based on the core name (without prefix)
             let key = normalized
-              .replace(/^dr\.?\s*/i, "")
+              .replace(/^(mme|mr|mrs|ms|dr|prof)\.?\s*/i, "")
               .split(" ")
               .sort()
               .join("-");
