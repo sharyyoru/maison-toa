@@ -272,10 +272,10 @@ export async function POST(request: NextRequest) {
     const provName = billingEntity?.name || invoiceRecord?.provider_name || "Aesthetics Clinic XT SA";
     const provStreet = billingEntity?.street
       ? `${billingEntity.street}${billingEntity.street_no ? " " + billingEntity.street_no : ""}`
-      : "";
-    const provZip = billingEntity?.zip_code || "";
-    const provCity = billingEntity?.city || "";
-    const provCanton = billingEntity?.canton || invoiceRecord?.treatment_canton || "GE";
+      : "Voie du Chariot 6";
+    const provZip = billingEntity?.zip_code || "1003";
+    const provCity = billingEntity?.city || "Lausanne";
+    const provCanton = billingEntity?.canton || invoiceRecord?.treatment_canton || "VD";
     const provIban = billingEntity?.iban || invoiceRecord?.provider_iban || "CH0930788000050249289";
 
     // Derive invoice metadata
