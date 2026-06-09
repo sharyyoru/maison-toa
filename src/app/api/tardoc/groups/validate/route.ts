@@ -116,9 +116,17 @@ export async function POST(request: NextRequest) {
       ? tpvOverride
       : (CANTON_TAX_POINT_VALUES[(canton as SwissCanton)] ?? 0.96);
 
-    // Filter out material items (tariff_type=402, mat: prefix) — Sumex doesn't validate them
+    // Filter out material items (tariff_type=402, mat: prefix) — Sumex doesn't validate them.
+    // Also skip AR.* room/infrastructure codes — they require a preceding treatment in the
+    // IValidate session and always fail when validated standalone; they are valid on real invoices.
     const validateableItems = (items as Array<typeof items[number] & { tariff_type?: string }>)
-      .filter((i) => (i as any).tariff_type !== "402" && !i.tardoc_code.startsWith("mat:") && !i.tardoc_code.startsWith("acf:") && !i.tardoc_code.startsWith("tma:"));
+      .filter((i) =>
+        (i as any).tariff_type !== "402" &&
+        !i.tardoc_code.startsWith("mat:") &&
+        !i.tardoc_code.startsWith("acf:") &&
+        !i.tardoc_code.startsWith("tma:") &&
+        !i.tardoc_code.startsWith("AR."),
+      );
 
     if (validateableItems.length === 0) {
       // Only materials/ACF — skip Sumex validation entirely
@@ -149,9 +157,20 @@ export async function POST(request: NextRequest) {
       }),
     );
 
+    // Sort so master codes precede their slaves in the Sumex IValidate session.
+    // Items without a ref_code (masters) sort before items whose ref_code matches a code already in the list.
+    const codesInGroup = new Set(resolvedItems.map((i) => i.tardoc_code));
+    const sortedItems = [...resolvedItems].sort((a, b) => {
+      const aIsSlave = a.ref_code ? codesInGroup.has(a.ref_code) : false;
+      const bIsSlave = b.ref_code ? codesInGroup.has(b.ref_code) : false;
+      if (aIsSlave && !bIsSlave) return 1;
+      if (!aIsSlave && bIsSlave) return -1;
+      return 0;
+    });
+
     // Build validation input
     const today = new Date().toISOString().split("T")[0];
-    const validationInputs: ValidationServiceInput[] = resolvedItems.map((item) => ({
+    const validationInputs: ValidationServiceInput[] = sortedItems.map((item) => ({
       code: item.tardoc_code,
       referenceCode: item.ref_code || "",
       quantity: item.quantity,
