@@ -629,8 +629,8 @@ export async function POST(request: NextRequest) {
       lawType: sumexInput.lawType,
       tiersMode: sumexInput.tiersMode,
       insuranceGln: sumexInput.insuranceGln,
-      servicesCount: sumexInput.services.length,
-      firstService: sumexInput.services[0] ? {
+      servicesCount: sumexInput.services?.length || 0,
+      firstService: sumexInput.services?.[0] ? {
         code: sumexInput.services[0].code,
         tariffType: sumexInput.services[0].tariffType,
         providerGln: sumexInput.services[0].providerGln,
