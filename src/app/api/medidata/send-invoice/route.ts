@@ -420,10 +420,13 @@ export async function POST(request: NextRequest) {
       const isTardoc = s.tariffType === "007";
       const isAcf = (s.tariffType || "590") === "005";
       const usesTaxPoints = isTardoc || isAcf;
+      // AR.* room/change codes (serviceType=R) self-compute TT via changeMin — must send unitTT=0 (Sumex error 755)
+      const isArCode = typeof s.code === "string" && s.code.startsWith("AR.");
       const unit = usesTaxPoints && s.tpAl !== undefined && s.tpAl !== null && s.tpAl > 0 ? s.tpAl : (s.unitPrice || 0);
       const unitFactor = usesTaxPoints && s.tpAlValue !== undefined && s.tpAlValue !== null && s.tpAlValue > 0 ? s.tpAlValue : 1;
-      const unitTT = usesTaxPoints && s.tpTl !== undefined && s.tpTl !== null && s.tpTl > 0 ? s.tpTl : undefined;
-      const unitFactorTT = usesTaxPoints && s.tpTlValue !== undefined && s.tpTlValue !== null && s.tpTlValue > 0 ? s.tpTlValue : undefined;
+      const unitTT = (!isArCode && usesTaxPoints && s.tpTl !== undefined && s.tpTl !== null && s.tpTl > 0) ? s.tpTl : undefined;
+      const unitFactorTT = (!isArCode && usesTaxPoints && s.tpTlValue !== undefined && s.tpTlValue !== null && s.tpTlValue > 0) ? s.tpTlValue : undefined;
+      if (isArCode) console.log(`[SendInvoice] AR code ${s.code}: forcing unitTT=0 (was tpTl=${s.tpTl})`);
       return {
         tariffType: s.tariffType || "590",
         code: s.code,
