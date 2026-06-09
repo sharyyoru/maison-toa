@@ -1256,9 +1256,12 @@ export async function buildInvoiceRequest(
           const extFactorMT = svc.externalFactor ?? 1;
           const computedAmountMT = Math.round(svc.quantity * unitMT * unitFactorMT * 1 * extFactorMT * 100) / 100;
 
-          // TT (Technical) component for TARDOC
-          const unitTT = svc.unitTT ?? 0;
-          const unitFactorTT = svc.unitFactorTT ?? 1;
+          // TT (Technical) component for TARDOC.
+          // AR.* codes (room/change codes, serviceType=R) compute TT internally via changeMin —
+          // Sumex error 755 if dUnitTT is non-zero. Force to 0 regardless of caller value.
+          const isArCode = (svc.code || "").startsWith("AR.");
+          const unitTT = isArCode ? 0 : (svc.unitTT ?? 0);
+          const unitFactorTT = isArCode ? 1 : (svc.unitFactorTT ?? 1);
           const extFactorTT = 1; // Usually 1 for TT
           const computedAmountTT = Math.round(svc.quantity * unitTT * unitFactorTT * 1 * extFactorTT * 100) / 100;
 
