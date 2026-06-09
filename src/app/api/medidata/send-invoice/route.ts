@@ -251,6 +251,16 @@ export async function POST(request: NextRequest) {
         .single();
       if (provRow) billingEntity = provRow;
     }
+    // Fallback: if provider_id is not set, look up by provider_gln
+    if (!billingEntity && invoiceRecord?.provider_gln) {
+      const { data: provRow } = await supabaseAdmin
+        .from("providers")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, phone, vatuid, qual_dignities")
+        .eq("gln", invoiceRecord.provider_gln)
+        .limit(1)
+        .maybeSingle();
+      if (provRow) billingEntity = provRow;
+    }
 
     // ── Fetch staff/doctor provider if different ──
     let staffEntity: Record<string, any> | null = null;
@@ -260,6 +270,16 @@ export async function POST(request: NextRequest) {
         .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, salutation, title, qual_dignities")
         .eq("id", invoiceRecord.doctor_user_id)
         .single();
+      if (staffRow) staffEntity = staffRow;
+    }
+    // Fallback: if doctor_user_id is not set, look up by doctor_gln
+    if (!staffEntity && invoiceRecord?.doctor_gln && invoiceRecord.doctor_gln !== invoiceRecord.provider_gln) {
+      const { data: staffRow } = await supabaseAdmin
+        .from("providers")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, salutation, title, qual_dignities")
+        .eq("gln", invoiceRecord.doctor_gln)
+        .limit(1)
+        .maybeSingle();
       if (staffRow) staffEntity = staffRow;
     }
 
