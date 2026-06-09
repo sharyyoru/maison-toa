@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
         consultationData = cons as unknown as ConsultationData;
       }
     } else {
-      return NextResponse.json({ error: "invoiceId is required", _v: "ar-fix-v4" }, { status: 400 });
+      return NextResponse.json({ error: "invoiceId is required", _v: "ar-fix-v5" }, { status: 400 });
     }
 
     const patientId = bodyPatientId
@@ -420,13 +420,16 @@ export async function POST(request: NextRequest) {
       const isTardoc = s.tariffType === "007";
       const isAcf = (s.tariffType || "590") === "005";
       const usesTaxPoints = isTardoc || isAcf;
-      // AR.* room/change codes (serviceType=R) self-compute TT via changeMin — must send unitTT=0 (Sumex error 755)
+      // AR.* room/change codes (serviceType=R) self-compute both MT and TT via changeMin.
+      // Sumex error 755: "Der Taxpunkt muss 0" — any non-zero unit value (MT or TT) is rejected.
+      // AR.00.0030 has catalog tpMT=0 but DB tp_al=0, so it falls through to unit_price (16.82).
+      // We must force unit=0 for AR.* codes regardless of the unit_price fallback.
       const isArCode = typeof s.code === "string" && s.code.startsWith("AR.");
-      const unit = usesTaxPoints && s.tpAl !== undefined && s.tpAl !== null && s.tpAl > 0 ? s.tpAl : (s.unitPrice || 0);
-      const unitFactor = usesTaxPoints && s.tpAlValue !== undefined && s.tpAlValue !== null && s.tpAlValue > 0 ? s.tpAlValue : 1;
+      const unit = isArCode ? 0 : (usesTaxPoints && s.tpAl !== undefined && s.tpAl !== null && s.tpAl > 0 ? s.tpAl : (s.unitPrice || 0));
+      const unitFactor = isArCode ? 1 : (usesTaxPoints && s.tpAlValue !== undefined && s.tpAlValue !== null && s.tpAlValue > 0 ? s.tpAlValue : 1);
       const unitTT = (!isArCode && usesTaxPoints && s.tpTl !== undefined && s.tpTl !== null && s.tpTl > 0) ? s.tpTl : undefined;
       const unitFactorTT = (!isArCode && usesTaxPoints && s.tpTlValue !== undefined && s.tpTlValue !== null && s.tpTlValue > 0) ? s.tpTlValue : undefined;
-      if (isArCode) console.log(`[SendInvoice] AR code ${s.code}: forcing unitTT=0 (was tpTl=${s.tpTl})`);
+      if (isArCode) console.log(`[SendInvoice] AR code ${s.code}: unit=0 unitTT=0 (unitPrice was ${s.unitPrice}, tpAl=${s.tpAl}, tpTl=${s.tpTl})`);
       return {
         tariffType: s.tariffType || "590",
         code: s.code,

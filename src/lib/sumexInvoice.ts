@@ -521,7 +521,7 @@ async function reqPost<T = Record<string, unknown>>(
       const abortCode = err.abortCode ?? "";
       const abortText = (err.pbstrAbort as string) || (err.errorText as string) || "";
       const errText = abortText || (err.errorCode as string) || `${res.status}`;
-      const bodyDebug = method === "AddServiceEx" ? ` [dUnitTT=${(body as any).dUnitTT} dAmountTT=${(body as any).dAmountTT} dUnitFactorTT=${(body as any).dUnitFactorTT} code=${(body as any).bstrCode}]` : "";
+      const bodyDebug = method === "AddServiceEx" ? ` [code=${(body as any).bstrCode} dUnitMT=${(body as any).dUnitMT} dAmountMT=${(body as any).dAmountMT} dUnitTT=${(body as any).dUnitTT} dAmountTT=${(body as any).dAmountTT}]` : "";
       console.error(`${LOG_PREFIX} POST ${iface}/${method} FAILED: code=${abortCode} ${errText}${bodyDebug}`);
       throw new Error(`Sumex Request POST ${iface}/${method} failed: [${abortCode}] ${errText}${bodyDebug}`);
     }
@@ -1251,22 +1251,23 @@ export async function buildInvoiceRequest(
         await initServiceExInput(svcInputHandle, input);
 
         for (const svc of tardocServices) {
+          // AR.* room/change codes (serviceType=R): Sumex self-computes both MT and TT amounts
+          // via changeMin. Sending any non-zero unit causes error 755 "Taxpunkt muss 0".
+          const isArCode = (svc.code || "").startsWith("AR.");
+
           // Sumex validates: dAmountMT = quantity × unitMT × unitFactorMT × internalScaling × externalScaling
-          const unitMT = svc.unit ?? 0;
-          const unitFactorMT = svc.unitFactor ?? 1;
+          const unitMT = isArCode ? 0 : (svc.unit ?? 0);
+          const unitFactorMT = isArCode ? 1 : (svc.unitFactor ?? 1);
           const extFactorMT = svc.externalFactor ?? 1;
           const computedAmountMT = Math.round(svc.quantity * unitMT * unitFactorMT * 1 * extFactorMT * 100) / 100;
 
-          // TT (Technical) component for TARDOC.
-          // AR.* codes (room/change codes, serviceType=R) compute TT internally via changeMin.
-          // Sumex error 755 if any TT field is non-zero. Omit TT fields entirely for AR.*.
-          const isArCode = (svc.code || "").startsWith("AR.");
+          // TT (Technical) component for TARDOC — also zero for AR.*.
           const unitTT = isArCode ? 0 : (svc.unitTT ?? 0);
           const unitFactorTT = isArCode ? 0 : (svc.unitFactorTT ?? 1);
           const extFactorTT = 1;
           const computedAmountTT = isArCode ? 0 : Math.round(svc.quantity * unitTT * unitFactorTT * 1 * extFactorTT * 100) / 100;
 
-          console.log(`${LOG_PREFIX} [v4-arfix] AddServiceEx ${svc.code}: isAR=${isArCode} svc.unitTT=${svc.unitTT} → sending dUnitTT=${unitTT} dUnitFactorTT=${unitFactorTT} dAmountTT=${computedAmountTT}`);
+          console.log(`${LOG_PREFIX} [v5-arfix] AddServiceEx ${svc.code}: isAR=${isArCode} → dUnitMT=${unitMT} dAmountMT=${computedAmountMT} dUnitTT=${unitTT} dAmountTT=${computedAmountTT}`);
 
           const addRes = await reqPost<{ plID: number; pbStatus: boolean }>(
             "IGeneralInvoiceRequest",
