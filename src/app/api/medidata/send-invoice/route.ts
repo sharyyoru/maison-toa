@@ -348,10 +348,12 @@ export async function POST(request: NextRequest) {
         const rawSession = item.session_number ?? 1;
         const sessionNumber = isAcf ? 1 : rawSession;
 
-        // For TARDOC, prefer stored tp_al/tp_tl; fall back to catalog tp_mt/tp_tt
+        // For TARDOC, prefer stored tp_al/tp_tl; fall back to catalog tp_mt/tp_tt.
+        // AR.* room/change codes (serviceType=R) self-compute TT via changeMin — must send 0.
         const catalog = item.tariff_code === 7 ? tardocCatalogMap[item.code] : undefined;
+        const isArCode = (item.code || "").startsWith("AR.");
         const resolvedTpAl = (item.tp_al > 0) ? item.tp_al : (catalog?.tp_mt ?? 0);
-        const resolvedTpTl = (item.tp_tl > 0) ? item.tp_tl : (catalog?.tp_tt ?? 0);
+        const resolvedTpTl = isArCode ? 0 : ((item.tp_tl > 0) ? item.tp_tl : (catalog?.tp_tt ?? 0));
 
         return {
           code: item.code || "",

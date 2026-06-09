@@ -252,11 +252,13 @@ export async function POST(request: NextRequest) {
           unitFactor = 1;
           calculatedAmount = unit * (item.quantity || 1);
         } else if (isTardoc || isAcf) {
-          // TARDOC and ACF: split AL (arzt) and TL (technisch) tax points + point values
+          // TARDOC and ACF: split AL (arzt) and TL (technisch) tax points + point values.
+          // AR.* room/change codes (serviceType=R) self-compute TT via changeMin — must send 0.
+          const isArCode = (item.tardoc_code || item.code || "").startsWith("AR.");
           unit = item.tp_al || 0;
           unitFactor = item.tp_al_value || 1;
-          unitTT = item.tp_tl || undefined;
-          unitFactorTT = item.tp_tl_value || undefined;
+          unitTT = isArCode ? undefined : (item.tp_tl || undefined);
+          unitFactorTT = isArCode ? undefined : (item.tp_tl_value || undefined);
           calculatedAmount = item.total_price || 0;
         } else {
           unit = item.unit_price || 0;
@@ -533,8 +535,11 @@ export async function POST(request: NextRequest) {
         if (isTarmed2) {
           unit2 = item.tp_al || item.unit_price || 0; unitFactor2 = 1; amt2 = unit2 * (item.quantity || 1);
         } else if (isTardoc2 || isAcf2) {
+          // AR.* room/change codes self-compute TT via changeMin — must send 0.
+          const isArCode2 = (item.tardoc_code || item.code || "").startsWith("AR.");
           unit2 = item.tp_al || 0; unitFactor2 = item.tp_al_value || 1;
-          unitTT2 = item.tp_tl || undefined; unitFactorTT2 = item.tp_tl_value || undefined;
+          unitTT2 = isArCode2 ? undefined : (item.tp_tl || undefined);
+          unitFactorTT2 = isArCode2 ? undefined : (item.tp_tl_value || undefined);
           amt2 = item.total_price || 0;
         } else {
           unit2 = item.unit_price || 0; unitFactor2 = 1; amt2 = item.total_price || 0;

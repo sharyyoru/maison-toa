@@ -192,11 +192,13 @@ function DignityTagInput({ value, onChange }: { value: string; onChange: (v: str
         />
       </div>
       <p className="mt-1 text-[10px] text-slate-400">
-        Required — Swiss FMH qualitative dignity codes for Sumex/TARDOC. Press{" "}
+        Required — TARDOC qualitative dignity codes. Press{" "}
         <kbd className="rounded border border-slate-200 px-1 font-sans">Enter</kbd> or{" "}
         <kbd className="rounded border border-slate-200 px-1 font-sans">,</kbd> to add each code.
-        Common codes: <code className="font-mono">2000</code> (General),{" "}
-        <code className="font-mono">1301</code> (Plastic surgery).
+        Common codes: <code className="font-mono">2000</code> (General medicine),{" "}
+        <code className="font-mono">1100</code> (Dermatology),{" "}
+        <code className="font-mono">1900</code> (Plastic &amp; aesthetic surgery),{" "}
+        <code className="font-mono">0300</code> (Surgery).
       </p>
     </div>
   );
