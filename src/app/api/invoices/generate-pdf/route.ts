@@ -129,6 +129,16 @@ export async function POST(request: NextRequest) {
         .single();
       if (providerRow) billingEntityData = providerRow as ProviderData;
     }
+    // Fallback: look up by provider_gln if provider_id is NULL
+    if (!billingEntityData && invoiceData.provider_gln) {
+      const { data: providerRow } = await supabaseAdmin
+        .from("providers")
+        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid, qual_dignities")
+        .eq("gln", invoiceData.provider_gln)
+        .limit(1)
+        .maybeSingle();
+      if (providerRow) billingEntityData = providerRow as ProviderData;
+    }
 
     // Fetch medical staff (doctor/nurse) data from providers table
     let staffData: ProviderData | null = null;
@@ -138,6 +148,16 @@ export async function POST(request: NextRequest) {
         .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, qual_dignities")
         .eq("id", invoiceData.doctor_user_id)
         .single();
+      if (staffRow) staffData = staffRow as ProviderData;
+    }
+    // Fallback: look up by doctor_gln if doctor_user_id is NULL (but only if different from provider_gln)
+    if (!staffData && invoiceData.doctor_gln && invoiceData.doctor_gln !== invoiceData.provider_gln) {
+      const { data: staffRow } = await supabaseAdmin
+        .from("providers")
+        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, qual_dignities")
+        .eq("gln", invoiceData.doctor_gln)
+        .limit(1)
+        .maybeSingle();
       if (staffRow) staffData = staffRow as ProviderData;
     }
 
