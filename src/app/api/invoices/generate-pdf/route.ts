@@ -476,10 +476,23 @@ export async function POST(request: NextRequest) {
       // Use "summary" for all invoice types to keep client invoice + QR-bill on same page
       // The insurance copy (Facture TP) will still be a separate page
       const printTemplate = "summary";
-      // For non-TP types, force law=ORG (only template the server respects)
-      if (invoiceType !== "tp") {
-        sumexInput.lawType = mapSumexLaw("ORG");
-      }
+      
+      // DEBUG: Log complete sumexInput before sending to Sumex
+      console.log('[GeneratePDF] DEBUG sumexInput:', JSON.stringify({
+        providerGln: sumexInput.providerGln,
+        qualDignities: sumexInput.qualDignities,
+        lawType: sumexInput.lawType,
+        tiersMode: sumexInput.tiersMode,
+        insuranceGln: sumexInput.insuranceGln,
+        servicesCount: sumexInput.services.length,
+        firstService: sumexInput.services[0] ? {
+          code: sumexInput.services[0].code,
+          tariffType: sumexInput.services[0].tariffType,
+          providerGln: sumexInput.services[0].providerGln,
+          responsibleGln: sumexInput.services[0].responsibleGln,
+        } : null
+      }, null, 2));
+      
       const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate, generationAttributes: pdfGenAttrs });
 
       if (!sumexResult.success) {
@@ -728,9 +741,6 @@ export async function POST(request: NextRequest) {
       try {
         // Use "summary" template for compact format with service list + QR-bill on same page
         const printTemplate2 = "summary";
-        if (invoiceType !== "tp") {
-          sumexInput2.lawType = mapSumexLaw("ORG");
-        }
         const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: printTemplate2, generationAttributes: pdfGenAttrs2 });
 
         if (sumexResult2.success && sumexResult2.pdfContent) {
