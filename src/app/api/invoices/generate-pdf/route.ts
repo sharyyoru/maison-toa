@@ -214,8 +214,11 @@ export async function POST(request: NextRequest) {
         insurerZip = insurerRow.address_postal_code || "";
         insurerCity = insurerRow.address_city || "";
       }
-      // Fallback: look up patient's primary insurance from patient_insurances
-      if (!insurerRow && invoiceData.patient_id) {
+      // Fallback: look up patient's primary insurance from patient_insurances.
+      // Only for TP mode — TG invoices don't call SetInsurance, so injecting an insurer
+      // GLN here would cause Sumex to call SetInsurance and silently return empty XML (204).
+      const effectiveTiersMode = invoiceType === "tg" ? "TG" : invoiceType === "tp" ? "TP" : (invoiceData.billing_type || "TG");
+      if (!insurerRow && invoiceData.patient_id && effectiveTiersMode === "TP") {
         const { data: patIns } = await supabaseAdmin
           .from("patient_insurances")
           .select("insurer_gln, insurer_id, provider_name, law_type")
