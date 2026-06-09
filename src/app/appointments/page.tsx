@@ -420,8 +420,7 @@ const AGENDA_ORDER: { name: string; initials: string }[] = [
   { name: "Dr Natalia Koltunova", initials: "NK" },
   { name: "Dr Adnan Plakalo", initials: "AP" },
   { name: "Claire", initials: "CB" },
-  { name: "Gwendoline Boursault", initials: "GB" },
-  { name: "Gwendolyn Boursault", initials: "GB" },
+  { name: "Gwendoline", initials: "GB" },
   { name: "Juliette", initials: "JLM" },
   { name: "Ophélie", initials: "OP" },
   { name: "Louise", initials: "LG" },
@@ -486,7 +485,7 @@ function getAgendaOrder(name: string): number {
 // Priority doctors to show first in the list (extract names from AGENDA_ORDER)
 const PRIORITY_DOCTOR_NAMES = AGENDA_ORDER.map(a => a.name);
 
-const AGENDA_PROVIDER_NAME_EXCEPTIONS = ["Gwendoline Boursault", "Gwendolyn Boursault"];
+const AGENDA_PROVIDER_NAME_EXCEPTIONS = ["Gwendoline"];
 
 type ProviderOption = {
   id: string;
