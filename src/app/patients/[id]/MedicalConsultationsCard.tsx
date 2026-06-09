@@ -5910,11 +5910,26 @@ export default function MedicalConsultationsCard({
                                                 const tpv = CANTON_TAX_POINT_VALUES[invoiceCanton] ?? 0.96;
                                                 const newLines: InvoiceServiceLine[] = (g.tardoc_group_items || []).map((item: any) => {
                                                   const rawCode: string = item.tardoc_code || "";
+                                                  const isMaterial = item.tariff_type === "402" || rawCode.startsWith("mat:");
                                                   const isAcf = rawCode.startsWith("acf:");
                                                   const isTma = rawCode.startsWith("tma:");
-                                                  const cleanCode = isAcf ? rawCode.slice(4) : isTma ? rawCode.slice(4) : rawCode;
-                                                  const serviceId = isAcf ? `flatrate-${cleanCode}` : isTma ? `tma-${cleanCode}` : `tardoc-${cleanCode}`;
+                                                  const cleanCode = (isAcf || isTma || isMaterial) ? rawCode.slice(4) : rawCode;
                                                   const displayName = `${cleanCode} - ${(item.description || "").substring(0, 80)}`;
+
+                                                  // Material item — uses service UUID as serviceId so it resolves via existing service lookup
+                                                  if (isMaterial) {
+                                                    const matServiceId = item.service_id || rawCode;
+                                                    return {
+                                                      serviceId: matServiceId,
+                                                      quantity: item.quantity || 1,
+                                                      unitPrice: item.unit_price ?? 0,
+                                                      groupId: null,
+                                                      discountPercent: null,
+                                                      customName: item.description || cleanCode,
+                                                    };
+                                                  }
+
+                                                  const serviceId = isAcf ? `flatrate-${cleanCode}` : isTma ? `tma-${cleanCode}` : `tardoc-${cleanCode}`;
 
                                                   if (isAcf || isTma) {
                                                     return {
@@ -5947,12 +5962,12 @@ export default function MedicalConsultationsCard({
                                                   };
                                                 });
                                                 setInvoiceServiceLines((prev) => [...prev, ...newLines]);
-                                                // Inject only TARDOC items into search results cache (ACF/TMA don't need it)
+                                                // Inject only TARDOC items into search results cache (ACF/TMA/material don't need it)
                                                 setTardocSearchResults((prev: any[]) => {
                                                   const existing = new Set(prev.map((r: any) => r.code));
                                                   const tardocOnly = (g.tardoc_group_items || []).filter((item: any) => {
                                                     const c: string = item.tardoc_code || "";
-                                                    return !c.startsWith("acf:") && !c.startsWith("tma:");
+                                                    return !c.startsWith("acf:") && !c.startsWith("tma:") && !c.startsWith("mat:") && item.tariff_type !== "402";
                                                   });
                                                   const newResults = tardocOnly
                                                     .filter((item: any) => !existing.has(item.tardoc_code))
@@ -5977,11 +5992,17 @@ export default function MedicalConsultationsCard({
                                               <span className="font-medium">{g.name}</span>
                                               {(() => {
                                                 const items = g.tardoc_group_items || [];
-                                                const tardocCount = items.filter((i: any) => !(i.tardoc_code || "").startsWith("acf:") && !(i.tardoc_code || "").startsWith("tma:")).length;
+                                                const matCount = items.filter((i: any) => i.tariff_type === "402" || (i.tardoc_code || "").startsWith("mat:")).length;
+                                                const tardocCount = items.filter((i: any) => !(i.tardoc_code || "").startsWith("acf:") && !(i.tardoc_code || "").startsWith("tma:") && !(i.tardoc_code || "").startsWith("mat:") && i.tariff_type !== "402").length;
                                                 const acfCount = items.filter((i: any) => (i.tardoc_code || "").startsWith("acf:") || (i.tardoc_code || "").startsWith("tma:")).length;
+                                                const parts = [
+                                                  tardocCount > 0 ? `${tardocCount} TARDOC` : "",
+                                                  acfCount > 0 ? `${acfCount} ACF` : "",
+                                                  matCount > 0 ? `${matCount} MAT` : "",
+                                                ].filter(Boolean);
                                                 return (
                                                   <span className="ml-1 text-slate-500">
-                                                    ({tardocCount > 0 ? `${tardocCount} TARDOC` : ""}{tardocCount > 0 && acfCount > 0 ? " + " : ""}{acfCount > 0 ? `${acfCount} ACF` : ""}{tardocCount === 0 && acfCount === 0 ? "empty" : ""})
+                                                    ({parts.length > 0 ? parts.join(" + ") : "empty"})
                                                   </span>
                                                 );
                                               })()}

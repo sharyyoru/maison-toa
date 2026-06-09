@@ -20,6 +20,18 @@ type GroupItem = {
   external_factor_mt: number;
   external_factor_tt: number;
   sort_order: number;
+  // Material / non-TARDOC fields
+  tariff_type?: string;   // '007' TARDOC (default), '402' material, '005' ACF, etc.
+  unit_price?: number | null; // CHF unit price for materials (tariff_type='402')
+  service_id?: string | null; // FK to services table (materials only)
+};
+
+type MaterialSearchResult = {
+  id: string;
+  name: string;
+  code: string | null;
+  base_price: number | null;
+  sub_category: string | null;
 };
 
 type TardocGroup = {
@@ -89,10 +101,18 @@ export default function TardocGroupsTab() {
   };
   const [autofillReport, setAutofillReport] = useState<AutofillReport | null>(null);
 
-  // Search state
+  // Search tab: 'tardoc' | 'material'
+  const [searchTab, setSearchTab] = useState<"tardoc" | "material">("tardoc");
+
+  // TARDOC search state
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+
+  // Material search state
+  const [materialQuery, setMaterialQuery] = useState("");
+  const [materialResults, setMaterialResults] = useState<MaterialSearchResult[]>([]);
+  const [materialLoading, setMaterialLoading] = useState(false);
 
   // Manual flat rate / TMA entry
   const [manualItemType, setManualItemType] = useState<"acf" | "tma">("acf");
@@ -144,6 +164,9 @@ export default function TardocGroupsTab() {
     setValidationResult(null);
     setSearchQuery("");
     setSearchResults([]);
+    setMaterialQuery("");
+    setMaterialResults([]);
+    setSearchTab("tardoc");
     setModalOpen(true);
   }
 
@@ -166,6 +189,9 @@ export default function TardocGroupsTab() {
     setValidationResult(null);
     setSearchQuery("");
     setSearchResults([]);
+    setMaterialQuery("");
+    setMaterialResults([]);
+    setSearchTab("tardoc");
     setModalOpen(true);
   }
 
@@ -180,6 +206,46 @@ export default function TardocGroupsTab() {
       if (json.success) setSearchResults(json.data || []);
     } catch { /* ignore */ }
     setSearchLoading(false);
+  }
+
+  async function handleMaterialSearch() {
+    setMaterialLoading(true);
+    setMaterialResults([]);
+    try {
+      const { data, error } = await supabaseClient
+        .from("services")
+        .select("id, name, code, base_price, sub_category")
+        .ilike("name", `%${materialQuery.trim()}%`)
+        .order("name", { ascending: true })
+        .limit(40);
+      if (!error && data) setMaterialResults(data as MaterialSearchResult[]);
+    } catch { /* ignore */ }
+    setMaterialLoading(false);
+  }
+
+  function addMaterialToGroup(svc: MaterialSearchResult) {
+    const alreadyAdded = groupItems.some((i) => i.service_id === svc.id);
+    if (alreadyAdded) return;
+    setGroupItems((prev) => [
+      ...prev,
+      {
+        tardoc_code: `mat:${svc.code || svc.id}`,
+        description: svc.name,
+        quantity: 1,
+        ref_code: null,
+        side_type: 0,
+        tp_mt: 0,
+        tp_tt: 0,
+        internal_factor_mt: 1,
+        internal_factor_tt: 1,
+        external_factor_mt: 1,
+        external_factor_tt: 1,
+        sort_order: prev.length,
+        tariff_type: "402",
+        unit_price: svc.base_price ?? 0,
+        service_id: svc.id,
+      },
+    ]);
   }
 
   function addItemFromSearch(svc: SearchResult) {
@@ -207,10 +273,11 @@ export default function TardocGroupsTab() {
     setGroupItems((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  /** Detect item type from the stored tardoc_code value */
-  function getItemType(code: string): "tardoc" | "acf" | "tma" {
-    if (code.startsWith("acf:")) return "acf";
-    if (code.startsWith("tma:")) return "tma";
+  /** Detect item type from the stored tardoc_code value or tariff_type */
+  function getItemType(item: GroupItem): "tardoc" | "acf" | "tma" | "material" {
+    if (item.tariff_type === "402" || item.tardoc_code.startsWith("mat:")) return "material";
+    if (item.tardoc_code.startsWith("acf:")) return "acf";
+    if (item.tardoc_code.startsWith("tma:")) return "tma";
     return "tardoc";
   }
 
@@ -218,6 +285,7 @@ export default function TardocGroupsTab() {
   function displayCode(code: string): string {
     if (code.startsWith("acf:")) return code.slice(4);
     if (code.startsWith("tma:")) return code.slice(4);
+    if (code.startsWith("mat:")) return code.slice(4);
     return code;
   }
 
@@ -284,7 +352,7 @@ export default function TardocGroupsTab() {
   /** Re-run the TMA grouper with current TMA + TARDOC codes in the group, replacing existing ACF flat rate items */
   async function handleRerunGrouper() {
     const tmaItems = groupItems.filter((i) => i.tardoc_code.startsWith("tma:"));
-    const tardocItems = groupItems.filter((i) => !i.tardoc_code.startsWith("acf:") && !i.tardoc_code.startsWith("tma:"));
+    const tardocItems = groupItems.filter((i) => !i.tardoc_code.startsWith("acf:") && !i.tardoc_code.startsWith("tma:") && !i.tardoc_code.startsWith("mat:") && i.tariff_type !== "402");
     const icdCode = tmaItems.find((i) => i.ref_code)?.ref_code || "";
     if (!icdCode) return;
 
@@ -387,6 +455,9 @@ export default function TardocGroupsTab() {
         external_factor_mt: item.external_factor_mt,
         external_factor_tt: item.external_factor_tt,
         sort_order: idx,
+        tariff_type: item.tariff_type ?? "007",
+        unit_price: item.unit_price ?? null,
+        service_id: item.service_id ?? null,
       }));
 
       const method = editingGroup ? "PUT" : "POST";
@@ -542,7 +613,10 @@ export default function TardocGroupsTab() {
               const itemCount = group.tardoc_group_items?.length || 0;
               const totalPrice = (group.tardoc_group_items || []).reduce((sum, item) => {
                 const canton = (group.canton || "GE") as SwissCanton;
-                const tv = CANTON_TAX_POINT_VALUES[canton] ?? 0.96;
+                const tv = (group.tax_point_value != null ? Number(group.tax_point_value) : null) ?? CANTON_TAX_POINT_VALUES[canton] ?? 0.96;
+                if (item.tariff_type === "402" || item.tardoc_code?.startsWith("mat:")) {
+                  return sum + (item.unit_price ?? 0) * item.quantity;
+                }
                 return sum + (item.tp_mt + item.tp_tt) * tv * item.quantity;
               }, 0);
 
@@ -585,15 +659,16 @@ export default function TardocGroupsTab() {
                       {/* Show codes preview */}
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {(group.tardoc_group_items || []).slice(0, 6).map((item, idx) => {
-                          const type = item.tardoc_code.startsWith("acf:") ? "acf" : item.tardoc_code.startsWith("tma:") ? "tma" : "tardoc";
-                          const code = type !== "tardoc" ? item.tardoc_code.slice(4) : item.tardoc_code;
-                          const bgClass = type === "acf" ? "bg-violet-100 text-violet-700" : type === "tma" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600";
+                          const isMat = item.tariff_type === "402" || item.tardoc_code?.startsWith("mat:");
+                          const type = isMat ? "material" : item.tardoc_code.startsWith("acf:") ? "acf" : item.tardoc_code.startsWith("tma:") ? "tma" : "tardoc";
+                          const code = (type !== "tardoc") ? item.tardoc_code.slice(4) : item.tardoc_code;
+                          const bgClass = type === "acf" ? "bg-violet-100 text-violet-700" : type === "tma" ? "bg-amber-100 text-amber-700" : type === "material" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600";
                           return (
                             <span
                               key={idx}
                               className={`inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[9px] ${bgClass}`}
                             >
-                              {type !== "tardoc" && <span className="mr-0.5 text-[8px] font-semibold uppercase opacity-70">{type === "acf" ? "ACF" : "TMA"}</span>}
+                              {type !== "tardoc" && <span className="mr-0.5 text-[8px] font-semibold uppercase opacity-70">{type === "acf" ? "ACF" : type === "tma" ? "TMA" : "MAT"}</span>}
                               {code}
                               {item.quantity > 1 && <span className="ml-0.5 opacity-60">×{item.quantity}</span>}
                             </span>
@@ -756,71 +831,157 @@ export default function TardocGroupsTab() {
                 </div>
               </div>
 
-              {/* Search for TARDOC codes */}
-              <div className="space-y-1">
-                <label className="block text-[11px] font-medium text-slate-600">Add TarDoc Codes</label>
-                <div className="flex gap-1">
-                  <input
-                    type="text"
-                    placeholder="Search by code or name (e.g. AA.00 or consultation)"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        void handleSearch();
-                      }
-                    }}
-                    className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void handleSearch()}
-                    disabled={searchLoading}
-                    className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    {searchLoading ? "..." : "Search"}
-                  </button>
-                </div>
+              {/* Search tab switcher */}
+              <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setSearchTab("tardoc")}
+                  className={`flex-1 rounded-md px-3 py-1 text-[11px] font-medium transition-colors ${searchTab === "tardoc" ? "bg-white shadow-sm text-slate-800" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  TARDOC / ACF Codes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSearchTab("material")}
+                  className={`flex-1 rounded-md px-3 py-1 text-[11px] font-medium transition-colors ${searchTab === "material" ? "bg-white shadow-sm text-slate-800" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Materials (Tariff 402)
+                </button>
               </div>
 
-              {/* Search results */}
-              {searchResults.length > 0 && (
-                <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/50">
-                  <div className="sticky top-0 z-10 grid grid-cols-[24px_minmax(0,1fr)_56px_56px_56px] items-center gap-0.5 border-b border-slate-200 bg-slate-100 px-2 py-1 text-[9px] font-semibold text-slate-500">
-                    <span />
-                    <span>CODE / DESCRIPTION</span>
-                    <span className="text-right">PT PM</span>
-                    <span className="text-right">PT PT</span>
-                    <span className="text-right">CHF</span>
-                  </div>
-                  {searchResults.map((svc) => {
-                    const price = svc.priceCHF ?? Math.round((svc.tpMT + svc.tpTT) * tpv * 100) / 100;
-                    const alreadyAdded = groupItems.some((i) => i.tardoc_code === svc.code);
-                    return (
-                      <div
-                        key={svc.code || svc.recordId}
-                        className={`grid grid-cols-[24px_minmax(0,1fr)_56px_56px_56px] items-center gap-0.5 border-b border-slate-100 px-2 py-1 text-[10px] ${alreadyAdded ? "bg-emerald-50/50" : "hover:bg-sky-50/50"}`}
+              {/* TARDOC search */}
+              {searchTab === "tardoc" && (
+                <>
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-medium text-slate-600">Add TarDoc Codes</label>
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        placeholder="Search by code or name (e.g. AA.00 or consultation)"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void handleSearch();
+                          }
+                        }}
+                        className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleSearch()}
+                        disabled={searchLoading}
+                        className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
                       >
-                        <button
-                          type="button"
-                          onClick={() => addItemFromSearch(svc)}
-                          disabled={alreadyAdded}
-                          className="flex h-4 w-4 items-center justify-center rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 disabled:opacity-30"
-                          title={alreadyAdded ? "Already added" : "Add to group"}
-                        >
-                          <span className="text-[10px] font-bold leading-none">{alreadyAdded ? "✓" : "+"}</span>
-                        </button>
-                        <div className="min-w-0">
-                          <span className="font-mono text-[9px] font-semibold text-slate-700">{svc.code}</span>
-                          <span className="ml-1 text-[9px] text-slate-500 line-clamp-1">{svc.name}</span>
-                        </div>
-                        <span className="text-right font-mono text-[9px] text-slate-600">{svc.tpMT?.toFixed(2)}</span>
-                        <span className="text-right font-mono text-[9px] text-slate-600">{svc.tpTT?.toFixed(2)}</span>
-                        <span className="text-right font-mono text-[9px] font-semibold text-slate-800">{price.toFixed(2)}</span>
+                        {searchLoading ? "..." : "Search"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* TARDOC Search results */}
+                  {searchResults.length > 0 && (
+                    <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/50">
+                      <div className="sticky top-0 z-10 grid grid-cols-[24px_minmax(0,1fr)_56px_56px_56px] items-center gap-0.5 border-b border-slate-200 bg-slate-100 px-2 py-1 text-[9px] font-semibold text-slate-500">
+                        <span />
+                        <span>CODE / DESCRIPTION</span>
+                        <span className="text-right">PT PM</span>
+                        <span className="text-right">PT PT</span>
+                        <span className="text-right">CHF</span>
                       </div>
-                    );
-                  })}
+                      {searchResults.map((svc) => {
+                        const price = svc.priceCHF ?? Math.round((svc.tpMT + svc.tpTT) * tpv * 100) / 100;
+                        const alreadyAdded = groupItems.some((i) => i.tardoc_code === svc.code);
+                        return (
+                          <div
+                            key={svc.code || svc.recordId}
+                            className={`grid grid-cols-[24px_minmax(0,1fr)_56px_56px_56px] items-center gap-0.5 border-b border-slate-100 px-2 py-1 text-[10px] ${alreadyAdded ? "bg-emerald-50/50" : "hover:bg-sky-50/50"}`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => addItemFromSearch(svc)}
+                              disabled={alreadyAdded}
+                              className="flex h-4 w-4 items-center justify-center rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 disabled:opacity-30"
+                              title={alreadyAdded ? "Already added" : "Add to group"}
+                            >
+                              <span className="text-[10px] font-bold leading-none">{alreadyAdded ? "✓" : "+"}</span>
+                            </button>
+                            <div className="min-w-0">
+                              <span className="font-mono text-[9px] font-semibold text-slate-700">{svc.code}</span>
+                              <span className="ml-1 text-[9px] text-slate-500 line-clamp-1">{svc.name}</span>
+                            </div>
+                            <span className="text-right font-mono text-[9px] text-slate-600">{svc.tpMT?.toFixed(2)}</span>
+                            <span className="text-right font-mono text-[9px] text-slate-600">{svc.tpTT?.toFixed(2)}</span>
+                            <span className="text-right font-mono text-[9px] font-semibold text-slate-800">{price.toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Material search */}
+              {searchTab === "material" && (
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-medium text-slate-600">Search Materials</label>
+                  <div className="flex gap-1">
+                    <input
+                      type="text"
+                      placeholder="Search by name (e.g. aiguille, askina)"
+                      value={materialQuery}
+                      onChange={(e) => setMaterialQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleMaterialSearch();
+                        }
+                      }}
+                      className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleMaterialSearch()}
+                      disabled={materialLoading}
+                      className="shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700 shadow-sm hover:bg-emerald-100 disabled:opacity-50"
+                    >
+                      {materialLoading ? "..." : "Search"}
+                    </button>
+                  </div>
+                  {materialResults.length > 0 && (
+                    <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/50">
+                      <div className="sticky top-0 z-10 grid grid-cols-[24px_minmax(0,1fr)_64px_80px] items-center gap-0.5 border-b border-slate-200 bg-slate-100 px-2 py-1 text-[9px] font-semibold text-slate-500">
+                        <span />
+                        <span>NAME</span>
+                        <span>CATEGORY</span>
+                        <span className="text-right">UNIT CHF</span>
+                      </div>
+                      {materialResults.map((svc) => {
+                        const alreadyAdded = groupItems.some((i) => i.service_id === svc.id);
+                        return (
+                          <div
+                            key={svc.id}
+                            className={`grid grid-cols-[24px_minmax(0,1fr)_64px_80px] items-center gap-0.5 border-b border-slate-100 px-2 py-1 text-[10px] ${alreadyAdded ? "bg-emerald-50/50" : "hover:bg-sky-50/50"}`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => addMaterialToGroup(svc)}
+                              disabled={alreadyAdded}
+                              className="flex h-4 w-4 items-center justify-center rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 disabled:opacity-30"
+                              title={alreadyAdded ? "Already added" : "Add material"}
+                            >
+                              <span className="text-[10px] font-bold leading-none">{alreadyAdded ? "✓" : "+"}</span>
+                            </button>
+                            <span className="text-[10px] text-slate-700 line-clamp-1">{svc.name}</span>
+                            <span className="text-[9px] text-slate-400 truncate">{svc.sub_category || "—"}</span>
+                            <span className="text-right font-mono text-[10px] font-semibold text-slate-800">
+                              {svc.base_price != null ? svc.base_price.toFixed(2) : "—"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -844,7 +1005,7 @@ export default function TardocGroupsTab() {
                 <AcfAccordionTree
                   onAddService={addAcfServiceToGroup}
                   existingTardocCodes={groupItems
-                    .filter((item) => !item.tardoc_code.startsWith("acf:") && !item.tardoc_code.startsWith("tma:"))
+                    .filter((item) => !item.tardoc_code.startsWith("acf:") && !item.tardoc_code.startsWith("tma:") && !item.tardoc_code.startsWith("mat:") && item.tariff_type !== "402")
                     .map((item) => ({
                       code: item.tardoc_code,
                       quantity: item.quantity,
@@ -922,10 +1083,10 @@ export default function TardocGroupsTab() {
               {(() => {
                 const hasAcf = groupItems.some((i) => i.tardoc_code.startsWith("acf:"));
                 const hasTma = groupItems.some((i) => i.tardoc_code.startsWith("tma:"));
-                const hasTardoc = groupItems.some((i) => !i.tardoc_code.startsWith("acf:") && !i.tardoc_code.startsWith("tma:"));
+                const hasTardoc = groupItems.some((i) => !i.tardoc_code.startsWith("acf:") && !i.tardoc_code.startsWith("tma:") && !i.tardoc_code.startsWith("mat:") && i.tariff_type !== "402");
                 if ((hasAcf || hasTma) && groupItems.length > 0) {
                   const tmaItems = groupItems.filter((i) => i.tardoc_code.startsWith("tma:"));
-                  const tardocItems = groupItems.filter((i) => !i.tardoc_code.startsWith("acf:") && !i.tardoc_code.startsWith("tma:"));
+                  const tardocItems = groupItems.filter((i) => !i.tardoc_code.startsWith("acf:") && !i.tardoc_code.startsWith("tma:") && !i.tardoc_code.startsWith("mat:") && i.tariff_type !== "402");
                   const icdCode = tmaItems.find((i) => i.ref_code)?.ref_code || "";
                   return (
                     <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 space-y-1">
@@ -982,18 +1143,28 @@ export default function TardocGroupsTab() {
                 ) : (
                   <div className="rounded-lg border border-slate-200 divide-y divide-slate-100">
                     {groupItems.map((item, idx) => {
-                      const itemPrice = Math.round((item.tp_mt + item.tp_tt) * tpv * item.quantity * item.external_factor_mt * 100) / 100;
+                      const itemType = getItemType(item);
+                      const isMaterial = itemType === "material";
+                      const itemPrice = isMaterial
+                        ? Math.round((item.unit_price ?? 0) * item.quantity * 100) / 100
+                        : Math.round((item.tp_mt + item.tp_tt) * tpv * item.quantity * item.external_factor_mt * 100) / 100;
+                      const typeBadge: Record<string, string> = {
+                        acf: "bg-violet-100 text-violet-600",
+                        tma: "bg-amber-100 text-amber-600",
+                        material: "bg-emerald-100 text-emerald-700",
+                      };
+                      const typeLabel: Record<string, string> = { acf: "ACF", tma: "TMA", material: "MAT" };
                       return (
                         <div key={idx} className="px-2 py-1.5 space-y-1">
-                          {/* Row 1: Code, description, price, remove */}
+                          {/* Row 1: Badge, code, description, price, remove */}
                           <div className="flex items-center gap-2">
                             <span className="text-[9px] text-slate-400 w-4 text-center">{idx + 1}</span>
-                            {getItemType(item.tardoc_code) !== "tardoc" && (
-                              <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-bold uppercase ${getItemType(item.tardoc_code) === "acf" ? "bg-violet-100 text-violet-600" : "bg-amber-100 text-amber-600"}`}>
-                                {getItemType(item.tardoc_code) === "acf" ? "ACF" : "TMA"}
+                            {itemType !== "tardoc" && (
+                              <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-bold uppercase ${typeBadge[itemType] ?? "bg-slate-100 text-slate-600"}`}>
+                                {typeLabel[itemType] ?? itemType}
                               </span>
                             )}
-                            <span className="font-mono text-[10px] font-semibold text-slate-700 w-20">{displayCode(item.tardoc_code)}</span>
+                            <span className="font-mono text-[10px] font-semibold text-slate-700 w-20 truncate">{displayCode(item.tardoc_code)}</span>
                             <span className="flex-1 text-[10px] text-slate-500 line-clamp-1 min-w-0">{item.description || "—"}</span>
                             <span className="text-[10px] font-medium text-slate-700 w-16 text-right">
                               {itemPrice.toFixed(2)}
@@ -1008,79 +1179,105 @@ export default function TardocGroupsTab() {
                               </svg>
                             </button>
                           </div>
-                          {/* Row 2: TP MT, TP TT, Point Value */}
-                          <div className="flex items-center gap-3 pl-6 text-[9px] text-slate-400">
-                            <span>TP MT: <span className="font-mono font-medium text-slate-600">{item.tp_mt.toFixed(2)}</span></span>
-                            <span>TP TT: <span className="font-mono font-medium text-slate-600">{item.tp_tt.toFixed(2)}</span></span>
-                            <span>TPV: <span className="font-mono font-medium text-slate-600">{tpv.toFixed(2)}</span></span>
-                          </div>
-                          {/* Row 3: Qty, Side, Ext Factor, Ref Code */}
-                          <div className="flex items-center gap-2 pl-6">
-                            <div className="flex items-center gap-1">
-                              <label className="text-[9px] text-slate-400">Qty:</label>
-                              <input
-                                type="number"
-                                min={1}
-                                step={1}
-                                value={item.quantity}
-                                onChange={(e) => updateItemField(idx, "quantity", Math.max(1, Number(e.target.value) || 1))}
-                                className="w-12 rounded border border-slate-200 px-1 py-0.5 text-center text-[10px] text-slate-900 focus:border-sky-400 focus:outline-none"
-                              />
+                          {/* Row 2: Material — unit price editor; TARDOC — TP points */}
+                          {isMaterial ? (
+                            <div className="flex items-center gap-3 pl-6 text-[9px] text-slate-400">
+                              <div className="flex items-center gap-1">
+                                <label className="text-[9px] text-slate-400">Unit CHF:</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={0.01}
+                                  value={item.unit_price ?? 0}
+                                  onChange={(e) => updateItemField(idx, "unit_price", parseFloat(e.target.value) || 0)}
+                                  className="w-20 rounded border border-slate-200 px-1 py-0.5 text-center text-[10px] text-slate-900 focus:border-sky-400 focus:outline-none"
+                                />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <label className="text-[9px] text-slate-400">Qty:</label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  value={item.quantity}
+                                  onChange={(e) => updateItemField(idx, "quantity", Math.max(1, Number(e.target.value) || 1))}
+                                  className="w-12 rounded border border-slate-200 px-1 py-0.5 text-center text-[10px] text-slate-900 focus:border-sky-400 focus:outline-none"
+                                />
+                              </div>
+                              <span className="text-slate-500">Tariff 402 — no Sumex validation</span>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <label className="text-[9px] text-slate-400">Side:</label>
-                              <select
-                                value={item.side_type}
-                                onChange={(e) => updateItemField(idx, "side_type", Number(e.target.value))}
-                                className="rounded border border-slate-200 px-1 py-0.5 text-[10px] text-slate-900 focus:border-sky-400 focus:outline-none"
-                              >
-                                <option value={0}>None</option>
-                                <option value={1}>Left</option>
-                                <option value={2}>Right</option>
-                                <option value={3}>Both</option>
-                              </select>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <label className="text-[9px] text-slate-400">Ext.F:</label>
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                value={item.external_factor_mt}
-                                onChange={(e) => {
-                                  const v = Number(e.target.value) || 1;
-                                  updateItemField(idx, "external_factor_mt", v);
-                                }}
-                                className="w-14 rounded border border-slate-200 px-1 py-0.5 text-center text-[10px] text-slate-900 focus:border-sky-400 focus:outline-none"
-                              />
-                            </div>
-                            {/* Ref code field — label adapts to item type */}
-                            {(() => {
-                              const itemType = getItemType(item.tardoc_code);
-                              const refLabel = itemType === "acf" ? "ICD-10" : itemType === "tma" ? "Master" : "Ref";
-                              const refPlaceholder = itemType === "acf" ? "Z42.1" : itemType === "tma" ? "C02.0001" : "AA.00.0010";
-                              const refTitle = itemType === "acf"
-                                ? "ICD-10 diagnosis code (per IValidate005::AddService)."
-                                : itemType === "tma"
-                                ? "Master TMA code (required when IsNeedsRefCode bit is set)."
-                                : "TARDOC parent code: MasterCode for slaves, AdditionalServiceReferenceCode for Zuschlag, empty for standalone main services.";
-                              return (
-                                <div className="flex items-center gap-1" title={refTitle}>
-                                  <label className="text-[9px] text-slate-400">{refLabel}:</label>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-3 pl-6 text-[9px] text-slate-400">
+                                <span>TP MT: <span className="font-mono font-medium text-slate-600">{item.tp_mt.toFixed(2)}</span></span>
+                                <span>TP TT: <span className="font-mono font-medium text-slate-600">{item.tp_tt.toFixed(2)}</span></span>
+                                <span>TPV: <span className="font-mono font-medium text-slate-600">{tpv.toFixed(2)}</span></span>
+                              </div>
+                              {/* Row 3: Qty, Side, Ext Factor, Ref Code */}
+                              <div className="flex items-center gap-2 pl-6">
+                                <div className="flex items-center gap-1">
+                                  <label className="text-[9px] text-slate-400">Qty:</label>
                                   <input
-                                    type="text"
-                                    value={item.ref_code ?? ""}
-                                    placeholder={refPlaceholder}
-                                    onChange={(e) => {
-                                      const raw = e.target.value.trim().toUpperCase();
-                                      updateItemField(idx, "ref_code", raw === "" ? null : raw);
-                                    }}
-                                    className="w-24 rounded border border-slate-200 px-1 py-0.5 font-mono text-[10px] text-slate-900 focus:border-sky-400 focus:outline-none"
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    value={item.quantity}
+                                    onChange={(e) => updateItemField(idx, "quantity", Math.max(1, Number(e.target.value) || 1))}
+                                    className="w-12 rounded border border-slate-200 px-1 py-0.5 text-center text-[10px] text-slate-900 focus:border-sky-400 focus:outline-none"
                                   />
                                 </div>
-                              );
-                            })()}
-                          </div>
+                                <div className="flex items-center gap-1">
+                                  <label className="text-[9px] text-slate-400">Side:</label>
+                                  <select
+                                    value={item.side_type}
+                                    onChange={(e) => updateItemField(idx, "side_type", Number(e.target.value))}
+                                    className="rounded border border-slate-200 px-1 py-0.5 text-[10px] text-slate-900 focus:border-sky-400 focus:outline-none"
+                                  >
+                                    <option value={0}>None</option>
+                                    <option value={1}>Left</option>
+                                    <option value={2}>Right</option>
+                                    <option value={3}>Both</option>
+                                  </select>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <label className="text-[9px] text-slate-400">Ext.F:</label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={0.01}
+                                    value={item.external_factor_mt}
+                                    onChange={(e) => updateItemField(idx, "external_factor_mt", Number(e.target.value) || 1)}
+                                    className="w-14 rounded border border-slate-200 px-1 py-0.5 text-center text-[10px] text-slate-900 focus:border-sky-400 focus:outline-none"
+                                  />
+                                </div>
+                                {/* Ref code field — label adapts to item type */}
+                                {(() => {
+                                  const refLabel = itemType === "acf" ? "ICD-10" : itemType === "tma" ? "Master" : "Ref";
+                                  const refPlaceholder = itemType === "acf" ? "Z42.1" : itemType === "tma" ? "C02.0001" : "AA.00.0010";
+                                  const refTitle = itemType === "acf"
+                                    ? "ICD-10 diagnosis code (per IValidate005::AddService)."
+                                    : itemType === "tma"
+                                    ? "Master TMA code (required when IsNeedsRefCode bit is set)."
+                                    : "TARDOC parent code: MasterCode for slaves, AdditionalServiceReferenceCode for Zuschlag, empty for standalone main services.";
+                                  return (
+                                    <div className="flex items-center gap-1" title={refTitle}>
+                                      <label className="text-[9px] text-slate-400">{refLabel}:</label>
+                                      <input
+                                        type="text"
+                                        value={item.ref_code ?? ""}
+                                        placeholder={refPlaceholder}
+                                        onChange={(e) => {
+                                          const raw = e.target.value.trim().toUpperCase();
+                                          updateItemField(idx, "ref_code", raw === "" ? null : raw);
+                                        }}
+                                        className="w-24 rounded border border-slate-200 px-1 py-0.5 font-mono text-[10px] text-slate-900 focus:border-sky-400 focus:outline-none"
+                                      />
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </>
+                          )}
                         </div>
                       );
                     })}
@@ -1088,7 +1285,12 @@ export default function TardocGroupsTab() {
                     <div className="flex items-center justify-between px-2 py-1.5 bg-slate-50">
                       <span className="text-[10px] font-semibold text-slate-600">Total</span>
                       <span className="text-[11px] font-bold text-slate-800">
-                        CHF {groupItems.reduce((sum, item) => sum + Math.round((item.tp_mt + item.tp_tt) * tpv * item.quantity * item.external_factor_mt * 100) / 100, 0).toFixed(2)}
+                        CHF {groupItems.reduce((sum, item) => {
+                          if (item.tariff_type === "402" || item.tardoc_code.startsWith("mat:")) {
+                            return sum + Math.round((item.unit_price ?? 0) * item.quantity * 100) / 100;
+                          }
+                          return sum + Math.round((item.tp_mt + item.tp_tt) * tpv * item.quantity * item.external_factor_mt * 100) / 100;
+                        }, 0).toFixed(2)}
                       </span>
                     </div>
                   </div>

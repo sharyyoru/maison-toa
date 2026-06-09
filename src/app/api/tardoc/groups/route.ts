@@ -55,7 +55,7 @@ export async function GET() {
           side_type, tp_mt, tp_tt,
           internal_factor_mt, internal_factor_tt,
           external_factor_mt, external_factor_tt,
-          sort_order
+          sort_order, tariff_type, unit_price, service_id
         )
       `)
       .eq("is_active", true)
@@ -116,6 +116,9 @@ export async function POST(request: NextRequest) {
         external_factor_mt?: number;
         external_factor_tt?: number;
         sort_order?: number;
+        tariff_type?: string;
+        unit_price?: number | null;
+        service_id?: string | null;
       }>;
     };
 
@@ -146,12 +149,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Run catalog-driven autofill (only fills empty ref_codes, never overwrites)
+    // Skip material items (tariff_type=402 or mat: prefix) — they have no ref codes
     let autofillReport: AutofillReport | null = null;
     let resolvedItems = items;
-    if (items.length > 0) {
+    const autofillableItems = items.filter((i) => (i.tariff_type ?? "007") !== "402" && !i.tardoc_code.startsWith("mat:"));
+    if (autofillableItems.length > 0) {
       try {
         const summary = await autofillGroupRefs(
-          items.map((item, idx) => ({
+          autofillableItems.map((item, idx) => ({
             tardoc_code: item.tardoc_code,
             ref_code: item.ref_code ?? null,
             sort_order: item.sort_order ?? idx,
@@ -184,6 +189,9 @@ export async function POST(request: NextRequest) {
         external_factor_mt: item.external_factor_mt ?? 1,
         external_factor_tt: item.external_factor_tt ?? 1,
         sort_order: item.sort_order ?? idx,
+        tariff_type: item.tariff_type ?? "007",
+        unit_price: item.unit_price ?? null,
+        service_id: item.service_id ?? null,
       }));
 
       const { error: itemsError } = await supabaseAdmin
@@ -230,6 +238,9 @@ export async function PUT(request: NextRequest) {
         external_factor_mt?: number;
         external_factor_tt?: number;
         sort_order?: number;
+        tariff_type?: string;
+        unit_price?: number | null;
+        service_id?: string | null;
       }>;
     };
 
@@ -267,11 +278,13 @@ export async function PUT(request: NextRequest) {
     let autofillReport: AutofillReport | null = null;
     if (items !== undefined) {
       // Run catalog-driven autofill (only fills empty ref_codes, never overwrites)
+      // Skip material items (tariff_type=402 or mat: prefix)
       let resolvedItems = items;
-      if (items.length > 0) {
+      const autofillableItems = items.filter((i) => (i.tariff_type ?? "007") !== "402" && !i.tardoc_code.startsWith("mat:"));
+      if (autofillableItems.length > 0) {
         try {
           const summary = await autofillGroupRefs(
-            items.map((item, idx) => ({
+            autofillableItems.map((item, idx) => ({
               tardoc_code: item.tardoc_code,
               ref_code: item.ref_code ?? null,
               sort_order: item.sort_order ?? idx,
@@ -306,6 +319,9 @@ export async function PUT(request: NextRequest) {
           external_factor_mt: item.external_factor_mt ?? 1,
           external_factor_tt: item.external_factor_tt ?? 1,
           sort_order: item.sort_order ?? idx,
+          tariff_type: item.tariff_type ?? "007",
+          unit_price: item.unit_price ?? null,
+          service_id: item.service_id ?? null,
         }));
 
         const { error: itemsError } = await supabaseAdmin
