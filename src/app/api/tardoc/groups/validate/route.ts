@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import {
   validateServices,
+  searchByCode,
   type ValidationServiceInput,
 } from "@/lib/sumexTardoc";
 import { CANTON_TAX_POINT_VALUES, type SwissCanton } from "@/lib/tardoc";
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
 
       const { data: dbItems, error: itemsError } = await supabaseAdmin
         .from("tardoc_group_items")
-        .select("tardoc_code, quantity, ref_code, side_type, tp_mt, tp_tt, external_factor_mt, external_factor_tt")
+        .select("tardoc_code, quantity, ref_code, side_type, tp_mt, tp_tt, external_factor_mt, external_factor_tt, tariff_type")
         .eq("group_id", groupId)
         .order("sort_order", { ascending: true });
 
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest) {
         tp_tt: i.tp_tt ?? 0,
         external_factor_mt: i.external_factor_mt ?? 1,
         external_factor_tt: i.external_factor_tt ?? 1,
+        tariff_type: i.tariff_type ?? "007",
       }));
       canton = group.canton || "VD";
       lawType = group.law_type || "KVG";
@@ -114,9 +116,42 @@ export async function POST(request: NextRequest) {
       ? tpvOverride
       : (CANTON_TAX_POINT_VALUES[(canton as SwissCanton)] ?? 0.96);
 
+    // Filter out material items (tariff_type=402, mat: prefix) — Sumex doesn't validate them
+    const validateableItems = (items as Array<typeof items[number] & { tariff_type?: string }>)
+      .filter((i) => (i as any).tariff_type !== "402" && !i.tardoc_code.startsWith("mat:") && !i.tardoc_code.startsWith("acf:") && !i.tardoc_code.startsWith("tma:"));
+
+    if (validateableItems.length === 0) {
+      // Only materials/ACF — skip Sumex validation entirely
+      if (groupId) {
+        await supabaseAdmin.from("tardoc_groups").update({
+          validation_status: "valid",
+          validation_message: "No TARDOC codes to validate (materials/ACF only)",
+          last_validated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq("id", groupId);
+      }
+      return NextResponse.json({ success: true, valid: true, services: [], summary: undefined });
+    }
+
+    // Auto-resolve ref_code from catalog masterCode when ref_code is empty.
+    // This prevents 422 errors when slave/detail codes are submitted without their master.
+    const resolvedItems = await Promise.all(
+      validateableItems.map(async (item) => {
+        if (item.ref_code) return item; // already set — don't override
+        try {
+          const { services } = await searchByCode(item.tardoc_code, false);
+          const record = services[0];
+          if (record?.masterCode) {
+            return { ...item, ref_code: record.masterCode };
+          }
+        } catch { /* non-fatal: proceed without ref_code */ }
+        return item;
+      }),
+    );
+
     // Build validation input
     const today = new Date().toISOString().split("T")[0];
-    const validationInputs: ValidationServiceInput[] = items.map((item) => ({
+    const validationInputs: ValidationServiceInput[] = resolvedItems.map((item) => ({
       code: item.tardoc_code,
       referenceCode: item.ref_code || "",
       quantity: item.quantity,
