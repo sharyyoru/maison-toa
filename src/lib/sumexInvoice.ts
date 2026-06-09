@@ -521,7 +521,8 @@ async function reqPost<T = Record<string, unknown>>(
       const abortCode = err.abortCode ?? "";
       const abortText = (err.pbstrAbort as string) || (err.errorText as string) || "";
       const errText = abortText || (err.errorCode as string) || `${res.status}`;
-      console.error(`${LOG_PREFIX} POST ${iface}/${method} FAILED: code=${abortCode} ${errText}`);
+      const bodySnip = JSON.stringify(body).slice(0, 300);
+      console.error(`${LOG_PREFIX} POST ${iface}/${method} FAILED: code=${abortCode} ${errText} | body=${bodySnip}`);
       throw new Error(`Sumex Request POST ${iface}/${method} failed: [${abortCode}] ${errText}`);
     }
     // Read as text first then parse — avoids truncated JSON issues with large responses
