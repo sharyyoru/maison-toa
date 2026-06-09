@@ -264,9 +264,15 @@ export async function POST(request: NextRequest) {
           calculatedAmount = item.total_price || 0;
         }
 
+        // Plain service lines (no tariff code) get tariff 999 with code "1"
+        // to prevent Sumex error 929 "undefined/invalid code".
+        const isPlain = !isTardoc && !isTarmed && !isAcf && !item.code && !item.tardoc_code;
+        const resolvedTariffType = isPlain ? "999" : tariffType;
+        const resolvedCode = isPlain ? "1" : (item.code || item.tardoc_code || "");
+
         return {
-          tariffType,
-          code: item.code || "",
+          tariffType: resolvedTariffType,
+          code: resolvedCode,
           referenceCode: item.ref_code || "",
           quantity: item.quantity || 1,
           sessionNumber: isAcf ? 1 : (item.session_number ?? 1),
@@ -533,9 +539,15 @@ export async function POST(request: NextRequest) {
         } else {
           unit2 = item.unit_price || 0; unitFactor2 = 1; amt2 = item.total_price || 0;
         }
+        // Plain service lines (no tariff code) get tariff 999 with code "1"
+        // to prevent Sumex error 929 "undefined/invalid code".
+        const isPlain2 = !isTardoc2 && !isTarmed2 && !isAcf2 && !item.code && !item.tardoc_code;
+        const resolvedTariffType2 = isPlain2 ? "999" : tariffType;
+        const resolvedCode2 = isPlain2 ? "1" : (item.code || item.tardoc_code || "");
+
         return {
-          tariffType,
-          code: item.code || "",
+          tariffType: resolvedTariffType2,
+          code: resolvedCode2,
           referenceCode: item.ref_code || "",
           quantity: item.quantity || 1,
           sessionNumber: isAcf2 ? 1 : (item.session_number ?? 1),
