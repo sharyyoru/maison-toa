@@ -1265,12 +1265,9 @@ export async function buildInvoiceRequest(
           const extFactorTT = 1; // Usually 1 for TT
           const computedAmountTT = Math.round(svc.quantity * unitTT * unitFactorTT * 1 * extFactorTT * 100) / 100;
 
-          console.log(`${LOG_PREFIX} AddServiceEx ${svc.code}: qty=${svc.quantity} unitMT=${unitMT} factor=${unitFactorMT} ext=${extFactorMT} => amountMT=${computedAmountMT}, unitTT=${unitTT} factorTT=${unitFactorTT} => amountTT=${computedAmountTT} (passed amount=${svc.amount})`);
+          console.log(`${LOG_PREFIX} AddServiceEx ${svc.code}: isAR=${isArCode} svc.unitTT=${svc.unitTT} unitTT=${unitTT} unitFactorTT=${unitFactorTT} amountTT=${computedAmountTT} | unitMT=${unitMT} amountMT=${computedAmountMT}`);
 
-          const addRes = await reqPost<{ plID: number; pbStatus: boolean }>(
-            "IGeneralInvoiceRequest",
-            "AddServiceEx",
-            {
+          const tardocPayload = {
               pIGeneralInvoiceRequest: req,
               pIServiceExInput: svcInputHandle,
               bstrTariffType: svc.tariffType,
@@ -1298,12 +1295,17 @@ export async function buildInvoiceRequest(
               bstrRemark: svc.remark || "",
               eIgnoreValidate: svc.ignoreValidate ?? YesNo.Yes,
               lServiceAttributes: svc.serviceAttributes ?? 0,
-            },
+          };
+          console.log(`${LOG_PREFIX} AddServiceEx PAYLOAD for ${svc.code}: ${JSON.stringify({dUnitTT: tardocPayload.dUnitTT, dAmountTT: tardocPayload.dAmountTT, dUnitMT: tardocPayload.dUnitMT, isAR: isArCode})}`);
+          const addRes = await reqPost<{ plID: number; pbStatus: boolean }>(
+            "IGeneralInvoiceRequest",
+            "AddServiceEx",
+            tardocPayload,
           );
           if (!addRes.pbStatus) {
             const abortInfo = await getAbortInfo(mgr);
-            console.error(`${LOG_PREFIX} ❌ AddServiceEx REJECTED: ${svc.code} (${svc.serviceName}) - Reason: ${abortInfo}`);
-            console.error(`${LOG_PREFIX} Service details: tariff=${svc.tariffType}, qty=${svc.quantity}, unit=${unitMT}, factor=${unitFactorMT}, ext=${extFactorMT}, amount=${computedAmountMT}`);
+            console.error(`${LOG_PREFIX} ❌ AddServiceEx REJECTED: ${svc.code} - Reason: ${abortInfo}`);
+            console.error(`${LOG_PREFIX} Sent: isAR=${isArCode} dUnitMT=${unitMT} dUnitTT=${unitTT} dAmountMT=${computedAmountMT} dAmountTT=${computedAmountTT} svc.unitTT=${svc.unitTT}`);
             rejectedServices.push({
               code: svc.code,
               name: svc.serviceName || "",
