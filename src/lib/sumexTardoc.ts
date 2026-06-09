@@ -437,6 +437,53 @@ export function calculatePrice(
 }
 
 // --------------------------------------------------------------------------
+// Additional Service Search
+// --------------------------------------------------------------------------
+
+/**
+ * Search for services that are valid as additional (Zuschlag) services to a
+ * given base code, using ISearch::SearchAdditionalService.
+ *
+ * Per TARDOC validator CHM: for each result, `additionalServiceReferenceCode`
+ * is the reference code to use when calling IValidate::AddService for the
+ * additional service in the context of this base.
+ */
+export async function searchAdditionalServices(
+  baseCode: string,
+  language: SumexLanguage = 2,
+): Promise<{ count: number; services: TardocServiceRecord[] }> {
+  const session = await getOrCreateSession(language);
+  const searchHandle = await createSubInterface(session.validatorHandle, "Search");
+
+  await callMethod("ISearch", "SearchAdditionalService", {
+    pISearch: searchHandle,
+    bstrCode: baseCode,
+  });
+
+  const countRes = await callMethod<{ pbStatus: boolean; plSize: number }>(
+    "ISearch",
+    "GetRecordCount",
+    { pISearch: searchHandle },
+  );
+
+  const count = countRes.plSize ?? 0;
+  if (count === 0) return { count: 0, services: [] };
+
+  const pageSize = Math.min(count, 500);
+  const rawServices = await callMethod<Array<Record<string, unknown>>>(
+    "ISearch",
+    "GetServices",
+    { pISearch: searchHandle, lStartRecordID: 0, lNumberOfRecords: pageSize },
+  );
+
+  const services = Array.isArray(rawServices)
+    ? rawServices.filter((r) => r.pbStatus).map(mapServiceRecord)
+    : [];
+
+  return { count, services };
+}
+
+// --------------------------------------------------------------------------
 // Session Info
 // --------------------------------------------------------------------------
 

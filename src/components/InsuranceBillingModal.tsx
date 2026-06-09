@@ -79,6 +79,7 @@ export default function InsuranceBillingModal({
   const [treatmentReason, setTreatmentReason] = useState("disease");
   const [selectedInsurerGln, setSelectedInsurerGln] = useState("");
   const [selectedInsurerName, setSelectedInsurerName] = useState("");
+  const [selectedInsurerAddress, setSelectedInsurerAddress] = useState<{ street?: string; zip?: string; city?: string } | null>(null);
   const [avsNumber, setAvsNumber] = useState("");
   const [policyNumber, setPolicyNumber] = useState("");
   const [caseNumber, setCaseNumber] = useState("");
@@ -178,6 +179,9 @@ export default function InsuranceBillingModal({
   const handleInsurerChange = async (gln: string, name: string, participant?: MedidataParticipant) => {
     setSelectedInsurerGln(gln);
     setSelectedInsurerName(name);
+    setSelectedInsurerAddress(
+      participant ? { street: participant.street, zip: participant.zipCode, city: participant.town } : null
+    );
     setInsuranceGlnWarning(null);
 
     // Auto-set law type and billing type from participant data
@@ -202,6 +206,17 @@ export default function InsuranceBillingModal({
           .maybeSingle();
         if (swissInsurer) {
           updatePayload.insurer_id = swissInsurer.id;
+          // Sync address from MediData participant into swiss_insurers
+          if (participant?.street || participant?.zipCode || participant?.town) {
+            await supabaseClient
+              .from("swiss_insurers")
+              .update({
+                ...(participant.street ? { address_street: participant.street } : {}),
+                ...(participant.zipCode ? { address_postal_code: participant.zipCode } : {}),
+                ...(participant.town ? { address_city: participant.town } : {}),
+              })
+              .eq("id", swissInsurer.id);
+          }
         }
 
         await supabaseClient
@@ -347,6 +362,7 @@ export default function InsuranceBillingModal({
           treatmentReason: lawType === 'UVG' ? 'accident' : treatmentReason,
           insurerGln: selectedInsurerGln,
           insurerName: selectedInsurerName,
+          insurerAddress: selectedInsurerAddress,
           policyNumber,
           avsNumber,
           accidentDate: lawType === 'UVG' ? accidentDate : undefined,
@@ -396,6 +412,7 @@ export default function InsuranceBillingModal({
           treatmentReason: lawType === 'UVG' ? 'accident' : treatmentReason,
           insurerGln: selectedInsurerGln,
           insurerName: selectedInsurerName,
+          insurerAddress: selectedInsurerAddress,
           policyNumber,
           avsNumber,
           caseNumber,

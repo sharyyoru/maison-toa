@@ -4,22 +4,39 @@
  * Communicates with the Railway-hosted proxy service that forwards
  * requests to MediData's servers in Switzerland (bypassing geoblocking).
  *
- * Proxy docs: POST /api/medidata/upload               → MediData POST /ela/uploads (multipart)
- *             POST /api/medidata/send-xml              → MediData POST /ela/uploads (raw XML)
- *             GET  /api/medidata/participants           → MediData GET  /ela/participants
- *             GET  /api/medidata/uploads/:ref/status    → MediData GET  /ela/uploads/{ref}/status
- *             GET  /api/medidata/downloads              → MediData GET  /ela/downloads
- *             GET  /api/medidata/downloads/:ref         → MediData GET  /ela/downloads/{ref}
- *             PUT  /api/medidata/downloads/:ref/status  → MediData PUT  /ela/downloads/{ref}/status
- *             GET  /api/medidata/notifications          → MediData GET  /ela/notifications
- *             PUT  /api/medidata/notifications/:id/status → MediData PUT /ela/notifications/{id}/status
- *             POST /api/medidata/proxy                  → Generic proxy for any MediData path
+ * The proxy exposes two independent route namespaces depending on the tenant:
+ *   aestheticclinic: /api/medidata/…
+ *   maison-toa:      /api/maison/…
+ *
+ * Set the MEDIDATA_PROXY_PATH_PREFIX env-var (Vercel dashboard only) to the
+ * correct prefix for this deployment.  Defaults to "/api/medidata" for
+ * backwards-compatibility during development.
+ *
+ * Proxy docs: POST {PREFIX}/upload               → MediData POST /ela/uploads (multipart)
+ *             POST {PREFIX}/send-xml              → MediData POST /ela/uploads (raw XML)
+ *             GET  {PREFIX}/participants           → MediData GET  /ela/participants
+ *             GET  {PREFIX}/uploads/:ref/status    → MediData GET  /ela/uploads/{ref}/status
+ *             GET  {PREFIX}/downloads              → MediData GET  /ela/downloads
+ *             GET  {PREFIX}/downloads/:ref         → MediData GET  /ela/downloads/{ref}
+ *             PUT  {PREFIX}/downloads/:ref/status  → MediData PUT  /ela/downloads/{ref}/status
+ *             GET  {PREFIX}/notifications          → MediData GET  /ela/notifications
+ *             PUT  {PREFIX}/notifications/:id/status → MediData PUT /ela/notifications/{id}/status
+ *             POST {PREFIX}/proxy                  → Generic proxy for any MediData path
  */
 
 const PROXY_BASE_URL =
   process.env.MEDIDATA_PROXY_URL ||
   "https://medidata-proxy-production.up.railway.app";
 const PROXY_API_KEY = process.env.MEDIDATA_PROXY_API_KEY || "";
+
+/**
+ * Route prefix for this tenant's proxy routes.
+ * aestheticclinic = "/api/medidata"  (default)
+ * maison-toa      = "/api/maison"
+ * Override via MEDIDATA_PROXY_PATH_PREFIX in Vercel environment variables.
+ */
+const PROXY_PATH_PREFIX =
+  (process.env.MEDIDATA_PROXY_PATH_PREFIX || "/api/medidata").replace(/\/$/, "");
 
 // ---------------------------------------------------------------------------
 // Types
@@ -158,24 +175,24 @@ export async function uploadInvoiceXml(
     let res: ProxyResponse<Record<string, unknown>>;
 
     if (useRaw) {
-      // Fallback: send raw XML via /api/medidata/send-xml
+      // Fallback: send raw XML via {PREFIX}/send-xml
       const headers: Record<string, string> = {
         "Content-Type": "application/xml",
         "x-filename": filename,
       };
       if (info) headers["x-info"] = JSON.stringify(info);
-      res = await proxyFetch<Record<string, unknown>>("/api/medidata/send-xml", {
+      res = await proxyFetch<Record<string, unknown>>(`${PROXY_PATH_PREFIX}/send-xml`, {
         method: "POST",
         headers,
         body: xmlContent,
       });
     } else {
-      // Primary: multipart form-data via /api/medidata/upload
+      // Primary: multipart form-data via {PREFIX}/upload
       const formData = new FormData();
       const xmlBlob = new Blob([xmlContent], { type: "application/xml" });
       formData.append("file", xmlBlob, filename);
       if (info) formData.append("info", JSON.stringify(info));
-      res = await proxyFetch<Record<string, unknown>>("/api/medidata/upload", {
+      res = await proxyFetch<Record<string, unknown>>(`${PROXY_PATH_PREFIX}/upload`, {
         method: "POST",
         body: formData,
       });
@@ -240,7 +257,7 @@ export async function sendRawXml(
     headers["x-info"] = JSON.stringify(info);
   }
 
-  const res = await proxyFetch<Record<string, unknown>>("/api/medidata/send-xml", {
+  const res = await proxyFetch<Record<string, unknown>>(`${PROXY_PATH_PREFIX}/send-xml`, {
     method: "POST",
     headers,
     body: xmlContent,
@@ -278,7 +295,7 @@ export async function getUploadStatus(
   transmissionReference: string,
 ): Promise<UploadStatus> {
   const res = await proxyFetch<Record<string, unknown>>(
-    `/api/medidata/uploads/${encodeURIComponent(transmissionReference)}/status`,
+    `${PROXY_PATH_PREFIX}/uploads/${encodeURIComponent(transmissionReference)}/status`,
   );
   return {
     transmissionReference,
@@ -294,7 +311,7 @@ export async function getUploadStatus(
 export async function getParticipants(
   query?: { limit?: number; offset?: number; glnparticipant?: string; lawtype?: number; name?: string },
 ): Promise<Participant[]> {
-  let path = "/api/medidata/participants";
+  let path = `${PROXY_PATH_PREFIX}/participants`;
   if (query) {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(query)) {
@@ -315,7 +332,7 @@ export async function getParticipants(
  * Fetch incoming download messages (insurer responses).
  */
 export async function getDownloads(): Promise<DownloadMessage[]> {
-  const res = await proxyFetch<DownloadMessage[]>("/api/medidata/downloads");
+  const res = await proxyFetch<DownloadMessage[]>(`${PROXY_PATH_PREFIX}/downloads`);
   if (res.success && Array.isArray(res.data)) {
     return res.data;
   }
@@ -326,7 +343,7 @@ export async function getDownloads(): Promise<DownloadMessage[]> {
  * Fetch a specific download by reference.
  */
 export async function getDownload(ref: string): Promise<ProxyResponse> {
-  return proxyFetch(`/api/medidata/downloads/${encodeURIComponent(ref)}`);
+  return proxyFetch(`${PROXY_PATH_PREFIX}/downloads/${encodeURIComponent(ref)}`);
 }
 
 /**
@@ -334,7 +351,7 @@ export async function getDownload(ref: string): Promise<ProxyResponse> {
  */
 export async function confirmDownload(ref: string): Promise<boolean> {
   const res = await proxyFetch(
-    `/api/medidata/downloads/${encodeURIComponent(ref)}/status`,
+    `${PROXY_PATH_PREFIX}/downloads/${encodeURIComponent(ref)}/status`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -348,7 +365,7 @@ export async function confirmDownload(ref: string): Promise<boolean> {
  * Fetch notifications.
  */
 export async function getNotifications(): Promise<ProxyResponse> {
-  return proxyFetch("/api/medidata/notifications");
+  return proxyFetch(`${PROXY_PATH_PREFIX}/notifications`);
 }
 
 /**
@@ -357,7 +374,7 @@ export async function getNotifications(): Promise<ProxyResponse> {
  */
 export async function confirmNotification(notificationId: number | string): Promise<boolean> {
   const res = await proxyFetch(
-    `/api/medidata/notifications/${encodeURIComponent(String(notificationId))}/status`,
+    `${PROXY_PATH_PREFIX}/notifications/${encodeURIComponent(String(notificationId))}/status`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -377,7 +394,7 @@ export async function proxyRequest(
   data?: unknown,
   headers?: Record<string, string>,
 ): Promise<ProxyResponse> {
-  return proxyFetch("/api/medidata/proxy", {
+  return proxyFetch(`${PROXY_PATH_PREFIX}/proxy`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ method, path, data, headers }),

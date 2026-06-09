@@ -4,6 +4,17 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
+import dynamic from "next/dynamic";
+
+const ProvidersBillingSettingsTab = dynamic(
+  () => import("@/components/ProvidersBillingSettingsTab"),
+  { loading: () => <div className="text-xs text-slate-400 py-8 text-center">Loading…</div> },
+);
+
+const TardocGroupsTab = dynamic(
+  () => import("@/components/TardocGroupsTab"),
+  { loading: () => <div className="text-xs text-slate-400 py-8 text-center">Loading…</div> },
+);
 
 const TABS = [
   { id: "external-labs", label: "External Labs" },
@@ -12,6 +23,8 @@ const TABS = [
   { id: "blocked-dates", label: "Blocked Dates" },
   { id: "medidata", label: "MediData Connection" },
   { id: "booking-categories", label: "Booking Categories" },
+  { id: "providers-billing", label: "Providers & Billing" },
+  { id: "tardoc-groups", label: "TARDOC Groups" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -48,6 +61,8 @@ export default function SettingsPage() {
     "blocked-dates": t("tabs.blockedDates"),
     "medidata": t("tabs.medidata"),
     "booking-categories": t("tabs.bookingCategories"),
+    "providers-billing": t("tabs.providersBilling"),
+    "tardoc-groups": t("tabs.tardocGroups"),
   };
 
   return (
@@ -85,6 +100,8 @@ export default function SettingsPage() {
         {activeTab === "blocked-dates" && <BlockedDatesTab />}
         {activeTab === "medidata" && <MediDataConnectionTab />}
         {activeTab === "booking-categories" && <BookingCategoriesTab />}
+        {activeTab === "providers-billing" && <ProvidersBillingSettingsTab />}
+        {activeTab === "tardoc-groups" && <TardocGroupsTab />}
       </div>
     </div>
   );

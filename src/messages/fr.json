@@ -1337,7 +1337,9 @@
       "calendarDefaults": "Calendriers par défaut",
       "blockedDates": "Dates bloquées",
       "medidata": "Connexion MediData",
-      "bookingCategories": "Catégories de réservation"
+      "bookingCategories": "Catégories de réservation",
+      "providersBilling": "Prestataires & Facturation",
+      "tardocGroups": "Groupes TARDOC"
     },
     "blockedDates": {
       "blockTitle": "Bloquer une date",

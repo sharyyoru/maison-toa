@@ -28,6 +28,7 @@ type TardocGroup = {
   description: string | null;
   canton: string;
   law_type: string;
+  tax_point_value: number | null;
   created_by_name: string | null;
   is_active: boolean;
   validation_status: string | null;
@@ -62,9 +63,31 @@ export default function TardocGroupsTab() {
   const [groupDescription, setGroupDescription] = useState("");
   const [groupCanton, setGroupCanton] = useState<SwissCanton>(DEFAULT_CANTON);
   const [groupLawType, setGroupLawType] = useState("KVG");
+  // Manual TPV override for the group. null = use canton default.
+  const [groupTaxPointOverride, setGroupTaxPointOverride] = useState<number | null>(null);
   const [groupItems, setGroupItems] = useState<GroupItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Last save's autofill report
+  type AutofillReport = {
+    filled: number;
+    kept: number;
+    standalone: number;
+    needsManual: number;
+    skipAcf: number;
+    unknown: number;
+    details: Array<{
+      tardoc_code: string;
+      sort_order: number;
+      ref_code: string | null;
+      filledBy:
+        | "kept" | "masterCode" | "additionalService" | "tmaSlave"
+        | "standalone" | "needsManual" | "skipAcf" | "unknown";
+      baseCode?: string;
+    }>;
+  };
+  const [autofillReport, setAutofillReport] = useState<AutofillReport | null>(null);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -115,6 +138,7 @@ export default function TardocGroupsTab() {
     setGroupDescription("");
     setGroupCanton(DEFAULT_CANTON);
     setGroupLawType("KVG");
+    setGroupTaxPointOverride(null);
     setGroupItems([]);
     setSaveError(null);
     setValidationResult(null);
@@ -129,6 +153,9 @@ export default function TardocGroupsTab() {
     setGroupDescription(group.description || "");
     setGroupCanton((group.canton || DEFAULT_CANTON) as SwissCanton);
     setGroupLawType(group.law_type || "KVG");
+    setGroupTaxPointOverride(
+      group.tax_point_value != null ? Number(group.tax_point_value) : null,
+    );
     setGroupItems(
       (group.tardoc_group_items || []).map((item, idx) => ({
         ...item,
@@ -368,6 +395,7 @@ export default function TardocGroupsTab() {
         description: groupDescription.trim() || null,
         canton: groupCanton,
         law_type: groupLawType,
+        tax_point_value: groupTaxPointOverride,
         items: itemsPayload,
       };
       if (editingGroup) bodyPayload.id = editingGroup.id;
@@ -383,6 +411,13 @@ export default function TardocGroupsTab() {
         setSaveError(json.error || "Failed to save");
         setSaving(false);
         return;
+      }
+
+      // Capture the autofill report (if any) so the user sees what changed
+      if (json.autofill) {
+        setAutofillReport(json.autofill as AutofillReport);
+      } else {
+        setAutofillReport(null);
       }
 
       setModalOpen(false);
@@ -424,7 +459,9 @@ export default function TardocGroupsTab() {
     setDeletingId(null);
   }
 
-  const tpv = CANTON_TAX_POINT_VALUES[groupCanton] ?? 0.96;
+  // Effective TPV used in modal (override if set, else canton default)
+  const cantonTpv = CANTON_TAX_POINT_VALUES[groupCanton] ?? 0.96;
+  const tpv = groupTaxPointOverride ?? cantonTpv;
 
   return (
     <>
@@ -447,6 +484,48 @@ export default function TardocGroupsTab() {
             New Group
           </button>
         </div>
+
+        {/* Autofill summary toast — shown after a save that ran the catalog autofill pass. Dismissible. */}
+        {autofillReport && (autofillReport.filled > 0 || autofillReport.needsManual > 0 || autofillReport.skipAcf > 0 || autofillReport.unknown > 0) && (
+          <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50/70 px-3 py-2 text-[11px] text-sky-800">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1">
+                <span className="font-semibold">Ref code autofill:</span>{" "}
+                <span className="text-emerald-700">{autofillReport.filled} filled</span>
+                {autofillReport.kept > 0 && <>, <span>{autofillReport.kept} kept</span></>}
+                {autofillReport.standalone > 0 && <>, <span className="text-slate-600">{autofillReport.standalone} standalone</span></>}
+                {autofillReport.needsManual > 0 && <>, <span className="text-amber-700">{autofillReport.needsManual} need manual</span></>}
+                {autofillReport.skipAcf > 0 && <>, <span className="text-violet-700">{autofillReport.skipAcf} ACF (set ICD)</span></>}
+                {autofillReport.unknown > 0 && <>, <span className="text-red-700">{autofillReport.unknown} unknown</span></>}
+                {(autofillReport.needsManual > 0 || autofillReport.skipAcf > 0 || autofillReport.unknown > 0) && (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-[10px] text-sky-600 hover:underline">Show details</summary>
+                    <ul className="mt-1 space-y-0.5 pl-3 text-[10px] font-mono">
+                      {autofillReport.details
+                        .filter((d) => d.filledBy !== "kept" && d.filledBy !== "standalone")
+                        .map((d, i) => (
+                          <li key={i}>
+                            <span className="text-slate-700">{d.tardoc_code}</span>
+                            {" → "}
+                            {d.ref_code
+                              ? <span className="text-emerald-600">{d.ref_code}</span>
+                              : <span className="text-slate-400">(empty)</span>}
+                            <span className="ml-1 text-slate-400">[{d.filledBy}{d.baseCode ? ` of ${d.baseCode}` : ""}]</span>
+                          </li>
+                        ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setAutofillReport(null)}
+                className="shrink-0 rounded-full px-1.5 text-sky-500 hover:bg-sky-100 hover:text-sky-700"
+                aria-label="Dismiss"
+              >×</button>
+            </div>
+          </div>
+        )}
 
         {loading && <div className="py-8 text-center text-xs text-slate-400">Loading...</div>}
         {error && <div className="py-4 text-center text-xs text-red-500">{error}</div>}
@@ -631,6 +710,49 @@ export default function TardocGroupsTab() {
                     <option value="MVG">MVG</option>
                     <option value="VVG">VVG</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Tax Point Value override */}
+              <div>
+                <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                  Tax Point Value (TPV)
+                  <span className="ml-1 font-normal text-slate-400">
+                    — leave empty to use canton default ({cantonTpv.toFixed(2)})
+                  </span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0.01}
+                    max={5}
+                    step={0.01}
+                    value={groupTaxPointOverride ?? ""}
+                    placeholder={cantonTpv.toFixed(2)}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw === "") { setGroupTaxPointOverride(null); return; }
+                      const val = parseFloat(raw);
+                      if (!isNaN(val) && val > 0) setGroupTaxPointOverride(val);
+                    }}
+                    className={`w-32 rounded-lg border px-3 py-1.5 text-xs text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 ${
+                      groupTaxPointOverride !== null
+                        ? "border-amber-400 bg-amber-50"
+                        : "border-slate-200 bg-white"
+                    }`}
+                  />
+                  {groupTaxPointOverride !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setGroupTaxPointOverride(null)}
+                      className="text-[10px] text-amber-600 hover:text-amber-800"
+                    >
+                      Reset to canton default
+                    </button>
+                  )}
+                  <span className="text-[10px] text-slate-500">
+                    Effective: <span className="font-mono font-semibold text-slate-700">{tpv.toFixed(2)}</span> CHF/pt
+                  </span>
                 </div>
               </div>
 
@@ -932,6 +1054,32 @@ export default function TardocGroupsTab() {
                                 className="w-14 rounded border border-slate-200 px-1 py-0.5 text-center text-[10px] text-slate-900 focus:border-sky-400 focus:outline-none"
                               />
                             </div>
+                            {/* Ref code field — label adapts to item type */}
+                            {(() => {
+                              const itemType = getItemType(item.tardoc_code);
+                              const refLabel = itemType === "acf" ? "ICD-10" : itemType === "tma" ? "Master" : "Ref";
+                              const refPlaceholder = itemType === "acf" ? "Z42.1" : itemType === "tma" ? "C02.0001" : "AA.00.0010";
+                              const refTitle = itemType === "acf"
+                                ? "ICD-10 diagnosis code (per IValidate005::AddService)."
+                                : itemType === "tma"
+                                ? "Master TMA code (required when IsNeedsRefCode bit is set)."
+                                : "TARDOC parent code: MasterCode for slaves, AdditionalServiceReferenceCode for Zuschlag, empty for standalone main services.";
+                              return (
+                                <div className="flex items-center gap-1" title={refTitle}>
+                                  <label className="text-[9px] text-slate-400">{refLabel}:</label>
+                                  <input
+                                    type="text"
+                                    value={item.ref_code ?? ""}
+                                    placeholder={refPlaceholder}
+                                    onChange={(e) => {
+                                      const raw = e.target.value.trim().toUpperCase();
+                                      updateItemField(idx, "ref_code", raw === "" ? null : raw);
+                                    }}
+                                    className="w-24 rounded border border-slate-200 px-1 py-0.5 font-mono text-[10px] text-slate-900 focus:border-sky-400 focus:outline-none"
+                                  />
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       );

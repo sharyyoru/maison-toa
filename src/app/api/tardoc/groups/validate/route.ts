@@ -19,7 +19,7 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { groupId, items: adHocItems, canton: adHocCanton, law_type: adHocLaw } = body as {
+    const { groupId, items: adHocItems, canton: adHocCanton, law_type: adHocLaw, tax_point_value: adHocTpv } = body as {
       groupId?: string;
       items?: Array<{
         tardoc_code: string;
@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
       }>;
       canton?: string;
       law_type?: string;
+      tax_point_value?: number | null;
     };
 
     let items: Array<{
@@ -47,12 +48,13 @@ export async function POST(request: NextRequest) {
     }>;
     let canton: string;
     let lawType: string;
+    let tpvOverride: number | null = null;
 
     if (groupId) {
       // Load from DB
       const { data: group, error: groupError } = await supabaseAdmin
         .from("tardoc_groups")
-        .select("canton, law_type")
+        .select("canton, law_type, tax_point_value")
         .eq("id", groupId)
         .single();
 
@@ -80,8 +82,9 @@ export async function POST(request: NextRequest) {
         external_factor_mt: i.external_factor_mt ?? 1,
         external_factor_tt: i.external_factor_tt ?? 1,
       }));
-      canton = group.canton || "GE";
+      canton = group.canton || "VD";
       lawType = group.law_type || "KVG";
+      tpvOverride = group.tax_point_value != null ? Number(group.tax_point_value) : null;
     } else if (adHocItems && adHocItems.length > 0) {
       items = adHocItems.map((i) => ({
         tardoc_code: i.tardoc_code,
@@ -93,8 +96,9 @@ export async function POST(request: NextRequest) {
         external_factor_mt: i.external_factor_mt ?? 1,
         external_factor_tt: i.external_factor_tt ?? 1,
       }));
-      canton = adHocCanton || "GE";
+      canton = adHocCanton || "VD";
       lawType = adHocLaw || "KVG";
+      tpvOverride = adHocTpv != null ? Number(adHocTpv) : null;
     } else {
       return NextResponse.json({ error: "Provide groupId or items" }, { status: 400 });
     }
@@ -105,8 +109,10 @@ export async function POST(request: NextRequest) {
     };
     const lawEnum = lawMap[lawType.toUpperCase()] ?? 1;
 
-    // Get tax point value for canton
-    const tpv = CANTON_TAX_POINT_VALUES[(canton as SwissCanton)] ?? 0.96;
+    // Get tax point value: explicit override (group-level or ad-hoc) > canton default
+    const tpv = tpvOverride != null && tpvOverride > 0
+      ? tpvOverride
+      : (CANTON_TAX_POINT_VALUES[(canton as SwissCanton)] ?? 0.96);
 
     // Build validation input
     const today = new Date().toISOString().split("T")[0];

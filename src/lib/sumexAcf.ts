@@ -640,11 +640,17 @@ export async function getAcfSessionInfo(
 //   7 = enTMATypeIsN (neither E nor P, e.g. hemodialysis)
 //   8 = enTMATypeIsPandE (filter: both P and E)
 //
-// ServiceProperties bit flags:
-//   1   = HasSideDependency
-//   256 = NeedsRefCode
-//   512 = IsGrouperRelevant
-//   2048 = IsContactRelated
+// ServiceProperties bit flags (per acfvalidator100.chm → ServicePropertyType enum):
+//   1    = enServicePropertyHasTP             — service has a fixed tax point
+//   32   = enServicePropertyIsNeedsRefCode    — must supply a reference code (master)
+//   256  = enServicePropertyHasSideDependency — side must be > enSideNone when used
+//   512  = enServicePropertyIsGroupingRelevant — relevant to the grouper (mostly P-type)
+//   1024 = enServicePropertyIsMinutageService — minutage-type service
+//   2048 = enServicePropertyIsContactRelated  — contact-related service
+//
+// NB: An earlier revision of this file documented and used the wrong values
+// (HasSideDependency=1, NeedsRefCode=256). Those have been corrected per the
+// CHM enumeration definition above.
 
 export type TmaType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
@@ -672,10 +678,13 @@ export type TmaServiceRecord = {
   validFrom: string;
   validTo: string;
   serviceProperties: number;
-  // Derived flags from serviceProperties
-  hasSideDependency: boolean;
-  needsRefCode: boolean;
-  isGrouperRelevant: boolean;
+  // Derived flags from serviceProperties (see ServicePropertyType bit-flag table above)
+  hasTP: boolean;            // bit 1
+  needsRefCode: boolean;     // bit 32
+  hasSideDependency: boolean;// bit 256
+  isGrouperRelevant: boolean;// bit 512
+  isMinutage: boolean;       // bit 1024
+  isContactRelated: boolean; // bit 2048
 };
 
 function mapTmaServiceRecord(raw: Record<string, unknown>): TmaServiceRecord {
@@ -692,9 +701,12 @@ function mapTmaServiceRecord(raw: Record<string, unknown>): TmaServiceRecord {
     validFrom: (raw.pdValidFrom as string) ?? "",
     validTo: (raw.pdValidTo as string) ?? "",
     serviceProperties: props,
-    hasSideDependency: (props & 1) !== 0,
-    needsRefCode: (props & 256) !== 0,
-    isGrouperRelevant: (props & 512) !== 0,
+    hasTP:             (props & 1)    !== 0,
+    needsRefCode:      (props & 32)   !== 0,
+    hasSideDependency: (props & 256)  !== 0,
+    isGrouperRelevant: (props & 512)  !== 0,
+    isMinutage:        (props & 1024) !== 0,
+    isContactRelated:  (props & 2048) !== 0,
   };
 }
 
@@ -763,6 +775,84 @@ export async function searchTma(
           .map(mapTmaServiceRecord);
         allServices.push(...batch);
         if (batch.length < 200) hasMore = false; // API returns max 200 per call
+      } else {
+        hasMore = false;
+      }
+    } catch {
+      hasMore = false;
+    }
+  }
+
+  return { count, services: allServices };
+}
+
+/**
+ * ServicePropertyType bit-flag values per the acfvalidator100.chm
+ * `ServicePropertyType` enum. Use `(props & SERVICE_PROPERTY.X) !== 0` to test
+ * a flag rather than relying on raw numbers.
+ */
+export const SERVICE_PROPERTY = Object.freeze({
+  HasTP:             1,    // service has a fixed (non-variable) tax point
+  IsNeedsRefCode:    32,   // must supply a reference code (parent code)
+  HasSideDependency: 256,  // side must be > enSideNone when used
+  IsGroupingRelevant:512,  // relevant to the ACF grouper (mostly P-type)
+  IsMinutage:        1024, // minutage-type service
+  IsContactRelated:  2048, // contact-related service
+});
+
+/**
+ * Search all TMA slave services of a given TMA master code.
+ *
+ * Per acfvalidator100.chm → ISearchTMA::Search4Slaves:
+ *   "The specialized Search4Slaves method is used to search for all TMA
+ *    slave services of a given TMA master service. Do not use wildcards in
+ *    the masterCode field."
+ *
+ * Returns the list of slave codes that depend on this master (i.e., codes
+ * whose `bstrReferenceCode` must equal `masterCode` when fed to
+ * IValidateTMA::AddService). Useful for deterministic ref-code autofill of
+ * TMA gestures whose `enServicePropertyIsNeedsRefCode` bit is set.
+ */
+export async function searchTmaSlaves(
+  masterCode: string,
+  date?: string,
+  language: AcfLanguage = 2,
+): Promise<{ count: number; services: TmaServiceRecord[] }> {
+  const session = await getOrCreateAcfSession(language);
+  const searchHandle = await createSearchTMA(session);
+
+  const searchDate = date || new Date().toISOString().split("T")[0] + "T00:00:00";
+
+  await acfPost("ISearchTMA", "Search4Slaves", {
+    pISearchTMA: searchHandle,
+    dDate: searchDate,
+    bstrMasterCode: masterCode,
+  });
+
+  const countRes = await acfPost<{ pbStatus: boolean; plSize: number }>(
+    "ISearchTMA",
+    "GetRecordCount",
+    { pISearchTMA: searchHandle },
+  );
+
+  const count = countRes.plSize ?? 0;
+  if (count === 0) return { count: 0, services: [] };
+
+  const allServices: TmaServiceRecord[] = [];
+  let hasMore = true;
+  while (hasMore) {
+    try {
+      const rawServices = await acfPost<Array<Record<string, unknown>>>(
+        "ISearchTMA",
+        "GetServices",
+        { pISearchTMA: searchHandle },
+      );
+      if (Array.isArray(rawServices) && rawServices.length > 0) {
+        const batch = rawServices
+          .filter((r) => r.pbStatus)
+          .map(mapTmaServiceRecord);
+        allServices.push(...batch);
+        if (batch.length < 200) hasMore = false;
       } else {
         hasMore = false;
       }

@@ -292,8 +292,10 @@ export type InvoiceServiceInput = {
   responsibleGln: string;
   side?: SideType;
   serviceName?: string;  // auto-expanded if validator installed
-  unit?: number;         // tax points — auto-expanded if 0
-  unitFactor?: number;   // tax point value
+  unit?: number;         // tax points MT (medical/physician) — auto-expanded if 0
+  unitFactor?: number;   // tax point value MT
+  unitTT?: number;       // tax points TT (technical) — for TARDOC
+  unitFactorTT?: number; // tax point value TT — for TARDOC
   externalFactor?: number;
   amount?: number;       // auto-expanded if 0
   vatRate?: number;
@@ -402,6 +404,8 @@ export type SumexInvoiceInput = {
   providerGlnLocation?: string;
   providerAddress: InvoiceAddress;
   providerZsr?: string;
+  qualDignity?: string; // Swiss FMH specialty code — deprecated, use qualDignities
+  qualDignities?: string[]; // Array of Swiss FMH specialty codes for multiple qualifications
 
   // Insurance (required for TP)
   insuranceGln?: string;
@@ -471,15 +475,28 @@ export type SumexInvoiceInput = {
 async function reqGet<T = Record<string, unknown>>(path: string): Promise<T> {
   const url = `${SUMEX_REQUEST_BASE_URL}/${path}`;
   console.log(`${LOG_PREFIX} GET ${path}`);
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    const err = await res.text().catch(() => "");
-    console.error(`${LOG_PREFIX} GET ${path} FAILED: ${res.status} ${err}`);
-    throw new Error(`Sumex Request GET ${path} failed: ${res.status} ${err}`);
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) {
+      const err = await res.text().catch(() => "");
+      console.error(`${LOG_PREFIX} GET ${path} FAILED: ${res.status} ${err}`);
+      throw new Error(`Sumex Request GET ${path} failed: ${res.status} ${err}`);
+    }
+    const data = await res.json() as T;
+    console.log(`${LOG_PREFIX} GET ${path} OK`);
+    return data;
+  } catch (error: any) {
+    if (
+      error.cause?.code === 'UND_ERR_CONNECT_TIMEOUT' ||
+      error.cause?.code === 'ECONNREFUSED' ||
+      error.message?.includes('fetch failed') ||
+      error.message?.includes('ECONNREFUSED')
+    ) {
+      console.error(`${LOG_PREFIX} Sumex server connection failed:`, error);
+      throw new Error('SUMEX_SERVER_OFFLINE');
+    }
+    throw error;
   }
-  const data = await res.json() as T;
-  console.log(`${LOG_PREFIX} GET ${path} OK`);
-  return data;
 }
 
 async function reqPost<T = Record<string, unknown>>(
@@ -713,6 +730,7 @@ async function initServiceExInput(
   });
 
   // 2. SetPhysician — provider/responsible GLN, medical & billing role
+  console.log(`${LOG_PREFIX} SetPhysician for GLN: ${input.providerGln}`);
   await reqPost("IServiceExInput", "SetPhysician", {
     pIServiceExInput: handle,
     eMedicalRole: MedicalRoleType.SelfEmployed,
@@ -721,6 +739,22 @@ async function initServiceExInput(
     bstrResponsibleGLN: input.providerGln,
     bstrMedicalSectionCode: "",
   });
+
+  // 2b. AddDignity — add multiple qualitative dignities for the provider
+  // Different TARDOC services require different dignities, so we add all relevant ones
+  const dignities = input.qualDignities;
+  if (!dignities || dignities.length === 0) {
+    throw new Error("qualDignities is required. Configure provider specialty codes in Settings > Providers & Billing.");
+  }
+  console.log(`${LOG_PREFIX} Adding ${dignities.length} dignities for GLN: ${input.providerGln}`);
+  for (const dignity of dignities) {
+    await reqPost("IServiceExInput", "AddDignity", {
+      pIServiceExInput: handle,
+      bstrGLN: input.providerGln,
+      bstrQLCode: dignity,
+    });
+    console.log(`${LOG_PREFIX} ✓ Added dignity: ${dignity}`);
+  }
 
   // 3. SetPatient — birthdate and sex
   await reqPost("IServiceExInput", "SetPatient", {
@@ -757,6 +791,9 @@ export type SumexBuildResult = {
   timestamp?: number;
   error?: string;
   abortInfo?: string;
+  rejectedServices?: Array<{ code: string; name: string; reason: string }>;
+  servicesRequested?: number;
+  servicesAccepted?: number;
 };
 
 /**
@@ -1062,13 +1099,19 @@ export async function buildInvoiceRequest(
     }
 
     // --- AddService / AddServiceEx (auto-route based on tariff type) ---
-    // TARDOC (tariff_code=7, tariffType="007") MUST use AddServiceEx; others use AddService
-    if (input.services && input.services.length > 0) {
-      const simpleServices = input.services.filter(s => s.tariffType !== "007");
-      const tardocServices = input.services.filter(s => s.tariffType === "007");
-      console.log(`${LOG_PREFIX} Services: ${input.services.length} total, ${simpleServices.length} simple, ${tardocServices.length} TARDOC. Types: [${input.services.map(s => s.tariffType).join(",")}]`);
+    // TARMED (001) and TARDOC (007) MUST use AddServiceEx; others use AddService
+    const rejectedServices: Array<{ code: string; name: string; reason: string }> = [];
+    let servicesRequested = 0;
+    let servicesAccepted = 0;
 
-      // Simple tariff services (ACF 005, drugs 402, other)
+    if (input.services && input.services.length > 0) {
+      servicesRequested = input.services.length;
+      const simpleServices = input.services.filter(s => s.tariffType !== "007" && s.tariffType !== "001");
+      const tarmedServices = input.services.filter(s => s.tariffType === "001");
+      const tardocServices = input.services.filter(s => s.tariffType === "007");
+      console.log(`${LOG_PREFIX} Services: ${input.services.length} total, ${simpleServices.length} simple, ${tarmedServices.length} TARMED, ${tardocServices.length} TARDOC. Types: [${input.services.map(s => s.tariffType).join(",")}]`);
+
+      // Simple tariff services (ACF 005, drugs 402, other - NOT TARMED/TARDOC)
       for (const svc of simpleServices) {
         const addRes = await reqPost<{ plID: number; pbStatus: boolean }>(
           "IGeneralInvoiceRequest",
@@ -1100,27 +1143,53 @@ export async function buildInvoiceRequest(
         );
         if (!addRes.pbStatus) {
           const abortInfo = await getAbortInfo(mgr);
-          console.warn(`${LOG_PREFIX} AddService ${svc.code} rejected: ${abortInfo}`);
+          console.error(`${LOG_PREFIX} ❌ AddService REJECTED: ${svc.code} (${svc.serviceName}) - Reason: ${abortInfo}`);
+          rejectedServices.push({
+            code: svc.code,
+            name: svc.serviceName || "",
+            reason: abortInfo || "Unknown validation error",
+          });
+        } else {
+          console.log(`${LOG_PREFIX} ✓ AddService OK: ${svc.code}`);
+          servicesAccepted++;
         }
       }
 
-      // TARDOC services auto-promoted to AddServiceEx
-      if (tardocServices.length > 0) {
-        const svcInputRes = await reqGet<{ pIServiceExInput: number }>(
-          `IGeneralInvoiceRequest/GetCreateServiceExInput?pIGeneralInvoiceRequest=${req}&bstrTariffType=007`,
-        );
-        const svcInputHandle = svcInputRes.pIServiceExInput;
+      // TARMED services - use AddServiceEx with TARMED tariffType (001)
+      if (tarmedServices.length > 0) {
+        // Attempt 1: Try with eIgnoreValidate parameter in URL
+        let svcInputHandle: number | null = null;
+        try {
+          const svcInputRes = await reqGet<{ pIServiceExInput: number }>(
+            `IGeneralInvoiceRequest/GetCreateServiceExInput?pIGeneralInvoiceRequest=${req}&bstrTariffType=001&eIgnoreValidate=1`,
+          );
+          svcInputHandle = svcInputRes.pIServiceExInput;
+          console.log(`${LOG_PREFIX} Created ServiceExInput for TARMED with eIgnoreValidate flag`);
+        } catch (err1) {
+          const errMsg1 = err1 instanceof Error ? err1.message : String(err1);
+          console.log(`${LOG_PREFIX} Attempt 1 failed (eIgnoreValidate in URL): ${errMsg1}`);
+          // Attempt 2: Try standard approach
+          try {
+            const svcInputRes = await reqGet<{ pIServiceExInput: number }>(
+              `IGeneralInvoiceRequest/GetCreateServiceExInput?pIGeneralInvoiceRequest=${req}&bstrTariffType=001`,
+            );
+            svcInputHandle = svcInputRes.pIServiceExInput;
+            console.log(`${LOG_PREFIX} Created ServiceExInput for TARMED (standard)`);
+          } catch (err2) {
+            const errMsg2 = err2 instanceof Error ? err2.message : String(err2);
+            console.error(`${LOG_PREFIX} All attempts failed. Err1: ${errMsg1}, Err2: ${errMsg2}`);
+            throw new Error(`Cannot create ServiceExInput for TARMED. Last error: ${errMsg2}`);
+          }
+        }
 
-        // Initialize the IServiceExInput with physician, patient, treatment data
-        await initServiceExInput(svcInputHandle, input);
+        await initServiceExInput(svcInputHandle!, input);
 
-        for (const svc of tardocServices) {
-          // Sumex validates: dAmountMT = quantity × unitMT × unitFactorMT × internalScaling × externalScaling
+        for (const svc of tarmedServices) {
           const unitMT = svc.unit ?? 0;
           const unitFactorMT = svc.unitFactor ?? 1;
           const extFactorMT = svc.externalFactor ?? 1;
           const computedAmountMT = Math.round(svc.quantity * unitMT * unitFactorMT * 1 * extFactorMT * 100) / 100;
-          console.log(`${LOG_PREFIX} AddServiceEx ${svc.code}: qty=${svc.quantity} unitMT=${unitMT} factor=${unitFactorMT} ext=${extFactorMT} => amountMT=${computedAmountMT} (passed amount=${svc.amount})`);
+          console.log(`${LOG_PREFIX} AddServiceEx TARMED ${svc.code}: qty=${svc.quantity} unitMT=${unitMT} factor=${unitFactorMT} ext=${extFactorMT} => amountMT=${computedAmountMT}`);
 
           const addRes = await reqPost<{ plID: number; pbStatus: boolean }>(
             "IGeneralInvoiceRequest",
@@ -1128,7 +1197,7 @@ export async function buildInvoiceRequest(
             {
               pIGeneralInvoiceRequest: req,
               pIServiceExInput: svcInputHandle,
-              bstrTariffType: svc.tariffType,
+              bstrTariffType: "001",
               bstrCode: svc.code,
               bstrReferenceCode: svc.referenceCode || "",
               dQuantity: svc.quantity,
@@ -1151,13 +1220,95 @@ export async function buildInvoiceRequest(
               dAmount: computedAmountMT,
               dVatRate: svc.vatRate ?? 0,
               bstrRemark: svc.remark || "",
+              eIgnoreValidate: YesNo.Yes,
+              lServiceAttributes: svc.serviceAttributes ?? 0,
+            },
+          );
+          if (!addRes.pbStatus) {
+            const abortInfo = await getAbortInfo(mgr);
+            console.error(`${LOG_PREFIX} ❌ AddServiceEx TARMED REJECTED: ${svc.code} (${svc.serviceName}) - Reason: ${abortInfo}`);
+            rejectedServices.push({
+              code: svc.code,
+              name: svc.serviceName || "",
+              reason: abortInfo || "Unknown validation error",
+            });
+          } else {
+            console.log(`${LOG_PREFIX} ✓ AddServiceEx TARMED OK: ${svc.code}`);
+            servicesAccepted++;
+          }
+        }
+      }
+
+      // TARDOC services auto-promoted to AddServiceEx
+      if (tardocServices.length > 0) {
+        const svcInputRes = await reqGet<{ pIServiceExInput: number }>(
+          `IGeneralInvoiceRequest/GetCreateServiceExInput?pIGeneralInvoiceRequest=${req}&bstrTariffType=007`,
+        );
+        const svcInputHandle = svcInputRes.pIServiceExInput;
+
+        // Initialize the IServiceExInput with physician, patient, treatment data
+        await initServiceExInput(svcInputHandle, input);
+
+        for (const svc of tardocServices) {
+          // Sumex validates: dAmountMT = quantity × unitMT × unitFactorMT × internalScaling × externalScaling
+          const unitMT = svc.unit ?? 0;
+          const unitFactorMT = svc.unitFactor ?? 1;
+          const extFactorMT = svc.externalFactor ?? 1;
+          const computedAmountMT = Math.round(svc.quantity * unitMT * unitFactorMT * 1 * extFactorMT * 100) / 100;
+
+          // TT (Technical) component for TARDOC
+          const unitTT = svc.unitTT ?? 0;
+          const unitFactorTT = svc.unitFactorTT ?? 1;
+          const extFactorTT = 1; // Usually 1 for TT
+          const computedAmountTT = Math.round(svc.quantity * unitTT * unitFactorTT * 1 * extFactorTT * 100) / 100;
+
+          console.log(`${LOG_PREFIX} AddServiceEx ${svc.code}: qty=${svc.quantity} unitMT=${unitMT} factor=${unitFactorMT} ext=${extFactorMT} => amountMT=${computedAmountMT}, unitTT=${unitTT} factorTT=${unitFactorTT} => amountTT=${computedAmountTT} (passed amount=${svc.amount})`);
+
+          const addRes = await reqPost<{ plID: number; pbStatus: boolean }>(
+            "IGeneralInvoiceRequest",
+            "AddServiceEx",
+            {
+              pIGeneralInvoiceRequest: req,
+              pIServiceExInput: svcInputHandle,
+              bstrTariffType: svc.tariffType,
+              bstrCode: svc.code,
+              bstrReferenceCode: svc.referenceCode || "",
+              dQuantity: svc.quantity,
+              lSessionNumber: svc.sessionNumber ?? 1,
+              lGroupSize: svc.groupSize ?? 1,
+              dDateBegin: svc.dateBegin,
+              dDateEnd: svc.dateEnd || "0",
+              eSide: svc.side ?? SideType.None,
+              bstrServiceName: svc.serviceName || "",
+              dUnitMT: unitMT,
+              dUnitFactorMT: unitFactorMT,
+              dUnitInternalScalingFactorMT: 1,
+              dUnitExternalScalingFactorMT: extFactorMT,
+              dAmountMT: computedAmountMT,
+              dUnitTT: unitTT,
+              dUnitFactorTT: unitFactorTT,
+              dUnitInternalScalingFactorTT: 1,
+              dUnitExternalScalingFactorTT: extFactorTT,
+              dAmountTT: computedAmountTT,
+              dAmount: computedAmountMT + computedAmountTT,
+              dVatRate: svc.vatRate ?? 0,
+              bstrRemark: svc.remark || "",
               eIgnoreValidate: svc.ignoreValidate ?? YesNo.Yes,
               lServiceAttributes: svc.serviceAttributes ?? 0,
             },
           );
           if (!addRes.pbStatus) {
             const abortInfo = await getAbortInfo(mgr);
-            console.warn(`${LOG_PREFIX} AddServiceEx (auto) ${svc.code} rejected: ${abortInfo}`);
+            console.error(`${LOG_PREFIX} ❌ AddServiceEx REJECTED: ${svc.code} (${svc.serviceName}) - Reason: ${abortInfo}`);
+            console.error(`${LOG_PREFIX} Service details: tariff=${svc.tariffType}, qty=${svc.quantity}, unit=${unitMT}, factor=${unitFactorMT}, ext=${extFactorMT}, amount=${computedAmountMT}`);
+            rejectedServices.push({
+              code: svc.code,
+              name: svc.serviceName || "",
+              reason: abortInfo || "Unknown validation error",
+            });
+          } else {
+            console.log(`${LOG_PREFIX} ✓ AddServiceEx OK: ${svc.code} (${svc.serviceName})`);
+            servicesAccepted++;
           }
         }
       }
@@ -1371,6 +1522,9 @@ export async function buildInvoiceRequest(
       validationError: xmlRes.plValidationError,
       usedSchema: xmlRes.pbstrUsedSchema,
       timestamp: xmlRes.plTimestamp,
+      rejectedServices: rejectedServices.length > 0 ? rejectedServices : undefined,
+      servicesRequested,
+      servicesAccepted,
     };
 
     // --- Print / PDF (optional) ---
@@ -2092,4 +2246,195 @@ export function mapTiersMode(billing: string): TiersMode {
 /** Map sex string to Sumex SexType */
 export function mapSex(sex: string): SexType {
   return sex?.toLowerCase() === "female" ? SexType.Female : SexType.Male;
+}
+
+// ---------------------------------------------------------------------------
+// Storno (cancellation) XML — simple string-replacement approach
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate Storno XML by rewriting the request_subtype attribute in the
+ * original XML (no round-trip through the Sumex server required).
+ *
+ * Per geninv-req-v50 schema: request_subtype "3" = storno.
+ * The storno XML can then be uploaded to MediData as a new transmission.
+ */
+export async function generateStornoFromXMLSimple(
+  originalXmlContent: string,
+  reason: string = "Technical error - incorrect service data",
+  options?: {
+    /** Override the `<invoice:transport to="…">` GLN. Use when the original
+     *  receiver is no longer an active MediData ELA participant. */
+    transportToGln?: string;
+  },
+): Promise<{ success: boolean; xmlContent?: string; error?: string }> {
+  try {
+    // Change request_subtype from "0" (normal) to "3" (storno)
+    let stornoXml = originalXmlContent.replace(
+      /(<invoice:payload[^>]*\s+request_subtype\s*=\s*["'])0(["'])/gi,
+      '$13$2'
+    );
+    // Also handle "normal" textual form
+    stornoXml = stornoXml.replace(
+      /(<invoice:payload[^>]*\s+request_subtype\s*=\s*["'])normal(["'])/gi,
+      '$1storno$2'
+    );
+
+    // Update request_timestamp to current time
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    stornoXml = stornoXml.replace(
+      /(<invoice:payload[^>]*\s+request_timestamp\s*=\s*["'])\d+(["'])/gi,
+      `$1${currentTimestamp}$2`
+    );
+    stornoXml = stornoXml.replace(
+      /(<invoice:invoice[^>]*\s+request_timestamp\s*=\s*["'])\d+(["'])/gi,
+      `$1${currentTimestamp}$2`
+    );
+
+    // Add or update remark element with the cancellation reason
+    const escapedReason = reason
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    if (stornoXml.includes('<invoice:remark>')) {
+      stornoXml = stornoXml.replace(
+        /<invoice:remark>[\s\S]*?<\/invoice:remark>/,
+        `<invoice:remark>${escapedReason}</invoice:remark>`
+      );
+    } else if (/<invoice:prolog[\s\S]*?<\/invoice:prolog>/.test(stornoXml)) {
+      stornoXml = stornoXml.replace(
+        /(<\/invoice:prolog>)/,
+        `$1\n        <invoice:remark>${escapedReason}</invoice:remark>`
+      );
+    } else if (/<invoice:prolog[^>]*\/>/.test(stornoXml)) {
+      stornoXml = stornoXml.replace(
+        /(<invoice:prolog[^>]*\/>)/,
+        `$1\n        <invoice:remark>${escapedReason}</invoice:remark>`
+      );
+    } else {
+      stornoXml = stornoXml.replace(
+        /(<invoice:body[^>]*>)/,
+        `$1\n        <invoice:remark>${escapedReason}</invoice:remark>`
+      );
+    }
+
+    // Optionally override the ELA transport receiver GLN
+    if (options?.transportToGln && /^\d{13}$/.test(options.transportToGln)) {
+      stornoXml = stornoXml.replace(
+        /(<invoice:transport\b[^>]*\bto\s*=\s*["'])\d{13}(["'])/i,
+        `$1${options.transportToGln}$2`,
+      );
+    }
+
+    return { success: true, xmlContent: stornoXml };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Print Invoice Request (re-print PDF from stored request XML)
+// ---------------------------------------------------------------------------
+
+/**
+ * Load a stored invoice request XML into the Sumex request manager and print
+ * a PDF from it. Useful for printing invoices that were already submitted but
+ * whose PDF wasn't stored, or for printing storno PDFs.
+ */
+export async function printInvoiceRequest(
+  xmlContent: string,
+  fileName: string = "invoice.xml",
+): Promise<{ success: boolean; pdfContent?: Buffer; pdfFilePath?: string; error?: string }> {
+  const factory = await reqGet<{ pIGeneralInvoiceRequestManager: number }>(
+    "IGeneralInvoiceRequestManager/GetCreateGeneralInvoiceRequestManager",
+  );
+  const mgrHandle = factory.pIGeneralInvoiceRequestManager;
+
+  try {
+    const loadParams = new URLSearchParams({
+      pIGeneralInvoiceRequestManager: String(mgrHandle),
+      bstrInputFile: fileName,
+    });
+    const loadUrl = `${SUMEX_REQUEST_BASE_URL}/IGeneralInvoiceRequestManager/LoadXML?${loadParams}`;
+    console.log(`${LOG_PREFIX} Request LoadXML POST to ${loadUrl}`);
+
+    const xmlBytes = new TextEncoder().encode(xmlContent);
+    const loadFetch = await fetch(loadUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Length": String(xmlBytes.length),
+      },
+      body: xmlBytes,
+      cache: "no-store",
+    });
+
+    if (!loadFetch.ok) {
+      const errBody = await loadFetch.text().catch(() => "");
+      return { success: false, error: `LoadXML POST failed: ${loadFetch.status} ${errBody}` };
+    }
+
+    const loadRes = (await loadFetch.json()) as {
+      pIGeneralInvoiceRequest: number;
+      pbStatus: boolean;
+    };
+
+    if (!loadRes.pbStatus) {
+      const abortRes = await reqPost<{ pbstrAbortInfo: string }>(
+        "IGeneralInvoiceRequestManager",
+        "GetAbortInfo",
+        { pIGeneralInvoiceRequestManager: mgrHandle },
+      ).catch(() => ({ pbstrAbortInfo: "Unknown error" }));
+      return { success: false, error: `LoadXML failed: ${abortRes.pbstrAbortInfo}` };
+    }
+
+    console.log(`${LOG_PREFIX} Request loaded, handle=${loadRes.pIGeneralInvoiceRequest}`);
+
+    const printRes = await reqPost<{
+      pbStatus: boolean;
+      pbstrPDFFile: string;
+    }>(
+      "IGeneralInvoiceRequestManager",
+      "Print",
+      {
+        pIGeneralInvoiceRequestManager: mgrHandle,
+        bstrPrintTemplate: "",
+        lGenerationAttributes: 0,
+        ePrintPreview: 0,
+        eAddressRight: 1,
+        plTimestamp: 0,
+      },
+    );
+
+    if (!printRes.pbStatus || !printRes.pbstrPDFFile) {
+      const abortRes = await reqPost<{ pbstrAbortInfo: string }>(
+        "IGeneralInvoiceRequestManager",
+        "GetAbortInfo",
+        { pIGeneralInvoiceRequestManager: mgrHandle },
+      ).catch(() => ({ pbstrAbortInfo: "Unknown error" }));
+      return { success: false, error: `Print failed: ${abortRes.pbstrAbortInfo}` };
+    }
+
+    const baseOrigin = new URL(SUMEX_REQUEST_BASE_URL).origin;
+    const pdfUrl = `${baseOrigin}${printRes.pbstrPDFFile}`;
+    console.log(`${LOG_PREFIX} Request PDF: ${pdfUrl}`);
+    const pdfRes = await fetch(pdfUrl, { cache: "no-store" });
+    if (!pdfRes.ok) {
+      return { success: false, error: `PDF download failed: ${pdfRes.status}` };
+    }
+    const arrayBuf = await pdfRes.arrayBuffer();
+    return {
+      success: true,
+      pdfContent: Buffer.from(arrayBuf),
+      pdfFilePath: printRes.pbstrPDFFile,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }

@@ -27,10 +27,59 @@ export async function POST() {
       statusUpdates: { checked: 0, updated: 0 },
     };
 
+    // Helper: when a storno submission transitions to a terminal state,
+    // cascade the outcome to its parent (the original invoice submission).
+    // - storno accepted  → parent becomes `cancelled`
+    // - storno rejected  → parent stays as-is, rejection note added to history
+    async function cascadeStornoOutcome(stornoRow: {
+      id: string;
+      is_storno?: boolean | null;
+      parent_submission_id?: string | null;
+    }, newStornoStatus: string, reason?: string | null) {
+      if (!stornoRow.is_storno || !stornoRow.parent_submission_id) return;
+      if (newStornoStatus === "accepted") {
+        const { data: parent } = await supabaseAdmin
+          .from("medidata_submissions")
+          .select("id, status")
+          .eq("id", stornoRow.parent_submission_id)
+          .single();
+        if (parent && parent.status !== "cancelled") {
+          await supabaseAdmin
+            .from("medidata_submissions")
+            .update({ status: "cancelled", updated_at: new Date().toISOString() })
+            .eq("id", parent.id);
+          await supabaseAdmin.from("medidata_submission_history").insert({
+            submission_id: parent.id,
+            previous_status: parent.status,
+            new_status: "cancelled",
+            changed_by: null,
+            notes: `Cancelled via accepted storno submission ${stornoRow.id}.`,
+          });
+        }
+      } else if (newStornoStatus === "rejected") {
+        // Storno was rejected by MediData/insurer — the original stays live.
+        // Record a history note (new_status = parent's current status) so the
+        // table's not-null constraint is satisfied.
+        const { data: parent } = await supabaseAdmin
+          .from("medidata_submissions")
+          .select("status")
+          .eq("id", stornoRow.parent_submission_id)
+          .single();
+        const parentStatus = parent?.status ?? "pending";
+        await supabaseAdmin.from("medidata_submission_history").insert({
+          submission_id: stornoRow.parent_submission_id,
+          previous_status: parentStatus,
+          new_status: parentStatus,
+          changed_by: null,
+          notes: `Storno submission ${stornoRow.id} was rejected by MediData${reason ? ` (${reason})` : ""}. Original submission status unchanged.`,
+        });
+      }
+    }
+
     // ── 1. Poll pending submission statuses ──
     const { data: pendingSubs } = await supabaseAdmin
       .from("medidata_submissions")
-      .select("id, medidata_message_id, status")
+      .select("id, medidata_message_id, status, is_storno, parent_submission_id")
       .in("status", ["pending", "transmitted"])
       .not("medidata_message_id", "is", null)
       .limit(20);
@@ -81,6 +130,11 @@ export async function POST() {
               response_message: errorReason || null,
             });
 
+            // Cascade storno outcome to parent submission (if this is a storno).
+            if (newStatus === "rejected" || newStatus === "accepted") {
+              await cascadeStornoOutcome(sub as any, newStatus, errorReason);
+            }
+
             results.statusUpdates.updated++;
           }
         } catch (e) {
@@ -126,13 +180,18 @@ export async function POST() {
         // This prevents multiple responses for the same invoice from all going to the latest submission.
         const corrRef = (dl as any).correlationReference || (dl as any).documentReference || "";
         const transmissionRef = ref; // The download's transmissionReference is the unique upload ID
+        // Detect if this response is for a patient copy (request_subtype="copy")
+        // Patient copies (TP Art. 42) are often rejected by insurers as duplicates.
+        // We must NOT overwrite the original submission status with a copy rejection.
+        const isCopyResponse = /request_subtype\s*=\s*["']copy["']/i.test(content);
+
         let submissionId: string | null = null;
-        let matchedSub: { id: string; status: string } | null = null;
+        let matchedSub: { id: string; status: string; is_storno?: boolean | null; parent_submission_id?: string | null } | null = null;
 
         // First try matching by transmission reference (most reliable - unique per upload)
         const { data: subByRef } = await supabaseAdmin
           .from("medidata_submissions")
-          .select("id, status")
+          .select("id, status, is_storno, parent_submission_id")
           .eq("medidata_message_id", transmissionRef)
           .limit(1)
           .single();
@@ -144,7 +203,7 @@ export async function POST() {
           // Only use this if transmission ref didn't match
           const { data: subByInv } = await supabaseAdmin
             .from("medidata_submissions")
-            .select("id, status")
+            .select("id, status, is_storno, parent_submission_id")
             .eq("invoice_number", corrRef)
             .not("medidata_message_id", "is", null)
             .order("created_at", { ascending: false })
@@ -159,31 +218,49 @@ export async function POST() {
         if (matchedSub) {
           submissionId = matchedSub.id;
 
-          // Update submission status based on response
-          const newStatus = parsed.type === "accepted" ? "accepted"
-            : parsed.type === "rejected" ? "rejected"
-            : parsed.type === "pending" ? "pending"
-            : matchedSub.status;
-
-          if (newStatus !== matchedSub.status) {
-            await supabaseAdmin
-              .from("medidata_submissions")
-              .update({
-                status: newStatus,
-                insurance_response_date: new Date().toISOString(),
-                insurance_response_code: parsed.statusOut,
-                insurance_response_message: parsed.explanation || parsed.type,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", matchedSub.id);
-
+          if (isCopyResponse) {
+            // Patient copy response — do NOT change submission status.
+            // Just record it in history for audit trail.
+            console.log(`[poll] Patient copy response for ${corrRef}: ${parsed.type}. Status NOT changed.`);
             await supabaseAdmin.from("medidata_submission_history").insert({
               submission_id: matchedSub.id,
               previous_status: matchedSub.status,
-              new_status: newStatus,
+              new_status: matchedSub.status,
               response_code: parsed.statusOut,
-              response_message: `Insurer response: ${parsed.type}${parsed.explanation ? ` — ${parsed.explanation}` : ""}`,
+              response_message: `[PATIENT COPY] Insurer response: ${parsed.type}${parsed.explanation ? ` — ${parsed.explanation}` : ""}`,
             });
+          } else {
+            // Original invoice (or storno) response — update submission status
+            const newStatus = parsed.type === "accepted" ? "accepted"
+              : parsed.type === "rejected" ? "rejected"
+              : parsed.type === "pending" ? "pending"
+              : matchedSub.status;
+
+            if (newStatus !== matchedSub.status) {
+              await supabaseAdmin
+                .from("medidata_submissions")
+                .update({
+                  status: newStatus,
+                  insurance_response_date: new Date().toISOString(),
+                  insurance_response_code: parsed.statusOut,
+                  insurance_response_message: parsed.explanation || parsed.type,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", matchedSub.id);
+
+              await supabaseAdmin.from("medidata_submission_history").insert({
+                submission_id: matchedSub.id,
+                previous_status: matchedSub.status,
+                new_status: newStatus,
+                response_code: parsed.statusOut,
+                response_message: `Insurer response: ${parsed.type}${parsed.explanation ? ` — ${parsed.explanation}` : ""}`,
+              });
+
+              // Cascade storno outcome to parent submission (if this is a storno).
+              if (newStatus === "accepted" || newStatus === "rejected") {
+                await cascadeStornoOutcome(matchedSub, newStatus, parsed.explanation || null);
+              }
+            }
           }
         }
 

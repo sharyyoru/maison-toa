@@ -69,3 +69,19 @@ PATIENT-*.md
 PAYMENT_FLOW_REFERENCE.md
 UPDATE-EXECUTION-SUMMARY.md
 src/app/api/admin/
+*.pdf
+*.md
+*.sql
+backfill-machine-assignments (2) (1).xlsx
+backfill-machine-assignments.xlsx
+scripts/import-csvs/medical_notes.tsv
+scripts/import-csvs/patient_insurances.tsv
+scripts/import-csvs/swiss_insurer_laws.tsv
+scripts/import-csvs/swiss_insurers.tsv
+scripts/insurance-migration-report.json
+scripts/migrate-insurance-csv.js
+scripts/migrate-insurance-direct.js
+scripts/migrate-insurance.js
+scripts/migrate-medical-notes.js
+scripts/setup-billing-entities-v2.sql
+scripts/setup-billing-entities-v2.sql

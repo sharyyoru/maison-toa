@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/cancel-unpaid-deposits",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/medidata-poll",
+      "schedule": "*/30 * * * *"
     }
   ],
   "headers": [

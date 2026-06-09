@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import {
-  generateTardocServicesFromDuration,
+  // NOTE: generateTardocServicesFromDuration is intentionally NOT imported.
+  // Auto-generating synthetic line items from consultation duration was a
+  // source of the partial-payment-for-services-not-rendered bug. Line items
+  // must come exclusively from the invoice_line_items table.
   type BillingType,
   type SwissLawType,
 } from "@/lib/medidata";
@@ -13,6 +16,7 @@ import {
   mapLawType as mapSumexLaw,
   mapTiersMode as mapSumexTiers,
   mapSex as mapSumexSex,
+  TiersMode,
   RoleType,
   PlaceType,
   RequestType,
@@ -24,6 +28,7 @@ import {
   type InvoiceServiceInput as SumexServiceInput,
   type InvoiceDiagnosis as SumexDiagnosis,
 } from "@/lib/sumexInvoice";
+import { deriveTariffType } from "@/lib/tariffType";
 
 type ConsultationData = {
   id: string;
@@ -83,12 +88,14 @@ export async function POST(request: NextRequest) {
       treatmentReason = 'disease',
       insurerGln,
       insurerName,
+      insurerAddress: bodyInsurerAddress,
       policyNumber,
       avsNumber,
       caseNumber,
       accidentDate,
       durationMinutes,
       language,
+      skipValidation = false,
     } = body as {
       invoiceId?: string;
       consultationId?: string;
@@ -100,12 +107,14 @@ export async function POST(request: NextRequest) {
       treatmentReason?: string;
       insurerGln?: string;
       insurerName?: string;
+      insurerAddress?: { street?: string; zip?: string; city?: string };
       policyNumber?: string;
       avsNumber?: string;
       caseNumber?: string;
       accidentDate?: string;
       durationMinutes?: number;
       language?: 1 | 2 | 3;
+      skipValidation?: boolean;
     };
 
     // ── Resolve the invoice (primary) or fall back to consultation ──
@@ -236,7 +245,7 @@ export async function POST(request: NextRequest) {
     if (invoiceRecord?.provider_id) {
       const { data: provRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, phone, vatuid")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, phone, vatuid, qual_dignities")
         .eq("id", invoiceRecord.provider_id)
         .single();
       if (provRow) billingEntity = provRow;
@@ -247,7 +256,7 @@ export async function POST(request: NextRequest) {
     if (invoiceRecord?.doctor_user_id && invoiceRecord.doctor_user_id !== invoiceRecord.provider_id) {
       const { data: staffRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, salutation, title")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, salutation, title, qual_dignities")
         .eq("id", invoiceRecord.doctor_user_id)
         .single();
       if (staffRow) staffEntity = staffRow;
@@ -285,17 +294,65 @@ export async function POST(request: NextRequest) {
     // Load line items
     let services: import("@/lib/medidata").InvoiceServiceLine[] = [];
     const lineItemLookupId = resolvedInvoiceId || consultationId;
-    const { data: dbLineItems } = await supabaseAdmin
+
+    console.log(`[SendInvoice] Loading line items: invoiceId=${invoiceId}, consultationId=${consultationId}, resolvedInvoiceId=${resolvedInvoiceId}, lineItemLookupId=${lineItemLookupId}`);
+
+    const lineItemsQuery = supabaseAdmin
       .from("invoice_line_items")
-      .select("code, name, quantity, unit_price, total_price, tariff_code, tariff_type, external_factor_mt, side_type, session_number, ref_code, date_begin, provider_gln, responsible_gln, catalog_name")
+      .select("code, name, quantity, unit_price, total_price, tariff_code, external_factor_mt, side_type, session_number, ref_code, date_begin, provider_gln, responsible_gln, catalog_name, tp_al, tp_tl, tp_al_value, tp_tl_value")
       .eq("invoice_id", lineItemLookupId)
       .order("sort_order", { ascending: true });
 
+    const { data: dbLineItems, error: lineItemsError } = await lineItemsQuery;
+
+    console.log(`[SendInvoice] Line items query result: found=${dbLineItems?.length ?? 0}, error=${lineItemsError ? JSON.stringify(lineItemsError) : 'none'}`);
+
     if (dbLineItems && dbLineItems.length > 0) {
+      // Include all line items (TMA gesture codes are kept as reference lines with amount=0)
+      const billableLineItems = dbLineItems;
+
+      // ── TARDOC tax-point backfill ─────────────────────────────────────────
+      // Some TARDOC line items were stored with tp_al=0/tp_tl=0 (the columns
+      // were not populated when the line item was created). Sumex requires the
+      // raw AL/TL tax-point counts (tp_mt/tp_tt) — it rejects dUnitMT = 0 or
+      // the CHF total.  Look up missing values from tardoc_group_items.
+      const tardocCodesNeedingLookup = billableLineItems
+        .filter((it: any) => it.tariff_code === 7 && (!(it.tp_al > 0) || !(it.tp_tl > 0)))
+        .map((it: any) => it.code as string)
+        .filter(Boolean);
+
+      const tardocCatalogMap: Record<string, { tp_mt: number; tp_tt: number }> = {};
+      if (tardocCodesNeedingLookup.length > 0) {
+        const uniqueCodes = [...new Set(tardocCodesNeedingLookup)];
+        const { data: catalogRows } = await supabaseAdmin
+          .from("tardoc_group_items")
+          .select("tardoc_code, tp_mt, tp_tt")
+          .in("tardoc_code", uniqueCodes);
+        for (const row of (catalogRows ?? [])) {
+          if (row.tardoc_code && !tardocCatalogMap[row.tardoc_code]) {
+            tardocCatalogMap[row.tardoc_code] = { tp_mt: row.tp_mt ?? 0, tp_tt: row.tp_tt ?? 0 };
+          }
+        }
+        console.log(`[SendInvoice] TARDOC catalog backfill: looked up ${uniqueCodes.length} codes, found ${Object.keys(tardocCatalogMap).length}:`, tardocCatalogMap);
+      }
+      // ── end backfill ──────────────────────────────────────────────────────
+
       // Map actual line items to InvoiceServiceLine for XML generation
-      services = dbLineItems.map((item: any) => {
-        // Use stored tariff_type, or derive from tariff_code (zero-padded to 3 digits)
-        const tariffType = item.tariff_type || (item.tariff_code ? String(item.tariff_code).padStart(3, "0") : "999");
+      services = billableLineItems.map((item: any, idx: number) => {
+        // Resolve tariff_type honoring `catalog_name` first so TMA gestures
+        // (catalog_name='TMA' but tariff_code=5/7) emit as "TMA", not "005".
+        // See src/lib/tariffType.ts for the full priority chain.
+        const tariffType = deriveTariffType(item);
+        const isAcf = tariffType === "005";
+        // ACF (005) with ignoreValidate=Yes: use sessionNumber=1 (simple tariff default per docs)
+        const rawSession = item.session_number ?? 1;
+        const sessionNumber = isAcf ? 1 : rawSession;
+
+        // For TARDOC, prefer stored tp_al/tp_tl; fall back to catalog tp_mt/tp_tt
+        const catalog = item.tariff_code === 7 ? tardocCatalogMap[item.code] : undefined;
+        const resolvedTpAl = (item.tp_al > 0) ? item.tp_al : (catalog?.tp_mt ?? 0);
+        const resolvedTpTl = (item.tp_tl > 0) ? item.tp_tl : (catalog?.tp_tt ?? 0);
+
         return {
           code: item.code || "",
           tariffType,
@@ -309,17 +366,40 @@ export async function POST(request: NextRequest) {
           // ACF/TARDOC-specific fields
           externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : undefined,
           sideType: item.tariff_code === 5 ? (item.side_type ?? 0) : undefined,
-          sessionNumber: item.session_number ?? 1,
+          sessionNumber,
           refCode: item.ref_code || undefined,
+          // Tax point fields for TARDOC — use catalog-backfilled values if stored as 0
+          tpAl: resolvedTpAl,
+          tpTl: resolvedTpTl,
+          tpAlValue: item.tp_al_value,
+          tpTlValue: item.tp_tl_value,
         };
       });
+
+      if (services.length === 0) {
+        console.error(`[SendInvoice] ❌ All line items are TMA gesture codes (grouper inputs). No billable ACF flat rate codes found.`);
+        return NextResponse.json(
+          { error: "No billable services found. TMA gesture codes must be grouped into ACF flat rate codes first." },
+          { status: 400 },
+        );
+      }
     } else {
-      // Fallback: generate TARDOC services from duration (backward compatibility)
-      const duration = durationMinutes || extractDurationFromContent(consultationData?.content || null);
-      services = generateTardocServicesFromDuration(
-        duration,
-        treatmentDate,
-        provGln
+      // NO FALLBACK - line items are required for all invoices
+      console.error(`[SendInvoice] ❌ CRITICAL: NO LINE ITEMS FOUND for invoice!`);
+      console.error(`[SendInvoice] invoiceId=${invoiceId}, consultationId=${consultationId}, resolvedInvoiceId=${resolvedInvoiceId}, lineItemLookupId=${lineItemLookupId}`);
+
+      return NextResponse.json(
+        {
+          error: "No line items found for this invoice",
+          details: "Invoice must have line items before it can be sent to insurance. Please add services to the invoice first.",
+          debug: {
+            invoiceId,
+            consultationId,
+            resolvedInvoiceId,
+            lineItemLookupId,
+          }
+        },
+        { status: 400 }
       );
     }
 
@@ -331,26 +411,53 @@ export async function POST(request: NextRequest) {
     const resolvedInsurerName = insurerName || invoiceRecord?.insurance_name || insuranceData?.provider_name || 'Unknown Insurer';
 
     // Build Sumex1 input — Sumex1 server is the ONLY XML generation path
-    const sumexServices: SumexServiceInput[] = services.map(s => ({
-      tariffType: s.tariffType || "999",
-      code: s.code,
-      referenceCode: s.refCode || "",
-      quantity: s.quantity,
-      sessionNumber: s.sessionNumber ?? 1,
-      dateBegin: s.date,
-      providerGln: s.providerGln || provGln,
-      responsibleGln: s.providerGln || provGln,
-      side: (s.sideType as 0 | 1 | 2 | 3) ?? 0,
-      serviceName: s.description || "",
-      unit: s.unitPrice || 0,
-      unitFactor: 1,
-      externalFactor: s.externalFactor ?? 1,
-      amount: s.total || 0,
-      vatRate: 0,
-      ignoreValidate: YesNo.Yes,
-    }));
+    const sumexServices: SumexServiceInput[] = services.map(s => {
+      // For TARDOC (007) and ACF (005), use tp_al/tp_tl as unit values and tp_al_value/tp_tl_value as unitFactors
+      // This correctly separates tax points from point value (Taxpunktwert)
+      const isTardoc = s.tariffType === "007";
+      const isAcf = (s.tariffType || "590") === "005";
+      const usesTaxPoints = isTardoc || isAcf;
+      const unit = usesTaxPoints && s.tpAl !== undefined && s.tpAl !== null && s.tpAl > 0 ? s.tpAl : (s.unitPrice || 0);
+      const unitFactor = usesTaxPoints && s.tpAlValue !== undefined && s.tpAlValue !== null && s.tpAlValue > 0 ? s.tpAlValue : 1;
+      const unitTT = usesTaxPoints && s.tpTl !== undefined && s.tpTl !== null && s.tpTl > 0 ? s.tpTl : undefined;
+      const unitFactorTT = usesTaxPoints && s.tpTlValue !== undefined && s.tpTlValue !== null && s.tpTlValue > 0 ? s.tpTlValue : undefined;
+      return {
+        tariffType: s.tariffType || "590",
+        code: s.code,
+        referenceCode: s.refCode || "",
+        quantity: s.quantity,
+        sessionNumber: s.sessionNumber ?? 1,
+        dateBegin: s.date,
+        providerGln: s.providerGln || provGln,
+        responsibleGln: s.providerGln || provGln,
+        side: (s.sideType as 0 | 1 | 2 | 3) ?? 0,
+        serviceName: s.description || "",
+        unit,
+        unitFactor,
+        unitTT,
+        unitFactorTT,
+        externalFactor: s.externalFactor ?? 1,
+        amount: s.total || 0,
+        vatRate: 0,
+        // ACF 005: always skip validation — already grouped by standalone acfValidator.
+        ignoreValidate: (isAcf || skipValidation) ? YesNo.Yes : YesNo.No,
+      };
+    });
 
-    const sumexDiagnoses: SumexDiagnosis[] = (diagnosisCodes || []).map((code: string) => ({
+    // Fallback: extract ICD codes from ACF line items' ref_code if none provided
+    let resolvedDiagCodes: string[] = (diagnosisCodes || []).filter((c: string) => c && c.length >= 2);
+    if (resolvedDiagCodes.length === 0 && services.some((s: any) => s.tariffType === "005")) {
+      const acfRefCodes = [...new Set(
+        services
+          .filter((s: any) => s.tariffType === "005" && s.refCode && s.refCode.length >= 2)
+          .map((s: any) => s.refCode as string)
+      )];
+      if (acfRefCodes.length > 0) {
+        console.log(`[SendInvoice] No diagnosis codes provided, extracted from ACF ref_codes: ${acfRefCodes.join(", ")}`);
+        resolvedDiagCodes = acfRefCodes;
+      }
+    }
+    const sumexDiagnoses: SumexDiagnosis[] = resolvedDiagCodes.map((code: string) => ({
       type: DiagnosisType.ICD,
       code,
     }));
@@ -387,13 +494,19 @@ export async function POST(request: NextRequest) {
     // For non-Swiss patients without SSN, use the unknownSSN per Sumex CHM docs
     const patientSsn = avsNumber || insuranceData?.avs_number || (!isSwissPatient ? "7569999999991" : "");
 
+    const tiersMode = mapSumexTiers(billingType);
+    // amountPrepaid is only allowed in Tiers Garant (TG) — error [926] if sent for TP/TS
+    const paidAmt = Number(invoiceRecord?.paid_amount) || 0;
+    const amountPrepaid = tiersMode === TiersMode.Garant ? paidAmt : 0;
+
     const sumexInput: SumexInvoiceInput = {
       language: language || 2,
       roleType: RoleType.Physician,
       placeType: PlaceType.Practice,
       requestType: RequestType.Invoice,
       requestSubtype: RequestSubtype.Normal,
-      tiersMode: mapSumexTiers(billingType),
+      tiersMode,
+      amountPrepaid: amountPrepaid || undefined,
       vatNumber: billingEntity?.vatuid || "",
       invoiceId: invoiceNumber,
       invoiceDate,
@@ -472,6 +585,12 @@ export async function POST(request: NextRequest) {
       transportTo: billingType === 'TG' ? TG_NO_TRANSMISSION_GLN : resolvedReceiverGln,
       // Per MediData feedback: TP invoices must include print_copy_to_guarantor for patient copy
       printCopyToGuarantor: billingType === 'TP' ? YesNo.Yes : (invoiceRecord?.copy_to_guarantor ? YesNo.Yes : YesNo.No),
+      qualDignities:
+        (staffEntity?.qual_dignities && staffEntity.qual_dignities.length > 0)
+          ? staffEntity.qual_dignities
+          : (billingEntity?.qual_dignities && billingEntity.qual_dignities.length > 0)
+            ? billingEntity.qual_dignities
+            : undefined,
     };
 
     // Generate XML + PDF via Sumex1 server (no fallback — this is the only path)
@@ -660,6 +779,11 @@ export async function POST(request: NextRequest) {
       console.warn("[SendInvoice] MEDIDATA_PROXY_API_KEY not set — skipping transmission");
     }
 
+    // Log rejected services if any
+    if (sumexResult.rejectedServices && sumexResult.rejectedServices.length > 0) {
+      console.warn(`[SendInvoice] ${sumexResult.rejectedServices.length} service(s) rejected by Sumex:`, sumexResult.rejectedServices);
+    }
+
     return NextResponse.json({
       success: true,
       submission: {
@@ -675,6 +799,9 @@ export async function POST(request: NextRequest) {
         transmitted: medidataTransmissionStatus === 'pending',
         transmissionError: medidataTransmissionError,
         total,
+        servicesRequested: sumexResult.servicesRequested,
+        servicesAccepted: sumexResult.servicesAccepted,
+        rejectedServices: sumexResult.rejectedServices,
         services: services.map(s => ({
           code: s.code,
           description: s.description,
@@ -690,15 +817,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-// Helper to extract duration from content
-function extractDurationFromContent(content: string | null): number {
-  if (!content) return 15; // Default 15 minutes
-
-  const durationMatch = content.match(/Duration[:\s]*(\d+)\s*min/i) ||
-    content.match(/Durée[:\s]*(\d+)\s*min/i) ||
-    content.match(/(\d+)\s*minutes?/i);
-
-  return durationMatch ? parseInt(durationMatch[1]) : 15;
 }

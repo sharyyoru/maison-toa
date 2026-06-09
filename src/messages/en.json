@@ -1337,7 +1337,9 @@
       "calendarDefaults": "Calendar Defaults",
       "blockedDates": "Blocked Dates",
       "medidata": "MediData Connection",
-      "bookingCategories": "Booking Categories"
+      "bookingCategories": "Booking Categories",
+      "providersBilling": "Providers & Billing",
+      "tardocGroups": "TARDOC Groups"
     },
     "blockedDates": {
       "blockTitle": "Block a Date",

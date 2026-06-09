@@ -168,7 +168,7 @@ VALUES
     'medical', 'tardoc_insurer', false, NULL,
     'CH04 0024 3243 5408 2003 X', 'UBSWCHZH80A', 'Z797322',
     (SELECT id FROM account_1), (SELECT id FROM clinic_id),
-    (SELECT id FROM doctor_ids WHERE name = 'Dr Natalia Koltunova'),
+    (SELECT id FROM doctor_ids WHERE name = 'Dr. Natalia Koltunova'),
     NULL, false),
 
   -- Soins Koltunova (aesthetic, direct, VAT 8.1%) → Account 1
@@ -176,7 +176,7 @@ VALUES
     'aesthetic', 'direct_patient', true, 8.1,
     'CH04 0024 3243 5408 2003 X', 'UBSWCHZH80A', 'Z797322',
     (SELECT id FROM account_1), (SELECT id FROM clinic_id),
-    (SELECT id FROM doctor_ids WHERE name = 'Dr Natalia Koltunova'),
+    (SELECT id FROM doctor_ids WHERE name = 'Dr. Natalia Koltunova'),
     NULL, false),
 
   -- Soins Assistantes (aesthetic only, no Dr) → Account 1
@@ -192,15 +192,15 @@ VALUES
     'aesthetic', 'direct_patient', true, 8.1,
     'CH04 0024 3243 5408 2003 X', 'UBSWCHZH80A', 'Z797322',
     (SELECT id FROM account_1), (SELECT id FROM clinic_id),
-    (SELECT id FROM doctor_ids WHERE name = 'Dr Reda Benani'),
+    (SELECT id FROM doctor_ids WHERE name = 'Dr. Reda Benani'),
     'Aesthetic only — no corresponding Dr account', false),
 
-  -- Soins Miles (aesthetic, direct, VAT 8.1%) → Account 1
-  ('44444444-4444-4444-4444-000000000007', 'Soins Miles', 'billing_entity',
+  -- TOA SA (aesthetic, direct, VAT 8.1%) → Account 1
+  ('44444444-4444-4444-4444-000000000007', 'TOA SA', 'billing_entity',
     'aesthetic', 'direct_patient', true, 8.1,
     'CH04 0024 3243 5408 2003 X', 'UBSWCHZH80A', 'Z797322',
     (SELECT id FROM account_1), (SELECT id FROM clinic_id),
-    (SELECT id FROM doctor_ids WHERE name = 'Dr Alexandra Miles'),
+    (SELECT id FROM doctor_ids WHERE name = 'Dr. Alexandra Miles'),
     'Aesthetic side uses Account 1 IBAN; Dr Miles medical side uses Account 2', false),
 
   -- Soins Nordback (aesthetic, direct, VAT 8.1%) → Account 1
@@ -208,7 +208,7 @@ VALUES
     'aesthetic', 'direct_patient', true, 8.1,
     'CH04 0024 3243 5408 2003 X', 'UBSWCHZH80A', 'Z797322',
     (SELECT id FROM account_1), (SELECT id FROM clinic_id),
-    (SELECT id FROM doctor_ids WHERE name = 'Dr Sophie Nordback'),
+    (SELECT id FROM doctor_ids WHERE name = 'Dr. Sophie Nordback'),
     'Aesthetic side uses Account 1 IBAN; Dr Nordback medical side uses Account 3', false),
 
   -- Soins Guarino (aesthetic only) → Account 1
@@ -224,7 +224,7 @@ VALUES
     'medical', 'tardoc_insurer', false, NULL,
     'CH26 0024 3243 5408 2001 V', 'UBSWCHZH80A', 'Z797322',
     (SELECT id FROM account_2), (SELECT id FROM clinic_id),
-    (SELECT id FROM doctor_ids WHERE name = 'Dr Alexandra Miles'),
+    (SELECT id FROM doctor_ids WHERE name = 'Dr. Alexandra Miles'),
     NULL, false),
 
   -- Dr Nordback (medical, tardoc, no VAT) → Account 3
@@ -232,7 +232,7 @@ VALUES
     'medical', 'tardoc_insurer', false, NULL,
     'CH64 0024 3243 5408 2002 N', 'UBSWCHZH80A', 'Z797322',
     (SELECT id FROM account_3), (SELECT id FROM clinic_id),
-    (SELECT id FROM doctor_ids WHERE name = 'Dr Sophie Nordback'),
+    (SELECT id FROM doctor_ids WHERE name = 'Dr. Sophie Nordback'),
     NULL, false)
 
 ON CONFLICT (id) DO UPDATE SET

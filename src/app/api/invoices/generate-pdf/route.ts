@@ -7,6 +7,7 @@ import {
   mapLawType as mapSumexLaw,
   mapTiersMode as mapSumexTiers,
   mapSex as mapSumexSex,
+  TiersMode,
   RoleType,
   PlaceType,
   RequestType,
@@ -19,6 +20,7 @@ import {
   type InvoiceServiceInput as SumexServiceInput,
   type InvoiceDiagnosis as SumexDiagnosis,
 } from "@/lib/sumexInvoice";
+import { deriveTariffType } from "@/lib/tariffType";
 
 type PatientData = {
   first_name: string;
@@ -48,6 +50,7 @@ type ProviderData = {
   iban: string | null;
   salutation: string | null;
   title: string | null;
+  qual_dignities?: string[] | null;
 };
 
 export async function POST(request: NextRequest) {
@@ -121,7 +124,7 @@ export async function POST(request: NextRequest) {
     if (invoiceData.provider_id) {
       const { data: providerRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid")
+        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid, qual_dignities")
         .eq("id", invoiceData.provider_id)
         .single();
       if (providerRow) billingEntityData = providerRow as ProviderData;
@@ -132,7 +135,7 @@ export async function POST(request: NextRequest) {
     if (invoiceData.doctor_user_id) {
       const { data: staffRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role")
+        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, qual_dignities")
         .eq("id", invoiceData.doctor_user_id)
         .single();
       if (staffRow) staffData = staffRow as ProviderData;
@@ -155,9 +158,27 @@ export async function POST(request: NextRequest) {
       // No need to fetch a separate billing entity
     }
 
+    // SYMMETRIC FALLBACK: invoice has doctor_user_id but no provider_id
+    // Without this, Sumex SetEsrQR fails with [622] "Kreditor: Die Adressangaben
+    // sind nicht vollständig" because provStreet/provZip/provCity default to "".
+    if (!billingEntityData && staffData) {
+      billingEntityData = staffData;
+      console.log(
+        `[GeneratePDF] No provider_id on invoice; using doctor (${staffData.name}) as billing entity.`,
+      );
+    }
+
     // ── Detect insurance (Tiers Payant / Tiers Garant) invoice and generate specialized PDF ──
-    // Only treat as insurance if there's an actual insurer OR payment method is Insurance
-    const isInsuranceInvoice = !!invoiceData.insurer_id || invoiceData.payment_method === "Insurance";
+    // Treat as insurance if:
+    // 1. There's an actual insurer OR payment method is Insurance
+    // 2. OR invoice contains TARMED/TARDOC items (requires proper tariff handling)
+    const hasMedicalTariffItems = lineItems.some((item: any) =>
+      item.tariff_code === 1 || // TARMED
+      item.tariff_code === 7 || // TARDOC
+      item.catalog_name?.toLowerCase() === 'tarmed' ||
+      item.catalog_name?.toLowerCase() === 'tardoc'
+    );
+    const isInsuranceInvoice = !!invoiceData.insurer_id || invoiceData.payment_method === "Insurance" || hasMedicalTariffItems;
     if (isInsuranceInvoice) {
       console.log(`[GeneratePDF] Insurance invoice detected (${invoiceData.billing_type || "TP"}) — using Sumex1 Print for PDF`);
 
@@ -208,28 +229,60 @@ export async function POST(request: NextRequest) {
       const isValidGln = (g: string | null | undefined) => g != null && /^\d{13}$/.test(g);
 
       const sumexServices: SumexServiceInput[] = lineItems.map((item: any) => {
-        // Use stored tariff_type, or derive from tariff_code (zero-padded to 3 digits)
-        const tariffType = item.tariff_type || (item.tariff_code ? String(item.tariff_code).padStart(3, "0") : "999");
+        // Resolve tariff_type honoring `catalog_name` first so TMA gestures
+        // emit as "TMA". See src/lib/tariffType.ts.
+        const tariffType = deriveTariffType(item);
         const svcGln = isValidGln(item.provider_gln) ? item.provider_gln : provGln;
         const svcRespGln = isValidGln(item.responsible_gln) ? item.responsible_gln : svcGln;
+
+        // TARMED (tariff_code=1) vs TARDOC (tariff_code=7) vs ACF (005) vs other
+        const isTardoc = item.tariff_code === 7 || tariffType === "007";
+        const isTarmed = item.tariff_code === 1 || tariffType === "001";
+        const isAcf = tariffType === "005";
+
+        let unit: number;
+        let unitFactor: number;
+        let unitTT: number | undefined;
+        let unitFactorTT: number | undefined;
+        let calculatedAmount: number;
+
+        if (isTarmed) {
+          // TARMED: unit = tp_al (medical technical points), Sumex handles Taxpunktwert internally
+          unit = item.tp_al || item.unit_price || 0;
+          unitFactor = 1;
+          calculatedAmount = unit * (item.quantity || 1);
+        } else if (isTardoc || isAcf) {
+          // TARDOC and ACF: split AL (arzt) and TL (technisch) tax points + point values
+          unit = item.tp_al || 0;
+          unitFactor = item.tp_al_value || 1;
+          unitTT = item.tp_tl || undefined;
+          unitFactorTT = item.tp_tl_value || undefined;
+          calculatedAmount = item.total_price || 0;
+        } else {
+          unit = item.unit_price || 0;
+          unitFactor = 1;
+          calculatedAmount = item.total_price || 0;
+        }
+
         return {
           tariffType,
           code: item.code || "",
           referenceCode: item.ref_code || "",
           quantity: item.quantity || 1,
-          sessionNumber: item.session_number ?? 1,
+          sessionNumber: isAcf ? 1 : (item.session_number ?? 1),
           dateBegin: item.date_begin || treatmentDate,
           providerGln: svcGln,
           responsibleGln: svcRespGln,
           side: (item.side_type as 0 | 1 | 2 | 3) ?? 0,
           serviceName: item.name || "",
-          unit: item.unit_price || 0,
-          unitFactor: 1,
-          externalFactor: item.tariff_code === 5 ? (item.external_factor_mt ?? 1) : 1,
-          amount: item.total_price || 0,
-          // Rule 4: TARDOC (tariff_type=007) lines are always VAT-exempt for insurer billing.
-          // Other lines use the rate stored on the line item (set from service vat_rate_pct).
-          vatRate: tariffType === "007" ? 0 : (Number(item.vat_rate_value) || 0),
+          unit,
+          unitFactor,
+          unitTT,
+          unitFactorTT,
+          externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
+          amount: calculatedAmount,
+          // TARDOC/ACF/TARMED lines are always VAT-exempt for insurer billing.
+          vatRate: (isTardoc || isTarmed || isAcf) ? 0 : (Number(item.vat_rate_value) || 0),
           ignoreValidate: YesNo.Yes,
         };
       });
@@ -243,13 +296,36 @@ export async function POST(request: NextRequest) {
         code: String(code),
       }));
 
+      // --- Payment status remark & generation attributes ---
+      const paidAmt = Number(invoiceData.paid_amount) || 0;
+      const totalAmt = Number(invoiceData.total_amount) || 0;
+      const isFullyPaid = invoiceData.status === "PAID" || invoiceData.status === "OVERPAID" || (paidAmt > 0 && paidAmt >= totalAmt - 0.01);
+      const isPartialPaid = invoiceData.status === "PARTIAL_PAID" || (paidAmt > 0 && paidAmt < totalAmt - 0.01);
+
+      let paymentRemark = "";
+      let pdfGenAttrs = GenerationAttribute.None;
+      if (isFullyPaid) {
+        paymentRemark = `ACQUITTÉ / BEZAHLT — Montant acquitté: ${totalAmt.toFixed(2)} CHF`;
+        // Remove QR payment slip for fully paid invoices (nothing to pay)
+        pdfGenAttrs = GenerationAttribute.ExcludeESRInPrint;
+      } else if (isPartialPaid) {
+        const remaining = totalAmt - paidAmt;
+        paymentRemark = `Acompte reçu / Anzahlung erhalten: ${paidAmt.toFixed(2)} CHF — Solde / Restbetrag: ${remaining.toFixed(2)} CHF`;
+      }
+
+      const tiersMode1 = mapSumexTiers(invoiceType === "tg" ? "TG" : invoiceType === "tp" ? "TP" : (invoiceData.billing_type || "TG"));
+      // amountPrepaid is only allowed in Tiers Garant (TG) — error [926] if sent for TP/TS
+      const amountPrepaid1 = tiersMode1 === TiersMode.Garant ? paidAmt : 0;
+
       const sumexInput: SumexInvoiceInput = {
         language: 2,
         roleType: RoleType.Physician,
         placeType: PlaceType.Practice,
         requestType: invoiceType === "reminder" ? RequestType.Reminder : RequestType.Invoice,
         requestSubtype: RequestSubtype.Normal,
-        tiersMode: mapSumexTiers(invoiceType === "tg" ? "TG" : invoiceType === "tp" ? "TP" : (invoiceData.billing_type || "TG")),
+        remark: paymentRemark || undefined,
+        tiersMode: tiersMode1,
+        amountPrepaid: amountPrepaid1 || undefined,
         vatNumber: (billingEntityData as any)?.vatuid || "",
         invoiceId: invoiceData.invoice_number || `INV-${invoiceId.slice(0, 8)}`,
         invoiceDate: invoiceData.invoice_date || new Date().toISOString().split("T")[0],
@@ -318,7 +394,12 @@ export async function POST(request: NextRequest) {
         transportFrom: provGln,
         transportTo: receiverGln || insurerGln || "",
         printCopyToGuarantor: (invoiceData.billing_type === 'TP' || invoiceData.copy_to_guarantor) ? YesNo.Yes : YesNo.No,
-        amountPrepaid: (invoiceData.status === "PAID" || invoiceData.status === "OVERPAID") ? (Number(invoiceData.paid_amount) || Number(invoiceData.total_amount) || 0) : (Number(invoiceData.paid_amount) || 0),
+        qualDignities:
+          (staffData?.qual_dignities && staffData.qual_dignities.length > 0)
+            ? staffData.qual_dignities
+            : (billingEntityData?.qual_dignities && billingEntityData.qual_dignities.length > 0)
+              ? billingEntityData.qual_dignities
+              : undefined,
         ...(invoiceType === "reminder" ? {
           reminderLevel: Number(reminderLevel) || 1,
           reminderText: `Rappel de paiement (${reminderLevel}${reminderLevel === 1 ? "er" : "ème"} rappel)`,
@@ -338,7 +419,7 @@ export async function POST(request: NextRequest) {
       if (invoiceType !== "tp") {
         sumexInput.lawType = mapSumexLaw("ORG");
       }
-      const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate });
+      const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate, generationAttributes: pdfGenAttrs });
 
       if (!sumexResult.success) {
         console.error(`[GeneratePDF] Sumex1 FAILED: ${sumexResult.error} / ${sumexResult.abortInfo}`);
@@ -435,25 +516,64 @@ export async function POST(request: NextRequest) {
       const isValidGln2 = (g: string | null | undefined) => g != null && /^\d{13}$/.test(g);
       const sumexServices2: SumexServiceInput[] = lineItems.map((item: any) => {
         const svcGln = isValidGln2(item.provider_gln) ? item.provider_gln : provGln;
+        const svcRespGln = isValidGln2(item.responsible_gln) ? item.responsible_gln : svcGln;
+        // Resolve tariff_type honoring `catalog_name` first so TMA gestures
+        // emit as "TMA". See src/lib/tariffType.ts.
+        const tariffType = deriveTariffType(item);
+        const isTardoc2 = item.tariff_code === 7 || tariffType === "007";
+        const isTarmed2 = item.tariff_code === 1 || tariffType === "001";
+        const isAcf2 = tariffType === "005";
+        let unit2: number; let unitFactor2: number; let unitTT2: number | undefined; let unitFactorTT2: number | undefined; let amt2: number;
+        if (isTarmed2) {
+          unit2 = item.tp_al || item.unit_price || 0; unitFactor2 = 1; amt2 = unit2 * (item.quantity || 1);
+        } else if (isTardoc2 || isAcf2) {
+          unit2 = item.tp_al || 0; unitFactor2 = item.tp_al_value || 1;
+          unitTT2 = item.tp_tl || undefined; unitFactorTT2 = item.tp_tl_value || undefined;
+          amt2 = item.total_price || 0;
+        } else {
+          unit2 = item.unit_price || 0; unitFactor2 = 1; amt2 = item.total_price || 0;
+        }
         return {
-          tariffType: "999",
+          tariffType,
           code: item.code || "",
-          referenceCode: "",
+          referenceCode: item.ref_code || "",
           quantity: item.quantity || 1,
-          sessionNumber: 1,
+          sessionNumber: isAcf2 ? 1 : (item.session_number ?? 1),
           dateBegin: item.date_begin || treatmentDate,
           providerGln: svcGln,
-          responsibleGln: svcGln,
-          side: 0 as 0,
+          responsibleGln: svcRespGln,
+          side: (item.side_type as 0 | 1 | 2 | 3) ?? 0,
           serviceName: item.name || "",
-          unit: item.unit_price || 0,
-          unitFactor: 1,
-          externalFactor: 1,
-          amount: item.total_price || 0,
-          vatRate: Number(item.vat_rate_value) || 0,
+          unit: unit2,
+          unitFactor: unitFactor2,
+          unitTT: unitTT2,
+          unitFactorTT: unitFactorTT2,
+          externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
+          amount: amt2,
+          vatRate: (isTardoc2 || isTarmed2 || isAcf2) ? 0 : (Number(item.vat_rate_value) || 0),
           ignoreValidate: YesNo.Yes,
         };
       });
+
+      // --- Payment status remark & generation attributes (non-insurance path) ---
+      const paidAmt2 = Number(invoiceData.paid_amount) || 0;
+      const totalAmt2 = Number(invoiceData.total_amount) || 0;
+      const isFullyPaid2 = invoiceData.status === "PAID" || invoiceData.status === "OVERPAID" || (paidAmt2 > 0 && paidAmt2 >= totalAmt2 - 0.01);
+      const isPartialPaid2 = invoiceData.status === "PARTIAL_PAID" || (paidAmt2 > 0 && paidAmt2 < totalAmt2 - 0.01);
+
+      let paymentRemark2 = "";
+      let pdfGenAttrs2 = GenerationAttribute.None;
+      if (isFullyPaid2) {
+        paymentRemark2 = `ACQUITTÉ / BEZAHLT — Montant acquitté: ${totalAmt2.toFixed(2)} CHF`;
+        pdfGenAttrs2 = GenerationAttribute.ExcludeESRInPrint;
+      } else if (isPartialPaid2) {
+        const remaining2 = totalAmt2 - paidAmt2;
+        paymentRemark2 = `Acompte reçu / Anzahlung erhalten: ${paidAmt2.toFixed(2)} CHF — Solde / Restbetrag: ${remaining2.toFixed(2)} CHF`;
+      }
+
+      const tiersMode2 = mapSumexTiers("TG");
+      // amountPrepaid only allowed in TG — keep consistent even though this path is always TG
+      const amountPrepaid2 = tiersMode2 === TiersMode.Garant ? paidAmt2 : 0;
 
       const sumexInput2: SumexInvoiceInput = {
         language: 2,
@@ -461,7 +581,9 @@ export async function POST(request: NextRequest) {
         placeType: PlaceType.Practice,
         requestType: invoiceType === "reminder" ? RequestType.Reminder : RequestType.Invoice,
         requestSubtype: RequestSubtype.Normal,
-        tiersMode: mapSumexTiers(invoiceType === "tg" ? "TG" : invoiceType === "tp" ? "TP" : (invoiceData.billing_type || "TG")),
+        remark: paymentRemark2 || undefined,
+        tiersMode: tiersMode2,
+        amountPrepaid: amountPrepaid2 || undefined,
         vatNumber: (billingEntityData as any)?.vatuid || "",
         invoiceId: invoiceData.invoice_number || `INV-${invoiceId.slice(0, 8)}`,
         invoiceDate: invoiceData.invoice_date || new Date().toISOString().split("T")[0],
@@ -520,7 +642,12 @@ export async function POST(request: NextRequest) {
         treatmentDateBegin: treatmentDate,
         treatmentDateEnd: treatmentDate,
         services: sumexServices2,
-        amountPrepaid: (invoiceData.status === "PAID" || invoiceData.status === "OVERPAID") ? (Number(invoiceData.paid_amount) || Number(invoiceData.total_amount) || 0) : (Number(invoiceData.paid_amount) || 0),
+        qualDignities:
+          (staffData?.qual_dignities && staffData.qual_dignities.length > 0)
+            ? staffData.qual_dignities
+            : (billingEntityData?.qual_dignities && billingEntityData.qual_dignities.length > 0)
+              ? billingEntityData.qual_dignities
+              : undefined,
         ...(invoiceType === "reminder" ? {
           reminderLevel: Number(reminderLevel) || 1,
           reminderText: `Rappel de paiement (${reminderLevel}${reminderLevel === 1 ? "er" : "ème"} rappel)`,
@@ -534,7 +661,7 @@ export async function POST(request: NextRequest) {
         if (invoiceType !== "tp") {
           sumexInput2.lawType = mapSumexLaw("ORG");
         }
-        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: printTemplate2 });
+        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: printTemplate2, generationAttributes: pdfGenAttrs2 });
 
         if (sumexResult2.success && sumexResult2.pdfContent) {
           console.log(`[GeneratePDF] Sumex1 unified PDF generated: ${sumexResult2.pdfContent.length} bytes, paymentMethod=${invoiceData.payment_method}`);
