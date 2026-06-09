@@ -219,11 +219,14 @@ export async function POST(request: NextRequest) {
       // GLN here would cause Sumex to call SetInsurance and silently return empty XML (204).
       const effectiveTiersMode = invoiceType === "tg" ? "TG" : invoiceType === "tp" ? "TP" : (invoiceData.billing_type || "TG");
       if (!insurerRow && invoiceData.patient_id && effectiveTiersMode === "TP") {
+        // Only use TP-capable insurance records — TG-only insurers must not be injected into TP
+        // invoices or Sumex calls SetInsurance with a TG insurer and silently returns empty XML (204).
         const { data: patIns } = await supabaseAdmin
           .from("patient_insurances")
-          .select("insurer_gln, insurer_id, provider_name, law_type")
+          .select("insurer_gln, insurer_id, provider_name, law_type, billing_type")
           .eq("patient_id", invoiceData.patient_id)
           .eq("is_primary", true)
+          .in("billing_type", ["TP", "TP/TG"])
           .limit(1)
           .maybeSingle();
         if (patIns) {
