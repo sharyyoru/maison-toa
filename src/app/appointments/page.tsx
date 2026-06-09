@@ -485,8 +485,6 @@ function getAgendaOrder(name: string): number {
 // Priority doctors to show first in the list (extract names from AGENDA_ORDER)
 const PRIORITY_DOCTOR_NAMES = AGENDA_ORDER.map(a => a.name);
 
-const AGENDA_PROVIDER_NAME_EXCEPTIONS = ["Gwendoline"];
-
 type ProviderOption = {
   id: string;
   name: string | null;
@@ -1338,9 +1336,7 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("providers")
           .select("id, name, email, role")
-          .or(
-            `role.in.(${["doctor", "nurse", "technician"].join(",")}),name.in.(${AGENDA_PROVIDER_NAME_EXCEPTIONS.join(",")})`,
-          )
+          .in("role", ["doctor", "nurse", "technician"])
           .order("name", { ascending: true });
 
         if (!isMounted) return;
