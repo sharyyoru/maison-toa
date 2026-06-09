@@ -1257,17 +1257,20 @@ export async function buildInvoiceRequest(
           const computedAmountMT = Math.round(svc.quantity * unitMT * unitFactorMT * 1 * extFactorMT * 100) / 100;
 
           // TT (Technical) component for TARDOC.
-          // AR.* codes (room/change codes, serviceType=R) compute TT internally via changeMin —
-          // Sumex error 755 if dUnitTT is non-zero. Force to 0 regardless of caller value.
+          // AR.* codes (room/change codes, serviceType=R) compute TT internally via changeMin.
+          // Sumex error 755 if any TT field is non-zero. Omit TT fields entirely for AR.*.
           const isArCode = (svc.code || "").startsWith("AR.");
           const unitTT = isArCode ? 0 : (svc.unitTT ?? 0);
-          const unitFactorTT = isArCode ? 1 : (svc.unitFactorTT ?? 1);
-          const extFactorTT = 1; // Usually 1 for TT
-          const computedAmountTT = Math.round(svc.quantity * unitTT * unitFactorTT * 1 * extFactorTT * 100) / 100;
+          const unitFactorTT = isArCode ? 0 : (svc.unitFactorTT ?? 1);
+          const extFactorTT = 1;
+          const computedAmountTT = isArCode ? 0 : Math.round(svc.quantity * unitTT * unitFactorTT * 1 * extFactorTT * 100) / 100;
 
-          console.log(`${LOG_PREFIX} AddServiceEx ${svc.code}: isAR=${isArCode} svc.unitTT=${svc.unitTT} unitTT=${unitTT} unitFactorTT=${unitFactorTT} amountTT=${computedAmountTT} | unitMT=${unitMT} amountMT=${computedAmountMT}`);
+          console.log(`${LOG_PREFIX} AddServiceEx ${svc.code}: isAR=${isArCode} svc.unitTT=${svc.unitTT} → sending dUnitTT=${unitTT} dUnitFactorTT=${unitFactorTT} dAmountTT=${computedAmountTT}`);
 
-          const tardocPayload = {
+          const addRes = await reqPost<{ plID: number; pbStatus: boolean }>(
+            "IGeneralInvoiceRequest",
+            "AddServiceEx",
+            {
               pIGeneralInvoiceRequest: req,
               pIServiceExInput: svcInputHandle,
               bstrTariffType: svc.tariffType,
@@ -1295,12 +1298,7 @@ export async function buildInvoiceRequest(
               bstrRemark: svc.remark || "",
               eIgnoreValidate: svc.ignoreValidate ?? YesNo.Yes,
               lServiceAttributes: svc.serviceAttributes ?? 0,
-          };
-          console.log(`${LOG_PREFIX} AddServiceEx PAYLOAD for ${svc.code}: ${JSON.stringify({dUnitTT: tardocPayload.dUnitTT, dAmountTT: tardocPayload.dAmountTT, dUnitMT: tardocPayload.dUnitMT, isAR: isArCode})}`);
-          const addRes = await reqPost<{ plID: number; pbStatus: boolean }>(
-            "IGeneralInvoiceRequest",
-            "AddServiceEx",
-            tardocPayload,
+            },
           );
           if (!addRes.pbStatus) {
             const abortInfo = await getAbortInfo(mgr);
