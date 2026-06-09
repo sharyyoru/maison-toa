@@ -622,6 +622,22 @@ export async function POST(request: NextRequest) {
             : undefined,
     };
 
+    // DEBUG: Log complete sumexInput before sending to Sumex
+    console.log('[SendInvoice] DEBUG sumexInput:', JSON.stringify({
+      providerGln: sumexInput.providerGln,
+      qualDignities: sumexInput.qualDignities,
+      lawType: sumexInput.lawType,
+      tiersMode: sumexInput.tiersMode,
+      insuranceGln: sumexInput.insuranceGln,
+      servicesCount: sumexInput.services.length,
+      firstService: sumexInput.services[0] ? {
+        code: sumexInput.services[0].code,
+        tariffType: sumexInput.services[0].tariffType,
+        providerGln: sumexInput.services[0].providerGln,
+        responsibleGln: sumexInput.services[0].responsibleGln,
+      } : null
+    }, null, 2));
+
     // Generate XML + PDF via Sumex1 server (no fallback — this is the only path)
     const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true });
 
