@@ -1265,7 +1265,7 @@ export async function buildInvoiceRequest(
           const extFactorTT = 1;
           const computedAmountTT = isArCode ? 0 : Math.round(svc.quantity * unitTT * unitFactorTT * 1 * extFactorTT * 100) / 100;
 
-          console.log(`${LOG_PREFIX} AddServiceEx ${svc.code}: isAR=${isArCode} svc.unitTT=${svc.unitTT} → sending dUnitTT=${unitTT} dUnitFactorTT=${unitFactorTT} dAmountTT=${computedAmountTT}`);
+          console.log(`${LOG_PREFIX} [v4-arfix] AddServiceEx ${svc.code}: isAR=${isArCode} svc.unitTT=${svc.unitTT} → sending dUnitTT=${unitTT} dUnitFactorTT=${unitFactorTT} dAmountTT=${computedAmountTT}`);
 
           const addRes = await reqPost<{ plID: number; pbStatus: boolean }>(
             "IGeneralInvoiceRequest",
