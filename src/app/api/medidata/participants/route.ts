@@ -180,14 +180,15 @@ export async function POST(request: NextRequest) {
         const upsertData = {
           gln: participant.gln,
           name: participant.name,
-          name_fr: participant.name, // Use same name for now
+          name_fr: participant.name,
           bag_number: participant.bagNumber,
           receiver_gln: participant.receiverGln,
           law_types: participant.lawTypes,
           tp_allowed: participant.tpAllowed,
-          street: participant.address?.street || null,
-          postal_code: participant.address?.postalCode || null,
-          city: participant.address?.city || null,
+          // MediData is the authoritative source for insurer addresses — use correct column names
+          address_street: participant.address?.street || null,
+          address_postal_code: participant.address?.postalCode || null,
+          address_city: participant.address?.city || null,
           updated_at: new Date().toISOString(),
         };
 

@@ -182,22 +182,41 @@ export async function POST(request: NextRequest) {
     if (isInsuranceInvoice) {
       console.log(`[GeneratePDF] Insurance invoice detected (${invoiceData.billing_type || "TP"}) — using Sumex1 Print for PDF`);
 
-      // Fetch insurer data
+      // Fetch insurer data — MediData participants is authoritative for addresses
       let insurerGln = "";
       let insurerName = "";
       let receiverGln = "";
-      if (invoiceData.insurer_id) {
-        const { data: insurerRow } = await supabaseAdmin
+      let insurerStreet = "";
+      let insurerZip = "";
+      let insurerCity = "";
+      const fetchInsurerRow = async (filter: { col: string; val: string }) => {
+        const { data } = await supabaseAdmin
           .from("swiss_insurers")
-          .select("name, gln, street, zip_code, city, pobox, receiver_gln")
-          .eq("id", invoiceData.insurer_id)
-          .single();
-        if (insurerRow) {
-          insurerGln = (insurerRow as any).gln || "";
-          insurerName = (insurerRow as any).name || "";
-          receiverGln = (insurerRow as any).receiver_gln || insurerGln;
-        }
+          .select("name, gln, receiver_gln, address_street, address_postal_code, address_city")
+          .eq(filter.col, filter.val)
+          .limit(1)
+          .maybeSingle();
+        return data as Record<string, any> | null;
+      };
+      let insurerRow: Record<string, any> | null = null;
+      if (invoiceData.insurer_id) {
+        insurerRow = await fetchInsurerRow({ col: "id", val: invoiceData.insurer_id });
       }
+      // Fallback: look up by GLN stored on the invoice
+      if (!insurerRow && invoiceData.insurance_gln) {
+        insurerRow = await fetchInsurerRow({ col: "gln", val: invoiceData.insurance_gln });
+      }
+      if (insurerRow) {
+        insurerGln = insurerRow.gln || "";
+        insurerName = insurerRow.name || "";
+        receiverGln = insurerRow.receiver_gln || insurerGln;
+        insurerStreet = insurerRow.address_street || "";
+        insurerZip = insurerRow.address_postal_code || "";
+        insurerCity = insurerRow.address_city || "";
+      }
+      // If insurer GLN not yet resolved, use invoice field directly
+      if (!insurerGln && invoiceData.insurance_gln) insurerGln = invoiceData.insurance_gln;
+      if (!insurerName && invoiceData.insurance_name) insurerName = invoiceData.insurance_name;
 
       const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
       const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
@@ -366,9 +385,9 @@ export async function POST(request: NextRequest) {
         insuranceGln: insurerGln || undefined,
         insuranceAddress: insurerGln ? {
           companyName: insurerName,
-          street: "",
-          zip: "",
-          city: "",
+          street: insurerStreet,
+          zip: insurerZip,
+          city: insurerCity,
           stateCode: "",
         } : undefined,
         patientSex: mapSumexSex(patientData.gender || "male"),
