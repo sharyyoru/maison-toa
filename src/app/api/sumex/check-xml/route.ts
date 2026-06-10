@@ -121,16 +121,38 @@ export async function POST(request: NextRequest) {
     let insurerGln = "";
     let insurerName = "";
     let receiverGln = "";
-    if (invoice.insurer_id) {
-      const { data: insurerRow } = await supabaseAdmin
+    let insurerStreet = "";
+    let insurerZip = "";
+    let insurerCity = "";
+    const fetchInsurerRow = async (filter: { col: string; val: string }) => {
+      const { data } = await supabaseAdmin
         .from("swiss_insurers")
-        .select("name, gln, receiver_gln")
-        .eq("id", invoice.insurer_id)
-        .single();
+        .select("name, gln, receiver_gln, address_street, address_postal_code, address_city")
+        .eq(filter.col, filter.val)
+        .limit(1)
+        .maybeSingle();
+      return data as Record<string, any> | null;
+    };
+    if (invoice.insurer_id) {
+      const insurerRow = await fetchInsurerRow({ col: "id", val: invoice.insurer_id });
       if (insurerRow) {
         insurerGln = insurerRow.gln || "";
         insurerName = insurerRow.name || "";
         receiverGln = insurerRow.receiver_gln || insurerGln;
+        insurerStreet = insurerRow.address_street || "";
+        insurerZip = insurerRow.address_postal_code || "";
+        insurerCity = insurerRow.address_city || "";
+      }
+    }
+    if (!insurerGln && invoice.insurance_gln) {
+      const insurerRow = await fetchInsurerRow({ col: "gln", val: invoice.insurance_gln });
+      if (insurerRow) {
+        insurerGln = insurerRow.gln || "";
+        insurerName = insurerRow.name || "";
+        receiverGln = insurerRow.receiver_gln || insurerGln;
+        insurerStreet = insurerRow.address_street || "";
+        insurerZip = insurerRow.address_postal_code || "";
+        insurerCity = insurerRow.address_city || "";
       }
     }
 
@@ -140,24 +162,24 @@ export async function POST(request: NextRequest) {
         .from("patient_insurances")
         .select("insurer_id, gln, insurer_gln, provider_name, card_number, avs_number")
         .eq("patient_id", patientId)
-        .eq("is_primary", true)
-        .limit(1);
-      const ins = patIns?.[0];
-      if (ins) {
-        insurerGln = ins.gln || ins.insurer_gln || "";
-        insurerName = ins.provider_name || "";
-        // Try to resolve receiver_gln from swiss_insurers
-        if (ins.insurer_id && !receiverGln) {
-          const { data: siRow } = await supabaseAdmin
-            .from("swiss_insurers")
-            .select("name, gln, receiver_gln")
-            .eq("id", ins.insurer_id)
-            .single();
-          if (siRow) {
-            insurerGln = insurerGln || siRow.gln || "";
-            insurerName = insurerName || siRow.name || "";
-            receiverGln = siRow.receiver_gln || insurerGln;
-          }
+        .order("is_primary", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (patIns) {
+        const patInsurerGln = (patIns as any).gln || (patIns as any).insurer_gln || "";
+        let siRow = patInsurerGln ? await fetchInsurerRow({ col: "gln", val: patInsurerGln }) : null;
+        if (!siRow && (patIns as any).insurer_id) siRow = await fetchInsurerRow({ col: "id", val: (patIns as any).insurer_id });
+        if (siRow) {
+          insurerGln = siRow.gln || "";
+          insurerName = siRow.name || "";
+          receiverGln = siRow.receiver_gln || insurerGln;
+          insurerStreet = siRow.address_street || "";
+          insurerZip = siRow.address_postal_code || "";
+          insurerCity = siRow.address_city || "";
+        } else if (patInsurerGln) {
+          insurerGln = patInsurerGln;
+          insurerName = (patIns as any).provider_name || "";
         }
       }
     }
@@ -285,9 +307,9 @@ export async function POST(request: NextRequest) {
       insuranceGln: insurerGln || undefined,
       insuranceAddress: insurerGln ? {
         companyName: insurerName,
-        street: "",
-        zip: "",
-        city: "",
+        street: insurerStreet,
+        zip: insurerZip,
+        city: insurerCity,
         stateCode: "",
       } : undefined,
       patientSex: mapSumexSex(patient.gender || "male"),
