@@ -732,7 +732,12 @@ export async function POST(request: NextRequest) {
         vatNumber: (billingEntityData as any)?.vatuid || "",
         invoiceId: invoiceData.invoice_number || `INV-${invoiceId.slice(0, 8)}`,
         invoiceDate: invoiceData.invoice_date || new Date().toISOString().split("T")[0],
-        lawType: mapSumexLaw(invoiceData.health_insurance_law || "VVG"),
+        // KVG law for non-insurance invoices — Sumex 5.0 standard patient invoice.
+        // Produces: page 1 = "Facture du patient avec QR code" (summary + QR),
+        //           page 2 = "Aperçu des prestations" (ELNF, itemised service lines).
+        // The ELNF companion is mandatory in Sumex 5.0 TG output and cannot be suppressed.
+        // printPatientInvoiceOnly=Yes (set above) ensures no Rückerstattungsbeleg/TP pages.
+        lawType: mapSumexLaw(invoiceData.health_insurance_law || "KVG"),
         esrType: EsrType.QR,
         iban: provIbanSumex,
         paymentPeriod: 30,
@@ -813,12 +818,11 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // Non-insurance invoices use TG/VVG mode.
-        // Per CHM printing_switches.html, VVG/ORG default = feeSummary + feeDetail
-        //   ("Honorarrechnung" / "Facture d'honoraires" + "Leistungsübersicht").
-        // Explicitly request "feeSummary" to produce the patient-facing fee summary only (1 page).
-        // printPatientInvoiceOnly=Yes (set above) additionally suppresses the feeDetail companion form.
-        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: "feeSummary", generationAttributes: pdfGenAttrs2 });
+        // Use default Sumex template (no explicit printTemplate).
+        // KVG/TG produces: summary (QR page) + ELNF (service lines page).
+        // printPatientInvoiceOnly=Yes suppresses Rückerstattungsbeleg/TP/annex pages.
+        // The ELNF is mandatory in Sumex 5.0 and cannot be suppressed — 2 pages is correct.
+        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, generationAttributes: pdfGenAttrs2 });
 
         if (sumexResult2.success && sumexResult2.pdfContent) {
           console.log(`[GeneratePDF] Sumex1 unified PDF generated: ${sumexResult2.pdfContent.length} bytes, paymentMethod=${invoiceData.payment_method}`);
