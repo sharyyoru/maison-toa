@@ -520,10 +520,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Generate XML + PDF via Sumex1 server.
-      // "summary" = single-sided template with service list + QR bill.
-      // Combined with printPatientInvoiceOnly=Yes above, this produces exactly 1 page.
-      const printTemplate = "summary";
-      const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate, generationAttributes: pdfGenAttrs });
+      // No explicit printTemplate — use Sumex default layout (matches aestheticclinic behaviour).
+      // printPatientInvoiceOnly=Yes (set above) suppresses extra documents (Rückerstattungsbeleg,
+      // TP-Rechnung, barcode annex), keeping the output to the patient-facing summary pages only.
+      const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, generationAttributes: pdfGenAttrs });
 
       if (!sumexResult.success) {
         console.error(`[GeneratePDF] Sumex1 FAILED: ${sumexResult.error} / ${sumexResult.abortInfo}`);
@@ -776,9 +776,9 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // "summary" + printPatientInvoiceOnly=Yes → exactly 1 page (patient summary + QR bill)
-        const printTemplate2 = "summary";
-        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: printTemplate2, generationAttributes: pdfGenAttrs2 });
+        // No explicit printTemplate — use Sumex default layout (matches aestheticclinic behaviour).
+        // printPatientInvoiceOnly=Yes (set above) suppresses extra documents.
+        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, generationAttributes: pdfGenAttrs2 });
 
         if (sumexResult2.success && sumexResult2.pdfContent) {
           console.log(`[GeneratePDF] Sumex1 unified PDF generated: ${sumexResult2.pdfContent.length} bytes, paymentMethod=${invoiceData.payment_method}`);
