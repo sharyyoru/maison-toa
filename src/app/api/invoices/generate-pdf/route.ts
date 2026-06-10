@@ -235,9 +235,9 @@ export async function POST(request: NextRequest) {
         insurerCity = insurerRow.address_city || "";
       }
       // Fallback: look up patient's primary insurance from patient_insurances.
-      // Only for TP mode — TG invoices don't call SetInsurance, so injecting an insurer
-      // GLN here would cause Sumex to call SetInsurance and silently return empty XML (204).
-      const effectiveTiersMode = invoiceType === "tg" ? "TG" : invoiceType === "tp" ? "TP" : (invoiceData.billing_type || "TG");
+      // Authoritative tiersMode comes from the invoice's billing_type column in the DB.
+      // invoiceType param is only used to distinguish invoice vs reminder, not TG vs TP.
+      const effectiveTiersMode = invoiceData.billing_type || "TG";
       if (!insurerRow && invoiceData.patient_id && effectiveTiersMode === "TP") {
         // billing_type in patient_insurances is the patient's preference, not insurer capability.
         // Most Swiss insurers support both TP and TG modes, so we use primary insurance regardless.
@@ -316,8 +316,6 @@ export async function POST(request: NextRequest) {
 
         let unit: number;
         let unitFactor: number;
-        let unitTT: number | undefined;
-        let unitFactorTT: number | undefined;
         let calculatedAmount: number;
 
         if (isTarmed) {
@@ -326,13 +324,11 @@ export async function POST(request: NextRequest) {
           unitFactor = 1;
           calculatedAmount = unit * (item.quantity || 1);
         } else if (isTardoc || isAcf) {
-          // TARDOC and ACF: split AL (arzt) and TL (technisch) tax points + point values.
-          // AR.* room/change codes (serviceType=R) self-compute TT via changeMin — must send 0.
-          const isArCode = (item.tardoc_code || item.code || "").startsWith("AR.");
+          // TARDOC and ACF: use tp_al (tax points) and tp_al_value (point value / Taxpunktwert).
+          // sumexInvoice.ts defaults unitTT to svc.unitTT ?? 0, so TT component is zero
+          // unless the caller explicitly sets it. This matches the working aestheticclinic pattern.
           unit = item.tp_al || 0;
           unitFactor = item.tp_al_value || 1;
-          unitTT = isArCode ? undefined : (item.tp_tl || undefined);
-          unitFactorTT = isArCode ? undefined : (item.tp_tl_value || undefined);
           calculatedAmount = item.total_price || 0;
         } else {
           unit = item.unit_price || 0;
@@ -359,8 +355,6 @@ export async function POST(request: NextRequest) {
           serviceName: item.name || "",
           unit,
           unitFactor,
-          unitTT,
-          unitFactorTT,
           externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
           amount: calculatedAmount,
           // TARDOC/ACF/TARMED lines are always VAT-exempt for insurer billing.
@@ -395,7 +389,7 @@ export async function POST(request: NextRequest) {
         paymentRemark = `Acompte reçu / Anzahlung erhalten: ${paidAmt.toFixed(2)} CHF — Solde / Restbetrag: ${remaining.toFixed(2)} CHF`;
       }
 
-      const tiersMode1 = mapSumexTiers(invoiceType === "tg" ? "TG" : invoiceType === "tp" ? "TP" : (invoiceData.billing_type || "TG"));
+      const tiersMode1 = mapSumexTiers(effectiveTiersMode);
       // amountPrepaid is only allowed in Tiers Garant (TG) — error [926] if sent for TP/TS
       const amountPrepaid1 = tiersMode1 === TiersMode.Garant ? paidAmt : 0;
 
@@ -618,15 +612,12 @@ export async function POST(request: NextRequest) {
         const isTardoc2 = item.tariff_code === 7 || tariffType === "007";
         const isTarmed2 = item.tariff_code === 1 || tariffType === "001";
         const isAcf2 = tariffType === "005";
-        let unit2: number; let unitFactor2: number; let unitTT2: number | undefined; let unitFactorTT2: number | undefined; let amt2: number;
+        let unit2: number; let unitFactor2: number; let amt2: number;
         if (isTarmed2) {
           unit2 = item.tp_al || item.unit_price || 0; unitFactor2 = 1; amt2 = unit2 * (item.quantity || 1);
         } else if (isTardoc2 || isAcf2) {
-          // AR.* room/change codes self-compute TT via changeMin — must send 0.
-          const isArCode2 = (item.tardoc_code || item.code || "").startsWith("AR.");
+          // TARDOC/ACF: use tp_al + tp_al_value only (matches aestheticclinic working pattern).
           unit2 = item.tp_al || 0; unitFactor2 = item.tp_al_value || 1;
-          unitTT2 = isArCode2 ? undefined : (item.tp_tl || undefined);
-          unitFactorTT2 = isArCode2 ? undefined : (item.tp_tl_value || undefined);
           amt2 = item.total_price || 0;
         } else {
           unit2 = item.unit_price || 0; unitFactor2 = 1; amt2 = item.total_price || 0;
@@ -650,8 +641,6 @@ export async function POST(request: NextRequest) {
           serviceName: item.name || "",
           unit: unit2,
           unitFactor: unitFactor2,
-          unitTT: unitTT2,
-          unitFactorTT: unitFactorTT2,
           externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
           amount: amt2,
           vatRate: (isTardoc2 || isTarmed2 || isAcf2) ? 0 : (Number(item.vat_rate_value) || 0),
