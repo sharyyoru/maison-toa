@@ -232,23 +232,38 @@ export async function POST(request: Request) {
         const formId = isFrench ? "patient-information-fr" : "patient-information-en";
         const formName = isFrench ? "Informations patient" : "Patient Information Form";
         
-        // Create form submission record
-        const { data: formSubmission, error: formError } = await supabase
+        const { data: completedForm, error: completedFormError } = await supabase
           .from("patient_form_submissions")
-          .insert({
-            patient_id: patientId,
-            form_id: formId,
-            form_name: formName,
-            status: "pending",
-            submission_data: {},
-          })
-          .select("id, token")
-          .single();
-        
-        if (!formError && formSubmission) {
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
-          formUrl = `${appUrl}/form/${formId}?token=${formSubmission.token}`;
-          console.log("✓ Patient form created with URL:", formUrl);
+          .select("id")
+          .eq("patient_id", patientId)
+          .like("form_id", "patient-information-%")
+          .eq("status", "submitted")
+          .limit(1)
+          .maybeSingle();
+
+        if (completedFormError) {
+          console.error("Error checking completed patient form:", completedFormError);
+        }
+
+        if (!completedForm) {
+          // Create form submission record
+          const { data: formSubmission, error: formError } = await supabase
+            .from("patient_form_submissions")
+            .insert({
+              patient_id: patientId,
+              form_id: formId,
+              form_name: formName,
+              status: "pending",
+              submission_data: {},
+            })
+            .select("id, token")
+            .single();
+
+          if (!formError && formSubmission) {
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
+            formUrl = `${appUrl}/form/${formId}?token=${formSubmission.token}`;
+            console.log("✓ Patient form created with URL:", formUrl);
+          }
         }
       } catch (formErr) {
         console.error("Error creating patient form:", formErr);
