@@ -487,7 +487,15 @@ export async function POST(request: NextRequest) {
         services: sumexServices,
         transportFrom: provGln,
         transportTo: receiverGln || insurerGln || "",
-        printCopyToGuarantor: (invoiceData.billing_type === 'TP' || invoiceData.copy_to_guarantor) ? YesNo.Yes : YesNo.No,
+        // printPatientInvoiceOnly: suppress all accompanying forms (Rückerstattungsbeleg, TP-Rechnung,
+        // barcode annex) so Sumex prints only the 1-page patient/guarantor summary.
+        // This is the PDF the clinic shows the patient. The TP invoice for the insurer is sent
+        // electronically via MediData XML and does not need to be in this PDF.
+        // Without this flag, a TP invoice with printCopyToGuarantor=Yes produces 3-4 pages.
+        printPatientInvoiceOnly: YesNo.Yes,
+        // printCopyToGuarantor is intentionally NOT set here (defaults to No).
+        // Setting it to Yes on a TP invoice forces Sumex to include a guarantor copy page,
+        // which is only needed when physically mailing the invoice, not for PDF display.
         qualDignities:
           (staffData?.qual_dignities && staffData.qual_dignities.length > 0)
             ? staffData.qual_dignities
@@ -511,31 +519,10 @@ export async function POST(request: NextRequest) {
         }, { status: 422 });
       }
 
-      // Generate XML + PDF via Sumex1 server
-      // Template options:
-      // - detail: multi-page with full service details (verbose, can overflow to many pages)
-      // - summary: compact format with service list + QR-bill on same page where possible
-      // - feeSummary: fee summary format (2 pages with QR-bill in v5.0)
-      // Use "summary" for all invoice types to keep client invoice + QR-bill on same page
-      // The insurance copy (Facture TP) will still be a separate page
+      // Generate XML + PDF via Sumex1 server.
+      // "summary" = single-sided template with service list + QR bill.
+      // Combined with printPatientInvoiceOnly=Yes above, this produces exactly 1 page.
       const printTemplate = "summary";
-      
-      // DEBUG: Log complete sumexInput before sending to Sumex
-      console.log('[GeneratePDF] DEBUG sumexInput:', JSON.stringify({
-        providerGln: sumexInput.providerGln,
-        qualDignities: sumexInput.qualDignities,
-        lawType: sumexInput.lawType,
-        tiersMode: sumexInput.tiersMode,
-        insuranceGln: sumexInput.insuranceGln,
-        servicesCount: sumexInput.services?.length || 0,
-        firstService: sumexInput.services?.[0] ? {
-          code: sumexInput.services[0].code,
-          tariffType: sumexInput.services[0].tariffType,
-          providerGln: sumexInput.services[0].providerGln,
-          responsibleGln: sumexInput.services[0].responsibleGln,
-        } : null
-      }, null, 2));
-      
       const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate, generationAttributes: pdfGenAttrs });
 
       if (!sumexResult.success) {
@@ -763,6 +750,8 @@ export async function POST(request: NextRequest) {
         treatmentDateBegin: treatmentDate,
         treatmentDateEnd: treatmentDate,
         services: sumexServices2,
+        // Print only the patient summary page (no Rückerstattungsbeleg, no barcode annex)
+        printPatientInvoiceOnly: YesNo.Yes,
         qualDignities:
           (staffData?.qual_dignities && staffData.qual_dignities.length > 0)
             ? staffData.qual_dignities
@@ -787,7 +776,7 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // Use "summary" template for compact format with service list + QR-bill on same page
+        // "summary" + printPatientInvoiceOnly=Yes → exactly 1 page (patient summary + QR bill)
         const printTemplate2 = "summary";
         const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: printTemplate2, generationAttributes: pdfGenAttrs2 });
 
