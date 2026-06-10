@@ -706,7 +706,7 @@ export default function MedicalConsultationsCard({
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
   const [pdfDropdownOpen, setPdfDropdownOpen] = useState<string | null>(null);
   const [viewPdfDropdownOpen, setViewPdfDropdownOpen] = useState<string | null>(null);
-  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<{ message: string; details?: string; abortInfo?: string } | null>(null);
   const [generatedPaymentLink, setGeneratedPaymentLink] = useState<{ consultationId: string; url: string } | null>(null);
   const [paymentLinkCopied, setPaymentLinkCopied] = useState(false);
 
@@ -2783,7 +2783,13 @@ export default function MedicalConsultationsCard({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to generate PDF");
+        setPdfError({
+          message: data.error || "Failed to generate PDF",
+          details: data.details || undefined,
+          abortInfo: data.abortInfo || undefined,
+        });
+        setGeneratingPdf(null);
+        return;
       }
 
       if (data.pdfUrl && typeof window !== "undefined") {
@@ -2810,7 +2816,7 @@ export default function MedicalConsultationsCard({
       setGeneratingPdf(null);
     } catch (error) {
       console.error("Error generating PDF:", error);
-      setPdfError(error instanceof Error ? error.message : "Failed to generate PDF");
+      setPdfError({ message: error instanceof Error ? error.message : "Failed to generate PDF" });
       setGeneratingPdf(null);
     }
   }
@@ -9138,6 +9144,64 @@ export default function MedicalConsultationsCard({
           setInsuranceBillingTarget(null);
         }}
       />
+
+      {/* PDF Generation Error Modal */}
+      {pdfError && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" onClick={() => setPdfError(null)}>
+          <div className="w-full max-w-lg rounded-xl border border-red-200 bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-start gap-3 border-b border-red-100 bg-red-50 px-5 py-4 rounded-t-xl">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100">
+                <svg className="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-red-900">PDF Generation Failed</h3>
+                <p className="mt-0.5 text-xs text-red-700">{pdfError.message}</p>
+              </div>
+              <button onClick={() => setPdfError(null)} className="ml-2 rounded-full p-1 text-red-400 hover:bg-red-100 hover:text-red-600 transition-colors">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {/* Body */}
+            <div className="px-5 py-4 space-y-3">
+              {pdfError.details && (
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wide mb-1">Error Details</p>
+                  <p className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-700 font-mono break-words">{pdfError.details}</p>
+                </div>
+              )}
+              {pdfError.abortInfo && (
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wide mb-1">Sumex Abort Info</p>
+                  <p className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-700 font-mono break-words">{pdfError.abortInfo}</p>
+                </div>
+              )}
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5">
+                <p className="text-[11px] font-medium text-amber-800 mb-1">What to do</p>
+                <ul className="text-xs text-amber-700 space-y-0.5 list-disc list-inside">
+                  <li>Check that the invoice has valid service codes and amounts</li>
+                  <li>Verify the patient has an insurance record (for TP invoices)</li>
+                  <li>Contact your system administrator if the problem persists</li>
+                </ul>
+              </div>
+            </div>
+            {/* Footer */}
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">
+              <button
+                onClick={() => setPdfError(null)}
+                className="rounded-lg bg-slate-100 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }
