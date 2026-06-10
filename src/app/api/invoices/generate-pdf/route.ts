@@ -520,10 +520,16 @@ export async function POST(request: NextRequest) {
       }
 
       // Generate XML + PDF via Sumex1 server.
-      // No explicit printTemplate — use Sumex default layout (matches aestheticclinic behaviour).
-      // printPatientInvoiceOnly=Yes (set above) suppresses extra documents (Rückerstattungsbeleg,
-      // TP-Rechnung, barcode annex), keeping the output to the patient-facing summary pages only.
-      const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, generationAttributes: pdfGenAttrs });
+      //
+      // Per CHM printing_switches.html:
+      //   TG/KVG default = summary4debitor + detail4debitor ("Facture d'honoraires" + "Justificatif de remboursement")
+      //   TP/KVG default = detail4hc ("Tiers Payant Rechnung") — NOT the patient-facing form
+      //
+      // For the patient-facing PDF we always want "summary4debitor" regardless of TG or TP mode.
+      // This produces "Facture d'honoraires" (FR) / "Patienten-Rechnung" (DE) with QR bill — 1 page.
+      // printPatientInvoiceOnly=Yes (set above) further suppresses any accompanying detail forms.
+      const printTemplate = tiersMode1 === TiersMode.Payant ? "summary4debitor" : "summary";
+      const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate, generationAttributes: pdfGenAttrs });
 
       if (!sumexResult.success) {
         console.error(`[GeneratePDF] Sumex1 FAILED: ${sumexResult.error} / ${sumexResult.abortInfo}`);
@@ -776,9 +782,12 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // No explicit printTemplate — use Sumex default layout (matches aestheticclinic behaviour).
-        // printPatientInvoiceOnly=Yes (set above) suppresses extra documents.
-        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, generationAttributes: pdfGenAttrs2 });
+        // Non-insurance invoices use TG/VVG mode.
+        // Per CHM printing_switches.html, VVG/ORG default = feeSummary + feeDetail
+        //   ("Honorarrechnung" / "Facture d'honoraires" + "Leistungsübersicht").
+        // Explicitly request "feeSummary" to produce the patient-facing fee summary only (1 page).
+        // printPatientInvoiceOnly=Yes (set above) additionally suppresses the feeDetail companion form.
+        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: "feeSummary", generationAttributes: pdfGenAttrs2 });
 
         if (sumexResult2.success && sumexResult2.pdfContent) {
           console.log(`[GeneratePDF] Sumex1 unified PDF generated: ${sumexResult2.pdfContent.length} bytes, paymentMethod=${invoiceData.payment_method}`);
