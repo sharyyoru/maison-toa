@@ -105,6 +105,12 @@ function formatShortDate(iso: string | null | undefined): string {
   });
 }
 
+function toExcelDate(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export default function FinancialsPage() {
   const t = useTranslations("financialsPage");
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
@@ -557,11 +563,11 @@ export default function FinancialsPage() {
         /qr|bank|bvr|insurance/i.test(paymentMethod) ? "BVR" : "Manuel";
 
       return [
-        invoice.treatment_date || invoice.invoice_date,
+        toExcelDate(invoice.treatment_date || invoice.invoice_date),
         invoice.patientName,
         invoice.ownerLabel,
         services || "-",
-        invoice.paid_at || invoice.invoice_date,
+        toExcelDate(invoice.paid_at || invoice.invoice_date),
         invoice.health_insurance_law || "Esthétique",
         invoice.patientName,
         isInsurance && invoice.billing_type === "TP"
@@ -615,7 +621,7 @@ export default function FinancialsPage() {
     for (let row = 2; row < rows.length + 2; row += 1) {
       for (const column of [0, 4]) {
         const cell = statisticsSheet[XLSX.utils.encode_cell({ r: row, c: column })];
-        if (cell) cell.z = "dd.mm.yyyy";
+        if (cell) cell.z = "dd.mm.yyyy hh:mm";
       }
       for (let column = 10; column <= 16; column += 1) {
         const cell = statisticsSheet[XLSX.utils.encode_cell({ r: row, c: column })];
