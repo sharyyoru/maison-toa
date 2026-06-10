@@ -1425,6 +1425,9 @@ export async function buildInvoiceRequest(
         abortInfo,
       };
     }
+    // NOTE: do NOT call getAbortInfo here after a successful Finalize.
+    // That call resets the session state on the Sumex server and causes
+    // GetXML to return HTTP 204 (empty body) on this server version.
 
     // --- GetXML ---
     const getXmlStart = Date.now();
