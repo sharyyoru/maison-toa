@@ -197,6 +197,25 @@ export async function POST(request: NextRequest) {
       item.catalog_name?.toLowerCase() === 'tardoc'
     );
     const isInsuranceInvoice = !!invoiceData.insurer_id || invoiceData.payment_method === "Insurance" || hasMedicalTariffItems;
+
+    // Normalize canton to 2-letter abbreviation — DB may store full name (e.g. "Vaud") or abbreviation ("VD")
+    const CANTON_NAME_TO_CODE: Record<string, string> = {
+      "aargau": "AG", "appenzell innerrhoden": "AI", "appenzell ausserrhoden": "AR",
+      "bern": "BE", "berne": "BE", "basel-landschaft": "BL", "basel-stadt": "BS",
+      "fribourg": "FR", "freiburg": "FR", "geneva": "GE", "genève": "GE", "genf": "GE",
+      "glarus": "GL", "graubünden": "GR", "grisons": "GR", "jura": "JU",
+      "luzern": "LU", "lucerne": "LU", "nidwalden": "NW", "neuenburg": "NE",
+      "neuchâtel": "NE", "obwalden": "OW", "st. gallen": "SG", "schaffhausen": "SH",
+      "solothurn": "SO", "schwyz": "SZ", "thurgau": "TG", "ticino": "TI",
+      "uri": "UR", "vaud": "VD", "valais": "VS", "wallis": "VS",
+      "zug": "ZG", "zürich": "ZH", "zurich": "ZH",
+    };
+    const normalizeCanton = (c: string | null | undefined): string => {
+      if (!c) return "GE";
+      if (c.length === 2) return c.toUpperCase();
+      return CANTON_NAME_TO_CODE[c.toLowerCase()] || c.toUpperCase().slice(0, 2);
+    };
+
     if (isInsuranceInvoice) {
       console.log(`[GeneratePDF] Insurance/Medical tariff invoice detected (${invoiceData.billing_type || "TG"}) — using Sumex1 Print for PDF`);
 
@@ -262,7 +281,8 @@ export async function POST(request: NextRequest) {
       const provStreet = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "";
       const provZip = billingEntityData?.zip_code || "";
       const provCity = billingEntityData?.city || "";
-      const provCanton = billingEntityData?.canton || invoiceData.treatment_canton || "GE";
+      // Prefer invoice treatment_canton (already a 2-letter code), fall back to billing entity
+      const provCanton = normalizeCanton(invoiceData.treatment_canton || billingEntityData?.canton);
       // IBAN: strip spaces, validate Swiss format, fallback to QR-IBAN
       const sanitizeIban = (raw: string | null | undefined): string | null => {
         if (!raw) return null;
@@ -608,7 +628,7 @@ export async function POST(request: NextRequest) {
       const provStreetFull = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "";
       const provZip = billingEntityData?.zip_code || "";
       const provCity = billingEntityData?.city || "";
-      const provCanton = billingEntityData?.canton || invoiceData.treatment_canton || "GE";
+      const provCanton = normalizeCanton(invoiceData.treatment_canton || billingEntityData?.canton);
       const sanitizeIban2 = (raw: string | null | undefined): string | null => {
         if (!raw) return null;
         const stripped = raw.replace(/\s+/g, "").toUpperCase();
