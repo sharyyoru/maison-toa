@@ -647,6 +647,16 @@ export async function POST(request: NextRequest) {
             : undefined,
     };
 
+    // Guard: qual_dignities are required for TARDOC/TARMED insurance billing
+    if (!sumexInput.qualDignities || sumexInput.qualDignities.length === 0) {
+      const doctorName = staffEntity?.name || billingEntity?.name || "the doctor";
+      console.error(`[SendInvoice] Missing qual_dignities for ${doctorName} (GLN: ${sumexInput.providerGln})`);
+      return NextResponse.json({
+        error: "Missing specialty codes",
+        details: `No specialty codes (qual_dignities) found for ${doctorName}. Please add the doctor's specialty codes in the provider settings before sending to insurance.`,
+      }, { status: 422 });
+    }
+
     // DEBUG: Log complete sumexInput before sending to Sumex
     console.log('[SendInvoice] DEBUG sumexInput:', JSON.stringify({
       providerGln: sumexInput.providerGln,

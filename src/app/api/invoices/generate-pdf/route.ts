@@ -501,6 +501,16 @@ export async function POST(request: NextRequest) {
         } : {}),
       };
 
+      // Guard: qual_dignities required for insurance billing
+      if (!sumexInput.qualDignities || sumexInput.qualDignities.length === 0) {
+        const doctorName = staffData?.name || billingEntityData?.name || "the doctor";
+        console.error(`[GeneratePDF] Missing qual_dignities for ${doctorName} (GLN: ${sumexInput.providerGln})`);
+        return NextResponse.json({
+          error: "Missing specialty codes",
+          details: `No specialty codes (qual_dignities) found for ${doctorName}. Please add the doctor's specialty codes in Settings → Providers before generating the PDF.`,
+        }, { status: 422 });
+      }
+
       // Generate XML + PDF via Sumex1 server
       // Template options:
       // - detail: multi-page with full service details (verbose, can overflow to many pages)
@@ -765,6 +775,16 @@ export async function POST(request: NextRequest) {
           reminderDate: new Date().toISOString().split("T")[0],
         } : {}),
       };
+
+      // Guard: qual_dignities required for medical tariff billing
+      if (!sumexInput2.qualDignities || sumexInput2.qualDignities.length === 0) {
+        const doctorName = staffData?.name || billingEntityData?.name || "the doctor";
+        console.error(`[GeneratePDF] Missing qual_dignities for ${doctorName} (GLN: ${sumexInput2.providerGln})`);
+        return NextResponse.json({
+          error: "Missing specialty codes",
+          details: `No specialty codes (qual_dignities) found for ${doctorName}. Please add the doctor's specialty codes in Settings → Providers before generating the PDF.`,
+        }, { status: 422 });
+      }
 
       try {
         // Use "summary" template for compact format with service list + QR-bill on same page
