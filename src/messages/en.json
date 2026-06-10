@@ -1507,6 +1507,7 @@
     "title": "Financials",
     "subtitle": "Overview of revenue, invoices, and outstanding balances across all patients.",
     "exportPdf": "Export current view (PDF)",
+    "exportExcel": "Export to Excel",
     "tabOverview": "Overview",
     "tabReceipts": "Bank Payment Receipts",
     "tabImportHistory": "Payment Import History",

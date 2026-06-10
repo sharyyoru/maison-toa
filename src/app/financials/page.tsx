@@ -451,6 +451,55 @@ export default function FinancialsPage() {
     if (typeof window === "undefined") return;
     window.print();
   }
+
+  async function handleExportExcel() {
+    if (typeof window === "undefined") return;
+
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.utils.book_new();
+    const patientsSheet = XLSX.utils.json_to_sheet(
+      patientSummaryRows.map((row) => ({
+        [t("patientCol")]: row.patientName,
+        [t("invoicesCol")]: row.invoiceCount,
+        [t("billedCol")]: row.totalAmount,
+        [t("paidCol")]: row.totalPaid,
+        [t("unpaidCol")]: row.totalUnpaid,
+      })),
+    );
+    const ownersSheet = XLSX.utils.json_to_sheet(
+      ownerSummaryRows.map((row) => ({
+        [t("ownerCol")]: row.ownerLabel,
+        [t("invoicesCol")]: row.invoiceCount,
+        [t("billedCol")]: row.totalAmount,
+        [t("paidPercentCol")]:
+          row.totalAmount > 0 ? row.totalPaid / row.totalAmount : 0,
+      })),
+    );
+    const invoicesSheet = XLSX.utils.json_to_sheet(
+      filteredInvoices.map((invoice) => ({
+        [t("dateCol")]: formatShortDate(invoice.invoice_date),
+        [t("patientCol")]: invoice.patientName,
+        [t("ownerCol")]: invoice.ownerLabel,
+        [t("titleCol")]: invoice.invoice_number || t("invoice"),
+        [t("paymentCol")]: invoice.payment_method || "-",
+        [t("amountCol")]: invoice.amount,
+        [t("statusCol")]: invoice.statusLabel,
+      })),
+    );
+
+    patientsSheet["!cols"] = [{ wch: 32 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+    ownersSheet["!cols"] = [{ wch: 32 }, { wch: 12 }, { wch: 16 }, { wch: 12 }];
+    invoicesSheet["!cols"] = [{ wch: 16 }, { wch: 32 }, { wch: 32 }, { wch: 20 }, { wch: 18 }, { wch: 16 }, { wch: 18 }];
+
+    XLSX.utils.book_append_sheet(workbook, patientsSheet, "Patients");
+    XLSX.utils.book_append_sheet(workbook, ownersSheet, "Invoice Owners");
+    XLSX.utils.book_append_sheet(workbook, invoicesSheet, "Invoices");
+    XLSX.writeFile(
+      workbook,
+      `financials-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 financials-hide-on-print">
@@ -461,13 +510,23 @@ export default function FinancialsPage() {
           </p>
         </div>
         {activeTab === "overview" && (
-          <button
-            type="button"
-            onClick={handleExportPdf}
-            className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            {t("exportPdf")}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={loading || !!error}
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {t("exportExcel")}
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              {t("exportPdf")}
+            </button>
+          </div>
         )}
       </div>
 

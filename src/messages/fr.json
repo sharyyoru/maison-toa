@@ -1507,6 +1507,7 @@
     "title": "Finances",
     "subtitle": "Aperçu des revenus, factures et soldes impayés pour tous les patients.",
     "exportPdf": "Exporter la vue actuelle (PDF)",
+    "exportExcel": "Exporter vers Excel",
     "tabOverview": "Aperçu",
     "tabReceipts": "Reçus de paiement bancaire",
     "tabImportHistory": "Historique d'importation des paiements",
