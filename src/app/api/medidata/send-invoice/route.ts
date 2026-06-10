@@ -357,6 +357,12 @@ export async function POST(request: NextRequest) {
     const { data: dbLineItems, error: lineItemsError } = await lineItemsQuery;
 
     console.log(`[SendInvoice] Line items query result: found=${dbLineItems?.length ?? 0}, error=${lineItemsError ? JSON.stringify(lineItemsError) : 'none'}`);
+    if (lineItemsError) {
+      console.error(`[SendInvoice] Line items query error details:`, lineItemsError);
+    }
+    if (dbLineItems && dbLineItems.length > 0) {
+      console.log(`[SendInvoice] First line item:`, JSON.stringify(dbLineItems[0], null, 2));
+    }
 
     if (dbLineItems && dbLineItems.length > 0) {
       // Include all line items (TMA gesture codes are kept as reference lines with amount=0)
@@ -440,6 +446,7 @@ export async function POST(request: NextRequest) {
       // NO FALLBACK - line items are required for all invoices
       console.error(`[SendInvoice] ❌ CRITICAL: NO LINE ITEMS FOUND for invoice!`);
       console.error(`[SendInvoice] invoiceId=${invoiceId}, consultationId=${consultationId}, resolvedInvoiceId=${resolvedInvoiceId}, lineItemLookupId=${lineItemLookupId}`);
+      console.error(`[SendInvoice] Invoice number: ${invoiceNumber}, Patient: ${patientId}`);
 
       return NextResponse.json(
         {
@@ -450,6 +457,7 @@ export async function POST(request: NextRequest) {
             consultationId,
             resolvedInvoiceId,
             lineItemLookupId,
+            invoiceNumber,
           }
         },
         { status: 400 }
