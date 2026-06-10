@@ -233,20 +233,34 @@ export async function POST(request: NextRequest) {
           receiverGln = insurerGln;
         }
       }
-      // Fallback: try patient_insurances table
+      // Fallback: try patient_insurances table (law_type=KVG, insurance_type="basic")
       if (!insurerGln) {
         const { data: patIns } = await supabaseAdmin
           .from("patient_insurances")
-          .select("insurer_gln, insurer_name, insurance_number")
+          .select("insurer_gln, provider_name, insurer_id")
           .eq("patient_id", invoiceData.patient_id)
-          .eq("insurance_type", "KVG")
+          .eq("law_type", "KVG")
+          .order("is_primary", { ascending: false })
           .order("created_at", { ascending: false })
           .limit(1)
           .single();
         if (patIns) {
           insurerGln = (patIns as any).insurer_gln || "";
-          insurerName = (patIns as any).insurer_name || "";
-          receiverGln = insurerGln;
+          insurerName = (patIns as any).provider_name || "";
+          // Try to get receiver_gln from swiss_insurers
+          if (insurerGln) {
+            const { data: siRow } = await supabaseAdmin
+              .from("swiss_insurers")
+              .select("name, receiver_gln")
+              .eq("gln", insurerGln)
+              .single();
+            if (siRow) {
+              insurerName = (siRow as any).name || insurerName;
+              receiverGln = (siRow as any).receiver_gln || insurerGln;
+            } else {
+              receiverGln = insurerGln;
+            }
+          }
         }
       }
 
@@ -272,11 +286,14 @@ export async function POST(request: NextRequest) {
       // GLN must be exactly 13 digits; fall back to billing entity GLN if invalid
       const isValidGln = (g: string | null | undefined) => g != null && /^\d{13}$/.test(g);
 
+      // Doctor GLN for service lines (provider/responsible) — doctor performs services, clinic bills
+      const doctorGln = staffData?.gln || invoiceData.doctor_gln || provGln;
+
       const sumexServices: SumexServiceInput[] = lineItems.map((item: any) => {
         // Resolve tariff_type honoring `catalog_name` first so TMA gestures
         // emit as "TMA". See src/lib/tariffType.ts.
         const tariffType = deriveTariffType(item);
-        const svcGln = isValidGln(item.provider_gln) ? item.provider_gln : provGln;
+        const svcGln = isValidGln(item.provider_gln) ? item.provider_gln : doctorGln;
         const svcRespGln = isValidGln(item.responsible_gln) ? item.responsible_gln : svcGln;
         
         // TARMED (tariff_code=1) vs TARDOC (tariff_code=7) have different handling
@@ -385,8 +402,8 @@ export async function POST(request: NextRequest) {
           city: provCity,
           stateCode: provCanton,
         },
-        providerGln: provGln,
-        providerZsr: provZsr || undefined,
+        providerGln: staffData?.gln || invoiceData.doctor_gln || provGln,
+        providerZsr: staffData?.zsr || invoiceData.doctor_zsr || provZsr || undefined,
         providerAddress: {
           familyName: staffData?.name || invoiceData.doctor_name || provName,
           givenName: "",
@@ -610,8 +627,9 @@ export async function POST(request: NextRequest) {
 
       // Map line items
       const isValidGln2 = (g: string | null | undefined) => g != null && /^\d{13}$/.test(g);
+      const doctorGln2 = staffData?.gln || invoiceData.doctor_gln || provGln;
       const sumexServices2: SumexServiceInput[] = lineItems.map((item: any) => {
-        const svcGln = isValidGln2(item.provider_gln) ? item.provider_gln : provGln;
+        const svcGln = isValidGln2(item.provider_gln) ? item.provider_gln : doctorGln2;
         const svcRespGln = isValidGln2(item.responsible_gln) ? item.responsible_gln : svcGln;
         
         // Resolve tariff_type honoring `catalog_name` first so TMA gestures
@@ -711,8 +729,8 @@ export async function POST(request: NextRequest) {
           city: provCity,
           stateCode: provCanton,
         },
-        providerGln: provGln,
-        providerZsr: provZsr || undefined,
+        providerGln: staffData?.gln || invoiceData.doctor_gln || provGln,
+        providerZsr: staffData?.zsr || invoiceData.doctor_zsr || provZsr || undefined,
         providerAddress: {
           familyName: staffData?.name || invoiceData.doctor_name || provName,
           givenName: "",
