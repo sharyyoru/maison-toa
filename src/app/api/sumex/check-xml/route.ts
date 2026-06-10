@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     if (invoice.provider_id) {
       const { data: provRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, phone, vatuid")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, phone, vatuid, qual_dignities")
         .eq("id", invoice.provider_id)
         .single();
       if (provRow) billingEntity = provRow;
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     if (invoice.doctor_user_id && invoice.doctor_user_id !== invoice.provider_id) {
       const { data: staffRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, qual_dignities")
         .eq("id", invoice.doctor_user_id)
         .single();
       if (staffRow) staffEntity = staffRow;
@@ -357,12 +357,18 @@ export async function POST(request: NextRequest) {
       treatmentDateEnd: invoice.treatment_date_end?.split("T")[0] || treatmentDate,
       diagnoses: sumexDiagnoses,
       services: sumexServices,
-      softwarePackage: "AestheticsClinic",
+      softwarePackage: "MaisonToa",
       softwareVersion: 100,
       softwareId: 0,
       transportFrom: senderGln || provGln,
       transportViaGln: MEDIDATA_INTERMEDIATE_GLN,
       transportTo: receiverGln || insurerGln || provGln,
+      qualDignities:
+        (staffEntity?.qual_dignities && (staffEntity.qual_dignities as string[]).length > 0)
+          ? staffEntity.qual_dignities as string[]
+          : (billingEntity?.qual_dignities && (billingEntity.qual_dignities as string[]).length > 0)
+            ? billingEntity.qual_dignities as string[]
+            : undefined,
     };
 
     console.log(`[CheckXML] Building XML: ${sumexServices.length} services, ${sumexDiagnoses.length} diagnoses, IBAN=${provIban}, biller=${provGln}`);
