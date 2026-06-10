@@ -1,4 +1,3 @@
-// v2 — AR.* zero-TT fix, correct TARDOC dignity codes
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import {
@@ -17,7 +16,6 @@ import {
   mapLawType as mapSumexLaw,
   mapTiersMode as mapSumexTiers,
   mapSex as mapSumexSex,
-  TiersMode,
   RoleType,
   PlaceType,
   RequestType,
@@ -251,16 +249,6 @@ export async function POST(request: NextRequest) {
         .single();
       if (provRow) billingEntity = provRow;
     }
-    // Fallback: if provider_id is not set, look up by provider_gln
-    if (!billingEntity && invoiceRecord?.provider_gln) {
-      const { data: provRow } = await supabaseAdmin
-        .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, phone, vatuid, qual_dignities")
-        .eq("gln", invoiceRecord.provider_gln)
-        .limit(1)
-        .maybeSingle();
-      if (provRow) billingEntity = provRow;
-    }
 
     // ── Fetch staff/doctor provider if different ──
     let staffEntity: Record<string, any> | null = null;
@@ -270,16 +258,6 @@ export async function POST(request: NextRequest) {
         .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, salutation, title, qual_dignities")
         .eq("id", invoiceRecord.doctor_user_id)
         .single();
-      if (staffRow) staffEntity = staffRow;
-    }
-    // Fallback: if doctor_user_id is not set, look up by doctor_gln
-    if (!staffEntity && invoiceRecord?.doctor_gln && invoiceRecord.doctor_gln !== invoiceRecord.provider_gln) {
-      const { data: staffRow } = await supabaseAdmin
-        .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, salutation, title, qual_dignities")
-        .eq("gln", invoiceRecord.doctor_gln)
-        .limit(1)
-        .maybeSingle();
       if (staffRow) staffEntity = staffRow;
     }
 
@@ -293,23 +271,11 @@ export async function POST(request: NextRequest) {
     const provName = billingEntity?.name || invoiceRecord?.provider_name || "TOA SA";
     const provStreet = billingEntity?.street
       ? `${billingEntity.street}${billingEntity.street_no ? " " + billingEntity.street_no : ""}`
-      : "Voie du Chariot 6";
-    const provZip = billingEntity?.zip_code || "1003";
-    const provCity = billingEntity?.city || "Lausanne";
+      : "";
+    const provZip = billingEntity?.zip_code || "";
+    const provCity = billingEntity?.city || "";
     const provCanton = billingEntity?.canton || invoiceRecord?.treatment_canton || "VD";
-    // QR-IBAN check: Sumex SetEsrQR requires IID 30000-31999 (error [638] for regular IBANs).
-    const sanitizeQrIban = (raw: string | null | undefined): string | null => {
-      if (!raw) return null;
-      const stripped = raw.replace(/\s+/g, "").toUpperCase();
-      if (!/^CH[0-9A-Z]{19}$/.test(stripped)) return null;
-      const iid = parseInt(stripped.slice(4, 9), 10);
-      if (Number.isNaN(iid) || iid < 30000 || iid > 31999) {
-        console.warn(`[SendInvoice] IBAN ${stripped} is not a QR-IBAN (IID=${iid}); falling back to default QR-IBAN.`);
-        return null;
-      }
-      return stripped;
-    };
-    const provIban = sanitizeQrIban(billingEntity?.iban) || sanitizeQrIban(invoiceRecord?.provider_iban) || "CH0930788000050249289";
+    const provIban = billingEntity?.iban || invoiceRecord?.provider_iban || "CH0930788000050249289";
 
     // Derive invoice metadata
     const invoiceNumber = invoiceRecord?.invoice_number || `INV-${Date.now().toString(36).toUpperCase()}`;
@@ -327,18 +293,25 @@ export async function POST(request: NextRequest) {
     // Load line items
     let services: import("@/lib/medidata").InvoiceServiceLine[] = [];
     const lineItemLookupId = resolvedInvoiceId || consultationId;
-
+    
     console.log(`[SendInvoice] Loading line items: invoiceId=${invoiceId}, consultationId=${consultationId}, resolvedInvoiceId=${resolvedInvoiceId}, lineItemLookupId=${lineItemLookupId}`);
-
+    console.log(`[SendInvoice] Query: SELECT * FROM invoice_line_items WHERE invoice_id = '${lineItemLookupId}'`);
+    
     const lineItemsQuery = supabaseAdmin
       .from("invoice_line_items")
       .select("code, name, quantity, unit_price, total_price, tariff_code, external_factor_mt, side_type, session_number, ref_code, date_begin, provider_gln, responsible_gln, catalog_name, tp_al, tp_tl, tp_al_value, tp_tl_value")
       .eq("invoice_id", lineItemLookupId)
       .order("sort_order", { ascending: true });
-
+    
     const { data: dbLineItems, error: lineItemsError } = await lineItemsQuery;
-
+    
     console.log(`[SendInvoice] Line items query result: found=${dbLineItems?.length ?? 0}, error=${lineItemsError ? JSON.stringify(lineItemsError) : 'none'}`);
+    if (lineItemsError) {
+      console.error(`[SendInvoice] Line items query error details:`, lineItemsError);
+    }
+    if (dbLineItems && dbLineItems.length > 0) {
+      console.log(`[SendInvoice] First line item:`, JSON.stringify(dbLineItems[0], null, 2));
+    }
 
     if (dbLineItems && dbLineItems.length > 0) {
       // Include all line items (TMA gesture codes are kept as reference lines with amount=0)
@@ -381,12 +354,10 @@ export async function POST(request: NextRequest) {
         const rawSession = item.session_number ?? 1;
         const sessionNumber = isAcf ? 1 : rawSession;
 
-        // For TARDOC, prefer stored tp_al/tp_tl; fall back to catalog tp_mt/tp_tt.
-        // AR.* room/change codes (serviceType=R) self-compute TT via changeMin — must send 0.
+        // For TARDOC, prefer stored tp_al/tp_tl; fall back to catalog tp_mt/tp_tt
         const catalog = item.tariff_code === 7 ? tardocCatalogMap[item.code] : undefined;
-        const isArCode = (item.code || "").startsWith("AR.");
         const resolvedTpAl = (item.tp_al > 0) ? item.tp_al : (catalog?.tp_mt ?? 0);
-        const resolvedTpTl = isArCode ? 0 : ((item.tp_tl > 0) ? item.tp_tl : (catalog?.tp_tt ?? 0));
+        const resolvedTpTl = (item.tp_tl > 0) ? item.tp_tl : (catalog?.tp_tt ?? 0);
 
         return {
           code: item.code || "",
@@ -422,7 +393,8 @@ export async function POST(request: NextRequest) {
       // NO FALLBACK - line items are required for all invoices
       console.error(`[SendInvoice] ❌ CRITICAL: NO LINE ITEMS FOUND for invoice!`);
       console.error(`[SendInvoice] invoiceId=${invoiceId}, consultationId=${consultationId}, resolvedInvoiceId=${resolvedInvoiceId}, lineItemLookupId=${lineItemLookupId}`);
-
+      console.error(`[SendInvoice] Invoice number: ${invoiceNumber}, Patient: ${patientId}`);
+      
       return NextResponse.json(
         {
           error: "No line items found for this invoice",
@@ -432,6 +404,7 @@ export async function POST(request: NextRequest) {
             consultationId,
             resolvedInvoiceId,
             lineItemLookupId,
+            invoiceNumber,
           }
         },
         { status: 400 }
@@ -447,14 +420,15 @@ export async function POST(request: NextRequest) {
 
     // Build Sumex1 input — Sumex1 server is the ONLY XML generation path
     const sumexServices: SumexServiceInput[] = services.map(s => {
-      // For TARDOC (007) and ACF (005), use tp_al as unit and tp_al_value as unitFactor.
-      // unitTT is intentionally NOT passed — sumexInvoice.ts defaults it to 0,
-      // which is the correct working pattern (matches aestheticclinic).
+      // For TARDOC (007) and ACF (005), use tp_al/tp_tl as unit values and tp_al_value/tp_tl_value as unitFactors
+      // This correctly separates tax points from point value (Taxpunktwert)
       const isTardoc = s.tariffType === "007";
       const isAcf = (s.tariffType || "590") === "005";
       const usesTaxPoints = isTardoc || isAcf;
       const unit = usesTaxPoints && s.tpAl !== undefined && s.tpAl !== null && s.tpAl > 0 ? s.tpAl : (s.unitPrice || 0);
       const unitFactor = usesTaxPoints && s.tpAlValue !== undefined && s.tpAlValue !== null && s.tpAlValue > 0 ? s.tpAlValue : 1;
+      const unitTT = usesTaxPoints && s.tpTl !== undefined && s.tpTl !== null && s.tpTl > 0 ? s.tpTl : undefined;
+      const unitFactorTT = usesTaxPoints && s.tpTlValue !== undefined && s.tpTlValue !== null && s.tpTlValue > 0 ? s.tpTlValue : undefined;
       return {
         tariffType: s.tariffType || "590",
         code: s.code,
@@ -468,6 +442,8 @@ export async function POST(request: NextRequest) {
         serviceName: s.description || "",
         unit,
         unitFactor,
+        unitTT,
+        unitFactorTT,
         externalFactor: s.externalFactor ?? 1,
         amount: s.total || 0,
         vatRate: 0,
@@ -521,15 +497,11 @@ export async function POST(request: NextRequest) {
     const patientCountryCode = resolveCountryCode(patientCountry);
     const patientCountryName = isSwissPatient ? "" : patientCountry;
 
-    console.log(`[SendInvoice] Building Sumex1 invoice: id=${invoiceNumber}, patient=${patientData.first_name} ${patientData.last_name}, services=${services.length}, total=${total}, country="${patientCountry}", isSwiss=${isSwissPatient}, countryCode="${patientCountryCode}", countryName="${patientCountryName}"`);
+    console.log(`[SendInvoice] Building Sumex1 invoice: id=${invoiceNumber}, patient=${patientData.first_name} ${patientData.last_name}, services=${services.length}, total=${total}, country="${patientCountry}", isSwiss=${isSwissPatient}, countryCode="${patientCountryCode}", countryName="${patientCountryName}", skipValidation=${skipValidation}`);
+    console.log(`[SendInvoice] Services being sent to Sumex:`, JSON.stringify(services.map(s => ({ code: s.code, desc: s.description, qty: s.quantity, total: s.total })), null, 2));
 
     // For non-Swiss patients without SSN, use the unknownSSN per Sumex CHM docs
     const patientSsn = avsNumber || insuranceData?.avs_number || (!isSwissPatient ? "7569999999991" : "");
-
-    const tiersMode = mapSumexTiers(billingType);
-    // amountPrepaid is only allowed in Tiers Garant (TG) — error [926] if sent for TP/TS
-    const paidAmt = Number(invoiceRecord?.paid_amount) || 0;
-    const amountPrepaid = tiersMode === TiersMode.Garant ? paidAmt : 0;
 
     const sumexInput: SumexInvoiceInput = {
       language: language || 2,
@@ -537,8 +509,7 @@ export async function POST(request: NextRequest) {
       placeType: PlaceType.Practice,
       requestType: RequestType.Invoice,
       requestSubtype: RequestSubtype.Normal,
-      tiersMode,
-      amountPrepaid: amountPrepaid || undefined,
+      tiersMode: mapSumexTiers(billingType),
       vatNumber: billingEntity?.vatuid || "",
       invoiceId: invoiceNumber,
       invoiceDate,
@@ -559,6 +530,12 @@ export async function POST(request: NextRequest) {
       },
       providerGln: pickValidGln(staffEntity?.gln, invoiceRecord?.doctor_gln, provGln),
       providerZsr: staffEntity?.zsr || invoiceRecord?.doctor_zsr || provZsr || undefined,
+      qualDignities:
+        (staffEntity?.qual_dignities && staffEntity.qual_dignities.length > 0)
+          ? staffEntity.qual_dignities
+          : (billingEntity?.qual_dignities && billingEntity.qual_dignities.length > 0)
+            ? billingEntity.qual_dignities
+            : (() => { throw new Error("Provider specialty codes (qual_dignities) not configured. Set them in Settings > Providers & Billing."); })(),
       providerAddress: {
         familyName: staffEntity?.name || invoiceRecord?.doctor_name || consultationData?.doctor_name || provName,
         givenName: "",
@@ -572,9 +549,9 @@ export async function POST(request: NextRequest) {
       insuranceGln: resolvedInsurerGln,
       insuranceAddress: resolvedInsurerGln ? {
         companyName: swissInsurer?.name || resolvedInsurerName,
-        street: swissInsurer?.address_street || "N/A",
-        zip: swissInsurer?.address_postal_code || "0000",
-        city: swissInsurer?.address_city || "N/A",
+        street: bodyInsurerAddress?.street || swissInsurer?.address_street || "N/A",
+        zip: bodyInsurerAddress?.zip || swissInsurer?.address_postal_code || "0000",
+        city: bodyInsurerAddress?.city || swissInsurer?.address_city || "N/A",
         stateCode: swissInsurer?.address_canton || canton,
       } : undefined,
       patientSex: mapSumexSex(patientData.gender || "male"),
@@ -617,31 +594,10 @@ export async function POST(request: NextRequest) {
       transportTo: billingType === 'TG' ? TG_NO_TRANSMISSION_GLN : resolvedReceiverGln,
       // Per MediData feedback: TP invoices must include print_copy_to_guarantor for patient copy
       printCopyToGuarantor: billingType === 'TP' ? YesNo.Yes : (invoiceRecord?.copy_to_guarantor ? YesNo.Yes : YesNo.No),
-      qualDignities:
-        (staffEntity?.qual_dignities && staffEntity.qual_dignities.length > 0)
-          ? staffEntity.qual_dignities
-          : (billingEntity?.qual_dignities && billingEntity.qual_dignities.length > 0)
-            ? billingEntity.qual_dignities
-            : undefined,
     };
 
-    // DEBUG: Log complete sumexInput before sending to Sumex
-    console.log('[SendInvoice] DEBUG sumexInput:', JSON.stringify({
-      providerGln: sumexInput.providerGln,
-      qualDignities: sumexInput.qualDignities,
-      lawType: sumexInput.lawType,
-      tiersMode: sumexInput.tiersMode,
-      insuranceGln: sumexInput.insuranceGln,
-      servicesCount: sumexInput.services?.length || 0,
-      firstService: sumexInput.services?.[0] ? {
-        code: sumexInput.services[0].code,
-        tariffType: sumexInput.services[0].tariffType,
-        providerGln: sumexInput.services[0].providerGln,
-        responsibleGln: sumexInput.services[0].responsibleGln,
-      } : null
-    }, null, 2));
-
     // Generate XML + PDF via Sumex1 server (no fallback — this is the only path)
+    console.log(`[SendInvoice] Calling Sumex1 with ${sumexServices.length} services`);
     const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true });
 
     if (!sumexResult.success || !sumexResult.xmlContent) {
@@ -659,6 +615,22 @@ export async function POST(request: NextRequest) {
 
     const xmlContent = sumexResult.xmlContent;
     console.log(`[SendInvoice] Sumex1 XML generated: schema=${sumexResult.usedSchema}, validErr=${sumexResult.validationError}, pdfSize=${sumexResult.pdfContent?.length ?? 0}`);
+    console.log(`[SendInvoice] Services: requested=${sumexResult.servicesRequested}, accepted=${sumexResult.servicesAccepted}, rejected=${sumexResult.rejectedServices?.length ?? 0}`);
+    
+    if (sumexResult.rejectedServices && sumexResult.rejectedServices.length > 0) {
+      console.error(`[SendInvoice] ⚠️ WARNING: ${sumexResult.rejectedServices.length} services were REJECTED by Sumex validation:`);
+      sumexResult.rejectedServices.forEach(svc => {
+        console.error(`[SendInvoice]   - ${svc.code} (${svc.name}): ${svc.reason}`);
+      });
+    }
+    
+    // Count services in generated XML to detect filtering
+    const serviceMatches = xmlContent.match(/<invoice:service_ex/g);
+    const servicesInXml = serviceMatches ? serviceMatches.length : 0;
+    console.log(`[SendInvoice] Services in XML: ${servicesInXml} (sent: ${sumexServices.length})`);
+    if (servicesInXml < sumexServices.length) {
+      console.warn(`[SendInvoice] WARNING: Sumex filtered out ${sumexServices.length - servicesInXml} services!`);
+    }
 
     // Upload PDF to Supabase storage if generated
     let pdfStoragePath: string | null = null;
@@ -732,7 +704,7 @@ export async function POST(request: NextRequest) {
           xmlContent,
           `${invoiceNumber}.xml`,
           {
-            source: "maisontoa",
+            source: "maison-toa",
             invoiceNumber,
             senderGln: senderGln || provGln,
             receiverGln: uploadReceiverGln,
@@ -827,11 +799,6 @@ export async function POST(request: NextRequest) {
       console.warn("[SendInvoice] MEDIDATA_PROXY_API_KEY not set — skipping transmission");
     }
 
-    // Log rejected services if any
-    if (sumexResult.rejectedServices && sumexResult.rejectedServices.length > 0) {
-      console.warn(`[SendInvoice] ${sumexResult.rejectedServices.length} service(s) rejected by Sumex:`, sumexResult.rejectedServices);
-    }
-
     return NextResponse.json({
       success: true,
       submission: {
@@ -847,15 +814,15 @@ export async function POST(request: NextRequest) {
         transmitted: medidataTransmissionStatus === 'pending',
         transmissionError: medidataTransmissionError,
         total,
-        servicesRequested: sumexResult.servicesRequested,
-        servicesAccepted: sumexResult.servicesAccepted,
-        rejectedServices: sumexResult.rejectedServices,
         services: services.map(s => ({
           code: s.code,
           description: s.description,
           quantity: s.quantity,
           total: s.total,
         })),
+        servicesRequested: sumexResult.servicesRequested,
+        servicesAccepted: sumexResult.servicesAccepted,
+        rejectedServices: sumexResult.rejectedServices,
       },
     });
   } catch (error) {
@@ -865,4 +832,15 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Helper to extract duration from content
+function extractDurationFromContent(content: string | null): number {
+  if (!content) return 15; // Default 15 minutes
+
+  const durationMatch = content.match(/Duration[:\s]*(\d+)\s*min/i) ||
+    content.match(/Durée[:\s]*(\d+)\s*min/i) ||
+    content.match(/(\d+)\s*minutes?/i);
+
+  return durationMatch ? parseInt(durationMatch[1]) : 15;
 }
