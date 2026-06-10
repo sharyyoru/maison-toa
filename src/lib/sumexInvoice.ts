@@ -1477,12 +1477,15 @@ export async function buildInvoiceRequest(
         }
 
         if (text.length === 0) {
+          // Capture abort info to understand why Sumex rejected the session
+          const abortInfo = await getAbortInfo(mgr).catch(() => "unknown");
+          console.error(`${LOG_PREFIX} GetXML empty body — abortInfo: ${abortInfo}`);
           if (attempt < 2) {
             console.warn(`${LOG_PREFIX} GetXML returned empty body (status=${gxRes.status}) — retrying in 1s...`);
             await new Promise(r => setTimeout(r, 1000)); // Reduced from 2s to 1s
             continue;
           }
-          throw new Error(`GetXML returned HTTP ${gxRes.status} with empty body after ${attempt + 1} attempts.`);
+          throw new Error(`GetXML returned HTTP ${gxRes.status} with empty body after ${attempt + 1} attempts. AbortInfo: ${abortInfo}`);
         }
 
         xmlRes = JSON.parse(text);
