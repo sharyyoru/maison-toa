@@ -30,20 +30,45 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-    // If doctor name is provided, first look up the provider ID
+    // Resolve the canonical booking doctor name first. Display names can be
+    // shortened (for example "Claire"), while the provider record uses the
+    // full name. The slug is the stable identifier shared by the booking flow.
+    let canonicalDoctorName = doctorName?.replace(/^Dr\.\s*/i, "").trim() || "";
+    if (doctorSlug) {
+      const { data: bookingDoctor } = await supabase
+        .from("booking_doctors")
+        .select("name")
+        .eq("slug", doctorSlug)
+        .maybeSingle();
+
+      if (bookingDoctor?.name) {
+        canonicalDoctorName = bookingDoctor.name.replace(/^Dr\.\s*/i, "").trim();
+      }
+    }
+
+    // If doctor name is provided, first look up the provider ID.
     let providerId: string | null = null;
-    if (doctorName) {
-      const doctorNameClean = doctorName.replace(/^Dr\.\s*/i, "").trim();
-      
-      // Try to find provider by name
-      const { data: provider } = await supabase
+    if (canonicalDoctorName) {
+      const nameParts = canonicalDoctorName
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
+      const { data: providerCandidates } = await supabase
         .from("providers")
-        .select("id")
-        .or(`name.ilike.*${doctorNameClean}*,name.ilike.*${doctorNameClean.split(" ")[0]}*`)
-        .limit(1)
-        .single();
-      
-      if (provider) {
+        .select("id, name")
+        .or(
+          `name.ilike.%${canonicalDoctorName}%,name.ilike.%${nameParts[0] || canonicalDoctorName}%`
+        )
+        .limit(20);
+
+      const provider =
+        providerCandidates?.find((candidate) => {
+          const candidateName = (candidate.name || "").toLowerCase();
+          return nameParts.every((part) => candidateName.includes(part));
+        }) ??
+        (providerCandidates?.length === 1 ? providerCandidates[0] : null);
+
+      if (provider?.id) {
         providerId = provider.id;
       }
     }
@@ -73,10 +98,10 @@ export async function GET(request: NextRequest) {
     // overlap detection. Regular patient appointments count toward the doctor's capacity.
     const allAppointments = appointments || [];
 
-    const doctorNameLower = doctorName ? doctorName.toLowerCase().replace(/^dr\.\s*/i, "") : "";
+    const doctorNameLower = canonicalDoctorName.toLowerCase();
 
     const matchesDoctor = (apt: { provider_id: string | null; reason: string | null }) => {
-      if (!doctorName) return true;
+      if (!canonicalDoctorName) return true;
       if (providerId && apt.provider_id === providerId) return true;
       if (apt.reason) {
         const match = apt.reason.match(/\[Doctor:\s*(.+?)\s*\]/i);

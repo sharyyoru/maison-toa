@@ -524,6 +524,30 @@ export async function POST(request: Request) {
         null;
     }
 
+    if (!treatmentServiceId) {
+      const normalizedServiceName = service.trim();
+      const serviceSearchTerms = [
+        normalizedServiceName,
+        ...normalizedServiceName
+          .split(/\s+/)
+          .map((term) => term.replace(/[^\p{L}\p{N}-]/gu, ""))
+          .filter((term) => term.length >= 3),
+      ];
+
+      for (const searchTerm of [...new Set(serviceSearchTerms)]) {
+        const { data: matchingServices } = await supabase
+          .from("services")
+          .select("id")
+          .ilike("name", `%${searchTerm}%`)
+          .limit(1);
+
+        if (matchingServices?.[0]?.id) {
+          treatmentServiceId = matchingServices[0].id;
+          break;
+        }
+      }
+    }
+
     // Check if time slot has capacity for this doctor using full overlap detection.
     const apptStart = appointmentDateObj;
     const apptEnd = new Date(appointmentDateObj.getTime() + durationMinutes * 60 * 1000);

@@ -395,11 +395,15 @@ function DoctorBookingContent() {
     }
   }, [hasAppliedPreselection, preselectedTime, availableSlots, selectedTime]);
 
-  async function checkAvailability(date: string) {
+  async function checkAvailability(date: string, forceRefresh = false) {
     const requestSeq = ++selectedDateRequestSeq.current;
     try {
       const doctorName = doctor?.name || "";
-      const isDateInCachedWindow = !!availabilityWindow && date >= availabilityWindow.startDate && date <= availabilityWindow.endDate;
+      const isDateInCachedWindow =
+        !forceRefresh &&
+        !!availabilityWindow &&
+        date >= availabilityWindow.startDate &&
+        date <= availabilityWindow.endDate;
       let blockedSlots = isDateInCachedWindow ? (availabilityWindow.blockedSlotsByDate[date] || []) : null;
       if (!blockedSlots) {
         const { start, end } = getSwissDayRange(date);
@@ -418,6 +422,15 @@ function DoctorBookingContent() {
       const currentSlots = generateTimeSlots(doctorSlug, locationId || "", date, dbAvailability);
       const duration = treatment?.duration_minutes ?? 60;
       const openSlots = currentSlots.filter(time => !slotConflicts(time, duration, blockedSlots));
+      if (forceRefresh) {
+        setNextAvailableSlots((slots) =>
+          slots.filter(
+            (slot) =>
+              slot.date !== date ||
+              !slotConflicts(slot.time, duration, blockedSlots)
+          )
+        );
+      }
       if (openSlots.length > 0) {
         const nextTime = selectedTime && openSlots.includes(selectedTime) ? selectedTime : openSlots[0];
         setSelectedTime(nextTime);
@@ -502,6 +515,10 @@ function DoctorBookingContent() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (res.status === 409) {
+          setStep("datetime");
+          await checkAvailability(selectedDate, true);
+        }
         throw new Error(data.error || "Failed to book appointment");
       }
 
