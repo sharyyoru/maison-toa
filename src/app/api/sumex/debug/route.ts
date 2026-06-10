@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { buildInvoiceRequest, RoleType, TiersType, LawType } from "@/lib/sumexInvoice";
+import { buildInvoiceRequest, RoleType, TiersMode, LawType } from "@/lib/sumexInvoice";
 import type { Invoice, InvoiceLineItem } from "@/lib/invoiceTypes";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     roleType: RoleType.Physician,
     invoiceId: invoice.invoice_number?.toString() || invoice.id,
     invoiceDate: invoice.invoice_date || new Date().toISOString().split("T")[0],
-    tiersMode: TiersType.TiersPayant,
+    tiersMode: TiersMode.TiersPayant,
     lawType: LawType.KVG,
     providerGln: provider?.gln || "(missing)",
     providerZsr: provider?.zsr || "(missing)",
