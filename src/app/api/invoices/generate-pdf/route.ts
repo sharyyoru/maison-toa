@@ -457,6 +457,7 @@ export async function POST(request: NextRequest) {
       try {
         const sumexStart = Date.now();
         console.log(`[TIMING] Starting Sumex1 buildInvoiceRequest (insurance path)...`);
+        console.log(`[GeneratePDF] sumexInput key values: billerGln=${sumexInput.billerGln} providerGln=${sumexInput.providerGln} insuranceGln=${sumexInput.insuranceGln} transportTo=${sumexInput.transportTo} patientSsn=${sumexInput.patientSsn} tiersMode=${sumexInput.tiersMode} lawType=${sumexInput.lawType} services=${sumexInput.services?.length}`);
         const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, generationAttributes: pdfGenAttrs });
         timings.sumexBuildInvoice = Date.now() - sumexStart;
         console.log(`[TIMING] Sumex1 buildInvoiceRequest completed: ${timings.sumexBuildInvoice}ms`);
