@@ -1425,11 +1425,6 @@ export async function buildInvoiceRequest(
         abortInfo,
       };
     }
-    // Check for warnings even after successful Finalize
-    const postFinalizeAbort = await getAbortInfo(mgr);
-    if (postFinalizeAbort) {
-      console.warn(`${LOG_PREFIX} Post-Finalize warnings: ${postFinalizeAbort}`);
-    }
 
     // --- GetXML ---
     const getXmlStart = Date.now();
