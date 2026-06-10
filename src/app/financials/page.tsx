@@ -27,10 +27,10 @@ type InvoiceRow = {
   created_by_user_id: string | null;
   created_by_name: string | null;
   is_archived: boolean;
-  invoice_line_items: InvoiceLineItemRow[];
 };
 
 type InvoiceLineItemRow = {
+  invoice_id: string;
   name: string;
   total_price: number;
   vat_rate: string | null;
@@ -131,7 +131,7 @@ export default function FinancialsPage() {
         const { data, error: invoicesError } = await supabaseClient
           .from("invoices")
           .select(
-            "id, patient_id, invoice_number, invoice_date, treatment_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, paid_at, health_insurance_law, billing_type, insurance_name, total_amount, paid_amount, vat_amount, status, is_complimentary, created_by_user_id, created_by_name, is_archived, invoice_line_items(name, total_price, vat_rate, vat_rate_value, vat_amount)",
+            "id, patient_id, invoice_number, invoice_date, treatment_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, paid_at, health_insurance_law, billing_type, insurance_name, total_amount, paid_amount, vat_amount, status, is_complimentary, created_by_user_id, created_by_name, is_archived",
           )
           .eq("is_archived", false)
           .order("invoice_date", { ascending: false });
@@ -471,6 +471,30 @@ export default function FinancialsPage() {
     if (typeof window === "undefined") return;
 
     const XLSX = await import("xlsx");
+    const lineItemsByInvoice = new Map<string, InvoiceLineItemRow[]>();
+    const invoiceIds = filteredInvoices.map((invoice) => invoice.id);
+    const BATCH_SIZE = 100;
+
+    for (let index = 0; index < invoiceIds.length; index += BATCH_SIZE) {
+      const batch = invoiceIds.slice(index, index + BATCH_SIZE);
+      const { data, error: lineItemsError } = await supabaseClient
+        .from("invoice_line_items")
+        .select("invoice_id, name, total_price, vat_rate, vat_rate_value, vat_amount")
+        .in("invoice_id", batch)
+        .order("sort_order", { ascending: true });
+
+      if (lineItemsError) {
+        setError(lineItemsError.message);
+        return;
+      }
+
+      for (const item of (data || []) as InvoiceLineItemRow[]) {
+        const items = lineItemsByInvoice.get(item.invoice_id) || [];
+        items.push(item);
+        lineItemsByInvoice.set(item.invoice_id, items);
+      }
+    }
+
     const workbook = XLSX.utils.book_new();
     const headers = [
       "Date (of the service done)",
@@ -495,7 +519,7 @@ export default function FinancialsPage() {
       "% TVA complète",
     ];
     const rows = filteredInvoices.map((invoice) => {
-      const lineItems = invoice.invoice_line_items || [];
+      const lineItems = lineItemsByInvoice.get(invoice.id) || [];
       const services = lineItems.map((item) => item.name).filter(Boolean).join("; ");
       const vat = lineItems.reduce(
         (totals, item) => {
