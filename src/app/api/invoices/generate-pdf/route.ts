@@ -203,37 +203,38 @@ export async function POST(request: NextRequest) {
       // Fetch insurer data — try insurer_id first, then fall back to insurance_gln on the invoice
       let insurerGln = "";
       let insurerName = "";
+      let insurerStreet = "";
+      let insurerZip = "";
+      let insurerCity = "";
       let receiverGln = "";
+
+      // Helper: populate insurer fields from a swiss_insurers row
+      const applyInsurerRow = (row: any) => {
+        insurerGln = row.gln || "";
+        insurerName = row.name || "";
+        insurerStreet = row.address_street || "";
+        insurerZip = row.address_postal_code || "";
+        insurerCity = row.address_city || "";
+        receiverGln = row.receiver_gln || insurerGln;
+      };
+      const INSURER_SELECT = "name, gln, receiver_gln, address_street, address_postal_code, address_city";
+
+      // Priority 1: insurer_id on invoice
       if (invoiceData.insurer_id) {
-        const { data: insurerRow } = await supabaseAdmin
-          .from("swiss_insurers")
-          .select("name, gln, street, zip_code, city, pobox, receiver_gln")
-          .eq("id", invoiceData.insurer_id)
-          .single();
-        if (insurerRow) {
-          insurerGln = (insurerRow as any).gln || "";
-          insurerName = (insurerRow as any).name || "";
-          receiverGln = (insurerRow as any).receiver_gln || insurerGln;
-        }
+        const { data: row } = await supabaseAdmin
+          .from("swiss_insurers").select(INSURER_SELECT)
+          .eq("id", invoiceData.insurer_id).single();
+        if (row) applyInsurerRow(row);
       }
-      // Fallback: use insurance_gln stored directly on the invoice
+      // Priority 2: insurance_gln on invoice
       if (!insurerGln && invoiceData.insurance_gln) {
-        insurerGln = invoiceData.insurance_gln;
-        insurerName = invoiceData.insurance_name || "";
-        // Try to look up receiver_gln from swiss_insurers by GLN
-        const { data: insurerByGln } = await supabaseAdmin
-          .from("swiss_insurers")
-          .select("name, gln, receiver_gln")
-          .eq("gln", insurerGln)
-          .single();
-        if (insurerByGln) {
-          insurerName = (insurerByGln as any).name || insurerName;
-          receiverGln = (insurerByGln as any).receiver_gln || insurerGln;
-        } else {
-          receiverGln = insurerGln;
-        }
+        const { data: row } = await supabaseAdmin
+          .from("swiss_insurers").select(INSURER_SELECT)
+          .eq("gln", invoiceData.insurance_gln).single();
+        if (row) applyInsurerRow(row);
+        else { insurerGln = invoiceData.insurance_gln; insurerName = invoiceData.insurance_name || ""; receiverGln = insurerGln; }
       }
-      // Fallback: try patient_insurances table (law_type=KVG, insurance_type="basic")
+      // Priority 3: patient_insurances (law_type=KVG)
       if (!insurerGln) {
         const { data: patIns } = await supabaseAdmin
           .from("patient_insurances")
@@ -242,24 +243,15 @@ export async function POST(request: NextRequest) {
           .eq("law_type", "KVG")
           .order("is_primary", { ascending: false })
           .order("created_at", { ascending: false })
-          .limit(1)
-          .single();
+          .limit(1).single();
         if (patIns) {
-          insurerGln = (patIns as any).insurer_gln || "";
-          insurerName = (patIns as any).provider_name || "";
-          // Try to get receiver_gln from swiss_insurers
-          if (insurerGln) {
-            const { data: siRow } = await supabaseAdmin
-              .from("swiss_insurers")
-              .select("name, receiver_gln")
-              .eq("gln", insurerGln)
-              .single();
-            if (siRow) {
-              insurerName = (siRow as any).name || insurerName;
-              receiverGln = (siRow as any).receiver_gln || insurerGln;
-            } else {
-              receiverGln = insurerGln;
-            }
+          const gln = (patIns as any).insurer_gln || "";
+          if (gln) {
+            const { data: row } = await supabaseAdmin
+              .from("swiss_insurers").select(INSURER_SELECT)
+              .eq("gln", gln).single();
+            if (row) applyInsurerRow(row);
+            else { insurerGln = gln; insurerName = (patIns as any).provider_name || ""; receiverGln = gln; }
           }
         }
       }
@@ -417,9 +409,9 @@ export async function POST(request: NextRequest) {
         insuranceGln: insurerGln || undefined,
         insuranceAddress: insurerGln ? {
           companyName: insurerName,
-          street: "",
-          zip: "",
-          city: "",
+          street: insurerStreet,
+          zip: insurerZip,
+          city: insurerCity,
           stateCode: "",
         } : undefined,
         patientSex: mapSumexSex(patientData.gender || "male"),
