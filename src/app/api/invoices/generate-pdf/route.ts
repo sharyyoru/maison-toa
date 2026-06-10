@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
     if (isInsuranceInvoice) {
       console.log(`[GeneratePDF] Insurance/Medical tariff invoice detected (${invoiceData.billing_type || "TG"}) — using Sumex1 Print for PDF`);
 
-      // Fetch insurer data
+      // Fetch insurer data — try insurer_id first, then fall back to insurance_gln on the invoice
       let insurerGln = "";
       let insurerName = "";
       let receiverGln = "";
@@ -214,6 +214,39 @@ export async function POST(request: NextRequest) {
           insurerGln = (insurerRow as any).gln || "";
           insurerName = (insurerRow as any).name || "";
           receiverGln = (insurerRow as any).receiver_gln || insurerGln;
+        }
+      }
+      // Fallback: use insurance_gln stored directly on the invoice
+      if (!insurerGln && invoiceData.insurance_gln) {
+        insurerGln = invoiceData.insurance_gln;
+        insurerName = invoiceData.insurance_name || "";
+        // Try to look up receiver_gln from swiss_insurers by GLN
+        const { data: insurerByGln } = await supabaseAdmin
+          .from("swiss_insurers")
+          .select("name, gln, receiver_gln")
+          .eq("gln", insurerGln)
+          .single();
+        if (insurerByGln) {
+          insurerName = (insurerByGln as any).name || insurerName;
+          receiverGln = (insurerByGln as any).receiver_gln || insurerGln;
+        } else {
+          receiverGln = insurerGln;
+        }
+      }
+      // Fallback: try patient_insurances table
+      if (!insurerGln) {
+        const { data: patIns } = await supabaseAdmin
+          .from("patient_insurances")
+          .select("insurer_gln, insurer_name, insurance_number")
+          .eq("patient_id", invoiceData.patient_id)
+          .eq("insurance_type", "KVG")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+        if (patIns) {
+          insurerGln = (patIns as any).insurer_gln || "";
+          insurerName = (patIns as any).insurer_name || "";
+          receiverGln = insurerGln;
         }
       }
 
