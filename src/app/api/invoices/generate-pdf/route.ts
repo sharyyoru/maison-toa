@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import QRCode from "qrcode";
 import { generateSwissReference } from "@/lib/swissQrBill";
 import type { Invoice, InvoiceLineItem } from "@/lib/invoiceTypes";
-import { createPayrexxGateway } from "@/lib/payrexx";
 import {
   buildInvoiceRequest,
   mapLawType as mapSumexLaw,
@@ -52,17 +50,13 @@ type ProviderData = {
   iban: string | null;
   salutation: string | null;
   title: string | null;
-  qual_dignities: string[] | null;
+  qual_dignities?: string[] | null;
 };
 
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
-  const timings: Record<string, number> = {};
-  
   try {
-    const { invoiceId } = await request.json();
-    console.log(`[TIMING] PDF generation started for invoice ID: ${invoiceId}`);
-    timings.start = 0;
+    const { invoiceId, invoiceType = "tp", reminderLevel = 1 } = await request.json();
+    console.log("PDF generation request received for invoice ID:", invoiceId, "type:", invoiceType);
 
     if (!invoiceId) {
       return NextResponse.json(
@@ -72,14 +66,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch invoice with line items
-    const fetchInvoiceStart = Date.now();
     const { data: invoice, error: invoiceError } = await supabaseAdmin
       .from("invoices")
       .select("*")
       .eq("id", invoiceId)
       .single();
-    timings.fetchInvoice = Date.now() - fetchInvoiceStart;
-    console.log(`[TIMING] Fetch invoice: ${timings.fetchInvoice}ms`);
 
     console.log("Invoice query result:", { invoice, invoiceError });
 
@@ -94,14 +85,11 @@ export async function POST(request: NextRequest) {
     const invoiceData = invoice as Invoice;
 
     // Fetch line items
-    const fetchLineItemsStart = Date.now();
     const { data: lineItemsRaw, error: lineItemsError } = await supabaseAdmin
       .from("invoice_line_items")
       .select("*")
       .eq("invoice_id", invoiceId)
       .order("sort_order", { ascending: true });
-    timings.fetchLineItems = Date.now() - fetchLineItemsStart;
-    console.log(`[TIMING] Fetch line items: ${timings.fetchLineItems}ms`);
 
     if (lineItemsError) {
       return NextResponse.json(
@@ -113,14 +101,11 @@ export async function POST(request: NextRequest) {
     const lineItems = (lineItemsRaw || []) as InvoiceLineItem[];
 
     // Fetch patient
-    const fetchPatientStart = Date.now();
     const { data: patient, error: patientError } = await supabaseAdmin
       .from("patients")
       .select("first_name, last_name, dob, street_address, postal_code, town, gender, email, phone")
       .eq("id", invoiceData.patient_id)
       .single();
-    timings.fetchPatient = Date.now() - fetchPatientStart;
-    console.log(`[TIMING] Fetch patient: ${timings.fetchPatient}ms`);
 
     console.log("Patient query result:", { patientId: invoiceData.patient_id, patient, patientError });
 
@@ -133,16 +118,25 @@ export async function POST(request: NextRequest) {
     }
 
     const patientData = patient as PatientData;
-    
+
     // Fetch billing entity (clinic) data
-    const fetchProvidersStart = Date.now();
     let billingEntityData: ProviderData | null = null;
     if (invoiceData.provider_id) {
       const { data: providerRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, qual_dignities")
+        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid, qual_dignities")
         .eq("id", invoiceData.provider_id)
         .single();
+      if (providerRow) billingEntityData = providerRow as ProviderData;
+    }
+    // Fallback: look up by provider_gln if provider_id is NULL
+    if (!billingEntityData && invoiceData.provider_gln) {
+      const { data: providerRow } = await supabaseAdmin
+        .from("providers")
+        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid, qual_dignities")
+        .eq("gln", invoiceData.provider_gln)
+        .limit(1)
+        .maybeSingle();
       if (providerRow) billingEntityData = providerRow as ProviderData;
     }
 
@@ -156,8 +150,16 @@ export async function POST(request: NextRequest) {
         .single();
       if (staffRow) staffData = staffRow as ProviderData;
     }
-    timings.fetchProviders = Date.now() - fetchProvidersStart;
-    console.log(`[TIMING] Fetch providers: ${timings.fetchProviders}ms`);
+    // Fallback: look up by doctor_gln if doctor_user_id is NULL (but only if different from provider_gln)
+    if (!staffData && invoiceData.doctor_gln && invoiceData.doctor_gln !== invoiceData.provider_gln) {
+      const { data: staffRow } = await supabaseAdmin
+        .from("providers")
+        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, qual_dignities")
+        .eq("gln", invoiceData.doctor_gln)
+        .limit(1)
+        .maybeSingle();
+      if (staffRow) staffData = staffRow as ProviderData;
+    }
 
     // FALLBACK for old invoices: If no doctor_user_id, provider_id was the doctor
     // In old system, the doctor record contained BOTH doctor info AND billing entity info
@@ -177,7 +179,6 @@ export async function POST(request: NextRequest) {
     }
 
     // SYMMETRIC FALLBACK: invoice has doctor_user_id but no provider_id
-    // (self-employed doctor, or setup where the doctor is their own biller).
     // Without this, Sumex SetEsrQR fails with [622] "Kreditor: Die Adressangaben
     // sind nicht vollständig" because provStreet/provZip/provCity default to "".
     if (!billingEntityData && staffData) {
@@ -186,19 +187,8 @@ export async function POST(request: NextRequest) {
         `[GeneratePDF] No provider_id on invoice; using doctor (${staffData.name}) as billing entity.`,
       );
     }
-    // ── Detect insurance (Tiers Payant / Tiers Garant) invoice and generate specialized PDF ──
-    // Treat as insurance if:
-    // 1. There's an actual insurer OR payment method is Insurance
-    // 2. OR invoice contains TARMED/TARDOC items (requires proper tariff handling)
-    const hasMedicalTariffItems = lineItems.some((item: any) => 
-      item.tariff_code === 1 || // TARMED
-      item.tariff_code === 7 || // TARDOC
-      item.catalog_name?.toLowerCase() === 'tarmed' ||
-      item.catalog_name?.toLowerCase() === 'tardoc'
-    );
-    const isInsuranceInvoice = !!invoiceData.insurer_id || invoiceData.payment_method === "Insurance" || hasMedicalTariffItems;
 
-    // Normalize canton to 2-letter abbreviation — DB may store full name (e.g. "Vaud") or abbreviation ("VD")
+    // Normalize canton abbreviation — DB may store full name e.g. "Vaud" instead of "VD"
     const CANTON_NAME_TO_CODE: Record<string, string> = {
       "aargau": "AG", "appenzell innerrhoden": "AI", "appenzell ausserrhoden": "AR",
       "bern": "BE", "berne": "BE", "basel-landschaft": "BL", "basel-stadt": "BS",
@@ -216,81 +206,113 @@ export async function POST(request: NextRequest) {
       return CANTON_NAME_TO_CODE[c.toLowerCase()] || c.toUpperCase().slice(0, 2);
     };
 
+    // ── Detect insurance (Tiers Payant / Tiers Garant) invoice and generate specialized PDF ──
+    // Treat as insurance if:
+    // 1. There's an actual insurer OR payment method is Insurance
+    // 2. OR invoice contains TARMED/TARDOC items (requires proper tariff handling)
+    const hasMedicalTariffItems = lineItems.some((item: any) =>
+      item.tariff_code === 1 || // TARMED
+      item.tariff_code === 7 || // TARDOC
+      item.catalog_name?.toLowerCase() === 'tarmed' ||
+      item.catalog_name?.toLowerCase() === 'tardoc'
+    );
+    const isInsuranceInvoice = !!invoiceData.insurer_id || invoiceData.payment_method === "Insurance" || hasMedicalTariffItems;
     if (isInsuranceInvoice) {
-      console.log(`[GeneratePDF] Insurance/Medical tariff invoice detected (${invoiceData.billing_type || "TG"}) — using Sumex1 Print for PDF`);
+      console.log(`[GeneratePDF] Insurance invoice detected (${invoiceData.billing_type || "TP"}) — using Sumex1 Print for PDF`);
 
-      // Fetch insurer data — try insurer_id first, then fall back to insurance_gln on the invoice
+      // Fetch insurer data — MediData participants is authoritative for addresses
       let insurerGln = "";
       let insurerName = "";
+      let receiverGln = "";
       let insurerStreet = "";
       let insurerZip = "";
       let insurerCity = "";
-      let receiverGln = "";
-
-      // Helper: populate insurer fields from a swiss_insurers row
-      const applyInsurerRow = (row: any) => {
-        insurerGln = row.gln || "";
-        insurerName = row.name || "";
-        insurerStreet = row.address_street || "";
-        insurerZip = row.address_postal_code || "";
-        insurerCity = row.address_city || "";
-        receiverGln = row.receiver_gln || insurerGln;
+      const fetchInsurerRow = async (filter: { col: string; val: string }) => {
+        const { data } = await supabaseAdmin
+          .from("swiss_insurers")
+          .select("name, gln, receiver_gln, address_street, address_postal_code, address_city")
+          .eq(filter.col, filter.val)
+          .limit(1)
+          .maybeSingle();
+        return data as Record<string, any> | null;
       };
-      const INSURER_SELECT = "name, gln, receiver_gln, address_street, address_postal_code, address_city";
-
-      // Priority 1: insurer_id on invoice
+      let insurerRow: Record<string, any> | null = null;
       if (invoiceData.insurer_id) {
-        const { data: row } = await supabaseAdmin
-          .from("swiss_insurers").select(INSURER_SELECT)
-          .eq("id", invoiceData.insurer_id).single();
-        if (row) applyInsurerRow(row);
+        insurerRow = await fetchInsurerRow({ col: "id", val: invoiceData.insurer_id });
       }
-      // Priority 2: insurance_gln on invoice
-      if (!insurerGln && invoiceData.insurance_gln) {
-        const { data: row } = await supabaseAdmin
-          .from("swiss_insurers").select(INSURER_SELECT)
-          .eq("gln", invoiceData.insurance_gln).single();
-        if (row) applyInsurerRow(row);
-        else { insurerGln = invoiceData.insurance_gln; insurerName = invoiceData.insurance_name || ""; receiverGln = insurerGln; }
+      // Fallback: look up by GLN stored on the invoice
+      if (!insurerRow && invoiceData.insurance_gln) {
+        insurerRow = await fetchInsurerRow({ col: "gln", val: invoiceData.insurance_gln });
       }
-      // Priority 3: patient_insurances (law_type=KVG)
-      if (!insurerGln) {
+      if (insurerRow) {
+        insurerGln = insurerRow.gln || "";
+        insurerName = insurerRow.name || "";
+        receiverGln = insurerRow.receiver_gln || insurerGln;
+        insurerStreet = insurerRow.address_street || "";
+        insurerZip = insurerRow.address_postal_code || "";
+        insurerCity = insurerRow.address_city || "";
+      }
+      // Fallback: look up patient's primary insurance from patient_insurances.
+      // Authoritative tiersMode comes from the invoice's billing_type column in the DB.
+      // invoiceType param is only used to distinguish invoice vs reminder, not TG vs TP.
+      const effectiveTiersMode = invoiceData.billing_type || "TG";
+      if (!insurerRow && invoiceData.patient_id && effectiveTiersMode === "TP") {
+        // billing_type in patient_insurances is the patient's preference, not insurer capability.
+        // Most Swiss insurers support both TP and TG modes, so we use primary insurance regardless.
+        // NOTE: is_primary may not be set in all deployments — fall back to most recent KVG record.
         const { data: patIns } = await supabaseAdmin
           .from("patient_insurances")
-          .select("insurer_gln, provider_name, insurer_id")
+          .select("insurer_gln, insurer_id, provider_name, law_type, billing_type")
           .eq("patient_id", invoiceData.patient_id)
-          .eq("law_type", "KVG")
           .order("is_primary", { ascending: false })
           .order("created_at", { ascending: false })
-          .limit(1).single();
+          .limit(1)
+          .maybeSingle();
         if (patIns) {
-          const gln = (patIns as any).insurer_gln || "";
-          if (gln) {
-            const { data: row } = await supabaseAdmin
-              .from("swiss_insurers").select(INSURER_SELECT)
-              .eq("gln", gln).single();
-            if (row) applyInsurerRow(row);
-            else { insurerGln = gln; insurerName = (patIns as any).provider_name || ""; receiverGln = gln; }
+          const patInsurerGln = (patIns as any).insurer_gln || "";
+          if (patInsurerGln) insurerRow = await fetchInsurerRow({ col: "gln", val: patInsurerGln });
+          if (!insurerRow && (patIns as any).insurer_id)
+            insurerRow = await fetchInsurerRow({ col: "id", val: (patIns as any).insurer_id });
+          if (insurerRow) {
+            insurerGln = insurerRow.gln || "";
+            insurerName = insurerRow.name || "";
+            receiverGln = insurerRow.receiver_gln || insurerGln;
+            insurerStreet = insurerRow.address_street || "";
+            insurerZip = insurerRow.address_postal_code || "";
+            insurerCity = insurerRow.address_city || "";
+          } else if (patInsurerGln) {
+            // GLN known but not in swiss_insurers yet — use GLN directly
+            insurerGln = patInsurerGln;
+            insurerName = (patIns as any).provider_name || "";
           }
         }
       }
+      // If insurer GLN not yet resolved, use invoice field directly
+      if (!insurerGln && invoiceData.insurance_gln) insurerGln = invoiceData.insurance_gln;
+      if (!insurerName && invoiceData.insurance_name) insurerName = invoiceData.insurance_name;
 
       const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
       const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
-      const provName = billingEntityData?.name || invoiceData.provider_name || "TOA SA";
-      const provStreet = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "";
-      const provZip = billingEntityData?.zip_code || "";
-      const provCity = billingEntityData?.city || "";
-      // Prefer invoice treatment_canton (already a 2-letter code), fall back to billing entity
+      const provName = "TOA SA";
+      const provStreet = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Voie du Chariot 6";
+      const provZip = billingEntityData?.zip_code || "1003";
+      const provCity = billingEntityData?.city || "Lausanne";
       const provCanton = normalizeCanton(invoiceData.treatment_canton || billingEntityData?.canton);
-      // IBAN: strip spaces, validate Swiss format, fallback to QR-IBAN
-      const sanitizeIban = (raw: string | null | undefined): string | null => {
+      // IBAN: strip spaces, validate Swiss QR-IBAN (Sumex SetEsrQR requires IID 30000-31999).
+      // Regular IBANs are rejected by Sumex with code 638; fall back to the clinic's default QR-IBAN.
+      const sanitizeQrIban = (raw: string | null | undefined): string | null => {
         if (!raw) return null;
         const stripped = raw.replace(/\s+/g, "").toUpperCase();
-        if (/^CH[0-9A-Z]{19}$/.test(stripped)) return stripped;
-        return null;
+        if (!/^CH[0-9A-Z]{19}$/.test(stripped)) return null;
+        // QR-IBAN: positions 4-8 (0-indexed) must be 30000-31999
+        const iid = parseInt(stripped.slice(4, 9), 10);
+        if (Number.isNaN(iid) || iid < 30000 || iid > 31999) {
+          console.warn(`[GeneratePDF] IBAN ${stripped} is not a QR-IBAN (IID=${iid}); falling back to default QR-IBAN.`);
+          return null;
+        }
+        return stripped;
       };
-      const provIban = sanitizeIban(billingEntityData?.iban) || sanitizeIban(invoiceData.provider_iban) || "CH0930788000050249289";
+      const provIban = sanitizeQrIban(billingEntityData?.iban) || sanitizeQrIban(invoiceData.provider_iban) || "CH0930788000050249289";
 
       const treatmentDate = invoiceData.treatment_date || invoiceData.invoice_date || new Date().toISOString().split("T")[0];
 
@@ -298,52 +320,52 @@ export async function POST(request: NextRequest) {
       // GLN must be exactly 13 digits; fall back to billing entity GLN if invalid
       const isValidGln = (g: string | null | undefined) => g != null && /^\d{13}$/.test(g);
 
-      // Doctor GLN for service lines (provider/responsible) — doctor performs services, clinic bills
-      const doctorGln = staffData?.gln || invoiceData.doctor_gln || provGln;
-
       const sumexServices: SumexServiceInput[] = lineItems.map((item: any) => {
         // Resolve tariff_type honoring `catalog_name` first so TMA gestures
         // emit as "TMA". See src/lib/tariffType.ts.
         const tariffType = deriveTariffType(item);
-        const svcGln = isValidGln(item.provider_gln) ? item.provider_gln : doctorGln;
+        const svcGln = isValidGln(item.provider_gln) ? item.provider_gln : provGln;
         const svcRespGln = isValidGln(item.responsible_gln) ? item.responsible_gln : svcGln;
-        
-        // TARMED (tariff_code=1) vs TARDOC (tariff_code=7) have different handling
+
+        // TARMED (tariff_code=1) vs TARDOC (tariff_code=7) vs ACF (005) vs other
         const isTardoc = item.tariff_code === 7 || tariffType === "007";
         const isTarmed = item.tariff_code === 1 || tariffType === "001";
-        
-        // For TARMED: Sumex expects amounts in technical points (TP), not CHF
-        // The formula is: amount = tp_al (medical TP) for the service
-        // Sumex will multiply by tax point value internally
-        // For TARDOC/others: use stored total_price (CHF)
-        let calculatedAmount: number;
+        const isAcf = tariffType === "005";
+
         let unit: number;
         let unitFactor: number;
-        
+        let calculatedAmount: number;
+
         if (isTarmed) {
-          // TARMED: amount = tp_al (medical technical points)
-          // unit = tp_al, unitFactor = 1 (Sumex handles tax point value internally)
+          // TARMED: unit = tp_al (medical technical points), Sumex handles Taxpunktwert internally
           unit = item.tp_al || item.unit_price || 0;
           unitFactor = 1;
           calculatedAmount = unit * (item.quantity || 1);
-        } else if (isTardoc || (item.catalog_name === "ACF" && item.tp_al > 0)) {
-          // TARDOC and ACF: use tp_al (tax points) and tp_al_value (point value / Taxpunktwert)
+        } else if (isTardoc || isAcf) {
+          // TARDOC and ACF: use tp_al (tax points) and tp_al_value (point value / Taxpunktwert).
+          // sumexInvoice.ts defaults unitTT to svc.unitTT ?? 0, so TT component is zero
+          // unless the caller explicitly sets it. This matches the working aestheticclinic pattern.
           unit = item.tp_al || 0;
           unitFactor = item.tp_al_value || 1;
           calculatedAmount = item.total_price || 0;
         } else {
-          // Other tariffs: use unit_price and total_price
           unit = item.unit_price || 0;
           unitFactor = 1;
           calculatedAmount = item.total_price || 0;
         }
-        
+
+        // Plain service lines (no tariff code) get tariff 999 with code "1"
+        // to prevent Sumex error 929 "undefined/invalid code".
+        const isPlain = !isTardoc && !isTarmed && !isAcf && !item.code && !item.tardoc_code;
+        const resolvedTariffType = isPlain ? "999" : tariffType;
+        const resolvedCode = isPlain ? "1" : (item.code || item.tardoc_code || "");
+
         return {
-          tariffType,
-          code: item.code || "",
+          tariffType: resolvedTariffType,
+          code: resolvedCode,
           referenceCode: item.ref_code || "",
           quantity: item.quantity || 1,
-          sessionNumber: item.session_number ?? 1,
+          sessionNumber: isAcf ? 1 : (item.session_number ?? 1),
           dateBegin: item.date_begin || treatmentDate,
           providerGln: svcGln,
           responsibleGln: svcRespGln,
@@ -351,9 +373,10 @@ export async function POST(request: NextRequest) {
           serviceName: item.name || "",
           unit,
           unitFactor,
-          externalFactor: item.tariff_code === 5 ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
+          externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
           amount: calculatedAmount,
-          vatRate: 0,
+          // TARDOC/ACF/TARMED lines are always VAT-exempt for insurer billing.
+          vatRate: (isTardoc || isTarmed || isAcf) ? 0 : (Number(item.vat_rate_value) || 0),
           ignoreValidate: YesNo.Yes,
         };
       });
@@ -384,7 +407,7 @@ export async function POST(request: NextRequest) {
         paymentRemark = `Acompte reçu / Anzahlung erhalten: ${paidAmt.toFixed(2)} CHF — Solde / Restbetrag: ${remaining.toFixed(2)} CHF`;
       }
 
-      const tiersMode1 = mapSumexTiers(invoiceData.billing_type || "TG");
+      const tiersMode1 = mapSumexTiers(effectiveTiersMode);
       // amountPrepaid is only allowed in Tiers Garant (TG) — error [926] if sent for TP/TS
       const amountPrepaid1 = tiersMode1 === TiersMode.Garant ? paidAmt : 0;
 
@@ -392,12 +415,12 @@ export async function POST(request: NextRequest) {
         language: 2,
         roleType: RoleType.Physician,
         placeType: PlaceType.Practice,
-        requestType: RequestType.Invoice,
+        requestType: invoiceType === "reminder" ? RequestType.Reminder : RequestType.Invoice,
         requestSubtype: RequestSubtype.Normal,
         remark: paymentRemark || undefined,
         tiersMode: tiersMode1,
-        vatNumber: "",
-        amountPrepaid: amountPrepaid1,
+        amountPrepaid: amountPrepaid1 || undefined,
+        vatNumber: (billingEntityData as any)?.vatuid || "",
         invoiceId: invoiceData.invoice_number || `INV-${invoiceId.slice(0, 8)}`,
         invoiceDate: invoiceData.invoice_date || new Date().toISOString().split("T")[0],
         lawType: mapSumexLaw(invoiceData.health_insurance_law || "KVG"),
@@ -414,8 +437,8 @@ export async function POST(request: NextRequest) {
           city: provCity,
           stateCode: provCanton,
         },
-        providerGln: staffData?.gln || invoiceData.doctor_gln || provGln,
-        providerZsr: staffData?.zsr || invoiceData.doctor_zsr || provZsr || undefined,
+        providerGln: provGln,
+        providerZsr: provZsr || undefined,
         providerAddress: {
           familyName: staffData?.name || invoiceData.doctor_name || provName,
           givenName: "",
@@ -471,35 +494,50 @@ export async function POST(request: NextRequest) {
             : (billingEntityData?.qual_dignities && billingEntityData.qual_dignities.length > 0)
               ? billingEntityData.qual_dignities
               : undefined,
+        ...(invoiceType === "reminder" ? {
+          reminderLevel: Number(reminderLevel) || 1,
+          reminderText: `Rappel de paiement (${reminderLevel}${reminderLevel === 1 ? "er" : "ème"} rappel)`,
+          reminderDate: new Date().toISOString().split("T")[0],
+        } : {}),
       };
 
       // Generate XML + PDF via Sumex1 server
-      try {
-        const sumexStart = Date.now();
-        console.log(`[TIMING] Starting Sumex1 buildInvoiceRequest (insurance path)...`);
-        console.log(`[GeneratePDF] sumexInput key values: billerGln=${sumexInput.billerGln} providerGln=${sumexInput.providerGln} insuranceGln=${sumexInput.insuranceGln} transportTo=${sumexInput.transportTo} patientSsn=${sumexInput.patientSsn} tiersMode=${sumexInput.tiersMode} lawType=${sumexInput.lawType} services=${sumexInput.services?.length}`);
-        const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, generationAttributes: pdfGenAttrs });
-        timings.sumexBuildInvoice = Date.now() - sumexStart;
-        console.log(`[TIMING] Sumex1 buildInvoiceRequest completed: ${timings.sumexBuildInvoice}ms`);
+      // Template options:
+      // - detail: multi-page with full service details (verbose, can overflow to many pages)
+      // - summary: compact format with service list + QR-bill on same page where possible
+      // - feeSummary: fee summary format (2 pages with QR-bill in v5.0)
+      // Use "summary" for all invoice types to keep client invoice + QR-bill on same page
+      // The insurance copy (Facture TP) will still be a separate page
+      const printTemplate = "summary";
+      
+      // DEBUG: Log complete sumexInput before sending to Sumex
+      console.log('[GeneratePDF] DEBUG sumexInput:', JSON.stringify({
+        providerGln: sumexInput.providerGln,
+        qualDignities: sumexInput.qualDignities,
+        lawType: sumexInput.lawType,
+        tiersMode: sumexInput.tiersMode,
+        insuranceGln: sumexInput.insuranceGln,
+        servicesCount: sumexInput.services?.length || 0,
+        firstService: sumexInput.services?.[0] ? {
+          code: sumexInput.services[0].code,
+          tariffType: sumexInput.services[0].tariffType,
+          providerGln: sumexInput.services[0].providerGln,
+          responsibleGln: sumexInput.services[0].responsibleGln,
+        } : null
+      }, null, 2));
+      
+      const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate, generationAttributes: pdfGenAttrs });
 
-        if (!sumexResult.success) {
-          console.error(`[GeneratePDF] Sumex1 FAILED: ${sumexResult.error} / ${sumexResult.abortInfo}`);
-          
-          // Check for server offline error
-          if (sumexResult.error === 'SUMEX_SERVER_OFFLINE') {
-            return NextResponse.json({ 
-              error: "Sumex1 server is offline", 
-              details: "The invoice generation server is currently unavailable. Please contact your system administrator for support.",
-              technicalDetails: "Connection timeout to Sumex server at 3.108.202.222:8080"
-            }, { status: 503 });
-          }
-          
-          return NextResponse.json({ 
-            error: "Sumex1 PDF generation failed", 
-            details: sumexResult.error,
-            abortInfo: sumexResult.abortInfo 
-          }, { status: 500 });
-        }      // Use Sumex1-generated PDF
+      if (!sumexResult.success) {
+        console.error(`[GeneratePDF] Sumex1 FAILED: ${sumexResult.error} / ${sumexResult.abortInfo}`);
+        return NextResponse.json({ 
+          error: "Sumex1 PDF generation failed", 
+          details: sumexResult.error,
+          abortInfo: sumexResult.abortInfo 
+        }, { status: 500 });
+      }
+
+      // Use Sumex1-generated PDF
       if (!sumexResult.pdfContent) {
         console.error(`[GeneratePDF] Sumex1 XML OK but PDF not available`);
         return NextResponse.json({ 
@@ -511,188 +549,119 @@ export async function POST(request: NextRequest) {
       const pdfBuffer = sumexResult.pdfContent;
       console.log(`[GeneratePDF] Sumex1 PDF: ${pdfBuffer.length} bytes, schema=${sumexResult.usedSchema}`);
 
-      // Create filename with patient name, invoice number, and timestamp for versioning
-      const patientName = `${patientData.last_name}_${patientData.first_name}`.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19); // YYYY-MM-DDTHH-MM-SS
-      const fileName = `Facture_${invoiceData.invoice_number}_${patientName}_${timestamp}.pdf`;
+      const typePrefix = invoiceType === "tg" ? "invoice" : invoiceType === "tp" ? "invoice-tp" : invoiceType === "reminder" ? "reminder" : "receipt";
+      const fileName = `${typePrefix}-${invoiceData.invoice_number}-${Date.now()}.pdf`;
       const filePath = `${invoiceData.patient_id}/${fileName}`;
 
-      const uploadStart = Date.now();
       const { error: uploadError } = await supabaseAdmin.storage
         .from("invoice-pdfs")
         .upload(filePath, pdfBuffer, {
           contentType: "application/pdf",
           cacheControl: "3600",
+          upsert: true,
         });
-      timings.uploadPdf = Date.now() - uploadStart;
-      console.log(`[TIMING] Upload PDF to storage: ${timings.uploadPdf}ms`);
 
       if (uploadError) {
         return NextResponse.json({ error: "Failed to upload PDF" }, { status: 500 });
       }
 
-      const updateDbStart = Date.now();
+      const pdfColumn = invoiceType === "tg" ? "pdf_path_tg" : invoiceType === "tp" ? "pdf_path_tp" : invoiceType === "reminder" ? "pdf_path_reminder" : "pdf_path_receipt";
       await supabaseAdmin
         .from("invoices")
-        .update({ pdf_path: filePath, pdf_generated_at: new Date().toISOString() })
+        .update({ pdf_path: filePath, [pdfColumn]: filePath, pdf_generated_at: new Date().toISOString() })
         .eq("id", invoiceId);
-      timings.updateDb = Date.now() - updateDbStart;
-      console.log(`[TIMING] Update database: ${timings.updateDb}ms`);
 
-      const { data: publicUrlData } = supabaseAdmin.storage
+      // Use signed URL for private bucket access (valid for 1 hour)
+      const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
         .from("invoice-pdfs")
-        .getPublicUrl(filePath);
+        .createSignedUrl(filePath, 3600);
 
-      timings.total = Date.now() - startTime;
-      console.log(`[TIMING] ===== TOTAL PDF GENERATION TIME: ${timings.total}ms =====`);
-      console.log(`[TIMING] Breakdown:`, JSON.stringify(timings, null, 2));
+      if (signedUrlError || !signedUrlData?.signedUrl) {
+        console.error("[GeneratePDF] Failed to create signed URL:", signedUrlError);
+        return NextResponse.json({ 
+          error: "PDF generated but failed to create download URL",
+          pdfPath: filePath 
+        }, { status: 500 });
+      }
 
       return NextResponse.json({
         success: true,
-        pdfUrl: publicUrlData.publicUrl,
+        pdfUrl: signedUrlData.signedUrl,
         pdfPath: filePath,
         qrCodeType: "sumex1",
-        timings, // Include timing data in response for analysis
         sumex1Schema: sumexResult.usedSchema,
       });
-      } catch (sumexErr: any) {
-        console.error(`[GeneratePDF] Sumex1 insurance error:`, sumexErr);
-        
-        // Check for server offline error
-        if (sumexErr?.message === 'SUMEX_SERVER_OFFLINE') {
-          return NextResponse.json({ 
-            error: "Sumex1 server is offline", 
-            details: "The invoice generation server is currently unavailable. Please contact your system administrator for support.",
-            technicalDetails: "Connection timeout to Sumex server at 3.108.202.222:8080"
-          }, { status: 503 });
-        }
-        
-        return NextResponse.json({ 
-          error: "Sumex1 PDF generation error", 
-          details: String(sumexErr) 
-        }, { status: 500 });
-      }
     }
 
     // ── Try Sumex1 for cash/card/bank/online invoices too (unified template) ──
     {
       console.log(`[GeneratePDF] Non-insurance invoice (${invoiceData.payment_method}) — attempting Sumex1 unified template (TG mode, no insurance)`);
-      // Auto-create Payrexx gateway for online/card/cash invoices that don't have one yet
-      const pmLower = (invoiceData.payment_method || "").toLowerCase();
-      const needsPayrexx = (pmLower.includes("online") || pmLower.includes("card") || pmLower.includes("cash")) && !invoiceData.payrexx_payment_link;
-      if (needsPayrexx) {
-        console.log(`[GeneratePDF] No Payrexx link for ${invoiceData.payment_method} invoice — auto-creating gateway`);
-        try {
-          const amount = Math.round((invoiceData.total_amount || 0) * 100);
-          if (amount > 0) {
-            const gatewayRes = await createPayrexxGateway({
-              amount,
-              currency: "CHF",
-              referenceId: invoiceData.invoice_number,
-              purpose: `Invoice ${invoiceData.invoice_number} - Medical Services`,
-              forename: patientData.first_name,
-              surname: patientData.last_name,
-              email: patientData.email || undefined,
-              phone: patientData.phone || undefined,
-              street: patientData.street_address || undefined,
-              postcode: patientData.postal_code || undefined,
-              place: patientData.town || undefined,
-              country: "CH",
-            });
-            const gwData = Array.isArray(gatewayRes.data) ? gatewayRes.data[0] : gatewayRes.data;
-            if (gatewayRes.status === "success" && gwData) {
-              const gw = gwData as { id: number; hash: string; link: string };
-              const paymentLink = gw.link || `https://maison-toa.payrexx.com/?payment=${gw.hash}`;
-              await supabaseAdmin.from("invoices").update({
-                payrexx_gateway_id: gw.id,
-                payrexx_gateway_hash: gw.hash,
-                payrexx_payment_link: paymentLink,
-                payrexx_payment_status: "waiting",
-              }).eq("id", invoiceId);
-              // Update local copy so QR overlay picks it up
-              (invoiceData as any).payrexx_payment_link = paymentLink;
-              console.log(`[GeneratePDF] ✓ Payrexx gateway created: ${paymentLink}`);
-            } else {
-              console.warn(`[GeneratePDF] Payrexx gateway creation returned non-success:`, gatewayRes.status);
-            }
-          }
-        } catch (payrexxErr) {
-          console.error(`[GeneratePDF] ✗ Failed to auto-create Payrexx gateway:`, payrexxErr);
-          // Non-fatal — continue with bank QR instead
-        }
-      }
 
       const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
       const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
-      const provName = billingEntityData?.name || invoiceData.provider_name || "TOA SA";
-      const provStreetFull = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "";
-      const provZip = billingEntityData?.zip_code || "";
-      const provCity = billingEntityData?.city || "";
+      const provName = "TOA SA";
+      const provStreetFull = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Voie du Chariot 6";
+      const provZip = billingEntityData?.zip_code || "1003";
+      const provCity = billingEntityData?.city || "Lausanne";
       const provCanton = normalizeCanton(invoiceData.treatment_canton || billingEntityData?.canton);
-      const sanitizeIban2 = (raw: string | null | undefined): string | null => {
+      // QR-IBAN check: Sumex SetEsrQR requires IID 30000-31999.
+      const sanitizeQrIban2 = (raw: string | null | undefined): string | null => {
         if (!raw) return null;
         const stripped = raw.replace(/\s+/g, "").toUpperCase();
-        if (/^CH[0-9A-Z]{19}$/.test(stripped)) return stripped;
-        return null;
+        if (!/^CH[0-9A-Z]{19}$/.test(stripped)) return null;
+        const iid = parseInt(stripped.slice(4, 9), 10);
+        if (Number.isNaN(iid) || iid < 30000 || iid > 31999) {
+          console.warn(`[GeneratePDF] IBAN ${stripped} is not a QR-IBAN (IID=${iid}); falling back to default QR-IBAN.`);
+          return null;
+        }
+        return stripped;
       };
-      const provIbanSumex = sanitizeIban2(billingEntityData?.iban) || sanitizeIban2(invoiceData.provider_iban) || "CH0930788000050249289";
+      const provIbanSumex = sanitizeQrIban2(billingEntityData?.iban) || sanitizeQrIban2(invoiceData.provider_iban) || "CH0930788000050249289";
       const treatmentDate = invoiceData.treatment_date || invoiceData.invoice_date || new Date().toISOString().split("T")[0];
 
       // Map line items
       const isValidGln2 = (g: string | null | undefined) => g != null && /^\d{13}$/.test(g);
-      const doctorGln2 = staffData?.gln || invoiceData.doctor_gln || provGln;
       const sumexServices2: SumexServiceInput[] = lineItems.map((item: any) => {
-        const svcGln = isValidGln2(item.provider_gln) ? item.provider_gln : doctorGln2;
+        const svcGln = isValidGln2(item.provider_gln) ? item.provider_gln : provGln;
         const svcRespGln = isValidGln2(item.responsible_gln) ? item.responsible_gln : svcGln;
-        
         // Resolve tariff_type honoring `catalog_name` first so TMA gestures
         // emit as "TMA". See src/lib/tariffType.ts.
         const tariffType = deriveTariffType(item);
-        
-        // TARMED (tariff_code=1) vs TARDOC (tariff_code=7) have different handling
-        const isTardoc = item.tariff_code === 7 || tariffType === "007";
-        const isTarmed = item.tariff_code === 1 || tariffType === "001";
-        
-        // For TARMED: Sumex expects amounts in technical points (TP), not CHF
-        // For TARDOC/others: use stored total_price (CHF)
-        let calculatedAmount: number;
-        let unit: number;
-        let unitFactor: number;
-        
-        if (isTarmed) {
-          // TARMED: amount = tp_al (medical technical points)
-          // unit = tp_al, unitFactor = 1 (Sumex handles tax point value internally)
-          unit = item.tp_al || item.unit_price || 0;
-          unitFactor = 1;
-          calculatedAmount = unit * (item.quantity || 1);
-        } else if (isTardoc || (item.catalog_name === "ACF" && item.tp_al > 0)) {
-          // TARDOC and ACF: use tp_al (tax points) and tp_al_value (point value / Taxpunktwert)
-          unit = item.tp_al || 0;
-          unitFactor = item.tp_al_value || 1;
-          calculatedAmount = item.total_price || 0;
+        const isTardoc2 = item.tariff_code === 7 || tariffType === "007";
+        const isTarmed2 = item.tariff_code === 1 || tariffType === "001";
+        const isAcf2 = tariffType === "005";
+        let unit2: number; let unitFactor2: number; let amt2: number;
+        if (isTarmed2) {
+          unit2 = item.tp_al || item.unit_price || 0; unitFactor2 = 1; amt2 = unit2 * (item.quantity || 1);
+        } else if (isTardoc2 || isAcf2) {
+          // TARDOC/ACF: use tp_al + tp_al_value only (matches aestheticclinic working pattern).
+          unit2 = item.tp_al || 0; unitFactor2 = item.tp_al_value || 1;
+          amt2 = item.total_price || 0;
         } else {
-          // Other tariffs: use unit_price and total_price
-          unit = item.unit_price || 0;
-          unitFactor = 1;
-          calculatedAmount = item.total_price || 0;
+          unit2 = item.unit_price || 0; unitFactor2 = 1; amt2 = item.total_price || 0;
         }
-        
+        // Plain service lines (no tariff code) get tariff 999 with code "1"
+        // to prevent Sumex error 929 "undefined/invalid code".
+        const isPlain2 = !isTardoc2 && !isTarmed2 && !isAcf2 && !item.code && !item.tardoc_code;
+        const resolvedTariffType2 = isPlain2 ? "999" : tariffType;
+        const resolvedCode2 = isPlain2 ? "1" : (item.code || item.tardoc_code || "");
+
         return {
-          tariffType,
-          code: item.code || "",
+          tariffType: resolvedTariffType2,
+          code: resolvedCode2,
           referenceCode: item.ref_code || "",
           quantity: item.quantity || 1,
-          sessionNumber: item.session_number ?? 1,
+          sessionNumber: isAcf2 ? 1 : (item.session_number ?? 1),
           dateBegin: item.date_begin || treatmentDate,
           providerGln: svcGln,
           responsibleGln: svcRespGln,
           side: (item.side_type as 0 | 1 | 2 | 3) ?? 0,
           serviceName: item.name || "",
-          unit,
-          unitFactor,
-          externalFactor: item.tariff_code === 5 ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
-          amount: calculatedAmount,
-          vatRate: 0,
+          unit: unit2,
+          unitFactor: unitFactor2,
+          externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
+          amount: amt2,
+          vatRate: (isTardoc2 || isTarmed2 || isAcf2) ? 0 : (Number(item.vat_rate_value) || 0),
           ignoreValidate: YesNo.Yes,
         };
       });
@@ -721,12 +690,12 @@ export async function POST(request: NextRequest) {
         language: 2,
         roleType: RoleType.Physician,
         placeType: PlaceType.Practice,
-        requestType: RequestType.Invoice,
+        requestType: invoiceType === "reminder" ? RequestType.Reminder : RequestType.Invoice,
         requestSubtype: RequestSubtype.Normal,
         remark: paymentRemark2 || undefined,
         tiersMode: tiersMode2,
-        vatNumber: "",
-        amountPrepaid: amountPrepaid2,
+        amountPrepaid: amountPrepaid2 || undefined,
+        vatNumber: (billingEntityData as any)?.vatuid || "",
         invoiceId: invoiceData.invoice_number || `INV-${invoiceId.slice(0, 8)}`,
         invoiceDate: invoiceData.invoice_date || new Date().toISOString().split("T")[0],
         lawType: mapSumexLaw(invoiceData.health_insurance_law || "VVG"),
@@ -742,8 +711,8 @@ export async function POST(request: NextRequest) {
           city: provCity,
           stateCode: provCanton,
         },
-        providerGln: staffData?.gln || invoiceData.doctor_gln || provGln,
-        providerZsr: staffData?.zsr || invoiceData.doctor_zsr || provZsr || undefined,
+        providerGln: provGln,
+        providerZsr: provZsr || undefined,
         providerAddress: {
           familyName: staffData?.name || invoiceData.doctor_name || provName,
           givenName: "",
@@ -790,132 +759,61 @@ export async function POST(request: NextRequest) {
             : (billingEntityData?.qual_dignities && billingEntityData.qual_dignities.length > 0)
               ? billingEntityData.qual_dignities
               : undefined,
+        ...(invoiceType === "reminder" ? {
+          reminderLevel: Number(reminderLevel) || 1,
+          reminderText: `Rappel de paiement (${reminderLevel}${reminderLevel === 1 ? "er" : "ème"} rappel)`,
+          reminderDate: new Date().toISOString().split("T")[0],
+        } : {}),
       };
 
       try {
-        const sumexStart = Date.now();
-        console.log(`[TIMING] Starting Sumex1 buildInvoiceRequest (non-insurance path)...`);
-        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, generationAttributes: pdfGenAttrs2 });
-        timings.sumexBuildInvoice = Date.now() - sumexStart;
-        console.log(`[TIMING] Sumex1 buildInvoiceRequest completed: ${timings.sumexBuildInvoice}ms`);
+        // Use "summary" template for compact format with service list + QR-bill on same page
+        const printTemplate2 = "summary";
+        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: printTemplate2, generationAttributes: pdfGenAttrs2 });
 
         if (sumexResult2.success && sumexResult2.pdfContent) {
-          // Overlay Payrexx QR for Online and Card payments (both use Payrexx gateway)
-          const hasPayrexxLink = !!invoiceData.payrexx_payment_link;
-          console.log(`[GeneratePDF] Sumex1 unified PDF generated: ${sumexResult2.pdfContent.length} bytes, paymentMethod=${invoiceData.payment_method}, hasPayrexxLink=${hasPayrexxLink}`);
+          console.log(`[GeneratePDF] Sumex1 unified PDF generated: ${sumexResult2.pdfContent.length} bytes, paymentMethod=${invoiceData.payment_method}`);
           
           let finalPdfBuffer = sumexResult2.pdfContent;
 
-          // For online payments with Payrexx link, overlay Payrexx QR on top of
-          // the bank QR code on the payment slip (FIRST page = patient invoice).
-          // Sumex1 generates multi-page PDF: page 1 = patient invoice with QR, rest = copies.
-          // Swiss QR-bill standard: A4 page (595x842pt), payment slip is bottom 105mm (≈298pt).
-          // Payment part is on the right side (210mm wide), receipt on left (62mm).
-          // QR code in payment part: 46x46mm, positioned 67mm from left edge of payment part.
-          if (hasPayrexxLink) {
-            try {
-              console.log(`[GeneratePDF] Starting Payrexx QR overlay for link: ${invoiceData.payrexx_payment_link}`);
-              const { PDFDocument, rgb } = await import("pdf-lib");
-              const pdfDoc = await PDFDocument.load(sumexResult2.pdfContent);
-              const pages = pdfDoc.getPages();
-              const firstPage = pages[0]; // Patient invoice is always page 1
-              const { width: pageWidth, height: pageHeight } = firstPage.getSize();
-              console.log(`[GeneratePDF] PDF total pages: ${pages.length}, page 1 size: ${pageWidth}x${pageHeight}pt`);
-              
-              // Generate Payrexx QR code as PNG
-              const payrexxLink = invoiceData.payrexx_payment_link as string;
-              const qrDataUrl = await QRCode.toDataURL(payrexxLink, {
-                width: 300,
-                margin: 0,
-                color: { dark: "#000000", light: "#FFFFFF" },
-              });
-              const qrImageBytes = Buffer.from(qrDataUrl.split(",")[1], "base64");
-              const qrImage = await pdfDoc.embedPng(qrImageBytes);
-              console.log(`[GeneratePDF] Payrexx QR image generated: ${qrImageBytes.length} bytes`);
-              
-              // Swiss QR-bill layout (in mm, converted to pt: 1mm ≈ 2.834pt):
-              // Payment slip (Zahlteil) is at the bottom 105mm of the page
-              // - Receipt part (Empfangsschein): left side, 0-62mm from left
-              // - Payment part (Zahlteil): right side, 62-210mm from left
-              // - QR code is in the payment part, positioned at:
-              //   * Horizontal: 67mm from left edge of payment part = 62+67 = 129mm from page left = 365pt
-              //   * Vertical: The QR is centered in the payment slip height, roughly 42mm from page bottom
-              // - QR size: 46x46mm ≈ 130x130pt
-              const qrSize = 130; // 46mm in points
-              const qrX = 190; // 129mm from left = 365pt
-              const qrY = 122; // 42mm from bottom = 119pt
-              
-              console.log(`[GeneratePDF] Overlaying on PAGE 1 at (${qrX}, ${qrY}) size ${qrSize}x${qrSize}`);
-              // White-out the existing bank QR code area
-              firstPage.drawRectangle({
-                x: qrX - 2,
-                y: qrY - 2,
-                width: qrSize + 4,
-                height: qrSize + 4,
-                color: rgb(1, 1, 1),
-              });
-              
-              // Draw Payrexx QR on top
-              firstPage.drawImage(qrImage, {
-                x: qrX,
-                y: qrY,
-                width: qrSize,
-                height: qrSize,
-              });
-              
-              finalPdfBuffer = Buffer.from(await pdfDoc.save());
-              console.log(`[GeneratePDF] ✓ Successfully overlaid Payrexx QR on page 1 payment slip`);
-            } catch (qrErr) {
-              console.error(`[GeneratePDF] ✗ Failed to overlay Payrexx QR:`, qrErr);
-            }
-          }
-
-          // Create filename with patient name, invoice number, and timestamp for versioning
-          const patientName = `${patientData.last_name}_${patientData.first_name}`.replace(/[^a-zA-Z0-9_-]/g, '_');
-          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19); // YYYY-MM-DDTHH-MM-SS
-          const fileName = `Facture_${invoiceData.invoice_number}_${patientName}_${timestamp}.pdf`;
+          const typePrefix2 = invoiceType === "tg" ? "invoice" : invoiceType === "tp" ? "invoice-tp" : invoiceType === "reminder" ? "reminder" : "receipt";
+          const fileName = `${typePrefix2}-${invoiceData.invoice_number}-${Date.now()}.pdf`;
           const filePath = `${invoiceData.patient_id}/${fileName}`;
-          const { error: uploadError } = await supabaseAdmin.storage.from("invoice-pdfs").upload(filePath, finalPdfBuffer, { contentType: "application/pdf", cacheControl: "3600" });
+          const { error: uploadError } = await supabaseAdmin.storage.from("invoice-pdfs").upload(filePath, finalPdfBuffer, { contentType: "application/pdf", cacheControl: "3600", upsert: true });
           if (!uploadError) {
-            await supabaseAdmin.from("invoices").update({ pdf_path: filePath, pdf_generated_at: new Date().toISOString() }).eq("id", invoiceId);
-            const { data: publicUrlData } = supabaseAdmin.storage.from("invoice-pdfs").getPublicUrl(filePath);
+            const pdfCol2 = invoiceType === "tg" ? "pdf_path_tg" : invoiceType === "tp" ? "pdf_path_tp" : invoiceType === "reminder" ? "pdf_path_reminder" : "pdf_path_receipt";
+            await supabaseAdmin.from("invoices").update({ pdf_path: filePath, [pdfCol2]: filePath, pdf_generated_at: new Date().toISOString() }).eq("id", invoiceId);
+            
+            // Use signed URL for private bucket access (valid for 1 hour)
+            const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
+              .from("invoice-pdfs")
+              .createSignedUrl(filePath, 3600);
+            
+            if (signedUrlError || !signedUrlData?.signedUrl) {
+              console.error("[GeneratePDF] Failed to create signed URL:", signedUrlError);
+              return NextResponse.json({ 
+                error: "PDF generated but failed to create download URL",
+                pdfPath: filePath 
+              }, { status: 500 });
+            }
+            
             return NextResponse.json({ 
               success: true, 
-              pdfUrl: publicUrlData.publicUrl, 
+              pdfUrl: signedUrlData.signedUrl, 
               pdfPath: filePath, 
-              qrCodeType: hasPayrexxLink ? "sumex1-payrexx" : "sumex1-unified", 
+              qrCodeType: "sumex1-unified", 
               sumex1Schema: sumexResult2.usedSchema 
             });
           }
         } else {
           console.error(`[GeneratePDF] Sumex1 unified failed: ${sumexResult2.error}`);
-          
-          // Check for server offline error
-          if (sumexResult2.error === 'SUMEX_SERVER_OFFLINE') {
-            return NextResponse.json({ 
-              error: "Sumex1 server is offline", 
-              details: "The invoice generation server is currently unavailable. Please contact your system administrator for support.",
-              technicalDetails: "Connection timeout to Sumex server at 3.108.202.222:8080"
-            }, { status: 503 });
-          }
-          
           return NextResponse.json({ 
             error: "Sumex1 PDF generation failed", 
             details: sumexResult2.error 
           }, { status: 500 });
         }
-      } catch (sumex2Err: any) {
+      } catch (sumex2Err) {
         console.error(`[GeneratePDF] Sumex1 unified error:`, sumex2Err);
-        
-        // Check for server offline error
-        if (sumex2Err?.message === 'SUMEX_SERVER_OFFLINE') {
-          return NextResponse.json({ 
-            error: "Sumex1 server is offline", 
-            details: "The invoice generation server is currently unavailable. Please contact your system administrator for support.",
-            technicalDetails: "Connection timeout to Sumex server at 3.108.202.222:8080"
-          }, { status: 503 });
-        }
-        
         return NextResponse.json({ 
           error: "Sumex1 PDF generation error", 
           details: String(sumex2Err) 
