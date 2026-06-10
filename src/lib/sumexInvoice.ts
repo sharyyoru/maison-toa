@@ -1257,8 +1257,9 @@ export async function buildInvoiceRequest(
         await initServiceExInput(svcInputHandle, input);
 
         for (const svc of tardocServices) {
-          // AR.* room/change codes (serviceType=R): Sumex self-computes both MT and TT amounts
-          // via changeMin. Sending any non-zero unit causes error 755 "Taxpunkt muss 0".
+          // AR.* room/change codes (serviceType=R): dUnitMT must be 0 (error 755 if non-zero).
+          // However, AR codes can still have a real TT component (e.g. AR.00.0140 has tp_tt=24.10).
+          // Send dUnitMT=0 / dAmountMT=0, but pass the actual tp_tl as dUnitTT.
           const isArCode = (svc.code || "").startsWith("AR.");
 
           // Sumex validates: dAmountMT = quantity × unitMT × unitFactorMT × internalScaling × externalScaling
@@ -1267,11 +1268,11 @@ export async function buildInvoiceRequest(
           const extFactorMT = svc.externalFactor ?? 1;
           const computedAmountMT = Math.round(svc.quantity * unitMT * unitFactorMT * 1 * extFactorMT * 100) / 100;
 
-          // TT (Technical) component for TARDOC — also zero for AR.*.
-          const unitTT = isArCode ? 0 : (svc.unitTT ?? 0);
-          const unitFactorTT = isArCode ? 0 : (svc.unitFactorTT ?? 1);
+          // TT (Technical) component — AR codes may have a non-zero TT (tp_tl), pass it through.
+          const unitTT = svc.unitTT ?? 0;
+          const unitFactorTT = (unitTT > 0) ? (svc.unitFactorTT ?? 1) : 0;
           const extFactorTT = 1;
-          const computedAmountTT = isArCode ? 0 : Math.round(svc.quantity * unitTT * unitFactorTT * 1 * extFactorTT * 100) / 100;
+          const computedAmountTT = Math.round(svc.quantity * unitTT * unitFactorTT * 1 * extFactorTT * 100) / 100;
 
           console.log(`${LOG_PREFIX} AddServiceEx ${svc.code}: isAR=${isArCode} dUnitMT=${unitMT} dAmountMT=${computedAmountMT} dUnitTT=${unitTT} dAmountTT=${computedAmountTT}`);
 

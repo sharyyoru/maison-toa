@@ -478,11 +478,16 @@ export async function POST(request: NextRequest) {
       const isTardoc = s.tariffType === "007";
       const isAcf = (s.tariffType || "590") === "005";
       const usesTaxPoints = isTardoc || isAcf;
-      const unit = usesTaxPoints && s.tpAl !== undefined && s.tpAl !== null && s.tpAl > 0 ? s.tpAl : (s.unitPrice || 0);
-      const unitFactor = usesTaxPoints && s.tpAlValue !== undefined && s.tpAlValue !== null && s.tpAlValue > 0 ? s.tpAlValue : 1;
+      // IMPORTANT: tp_al=0 is a valid value for pure-TT codes (AK.*, AR.*).
+      // Do NOT fall back to unitPrice when tp_al is explicitly 0 — send 0 to Sumex.
+      // Only fall back to unitPrice when the service is NOT a tax-point service (590 etc.).
+      const unit = usesTaxPoints
+        ? (s.tpAl ?? 0)
+        : (s.unitPrice || 0);
+      const unitFactor = usesTaxPoints && s.tpAlValue != null && s.tpAlValue > 0 ? s.tpAlValue : 1;
       // TT (technical) component — pass for TARDOC so insurance XML includes full billed amount
-      const unitTT = usesTaxPoints && s.tpTl !== undefined && s.tpTl !== null && s.tpTl > 0 ? s.tpTl : undefined;
-      const unitFactorTT = usesTaxPoints && s.tpTlValue !== undefined && s.tpTlValue !== null && s.tpTlValue > 0 ? s.tpTlValue : undefined;
+      const unitTT = usesTaxPoints && s.tpTl != null && s.tpTl > 0 ? s.tpTl : undefined;
+      const unitFactorTT = usesTaxPoints && s.tpTlValue != null && s.tpTlValue > 0 ? s.tpTlValue : undefined;
       return {
         tariffType: s.tariffType || "590",
         code: s.code,
@@ -700,12 +705,16 @@ export async function POST(request: NextRequest) {
     const xmlContent = sumexResult.xmlContent;
     console.log(`[SendInvoice] Sumex1 XML generated: schema=${sumexResult.usedSchema}, validErr=${sumexResult.validationError}, pdfSize=${sumexResult.pdfContent?.length ?? 0}`);
 
-    // Verify Sumex didn't silently drop any services
+    // Verify Sumex didn't silently drop any services.
+    // TARDOC/ACF use AddServiceEx → <invoice:service_ex> tags.
+    // Free-text/590 use AddService → <invoice:service> tags (NOT service_ex).
+    // Count both to detect silent rejections.
     if (xmlContent) {
-      const xmlServiceCount = (xmlContent.match(/<invoice:service_ex/g) || []).length;
+      const xmlServiceExCount = (xmlContent.match(/<invoice:service_ex/g) || []).length;
+      const xmlServiceCount = xmlServiceExCount + (xmlContent.match(/<invoice:service\b/g) || []).length;
       const sentCount = sumexServices.length;
       if (xmlServiceCount < sentCount) {
-        console.error(`[SendInvoice] Service count mismatch: sent ${sentCount}, XML contains ${xmlServiceCount}. Sumex may have silently filtered services.`);
+        console.error(`[SendInvoice] Service count mismatch: sent ${sentCount}, XML contains ${xmlServiceCount} (${xmlServiceExCount} service_ex + ${xmlServiceCount - xmlServiceExCount} service). Sumex may have silently filtered services.`);
         return NextResponse.json({
           error: "Invoice XML incomplete",
           details: `Sent ${sentCount} service(s) but XML only contains ${xmlServiceCount}. Sumex may have rejected some services silently. Check service codes and amounts.`,
