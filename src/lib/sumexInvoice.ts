@@ -535,6 +535,12 @@ async function reqPost<T = Record<string, unknown>>(
       console.error(`${LOG_PREFIX} POST ${iface}/${method} JSON parse failed: textLen=${text.length}, first200=${text.slice(0, 200)}, last200=${text.slice(-200)}`);
       throw parseErr;
     }
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      console.error(`${LOG_PREFIX} POST ${iface}/${method} TIMED OUT after 60s`);
+      throw new Error(`Sumex request timed out: ${iface}/${method} did not respond within 60 seconds`);
+    }
+    throw err;
   } finally {
     clearTimeout(timeout);
   }
