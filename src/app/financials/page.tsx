@@ -9,18 +9,33 @@ type InvoiceRow = {
   patient_id: string | null;
   invoice_number: string;
   invoice_date: string | null;
+  treatment_date: string | null;
   doctor_user_id: string | null;
   doctor_name: string | null;
   provider_id: string | null;
   provider_name: string | null;
   payment_method: string | null;
+  paid_at: string | null;
+  health_insurance_law: string | null;
+  billing_type: string | null;
+  insurance_name: string | null;
   total_amount: number;
   paid_amount: number | null;
+  vat_amount: number;
   status: string;
   is_complimentary: boolean;
   created_by_user_id: string | null;
   created_by_name: string | null;
   is_archived: boolean;
+  invoice_line_items: InvoiceLineItemRow[];
+};
+
+type InvoiceLineItemRow = {
+  name: string;
+  total_price: number;
+  vat_rate: string | null;
+  vat_rate_value: number | null;
+  vat_amount: number | null;
 };
 
 type PatientInfo = {
@@ -116,7 +131,7 @@ export default function FinancialsPage() {
         const { data, error: invoicesError } = await supabaseClient
           .from("invoices")
           .select(
-            "id, patient_id, invoice_number, invoice_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, paid_amount, status, is_complimentary, created_by_user_id, created_by_name, is_archived",
+            "id, patient_id, invoice_number, invoice_date, treatment_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, paid_at, health_insurance_law, billing_type, insurance_name, total_amount, paid_amount, vat_amount, status, is_complimentary, created_by_user_id, created_by_name, is_archived, invoice_line_items(name, total_price, vat_rate, vat_rate_value, vat_amount)",
           )
           .eq("is_archived", false)
           .order("invoice_date", { ascending: false });
@@ -457,46 +472,141 @@ export default function FinancialsPage() {
 
     const XLSX = await import("xlsx");
     const workbook = XLSX.utils.book_new();
-    const patientsSheet = XLSX.utils.json_to_sheet(
-      patientSummaryRows.map((row) => ({
-        [t("patientCol")]: row.patientName,
-        [t("invoicesCol")]: row.invoiceCount,
-        [t("billedCol")]: row.totalAmount,
-        [t("paidCol")]: row.totalPaid,
-        [t("unpaidCol")]: row.totalUnpaid,
-      })),
-    );
-    const ownersSheet = XLSX.utils.json_to_sheet(
-      ownerSummaryRows.map((row) => ({
-        [t("ownerCol")]: row.ownerLabel,
-        [t("invoicesCol")]: row.invoiceCount,
-        [t("billedCol")]: row.totalAmount,
-        [t("paidPercentCol")]:
-          row.totalAmount > 0 ? row.totalPaid / row.totalAmount : 0,
-      })),
-    );
-    const invoicesSheet = XLSX.utils.json_to_sheet(
-      filteredInvoices.map((invoice) => ({
-        [t("dateCol")]: formatShortDate(invoice.invoice_date),
-        [t("patientCol")]: invoice.patientName,
-        [t("ownerCol")]: invoice.ownerLabel,
-        [t("titleCol")]: invoice.invoice_number || t("invoice"),
-        [t("paymentCol")]: invoice.payment_method || "-",
-        [t("amountCol")]: invoice.amount,
-        [t("statusCol")]: invoice.statusLabel,
-      })),
-    );
+    const headers = [
+      "Date (of the service done)",
+      "PATIENT",
+      "OWNER",
+      "Service (if more than 1, add all the service in the same cells)\nExemple : Botox; Acide Hyaluronique",
+      "Accounting date",
+      "Type (KVG, UVG, or Esthetic)",
+      "Patient",
+      "For (Patient or Assurance)",
+      "Payment",
+      "Type d'encaissement",
+      "Montant du paiement",
+      "exonéré de TVA",
+      "TVA réduite",
+      "TVA complète",
+      "TVA réduite",
+      "TVA complète",
+      "TVA réduite",
+      "% TVA réduite",
+      "TVA complète",
+      "% TVA complète",
+    ];
+    const rows = filteredInvoices.map((invoice) => {
+      const lineItems = invoice.invoice_line_items || [];
+      const services = lineItems.map((item) => item.name).filter(Boolean).join("; ");
+      const vat = lineItems.reduce(
+        (totals, item) => {
+          const total = Number(item.total_price) || 0;
+          const vatAmount = Number(item.vat_amount) || 0;
+          const withoutVat = total - vatAmount;
+          const rate = (item.vat_rate || "FREE").toUpperCase();
 
-    patientsSheet["!cols"] = [{ wch: 32 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
-    ownersSheet["!cols"] = [{ wch: 32 }, { wch: 12 }, { wch: 16 }, { wch: 12 }];
-    invoicesSheet["!cols"] = [{ wch: 16 }, { wch: 32 }, { wch: 32 }, { wch: 20 }, { wch: 18 }, { wch: 16 }, { wch: 18 }];
+          if (rate === "REDUCED") {
+            totals.reducedIncluded += total;
+            totals.reducedWithout += withoutVat;
+            totals.reducedVat += vatAmount;
+          } else if (rate === "COMMON" || rate === "NORMAL") {
+            totals.fullIncluded += total;
+            totals.fullWithout += withoutVat;
+            totals.fullVat += vatAmount;
+          } else {
+            totals.exempt += total;
+          }
+          return totals;
+        },
+        {
+          exempt: 0,
+          reducedIncluded: 0,
+          fullIncluded: 0,
+          reducedWithout: 0,
+          fullWithout: 0,
+          reducedVat: 0,
+          fullVat: 0,
+        },
+      );
+      const isInsurance = !!invoice.health_insurance_law;
+      const paymentMethod = invoice.payment_method || "-";
+      const collectionType =
+        /qr|bank|bvr|insurance/i.test(paymentMethod) ? "BVR" : "Manuel";
 
-    XLSX.utils.book_append_sheet(workbook, patientsSheet, "Patients");
-    XLSX.utils.book_append_sheet(workbook, ownersSheet, "Invoice Owners");
-    XLSX.utils.book_append_sheet(workbook, invoicesSheet, "Invoices");
+      return [
+        invoice.treatment_date || invoice.invoice_date,
+        invoice.patientName,
+        invoice.ownerLabel,
+        services || "-",
+        invoice.paid_at || invoice.invoice_date,
+        invoice.health_insurance_law || "Esthétique",
+        invoice.patientName,
+        isInsurance && invoice.billing_type === "TP"
+          ? invoice.insurance_name || "Assurance"
+          : invoice.patientName,
+        paymentMethod,
+        collectionType,
+        invoice.amount,
+        vat.exempt || 0,
+        vat.reducedIncluded || 0,
+        vat.fullIncluded || 0,
+        vat.reducedWithout || 0,
+        vat.fullWithout || 0,
+        vat.reducedVat || 0,
+        0.026,
+        vat.fullVat || 0,
+        0.081,
+      ];
+    });
+    const statisticsSheet = XLSX.utils.aoa_to_sheet([
+      ["", "", "", "", "", "", "", "", "", "", "", "Montant TVA inclus", "", "", "Montant sans TVA", "", "TVA seule"],
+      headers,
+      ...rows,
+    ]);
+
+    statisticsSheet["!merges"] = [
+      XLSX.utils.decode_range("L1:N1"),
+      XLSX.utils.decode_range("O1:P1"),
+      XLSX.utils.decode_range("Q1:T1"),
+    ];
+    statisticsSheet["!cols"] = [
+      { wch: 18 }, { wch: 28 }, { wch: 28 }, { wch: 42 }, { wch: 18 },
+      { wch: 24 }, { wch: 28 }, { wch: 28 }, { wch: 16 }, { wch: 20 },
+      { wch: 20 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+      { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+    ];
+    statisticsSheet["!autofilter"] = { ref: `A2:T${rows.length + 2}` };
+    statisticsSheet["!freeze"] = { xSplit: 0, ySplit: 2 };
+
+    for (let column = 0; column < 20; column += 1) {
+      for (let row = 0; row < 2; row += 1) {
+        const cell = statisticsSheet[XLSX.utils.encode_cell({ r: row, c: column })];
+        if (!cell) continue;
+        cell.s = {
+          fill: { patternType: "solid", fgColor: { rgb: "4EABCB" } },
+          font: { bold: true, color: { rgb: "FFFFFF" } },
+          alignment: { wrapText: true, vertical: "center" },
+        };
+      }
+    }
+    for (let row = 2; row < rows.length + 2; row += 1) {
+      for (const column of [0, 4]) {
+        const cell = statisticsSheet[XLSX.utils.encode_cell({ r: row, c: column })];
+        if (cell) cell.z = "dd.mm.yyyy";
+      }
+      for (let column = 10; column <= 16; column += 1) {
+        const cell = statisticsSheet[XLSX.utils.encode_cell({ r: row, c: column })];
+        if (cell) cell.z = '#,##0.00';
+      }
+      for (const column of [17, 19]) {
+        const cell = statisticsSheet[XLSX.utils.encode_cell({ r: row, c: column })];
+        if (cell) cell.z = "0.0%";
+      }
+    }
+
+    XLSX.utils.book_append_sheet(workbook, statisticsSheet, "Statistics");
     XLSX.writeFile(
       workbook,
-      `financials-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      `statistics-${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   }
 
