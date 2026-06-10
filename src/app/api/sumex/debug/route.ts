@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     roleType: RoleType.Physician,
     invoiceId: invoice.invoice_number?.toString() || invoice.id,
     invoiceDate: invoice.invoice_date || new Date().toISOString().split("T")[0],
-    tiersMode: TiersMode.TiersPayant,
+    tiersMode: TiersMode.Payant,
     lawType: LawType.KVG,
     providerGln: provider?.gln || "(missing)",
     providerZsr: provider?.zsr || "(missing)",
