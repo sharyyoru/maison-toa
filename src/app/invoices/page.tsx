@@ -970,7 +970,7 @@ export default function InvoicesPage() {
         <InsuranceBillingModal
           isOpen={insuranceModalOpen}
           onClose={() => { setInsuranceModalOpen(false); setInsuranceTarget(null); }}
-          invoiceId={insuranceTarget.id}
+          consultationId={insuranceTarget.id}
           patientId={insuranceTarget.patient_id || ""}
           patientName={patientName(insuranceTarget.patient_id)}
           invoiceAmount={Number(insuranceTarget.total_amount) || null}
