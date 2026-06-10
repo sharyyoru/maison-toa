@@ -241,11 +241,13 @@ export async function POST(request: NextRequest) {
       if (!insurerRow && invoiceData.patient_id && effectiveTiersMode === "TP") {
         // billing_type in patient_insurances is the patient's preference, not insurer capability.
         // Most Swiss insurers support both TP and TG modes, so we use primary insurance regardless.
+        // NOTE: is_primary may not be set in all deployments — fall back to most recent KVG record.
         const { data: patIns } = await supabaseAdmin
           .from("patient_insurances")
           .select("insurer_gln, insurer_id, provider_name, law_type, billing_type")
           .eq("patient_id", invoiceData.patient_id)
-          .eq("is_primary", true)
+          .order("is_primary", { ascending: false })
+          .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
         if (patIns) {

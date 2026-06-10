@@ -290,14 +290,26 @@ export async function POST(request: NextRequest) {
     };
     const provGln = pickValidGln(billingEntity?.gln, invoiceRecord?.provider_gln);
     const provZsr = billingEntity?.zsr || invoiceRecord?.provider_zsr || "";
-    const provName = billingEntity?.name || invoiceRecord?.provider_name || "Aesthetics Clinic XT SA";
+    const provName = billingEntity?.name || invoiceRecord?.provider_name || "TOA SA";
     const provStreet = billingEntity?.street
       ? `${billingEntity.street}${billingEntity.street_no ? " " + billingEntity.street_no : ""}`
       : "Voie du Chariot 6";
     const provZip = billingEntity?.zip_code || "1003";
     const provCity = billingEntity?.city || "Lausanne";
     const provCanton = billingEntity?.canton || invoiceRecord?.treatment_canton || "VD";
-    const provIban = billingEntity?.iban || invoiceRecord?.provider_iban || "CH0930788000050249289";
+    // QR-IBAN check: Sumex SetEsrQR requires IID 30000-31999 (error [638] for regular IBANs).
+    const sanitizeQrIban = (raw: string | null | undefined): string | null => {
+      if (!raw) return null;
+      const stripped = raw.replace(/\s+/g, "").toUpperCase();
+      if (!/^CH[0-9A-Z]{19}$/.test(stripped)) return null;
+      const iid = parseInt(stripped.slice(4, 9), 10);
+      if (Number.isNaN(iid) || iid < 30000 || iid > 31999) {
+        console.warn(`[SendInvoice] IBAN ${stripped} is not a QR-IBAN (IID=${iid}); falling back to default QR-IBAN.`);
+        return null;
+      }
+      return stripped;
+    };
+    const provIban = sanitizeQrIban(billingEntity?.iban) || sanitizeQrIban(invoiceRecord?.provider_iban) || "CH0930788000050249289";
 
     // Derive invoice metadata
     const invoiceNumber = invoiceRecord?.invoice_number || `INV-${Date.now().toString(36).toUpperCase()}`;
