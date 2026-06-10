@@ -98,7 +98,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const lineItems = (lineItemsRaw || []) as InvoiceLineItem[];
+    let lineItems = (lineItemsRaw || []) as InvoiceLineItem[];
+
+    // If no line items exist (e.g. deposit invoices created directly from a consultation),
+    // synthesize a single free-text line from the invoice title and total amount.
+    // Sumex requires at least one service line to finalize; without this we get [813].
+    if (lineItems.length === 0) {
+      lineItems = [{
+        id: "synthetic-1",
+        invoice_id: invoiceId,
+        name: invoiceData.title || invoiceData.invoice_number || "Prestation médicale",
+        code: null,
+        tardoc_code: null,
+        tariff_code: null,
+        tariff_type: "590",
+        catalog_name: null,
+        quantity: 1,
+        unit_price: Number(invoiceData.total_amount) || 0,
+        total_price: Number(invoiceData.total_amount) || 0,
+        tp_al: 0,
+        tp_al_value: 1,
+        vat_rate_value: 0,
+        sort_order: 0,
+        provider_gln: null,
+        responsible_gln: null,
+        ref_code: null,
+        side_type: 0,
+        session_number: 1,
+        date_begin: null,
+        external_factor_mt: 1,
+      } as any];
+      console.log(`[GeneratePDF] No line items found for invoice ${invoiceId}; synthesized 1 free-text line from invoice title.`);
+    }
 
     // Fetch patient
     const { data: patient, error: patientError } = await supabaseAdmin
@@ -355,12 +386,14 @@ export async function POST(request: NextRequest) {
         }
 
         // Use deriveTariffType result directly (falls back to "590" for plain/free-text lines).
-        // Empty string for code is fine — Sumex accepts it with ignoreValidate=Yes.
+        // For tariff "590", Sumex rejects an empty/whitespace code with [929] even with
+        // ignoreValidate=Yes — use "0" as a safe placeholder when no real code exists.
         // Do NOT use tariff "999": it is not a recognized Sumex tariff type and causes [813].
+        const resolvedCode = item.code || item.tardoc_code || (tariffType === "590" ? "0" : "");
 
         return {
           tariffType,
-          code: item.code || item.tardoc_code || "",
+          code: resolvedCode,
           referenceCode: item.ref_code || "",
           quantity: item.quantity || 1,
           sessionNumber: isAcf ? 1 : (item.session_number ?? 1),
@@ -642,12 +675,14 @@ export async function POST(request: NextRequest) {
           unit2 = item.unit_price || 0; unitFactor2 = 1; amt2 = item.total_price || 0;
         }
         // Use deriveTariffType result directly (falls back to "590" for plain/free-text lines).
-        // Empty string for code is fine — Sumex accepts it with ignoreValidate=Yes.
+        // For tariff "590", Sumex rejects an empty/whitespace code with [929] even with
+        // ignoreValidate=Yes — use "0" as a safe placeholder when no real code exists.
         // Do NOT use tariff "999": it is not a recognized Sumex tariff type and causes [813].
+        const resolvedCode2 = item.code || item.tardoc_code || (tariffType === "590" ? "0" : "");
 
         return {
           tariffType,
-          code: item.code || item.tardoc_code || "",
+          code: resolvedCode2,
           referenceCode: item.ref_code || "",
           quantity: item.quantity || 1,
           sessionNumber: isAcf2 ? 1 : (item.session_number ?? 1),
