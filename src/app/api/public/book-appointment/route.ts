@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { formatSwissDateWithWeekday, formatSwissTimeAmPm } from "@/lib/swissTimezone";
 import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
 import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
@@ -42,6 +42,44 @@ type TreatmentBookingDetails = {
     name?: string | null;
   } | null;
 };
+
+async function findBookingDealStageId(supabase: SupabaseClient): Promise<string | null> {
+  const { data: appointmentStage } = await supabase
+    .from("deal_stages")
+    .select("id")
+    .ilike("name", "%appointment set%")
+    .eq("is_demo", false)
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (appointmentStage?.id) return appointmentStage.id;
+
+  const { data: requestStage } = await supabase
+    .from("deal_stages")
+    .select("id")
+    .ilike("name", "%request for information%")
+    .eq("is_demo", false)
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (requestStage?.id) return requestStage.id;
+
+  const { data: defaultStage } = await supabase
+    .from("deal_stages")
+    .select("id")
+    .eq("is_default", true)
+    .eq("is_demo", false)
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (defaultStage?.id) return defaultStage.id;
+
+  const { data: firstStage } = await supabase
+    .from("deal_stages")
+    .select("id")
+    .eq("is_demo", false)
+    .order("sort_order", { ascending: true })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  return firstStage?.id ?? null;
+}
 
 async function sendEmail(to: string, subject: string, html: string) {
   if (!isEmailConfigured()) {
@@ -406,6 +444,7 @@ export async function POST(request: Request) {
     // Look up treatment duration and category metadata; fall back to 60 min if not found
     let durationMinutes = 60;
     let categoryName: string | null = null;
+    let treatmentServiceId: string | null = null;
     if (treatmentId) {
       const { data: treatmentData } = await supabase
         .from("booking_treatments")
@@ -425,6 +464,8 @@ export async function POST(request: Request) {
       if (treatmentData?.duration_minutes) {
         durationMinutes = treatmentData.duration_minutes;
       }
+
+      treatmentServiceId = treatmentData?.linked_service_id ?? null;
 
       categoryName =
         treatmentData?.assigned_service_categories?.name?.trim() ||
@@ -633,11 +674,50 @@ export async function POST(request: Request) {
     const categoryTag = categoryName ? ` [Category: ${categoryName}]` : "";
     const reason = `${service}${notes ? ` - ${notes}` : ""} [Doctor: ${doctorName.replace("Dr. ", "")}] [Online Booking] [Lang: ${language}]${categoryTag}`;
 
+    const bookingDealStageId = await findBookingDealStageId(supabase);
+    if (!bookingDealStageId) {
+      console.error("[Booking] Could not find a deal stage for online booking deal creation");
+      return NextResponse.json(
+        { error: "Failed to create booking deal" },
+        { status: 500 }
+      );
+    }
+
+    const { data: deal, error: dealError } = await supabase
+      .from("deals")
+      .insert({
+        patient_id: patientId,
+        stage_id: bookingDealStageId,
+        service_id: treatmentServiceId,
+        title: `${patientName} - ${service}`,
+        pipeline: "Online Booking",
+        contact_label: "Online Booking",
+        location: location || "Geneva",
+        notes: [
+          `Auto-created from online appointment booking on ${new Date().toISOString()}.`,
+          `Treatment: ${service}`,
+          `Doctor: ${doctorName}`,
+          `Appointment: ${appointmentDateObj.toISOString()}`,
+          notes ? `Patient notes: ${notes}` : null,
+        ].filter(Boolean).join("\n"),
+      })
+      .select("id")
+      .single();
+
+    if (dealError || !deal) {
+      console.error("[Booking] Error creating deal:", dealError);
+      return NextResponse.json(
+        { error: "Failed to create booking deal" },
+        { status: 500 }
+      );
+    }
+
     // Create the appointment
     const { data: appointment, error: appointmentError } = await supabase
       .from("appointments")
       .insert({
         patient_id: patientId,
+        deal_id: deal.id,
         provider_id: providerId,
         start_time: appointmentDateObj.toISOString(),
         end_time: apptEnd.toISOString(),
@@ -652,6 +732,7 @@ export async function POST(request: Request) {
 
     if (appointmentError || !appointment) {
       console.error("Error creating appointment:", appointmentError);
+      await supabase.from("deals").delete().eq("id", deal.id);
       return NextResponse.json(
         { error: "Failed to create appointment" },
         { status: 500 }
@@ -668,7 +749,7 @@ export async function POST(request: Request) {
         await fetch(`${baseUrl}/api/workflows/patient-created`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ patient_id: patientId }),
+          body: JSON.stringify({ patient_id: patientId, skipDealCreation: true }),
         });
         console.log("✓ Triggered patient-created workflow for new patient:", patientId);
       } catch (err) {

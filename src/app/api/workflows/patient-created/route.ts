@@ -11,7 +11,7 @@ const SALES_TEAM_NAMES = ["Charline", "Elite", "Audrey", "Bubuque", "Victoria"];
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { patient_id } = body;
+    const { patient_id, skipDealCreation = false } = body;
 
     if (!patient_id) {
       return NextResponse.json(
@@ -49,7 +49,9 @@ export async function POST(request: Request) {
       patientId: patient_id,
     });
 
-    if (dealCheck.shouldCreate) {
+    if (skipDealCreation) {
+      console.log(`Skipped deal creation for patient ${patient_id} because caller already created a booking deal`);
+    } else if (dealCheck.shouldCreate) {
       // Get "Request for Information" stage
       const { data: requestStage } = await supabaseAdmin
         .from("deal_stages")
