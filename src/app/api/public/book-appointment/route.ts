@@ -53,6 +53,14 @@ async function findBookingDealStageId(supabase: SupabaseClient): Promise<string 
     .maybeSingle<{ id: string }>();
   if (appointmentStage?.id) return appointmentStage.id;
 
+  const { data: anyAppointmentStage } = await supabase
+    .from("deal_stages")
+    .select("id")
+    .ilike("name", "%appointment set%")
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (anyAppointmentStage?.id) return anyAppointmentStage.id;
+
   const { data: requestStage } = await supabase
     .from("deal_stages")
     .select("id")
@@ -61,6 +69,14 @@ async function findBookingDealStageId(supabase: SupabaseClient): Promise<string 
     .limit(1)
     .maybeSingle<{ id: string }>();
   if (requestStage?.id) return requestStage.id;
+
+  const { data: anyRequestStage } = await supabase
+    .from("deal_stages")
+    .select("id")
+    .ilike("name", "%request for information%")
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (anyRequestStage?.id) return anyRequestStage.id;
 
   const { data: defaultStage } = await supabase
     .from("deal_stages")
@@ -71,6 +87,14 @@ async function findBookingDealStageId(supabase: SupabaseClient): Promise<string 
     .maybeSingle<{ id: string }>();
   if (defaultStage?.id) return defaultStage.id;
 
+  const { data: anyDefaultStage } = await supabase
+    .from("deal_stages")
+    .select("id")
+    .eq("is_default", true)
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (anyDefaultStage?.id) return anyDefaultStage.id;
+
   const { data: firstStage } = await supabase
     .from("deal_stages")
     .select("id")
@@ -78,7 +102,33 @@ async function findBookingDealStageId(supabase: SupabaseClient): Promise<string 
     .order("sort_order", { ascending: true })
     .limit(1)
     .maybeSingle<{ id: string }>();
-  return firstStage?.id ?? null;
+  if (firstStage?.id) return firstStage.id;
+
+  const { data: anyFirstStage } = await supabase
+    .from("deal_stages")
+    .select("id")
+    .order("sort_order", { ascending: true })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (anyFirstStage?.id) return anyFirstStage.id;
+
+  const { data: createdStage, error: createStageError } = await supabase
+    .from("deal_stages")
+    .insert({
+      name: "Appointment Set",
+      type: "consultation",
+      sort_order: 10,
+      is_default: true,
+      is_demo: false,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (createStageError) {
+    console.error("[Booking] Could not create fallback deal stage:", createStageError);
+  }
+
+  return createdStage?.id ?? null;
 }
 
 async function sendEmail(to: string, subject: string, html: string) {
