@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       lineItems = [{
         id: "synthetic-1",
         invoice_id: invoiceId,
-        name: invoiceData.title || invoiceData.invoice_number || "Prestation médicale",
+        name: (invoiceData as any).title || invoiceData.invoice_number || "Prestation médicale",
         code: null,
         tardoc_code: null,
         tariff_code: null,
