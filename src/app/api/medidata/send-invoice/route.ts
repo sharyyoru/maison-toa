@@ -682,6 +682,20 @@ export async function POST(request: NextRequest) {
     const xmlContent = sumexResult.xmlContent;
     console.log(`[SendInvoice] Sumex1 XML generated: schema=${sumexResult.usedSchema}, validErr=${sumexResult.validationError}, pdfSize=${sumexResult.pdfContent?.length ?? 0}`);
 
+    // Verify Sumex didn't silently drop any services
+    if (xmlContent) {
+      const xmlServiceCount = (xmlContent.match(/<invoice:service_ex/g) || []).length;
+      const sentCount = sumexServices.length;
+      if (xmlServiceCount < sentCount) {
+        console.error(`[SendInvoice] Service count mismatch: sent ${sentCount}, XML contains ${xmlServiceCount}. Sumex may have silently filtered services.`);
+        return NextResponse.json({
+          error: "Invoice XML incomplete",
+          details: `Sent ${sentCount} service(s) but XML only contains ${xmlServiceCount}. Sumex may have rejected some services silently. Check service codes and amounts.`,
+        }, { status: 500 });
+      }
+      console.log(`[SendInvoice] XML service count OK: ${xmlServiceCount}/${sentCount}`);
+    }
+
     // Upload PDF to Supabase storage if generated
     let pdfStoragePath: string | null = null;
     if (sumexResult.pdfContent) {
