@@ -465,14 +465,16 @@ export async function POST(request: NextRequest) {
 
     // Build Sumex1 input — Sumex1 server is the ONLY XML generation path
     const sumexServices: SumexServiceInput[] = services.map(s => {
-      // For TARDOC (007) and ACF (005), use tp_al as unit and tp_al_value as unitFactor.
-      // unitTT is intentionally NOT passed — sumexInvoice.ts defaults it to 0,
-      // which is the correct working pattern (matches aestheticclinic).
+      // For TARDOC (007) and ACF (005), use tp_al/tp_tl as MT/TT unit values.
+      // Both AL (physician) and TL (technical) components must be sent for correct insurance billing.
       const isTardoc = s.tariffType === "007";
       const isAcf = (s.tariffType || "590") === "005";
       const usesTaxPoints = isTardoc || isAcf;
       const unit = usesTaxPoints && s.tpAl !== undefined && s.tpAl !== null && s.tpAl > 0 ? s.tpAl : (s.unitPrice || 0);
       const unitFactor = usesTaxPoints && s.tpAlValue !== undefined && s.tpAlValue !== null && s.tpAlValue > 0 ? s.tpAlValue : 1;
+      // TT (technical) component — pass for TARDOC so insurance XML includes full billed amount
+      const unitTT = usesTaxPoints && s.tpTl !== undefined && s.tpTl !== null && s.tpTl > 0 ? s.tpTl : undefined;
+      const unitFactorTT = usesTaxPoints && s.tpTlValue !== undefined && s.tpTlValue !== null && s.tpTlValue > 0 ? s.tpTlValue : undefined;
       return {
         tariffType: s.tariffType || "590",
         code: s.code,
@@ -486,6 +488,8 @@ export async function POST(request: NextRequest) {
         serviceName: s.description || "",
         unit,
         unitFactor,
+        unitTT,
+        unitFactorTT,
         externalFactor: s.externalFactor ?? 1,
         amount: s.total || 0,
         vatRate: 0,
