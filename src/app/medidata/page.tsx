@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import InvoiceStatusBadge, { InvoiceStatusTimeline } from "@/components/InvoiceStatusBadge";
@@ -11,14 +12,28 @@ import type { MediDataInvoiceStatus } from "@/lib/medidata";
 
 type Tab = "submissions" | "responses" | "participants" | "notifications";
 
+type SubmissionKind = "normal" | "storno";
+
 type Submission = {
   id: string;
   invoice_id: string | null;
   invoice_number: string;
+  is_storno?: boolean | null;
+  parent_submission_id?: string | null;
+  storno_reason?: string | null;
+  xml_content?: string | null;
+  patient?: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+  } | null;
   invoice?: {
     id: string;
     pdf_path: string | null;
     pdf_generated_at: string | null;
+    status: string | null;            // OPEN | PAID | PARTIAL_PAID | OVERPAID | CANCELLED | PARTIAL_LOSS
+    paid_amount: number | null;
+    total_amount: number | null;
   } | null;
   status: MediDataInvoiceStatus;
   patient_id: string;
@@ -109,6 +124,25 @@ type MediDataParticipant = {
   tgAllowed?: boolean;
 };
 
+const SUBMISSIONS_PAGE_SIZE = 25;
+const RESPONSES_BATCH_SIZE = 100;
+const NOTIFICATIONS_BATCH_SIZE = 100;
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "All statuses" },
+  { value: "draft", label: "Draft" },
+  { value: "pending", label: "Pending" },
+  { value: "transmitted", label: "Transmitted" },
+  { value: "delivered", label: "Delivered" },
+  { value: "accepted", label: "Accepted" },
+  { value: "rejected", label: "Rejected" },
+  { value: "paid", label: "Paid" },
+  { value: "partially_paid", label: "Partially Paid" },
+  { value: "cancelled", label: "Cancelled" },
+];
+const AUTO_POLL_INTERVAL_MS = 12 * 60 * 60 * 1000;
+const AUTO_POLL_STORAGE_KEY = "medidata:last-poll-at";
+
 // ---------------------------------------------------------------------------
 // Law type helpers
 // ---------------------------------------------------------------------------
@@ -133,6 +167,53 @@ type ParsedNotification = {
   errorCode: string | null;
   communication: string | null;
 };
+
+// ---------------------------------------------------------------------------
+// Invoice payment badge — purely informational, sourced from `invoices.status`
+// and `invoices.paid_amount`. The MediData submission status reflects what
+// the insurer told us via Sumex; the invoice payment status reflects bank
+// reality. They are independent — this badge surfaces the latter alongside
+// the existing MediData status badge so a "rejected as duplicate but bank-
+// paid" case is legible at a glance.
+// ---------------------------------------------------------------------------
+
+type InvoicePaymentInfo = {
+  status: string | null;
+  paid_amount: number | null;
+  total_amount: number | null;
+};
+
+function InvoicePaymentBadge({ invoice }: { invoice?: InvoicePaymentInfo | null }) {
+  if (!invoice) {
+    return <span className="text-[10px] text-slate-400">—</span>;
+  }
+  const paid = Number(invoice.paid_amount ?? 0);
+  const total = Number(invoice.total_amount ?? 0);
+  const status = (invoice.status ?? "OPEN").toUpperCase();
+  // Map invoice status → label + tailwind colors
+  const config: Record<string, { label: string; cls: string }> = {
+    PAID:         { label: "Paid",     cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    PARTIAL_PAID: { label: "Partial",  cls: "bg-amber-50  text-amber-700  border-amber-200"  },
+    OVERPAID:     { label: "Overpaid", cls: "bg-cyan-50   text-cyan-700   border-cyan-200"   },
+    PARTIAL_LOSS: { label: "Loss",     cls: "bg-rose-50   text-rose-700   border-rose-200"   },
+    CANCELLED:    { label: "Cancelled",cls: "bg-slate-50  text-slate-500  border-slate-200"  },
+    OPEN:         { label: "Unpaid",   cls: "bg-slate-50  text-slate-600  border-slate-200"  },
+  };
+  const c = config[status] ?? config.OPEN;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${c.cls}`}
+      title={`Invoice ${status} — paid CHF ${paid.toFixed(2)} / total CHF ${total.toFixed(2)}`}
+    >
+      {c.label}
+      {paid > 0 && (
+        <span className="font-mono text-[10px] opacity-80">
+          {paid.toFixed(0)}
+        </span>
+      )}
+    </span>
+  );
+}
 
 function parseNotificationMessage(message: string | null): ParsedNotification {
   const result: ParsedNotification = {
@@ -225,6 +306,15 @@ export default function MediDataDashboard() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [subsLoading, setSubsLoading] = useState(false);
   const [expandedSub, setExpandedSub] = useState<string | null>(null);
+  const [submissionsPage, setSubmissionsPage] = useState(0);
+  const [submissionsCount, setSubmissionsCount] = useState(0);
+  const [submissionSearch, setSubmissionSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  // Normal vs Storno sub-tab inside the Submissions tab. Default: normal.
+  const [submissionKind, setSubmissionKind] = useState<SubmissionKind>("normal");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
 
   // Participants
   const [participants, setParticipants] = useState<MediDataParticipant[]>([]);
@@ -236,18 +326,27 @@ export default function MediDataDashboard() {
   const [responses, setResponses] = useState<DbResponse[]>([]);
   const [respLoading, setRespLoading] = useState(false);
   const [expandedResp, setExpandedResp] = useState<string | null>(null);
+  const [responsesLimit, setResponsesLimit] = useState(RESPONSES_BATCH_SIZE);
 
   // Notifications (DB-backed)
   const [notifications, setNotifications] = useState<DbNotification[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [notificationsLimit, setNotificationsLimit] = useState(NOTIFICATIONS_BATCH_SIZE);
 
   // Actions
   const [connStatus, setConnStatus] = useState<string | null>(null);
   const [pollStatus, setPollStatus] = useState<string | null>(null);
+  const [lastPolledAt, setLastPolledAt] = useState<string | null>(null);
   const [sendTestStatus, setSendTestStatus] = useState<string | null>(null);
   const [sendTestResults, setSendTestResults] = useState<any[] | null>(null);
   const [sendInvoiceIds, setSendInvoiceIds] = useState("");
   const [renderingPdf, setRenderingPdf] = useState<string | null>(null);
+
+  const formatPatientName = useCallback((patient?: Submission["patient"] | null) => {
+    if (!patient) return "Unknown patient";
+    const full = [patient.first_name, patient.last_name].filter(Boolean).join(" ").trim();
+    return full || "Unknown patient";
+  }, []);
 
   const openStorageFile = useCallback((path: string | null | undefined) => {
     if (!path) return;
@@ -256,19 +355,73 @@ export default function MediDataDashboard() {
     if (url) window.open(url, "_blank", "noopener,noreferrer");
   }, []);
 
+  const submissionTotalPages = Math.max(1, Math.ceil(submissionsCount / SUBMISSIONS_PAGE_SIZE));
+
   // ── Fetch submissions from local DB ──
   const fetchSubmissions = useCallback(async () => {
     setSubsLoading(true);
     try {
-      const { data } = await supabaseClient
+      const from = submissionsPage * SUBMISSIONS_PAGE_SIZE;
+      const to = from + SUBMISSIONS_PAGE_SIZE - 1;
+      let query = supabaseClient
         .from("medidata_submissions")
         .select(`
           *,
-          invoice:invoices(id,pdf_path,pdf_generated_at),
+          patient:patients(id,first_name,last_name),
+          invoice:invoices(id,pdf_path,pdf_generated_at,status,paid_amount,total_amount),
           history:medidata_submission_history(*)
-        `)
+        `, { count: "exact" })
         .order("created_at", { ascending: false })
-        .limit(50);
+        .range(from, to);
+
+      // Status filter
+      if (statusFilter) {
+        query = query.eq("status", statusFilter);
+      }
+
+      // Normal vs Storno filter. The `is_storno` column is nullable on legacy
+      // rows, so treat NULL as `false` (i.e. legacy rows belong to "normal").
+      if (submissionKind === "storno") {
+        query = query.eq("is_storno", true);
+      } else {
+        query = query.or("is_storno.is.null,is_storno.eq.false");
+      }
+
+      // Date range filter
+      if (dateFrom) {
+        query = query.gte("created_at", `${dateFrom}T00:00:00`);
+      }
+      if (dateTo) {
+        query = query.lte("created_at", `${dateTo}T23:59:59`);
+      }
+
+      const trimmedSearch = submissionSearch.trim();
+      if (trimmedSearch) {
+        const { data: matchingPatients } = await supabaseClient
+          .from("patients")
+          .select("id")
+          .or([
+            `first_name.ilike.%${trimmedSearch}%`,
+            `last_name.ilike.%${trimmedSearch}%`,
+          ].join(","))
+          .limit(100);
+
+        const patientIds = (matchingPatients || []).map((patient) => patient.id).filter(Boolean);
+        const searchClauses = [
+          `invoice_number.ilike.%${trimmedSearch}%`,
+          `medidata_message_id.ilike.%${trimmedSearch}%`,
+          `law_type.ilike.%${trimmedSearch}%`,
+          `billing_type.ilike.%${trimmedSearch}%`,
+        ];
+
+        if (patientIds.length > 0) {
+          searchClauses.push(`patient_id.in.(${patientIds.join(",")})`);
+        }
+
+        query = query.or(searchClauses.join(","));
+      }
+
+      const { data, count } = await query;
 
       let subs = (data as Submission[]) || [];
 
@@ -339,11 +492,12 @@ export default function MediDataDashboard() {
       }
 
       setSubmissions(subs);
+      setSubmissionsCount(count || 0);
     } catch (e) {
       console.error("Error fetching submissions:", e);
     }
     setSubsLoading(false);
-  }, []);
+  }, [submissionSearch, submissionsPage, statusFilter, dateFrom, dateTo, submissionKind]);
 
   // ── Fetch responses from local DB ──
   const fetchResponses = useCallback(async () => {
@@ -353,13 +507,13 @@ export default function MediDataDashboard() {
         .from("medidata_responses")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(50);
+        .range(0, responsesLimit - 1);
       setResponses((data as DbResponse[]) || []);
     } catch (e) {
       console.error("Error fetching responses:", e);
     }
     setRespLoading(false);
-  }, []);
+  }, [responsesLimit]);
 
   // ── Fetch notifications from local DB ──
   const fetchNotifications = useCallback(async () => {
@@ -369,13 +523,13 @@ export default function MediDataDashboard() {
         .from("medidata_notifications_log")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(50);
+        .range(0, notificationsLimit - 1);
       setNotifications((data as DbNotification[]) || []);
     } catch (e) {
       console.error("Error fetching notifications:", e);
     }
     setNotifLoading(false);
-  }, []);
+  }, [notificationsLimit]);
 
   // ── Fetch participants from MediData proxy ──
   const fetchParticipants = useCallback(async () => {
@@ -395,12 +549,17 @@ export default function MediDataDashboard() {
   }, [partSearch, partLawFilter]);
 
   // ── Poll MediData: fetch downloads + notifications, store in DB ──
-  const handlePollMediData = async () => {
-    setPollStatus("Polling...");
+  const handlePollMediData = async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setPollStatus("Polling...");
     try {
       const res = await fetch("/api/medidata/poll", { method: "POST" });
       const json = await res.json();
       if (json.success) {
+        const polledAt = json.polledAt || new Date().toISOString();
+        setLastPolledAt(polledAt);
+        try {
+          window.localStorage.setItem(AUTO_POLL_STORAGE_KEY, polledAt);
+        } catch {}
         const parts: string[] = [];
         if (json.statusUpdates?.updated > 0)
           parts.push(`${json.statusUpdates.updated} status updates`);
@@ -408,18 +567,26 @@ export default function MediDataDashboard() {
           parts.push(`${json.downloads.processed} responses`);
         if (json.notifications?.processed > 0)
           parts.push(`${json.notifications.processed} notifications`);
-        setPollStatus(parts.length > 0 ? `Found: ${parts.join(", ")}` : "No new data");
+        if (!options?.silent) {
+          setPollStatus(parts.length > 0 ? `Found: ${parts.join(", ")}` : "No new data");
+        }
         // Refresh all tabs
         fetchSubmissions();
         fetchResponses();
         fetchNotifications();
       } else {
-        setPollStatus(`Error: ${json.error}`);
+        if (!options?.silent) {
+          setPollStatus(`Error: ${json.error}`);
+        }
       }
     } catch {
-      setPollStatus("Poll failed");
+      if (!options?.silent) {
+        setPollStatus("Poll failed");
+      }
     }
-    setTimeout(() => setPollStatus(null), 8000);
+    if (!options?.silent) {
+      setTimeout(() => setPollStatus(null), 8000);
+    }
   };
 
   // ── Send invoices to MediData (production) ──
@@ -636,6 +803,29 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
     if (tab === "notifications") fetchNotifications();
   }, [tab, fetchSubmissions, fetchParticipants, fetchResponses, fetchNotifications]);
 
+  useEffect(() => {
+    setSubmissionsPage(0);
+  }, [submissionSearch]);
+
+  useEffect(() => {
+    // Reset paging + collapse any open row when switching Normal/Storno.
+    setSubmissionsPage(0);
+    setExpandedSub(null);
+  }, [submissionKind]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(AUTO_POLL_STORAGE_KEY);
+      if (stored) setLastPolledAt(stored);
+      const last = stored ? new Date(stored).getTime() : 0;
+      if (!last || Date.now() - last >= AUTO_POLL_INTERVAL_MS) {
+        void handlePollMediData({ silent: true });
+      }
+    } catch {
+      void handlePollMediData({ silent: true });
+    }
+  }, []);
+
   // ── Tab buttons ──
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: "submissions", label: "Submissions", icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" },
@@ -684,7 +874,7 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={handlePollMediData}
+            onClick={() => handlePollMediData()}
             disabled={pollStatus === "Polling..."}
             className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
           >
@@ -696,6 +886,11 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
           {pollStatus && (
             <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
               {pollStatus}
+            </span>
+          )}
+          {lastPolledAt && (
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+              Last poll {new Date(lastPolledAt).toLocaleString("fr-CH")}
             </span>
           )}
           {sendTestStatus && (
@@ -732,7 +927,7 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
         </div>
       </div>
 
-      {/* Send test results */}
+      {/* Send results */}
       {sendTestResults && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-2 text-sm font-medium text-slate-700">Send Results</h3>
@@ -784,55 +979,312 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
       {/* ── Tab: Submissions ── */}
       {tab === "submissions" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-800">Invoice Submissions</h2>
-            <button
-              onClick={fetchSubmissions}
-              disabled={subsLoading}
-              className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
-            >
-              {subsLoading ? "Loading..." : "Refresh"}
-            </button>
+          {/* Normal vs Storno sub-tabs */}
+          <div className="inline-flex rounded-full bg-slate-100 p-1 text-xs font-medium">
+            {([
+              { id: "normal" as const, label: "Normal submissions" },
+              { id: "storno" as const, label: "Storno (cancellations)" },
+            ]).map((k) => (
+              <button
+                key={k.id}
+                type="button"
+                onClick={() => setSubmissionKind(k.id)}
+                className={
+                  "rounded-full px-4 py-1.5 transition " +
+                  (submissionKind === k.id
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700")
+                }
+              >
+                {k.label}
+              </button>
+            ))}
           </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">
+                {submissionKind === "storno" ? "Storno Submissions" : "Invoice Submissions"}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {submissionsCount > 0
+                  ? `Showing ${submissionsPage * SUBMISSIONS_PAGE_SIZE + 1}-${Math.min((submissionsPage + 1) * SUBMISSIONS_PAGE_SIZE, submissionsCount)} of ${submissionsCount}`
+                  : submissionKind === "storno"
+                    ? "No storno submissions found"
+                    : "No submissions found"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSubmissionsPage((prev) => Math.max(0, prev - 1))}
+                disabled={subsLoading || submissionsPage === 0}
+                className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setSubmissionsPage((prev) => (prev + 1 < submissionTotalPages ? prev + 1 : prev))}
+                disabled={subsLoading || submissionsPage + 1 >= submissionTotalPages}
+                className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+              >
+                Next
+              </button>
+              <button
+                onClick={fetchSubmissions}
+                disabled={subsLoading}
+                className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+              >
+                {subsLoading ? "Loading..." : "Refresh"}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
+              <div>
+                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-400">Search</label>
+                <input
+                  type="text"
+                  value={submissionSearch}
+                  onChange={(e) => setSubmissionSearch(e.target.value)}
+                  placeholder="Patient, invoice number, reference…"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-300 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-400">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => { setStatusFilter(e.target.value); setSubmissionsPage(0); }}
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                >
+                  {STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-400">From</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => { setDateFrom(e.target.value); setSubmissionsPage(0); }}
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-400">To</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => { setDateTo(e.target.value); setSubmissionsPage(0); }}
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                />
+              </div>
+            </div>
+            {(statusFilter || dateFrom || dateTo) && (
+              <button
+                type="button"
+                onClick={() => { setStatusFilter(""); setDateFrom(""); setDateTo(""); setSubmissionsPage(0); }}
+                className="text-[11px] font-medium text-sky-600 hover:text-sky-800"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+
+          {/* ── Accountant Action Items ── */}
+          {(() => {
+            const rejected = submissions.filter((s) => s.status === "rejected");
+            if (rejected.length === 0 && !statusFilter) return null;
+
+            // Categorize rejections by parsing insurance_response_message and response explanations
+            type ActionItem = { invoiceNumber: string; patientName: string; patientId: string; submissionId: string; category: string; detail: string };
+            const items: ActionItem[] = [];
+
+            for (const sub of rejected) {
+              const msg = sub.insurance_response_message || "";
+              const respExplanations = (sub.rejection_responses || []).map((r) => r.explanation || "").join(" ");
+              const combined = `${msg} ${respExplanations}`.toLowerCase();
+
+              let category = "Other";
+              let detail = msg || respExplanations || "No details available";
+
+              if (combined.includes("point tarifaire") || combined.includes("taxe de valeur") || combined.includes("0,91") || combined.includes("0.91")) {
+                category = "Wrong tariff point value";
+                detail = "Canton GE requires point value 0.91. Resubmit with corrected tariff.";
+              } else if (combined.includes("tarif 007") || combined.includes("type de tarif") || combined.includes("chiffre tarifaire") || combined.includes("chiffres tarifaires")) {
+                category = "Wrong tariff type/code";
+                detail = "Insurer requires TARDOC tariff 007. Check service codes and resubmit.";
+              } else if (combined.includes("déjà reçu") || combined.includes("bereits erhalten") || combined.includes("duplicate")) {
+                category = "Duplicate invoice";
+                detail = "Insurer already has this invoice. Verify if previously sent via another channel.";
+              } else if (combined.includes("assuré inconnu") || combined.includes("versicherter unbekannt")) {
+                category = "Unknown insured";
+                detail = "Patient not recognized by insurer. Verify insurance details and policy number.";
+              } else if (combined.includes("pas payés directement") || combined.includes("pas à notre charge") || combined.includes("conditions n'étant pas remplies")) {
+                category = "Not covered";
+                detail = "Treatment not covered by insurance. May need to bill patient directly.";
+              } else if (combined.includes("xml-schema") || combined.includes("w3c")) {
+                category = "XML Schema error";
+                detail = "Technical XML issue. Contact system administrator.";
+              } else if (combined.includes("rueckweisung") && !combined.includes("copy")) {
+                category = "Generic rejection";
+                detail = msg || "Insurer rejected without specific reason. Check response details.";
+              }
+
+              items.push({
+                invoiceNumber: sub.invoice_number,
+                patientName: formatPatientName(sub.patient),
+                patientId: sub.patient_id,
+                submissionId: sub.id,
+                category,
+                detail: detail.length > 120 ? detail.substring(0, 120) + "…" : detail,
+              });
+            }
+
+            if (items.length === 0) return null;
+
+            // Group by category
+            const grouped: Record<string, ActionItem[]> = {};
+            for (const item of items) {
+              if (!grouped[item.category]) grouped[item.category] = [];
+              grouped[item.category].push(item);
+            }
+
+            const categoryColors: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+              "Wrong tariff point value": { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-900", badge: "bg-amber-100 text-amber-800" },
+              "Wrong tariff type/code": { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-900", badge: "bg-orange-100 text-orange-800" },
+              "Duplicate invoice": { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-900", badge: "bg-blue-100 text-blue-800" },
+              "Unknown insured": { bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-900", badge: "bg-rose-100 text-rose-800" },
+              "Not covered": { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-900", badge: "bg-purple-100 text-purple-800" },
+              "XML Schema error": { bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-900", badge: "bg-slate-100 text-slate-800" },
+              "Generic rejection": { bg: "bg-red-50", border: "border-red-200", text: "text-red-900", badge: "bg-red-100 text-red-800" },
+              "Other": { bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-900", badge: "bg-slate-100 text-slate-800" },
+            };
+
+            return (
+              <div className="rounded-xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 shadow-sm overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setExpandedSub(expandedSub === "accountant-actions" ? null : "accountant-actions")}
+                  className="w-full p-4 text-left hover:bg-amber-100/50 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <h3 className="text-sm font-bold text-amber-900">
+                        Accountant Action Required - {items.length} rejected invoice{items.length !== 1 ? "s" : ""} need attention
+                      </h3>
+                    </div>
+                    <svg
+                      className={`h-4 w-4 text-amber-600 transition-transform ${expandedSub === "accountant-actions" ? "rotate-180" : ""}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </button>
+
+                {expandedSub === "accountant-actions" && (
+                  <div className="border-t border-amber-200 p-4 space-y-3 bg-white/50">
+                    {Object.entries(grouped).sort((a, b) => b[1].length - a[1].length).map(([cat, catItems]) => {
+                      const colors = categoryColors[cat] || categoryColors["Other"];
+                      return (
+                        <div key={cat} className={`rounded-lg border ${colors.border} ${colors.bg} p-3`}>
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${colors.badge}`}>
+                              {catItems.length}
+                            </span>
+                            <span className={`text-xs font-semibold ${colors.text}`}>{cat}</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {catItems.slice(0, 5).map((item) => (
+                              <div key={item.submissionId} className="flex items-start gap-2 text-xs">
+                                <span className="font-mono font-semibold text-slate-700 whitespace-nowrap">{item.invoiceNumber}</span>
+                                <span className="text-slate-500">-</span>
+                                <Link href={`/patients/${item.patientId}`} className="text-sky-600 hover:underline whitespace-nowrap">{item.patientName}</Link>
+                                <span className="text-slate-400 truncate">{item.detail}</span>
+                              </div>
+                            ))}
+                            {catItems.length > 5 && (
+                              <p className="text-[10px] text-slate-500 italic">+ {catItems.length - 5} more</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {submissions.length === 0 && !subsLoading ? (
             <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
               <p className="text-sm text-slate-400">No submissions found</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)_minmax(110px,0.9fr)_minmax(90px,0.8fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_32px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <div>Invoice</div>
+                <div>Patient</div>
+                <div>Billing</div>
+                <div>Amount</div>
+                <div title="Bank-confirmed payment status from the invoices table — independent of the MediData/Sumex response">Payment</div>
+                <div>MediData status</div>
+                <div></div>
+              </div>
+
               {submissions.map((sub) => (
-                <div key={sub.id} className="rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <div
-                    className="flex cursor-pointer items-center justify-between p-4 hover:bg-slate-50/50"
+                <div key={sub.id} className="border-b border-slate-100 last:border-b-0">
+                  <button
+                    type="button"
+                    className="grid w-full grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)_minmax(110px,0.9fr)_minmax(90px,0.8fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_32px] gap-3 px-4 py-3 text-left hover:bg-slate-50"
                     onClick={() => setExpandedSub(expandedSub === sub.id ? null : sub.id)}
                   >
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <p className="font-medium text-slate-900">{sub.invoice_number}</p>
-                        <p className="text-xs text-slate-400">
-                          {new Date(sub.created_at).toLocaleDateString("fr-CH")}{" "}
-                          {new Date(sub.created_at).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" })}
-                        </p>
-                      </div>
-                      {sub.billing_type && (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                          {sub.billing_type}
-                        </span>
-                      )}
-                      {sub.law_type && (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                          {sub.law_type}
-                        </span>
-                      )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{sub.invoice_number}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {new Date(sub.created_at).toLocaleDateString("fr-CH")}{" "}
+                        {new Date(sub.created_at).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" })}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {sub.invoice_amount != null && (
-                        <span className="text-sm font-medium text-slate-700">
-                          CHF {sub.invoice_amount.toFixed(2)}
-                        </span>
-                      )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-slate-800">{formatPatientName(sub.patient)}</p>
+                      <p className="mt-1 truncate text-xs text-slate-400">{sub.patient_id}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap gap-1">
+                        {sub.billing_type && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                            {sub.billing_type}
+                          </span>
+                        )}
+                        {sub.law_type && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                            {sub.law_type}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-700">
+                        {sub.invoice_amount != null ? `CHF ${sub.invoice_amount.toFixed(2)}` : "—"}
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <InvoicePaymentBadge invoice={sub.invoice} />
+                    </div>
+                    <div className="min-w-0">
                       <InvoiceStatusBadge status={sub.status} />
+                    </div>
+                    <div className="flex items-center justify-center">
                       <svg
                         className={`h-4 w-4 text-slate-400 transition-transform ${expandedSub === sub.id ? "rotate-180" : ""}`}
                         fill="none"
@@ -843,10 +1295,72 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                       </svg>
                     </div>
-                  </div>
+                  </button>
 
                   {expandedSub === sub.id && (
-                    <div className="border-t border-slate-100 p-4 space-y-4">
+                    <div className="border-t border-slate-100 p-4 space-y-4 bg-white">
+                      <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 md:grid-cols-4">
+                        <div>
+                          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Patient</p>
+                          <p className="mt-1 text-sm text-slate-700">{formatPatientName(sub.patient)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Patient ID</p>
+                          <p className="mt-1 break-all font-mono text-xs text-slate-600">{sub.patient_id}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Invoice ID</p>
+                          <p className="mt-1 break-all font-mono text-xs text-slate-600">{sub.invoice_id || "—"}</p>
+                        </div>
+                        <div className="flex items-end justify-start md:justify-end">
+                          {sub.patient?.id && (
+                            <Link
+                              href={`/patients/${sub.patient.id}`}
+                              className="inline-flex items-center rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700"
+                            >
+                              Go to patient
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Invoice payment block — independent of MediData/Sumex.
+                          Surfaces the invoices.status / paid_amount truth so a
+                          "rejected (déjà payée)" submission is plainly paid here. */}
+                      {sub.invoice && (
+                        <div className="rounded-lg border border-slate-200 bg-white p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Invoice payment</p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                Bank-confirmed payment status. Independent of the MediData/Sumex response above.
+                              </p>
+                            </div>
+                            <InvoicePaymentBadge invoice={sub.invoice} />
+                          </div>
+                          <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wide text-slate-400">Total</p>
+                              <p className="mt-0.5 font-medium text-slate-700">
+                                CHF {Number(sub.invoice.total_amount ?? 0).toFixed(2)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wide text-slate-400">Paid</p>
+                              <p className="mt-0.5 font-medium text-emerald-700">
+                                CHF {Number(sub.invoice.paid_amount ?? 0).toFixed(2)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wide text-slate-400">Outstanding</p>
+                              <p className="mt-0.5 font-medium text-amber-700">
+                                CHF {(Number(sub.invoice.total_amount ?? 0) - Number(sub.invoice.paid_amount ?? 0)).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Error Notifications Alert (transmission errors) */}
                       {sub.error_notifications && sub.error_notifications.length > 0 && (
                         <div className="rounded-lg border-2 border-orange-200 bg-orange-50 p-4">
@@ -887,7 +1401,7 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                                     </p>
                                   )}
                                   <p className="text-[10px] text-orange-600 mt-1">
-                                    {notif.medidata_created_at 
+                                    {notif.medidata_created_at
                                       ? new Date(notif.medidata_created_at).toLocaleString("fr-CH")
                                       : new Date(notif.created_at).toLocaleString("fr-CH")}
                                   </p>
@@ -1164,18 +1678,42 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                           </button>
                         )}
 
-                        {sub.invoice?.pdf_path && (
+                        {sub.xml_content && (
                           <button
-                            onClick={(e) => {
+                            disabled={generatingPdfId === sub.id}
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              openStorageFile(sub.invoice?.pdf_path);
+                              setGeneratingPdfId(sub.id);
+                              try {
+                                const res = await fetch("/api/medidata/request-pdf", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ submissionId: sub.id }),
+                                });
+                                if (!res.ok) {
+                                  const err = await res.json().catch(() => ({}));
+                                  alert(err.error || "PDF generation failed");
+                                  return;
+                                }
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                window.open(url, "_blank", "noopener,noreferrer");
+                              } catch (err) {
+                                alert("Failed to generate PDF");
+                              } finally {
+                                setGeneratingPdfId(null);
+                              }
                             }}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                           >
-                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            Open Invoice PDF
+                            {generatingPdfId === sub.id ? (
+                              <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            ) : (
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            )}
+                            {generatingPdfId === sub.id ? "Generating..." : "View Invoice PDF"}
                           </button>
                         )}
                       </div>
@@ -1198,6 +1736,30 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
               ))}
             </div>
           )}
+
+          {submissionsCount > 0 && (
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <p className="text-xs text-slate-500">
+                Page {submissionsPage + 1} of {submissionTotalPages}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSubmissionsPage((prev) => Math.max(0, prev - 1))}
+                  disabled={subsLoading || submissionsPage === 0}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setSubmissionsPage((prev) => (prev + 1 < submissionTotalPages ? prev + 1 : prev))}
+                  disabled={subsLoading || submissionsPage + 1 >= submissionTotalPages}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1208,7 +1770,14 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
             <h2 className="text-lg font-semibold text-slate-800">Insurer Responses</h2>
             <div className="flex items-center gap-2">
               <button
-                onClick={handlePollMediData}
+                onClick={() => setResponsesLimit((prev) => prev + RESPONSES_BATCH_SIZE)}
+                disabled={respLoading}
+                className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+              >
+                Load more
+              </button>
+              <button
+                onClick={() => handlePollMediData()}
                 disabled={pollStatus === "Polling..."}
                 className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
               >
@@ -1458,7 +2027,14 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
             <h2 className="text-lg font-semibold text-slate-800">MediData Notifications</h2>
             <div className="flex items-center gap-2">
               <button
-                onClick={handlePollMediData}
+                onClick={() => setNotificationsLimit((prev) => prev + NOTIFICATIONS_BATCH_SIZE)}
+                disabled={notifLoading}
+                className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+              >
+                Load more
+              </button>
+              <button
+                onClick={() => handlePollMediData()}
                 disabled={pollStatus === "Polling..."}
                 className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
               >

@@ -221,7 +221,7 @@ export async function POST() {
           if (isCopyResponse) {
             // Patient copy response — do NOT change submission status.
             // Just record it in history for audit trail.
-            console.log(`[poll] Patient copy response for ${corrRef}: ${parsed.type}. Status NOT changed.`);
+            console.log(`[poll] Patient copy response for submission ${matchedSub.id} (${corrRef}): ${parsed.type} — ${parsed.explanation || "no explanation"}. Status NOT changed.`);
             await supabaseAdmin.from("medidata_submission_history").insert({
               submission_id: matchedSub.id,
               previous_status: matchedSub.status,
@@ -356,16 +356,20 @@ export async function POST() {
 
         if (existing) continue;
 
-        // Find related submission
+        // Find related submission (fetch full row for error cascade logic)
         let submissionId: string | null = null;
+        let matchedNotifSub: { id: string; status: string; is_storno: boolean | null; parent_submission_id: string | null } | null = null;
         if (n.transmissionReference) {
           const { data: sub } = await supabaseAdmin
             .from("medidata_submissions")
-            .select("id")
+            .select("id, status, is_storno, parent_submission_id")
             .eq("medidata_message_id", n.transmissionReference)
             .limit(1)
             .single();
-          if (sub) submissionId = sub.id;
+          if (sub) {
+            submissionId = sub.id;
+            matchedNotifSub = sub as any;
+          }
         }
 
         // Extract message text (MediData sends multilingual object {de, fr, it})
@@ -392,6 +396,45 @@ export async function POST() {
           submission_id: submissionId,
           medidata_created_at: n.created || null,
         });
+
+        // If this is a hard transmission error (XSD validation, upload failure,
+        // etc.) and the submission is still live, mark it as `rejected` and
+        // cascade to its storno parent if applicable. This ensures a broken
+        // storno doesn't leave the original stuck in a fake `cancelled` state.
+        const isErrorSeverity = (n.severity || "").toUpperCase() === "ERROR";
+        const isUploadError = errorCode?.startsWith("UPLOAD:") || errorCode === "UPLOAD:XML-NOT-VALID";
+        if (
+          isErrorSeverity &&
+          isUploadError &&
+          matchedNotifSub &&
+          matchedNotifSub.status !== "rejected" &&
+          matchedNotifSub.status !== "cancelled" &&
+          matchedNotifSub.status !== "accepted"
+        ) {
+          await supabaseAdmin
+            .from("medidata_submissions")
+            .update({
+              status: "rejected",
+              medidata_response_code: errorCode,
+              medidata_response_message: messageText,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", matchedNotifSub.id);
+
+          await supabaseAdmin.from("medidata_submission_history").insert({
+            submission_id: matchedNotifSub.id,
+            previous_status: matchedNotifSub.status,
+            new_status: "rejected",
+            response_code: errorCode,
+            response_message: messageText,
+            changed_by: null,
+            notes: `MediData rejected transmission (${errorCode || "unknown"}).`,
+          });
+
+          // Cascade: if this was a storno, the original stays live — record a
+          // note so operators know the cancellation attempt failed.
+          await cascadeStornoOutcome(matchedNotifSub, "rejected", errorCode);
+        }
 
         // Confirm notification
         const confirmed = await confirmNotification(notifId);
