@@ -704,6 +704,7 @@ export default function MedicalConsultationsCard({
   const [cashReceiptError, setCashReceiptError] = useState<string | null>(null);
 
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
+  const [sendingEmail, setSendingEmail] = useState<string | null>(null);
   const [pdfDropdownOpen, setPdfDropdownOpen] = useState<string | null>(null);
   const [viewPdfDropdownOpen, setViewPdfDropdownOpen] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<{ message: string; details?: string; abortInfo?: string } | null>(null);
@@ -2818,6 +2819,56 @@ export default function MedicalConsultationsCard({
       console.error("Error generating PDF:", error);
       setPdfError({ message: error instanceof Error ? error.message : "Failed to generate PDF" });
       setGeneratingPdf(null);
+    }
+  }
+
+  async function handleSendInvoiceEmail(invoiceId: string, pdfPath: string | null) {
+    if (!patientEmail) {
+      alert("Patient has no email address.");
+      return;
+    }
+    if (!pdfPath) {
+      alert("Please generate the PDF first.");
+      return;
+    }
+
+    setSendingEmail(invoiceId);
+    try {
+      const res = await fetch("/api/invoices/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId, recipientEmail: patientEmail }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // Update local state to reflect email_sent_at
+        setConsultations((prev) =>
+          prev.map((row) =>
+            row.id === invoiceId
+              ? { ...row, email_sent_at: new Date().toISOString() }
+              : row,
+          ),
+        );
+        const toast = document.createElement("div");
+        toast.className = "fixed top-4 right-4 z-50 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 shadow-lg";
+        toast.innerHTML = `<div class="flex items-center gap-2"><svg class="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><span>Invoice emailed to ${patientEmail}</span></div>`;
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.transition = "opacity 0.3s"; toast.style.opacity = "0"; setTimeout(() => document.body.removeChild(toast), 300); }, 3000);
+      } else {
+        const toast = document.createElement("div");
+        toast.className = "fixed top-4 right-4 z-50 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 shadow-lg";
+        toast.innerHTML = `<div class="flex items-center gap-2"><svg class="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg><span>Failed: ${data.error || "Unknown error"}</span></div>`;
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.transition = "opacity 0.3s"; toast.style.opacity = "0"; setTimeout(() => document.body.removeChild(toast), 300); }, 4000);
+      }
+    } catch {
+      const toast = document.createElement("div");
+      toast.className = "fixed top-4 right-4 z-50 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 shadow-lg";
+      toast.innerHTML = `<div class="flex items-center gap-2"><svg class="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg><span>Failed to send email</span></div>`;
+      document.body.appendChild(toast);
+      setTimeout(() => { toast.style.transition = "opacity 0.3s"; toast.style.opacity = "0"; setTimeout(() => document.body.removeChild(toast), 300); }, 4000);
+    } finally {
+      setSendingEmail(null);
     }
   }
 
@@ -7948,6 +7999,20 @@ export default function MedicalConsultationsCard({
                                 </div>
                               )}
                             </div>
+
+                            {/* Send Email — visible only when patient has an email */}
+                            {patientEmail && (
+                              <button
+                                type="button"
+                                onClick={() => handleSendInvoiceEmail(row.id, row.invoice_pdf_path)}
+                                disabled={sendingEmail === row.id}
+                                title={!row.invoice_pdf_path ? "Generate a PDF first" : `Send invoice to ${patientEmail}`}
+                                className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                              >
+                                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                {sendingEmail === row.id ? "Sending..." : "Send Email"}
+                              </button>
+                            )}
 
                             <div className="h-4 w-px bg-slate-200" />
 

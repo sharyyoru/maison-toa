@@ -9,6 +9,7 @@ const APP_LINKS = [
   { href: "/appointments", label: "Calendar" },
   { href: "/deals", label: "Deals & Pipeline" },
   { href: "/financials", label: "Financials" },
+  { href: "/invoices", label: "Invoices" },
   { href: "/services", label: "Services" },
   { href: "/tasks", label: "Tasks" },
   { href: "/users", label: "User Management" },
