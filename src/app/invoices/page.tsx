@@ -26,6 +26,10 @@ type InvoiceRow = {
   status: InvoiceStatus;
   is_complimentary: boolean;
   pdf_path: string | null;
+  pdf_path_tg: string | null;
+  pdf_path_tp: string | null;
+  pdf_path_reminder: string | null;
+  pdf_path_receipt: string | null;
   created_by_user_id: string | null;
   created_by_name: string | null;
   is_archived: boolean;
@@ -158,6 +162,16 @@ export default function InvoicesPage() {
   const [sendingEmail, setSendingEmail] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<string | null>(null);
 
+  // Per-row PDF generate dropdown
+  const [pdfDropdownOpen, setPdfDropdownOpen] = useState<string | null>(null);
+
+  // Per-row email modal
+  const [emailModalInvoice, setEmailModalInvoice] = useState<InvoiceRow | null>(null);
+
+  // Bulk email doc-type picker
+  const [bulkEmailDocTypeOpen, setBulkEmailDocTypeOpen] = useState(false);
+  const [bulkEmailDocType, setBulkEmailDocType] = useState<string>("tg");
+
   // Insurance modal state
   const [insuranceModalOpen, setInsuranceModalOpen] = useState(false);
   const [insuranceTarget, setInsuranceTarget] = useState<InvoiceRow | null>(null);
@@ -183,7 +197,7 @@ export default function InvoicesPage() {
 
         const { data, error: err } = await supabaseClient
           .from("invoices")
-          .select("id, patient_id, invoice_number, invoice_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, paid_amount, status, is_complimentary, pdf_path, created_by_user_id, created_by_name, is_archived, health_insurance_law, billing_type")
+          .select("id, patient_id, invoice_number, invoice_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, paid_amount, status, is_complimentary, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, created_by_user_id, created_by_name, is_archived, health_insurance_law, billing_type")
           .eq("is_archived", false)
           .is("parent_invoice_id", null)
           .order("invoice_date", { ascending: false });
@@ -377,18 +391,27 @@ export default function InvoicesPage() {
     }
   };
 
-  const handleGeneratePdf = async (invoiceId: string) => {
+  const handleGeneratePdf = async (invoiceId: string, invoiceType: "tg" | "tp" | "reminder" | "receipt" = "tg", reminderLevel = 1) => {
     setGeneratingPdf(prev => new Set(prev).add(invoiceId));
     try {
       const res = await fetch("/api/invoices/generate-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceId }),
+        body: JSON.stringify({ invoiceId, invoiceType, reminderLevel }),
       });
       const data = await res.json();
       if (data.pdfUrl) {
         window.open(data.pdfUrl, "_blank");
-        setInvoices(prev => prev.map(r => r.id === invoiceId ? { ...r, pdf_path: data.pdfPath || r.pdf_path } : r));
+        // Update both the generic pdf_path and the specific typed column in local state
+        const typedCol = invoiceType === "tg" ? "pdf_path_tg"
+          : invoiceType === "tp" ? "pdf_path_tp"
+          : invoiceType === "reminder" ? "pdf_path_reminder"
+          : "pdf_path_receipt";
+        setInvoices(prev => prev.map(r => r.id === invoiceId ? {
+          ...r,
+          pdf_path: data.pdfPath || r.pdf_path,
+          [typedCol]: data.pdfPath || r[typedCol as keyof InvoiceRow],
+        } : r));
       } else {
         alert("Failed: " + (data.error || "Unknown error"));
       }
@@ -399,17 +422,25 @@ export default function InvoicesPage() {
     }
   };
 
-  const handleSendEmail = async (invoice: InvoiceRow) => {
+  const handleSendEmail = async (invoice: InvoiceRow, documentType?: string) => {
     const email = patientEmail(invoice.patient_id);
     if (!email) { alert("Patient has no email address."); return; }
-    if (!invoice.pdf_path) { alert("Please generate the PDF first."); return; }
+
+    // Resolve path for the requested type
+    const pathForType = documentType === "tg" ? invoice.pdf_path_tg
+      : documentType === "tp" ? invoice.pdf_path_tp
+      : documentType === "reminder" ? invoice.pdf_path_reminder
+      : documentType === "receipt" ? invoice.pdf_path_receipt
+      : invoice.pdf_path;
+
+    if (!pathForType) { alert("Please generate that PDF type first."); return; }
 
     setSendingEmail(prev => new Set(prev).add(invoice.id));
     try {
       const res = await fetch("/api/invoices/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceId: invoice.id, recipientEmail: email }),
+        body: JSON.stringify({ invoiceId: invoice.id, recipientEmail: email, ...(documentType ? { documentType } : {}) }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -457,17 +488,31 @@ export default function InvoicesPage() {
     if (receiptIds.length === 0) { alert("No paid/partial invoices selected."); return; }
     if (!confirm(`Generate receipt PDF for ${receiptIds.length} invoice(s)?`)) return;
     setBulkAction("receipt");
-    for (const id of receiptIds) await handleGeneratePdf(id);
+    for (const id of receiptIds) await handleGeneratePdf(id, "receipt");
     setBulkAction(null);
   };
 
-  const handleBulkSendEmail = async () => {
+  const handleBulkSendEmail = () => {
+    // Open the doc-type picker dialog; actual sending happens in handleBulkSendEmailConfirm
+    setBulkEmailDocType("tg");
+    setBulkEmailDocTypeOpen(true);
+  };
+
+  const handleBulkSendEmailConfirm = async (docType: string) => {
+    setBulkEmailDocTypeOpen(false);
     const toSend = Array.from(selected).map(id => invoices.find(r => r.id === id)).filter(Boolean) as InvoiceRow[];
-    const withEmail = toSend.filter(r => r.pdf_path && patientEmail(r.patient_id));
-    if (withEmail.length === 0) { alert("No selected invoices have both a PDF and patient email."); return; }
-    if (!confirm(`Send ${withEmail.length} invoice(s) by email?`)) return;
+    const withEmail = toSend.filter(r => {
+      const hasPath = docType === "tg" ? r.pdf_path_tg
+        : docType === "tp" ? r.pdf_path_tp
+        : docType === "reminder" ? r.pdf_path_reminder
+        : docType === "receipt" ? r.pdf_path_receipt
+        : r.pdf_path;
+      return hasPath && patientEmail(r.patient_id);
+    });
+    if (withEmail.length === 0) { alert(`No selected invoices have a ${docType.toUpperCase()} PDF generated and a patient email.`); return; }
+    if (!confirm(`Send ${withEmail.length} invoice(s) as ${docType.toUpperCase()} by email?`)) return;
     setBulkAction("email");
-    for (const inv of withEmail) await handleSendEmail(inv);
+    for (const inv of withEmail) await handleSendEmail(inv, docType);
     setBulkAction(null);
   };
 
@@ -897,37 +942,47 @@ export default function InvoicesPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleGeneratePdf(row.id)}
-                          disabled={isGenerating}
-                          className="inline-flex items-center gap-0.5 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50 transition-colors"
-                          title={row.pdf_path ? "Regenerate PDF" : "Generate PDF"}
-                        >
-                          {isGenerating ? "..." : "PDF"}
-                        </button>
-                        {isReceipt && (
+
+                        {/* Generate PDF — dropdown */}
+                        <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setPdfDropdownOpen(null); }}>
                           <button
                             type="button"
-                            onClick={() => handleGeneratePdf(row.id)}
                             disabled={isGenerating}
-                            className="inline-flex items-center gap-0.5 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
-                            title="Generate Receipt (with paid status)"
+                            onClick={() => setPdfDropdownOpen(pdfDropdownOpen === row.id ? null : row.id)}
+                            className="inline-flex items-center gap-0.5 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50 transition-colors"
+                            title="Generate PDF"
                           >
-                            {isGenerating ? "..." : "Receipt"}
+                            {isGenerating ? "..." : "PDF ▾"}
                           </button>
-                        )}
-                        {row.pdf_path && patientEmail(row.patient_id) && (
+                          {pdfDropdownOpen === row.id && (
+                            <div className="absolute left-0 top-full z-30 mt-0.5 min-w-[160px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                              <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(row.id, "tg"); }}>Invoice (patient / TG)</button>
+                              <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(row.id, "tp"); }}>Invoice (insurance / TP)</button>
+                              <div className="my-1 border-t border-slate-100" />
+                              <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(row.id, "reminder", 1); }}>Reminder (1st)</button>
+                              <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(row.id, "reminder", 2); }}>Reminder (2nd)</button>
+                              <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(row.id, "reminder", 3); }}>Reminder (3rd)</button>
+                              <div className="my-1 border-t border-slate-100" />
+                              <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(row.id, "receipt"); }}>Patient receipt</button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Email to patient — opens modal picker */}
+                        {patientEmail(row.patient_id) ? (
                           <button
                             type="button"
-                            onClick={() => handleSendEmail(row)}
+                            onClick={() => setEmailModalInvoice(row)}
                             disabled={isSending}
-                            className="inline-flex items-center gap-0.5 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
-                            title="Send to patient email"
+                            className="inline-flex items-center gap-0.5 rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+                            title="Email to patient"
                           >
                             {isSending ? "..." : "Email"}
                           </button>
+                        ) : (
+                          <span className="inline-flex items-center rounded border border-slate-100 bg-slate-50 px-1.5 py-0.5 text-[9px] text-slate-300 cursor-not-allowed" title="No email on file">Email</span>
                         )}
+
                         {row.patient_id && (
                           <button
                             type="button"
@@ -1123,6 +1178,110 @@ export default function InvoicesPage() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+      {/* ── Email to patient modal (per-row) ─────────────────────────────── */}
+      {emailModalInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50" onClick={(e) => { if (e.target === e.currentTarget) setEmailModalInvoice(null); }}>
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">Email to patient</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Invoice <strong>{emailModalInvoice.invoice_number}</strong> → {patientEmail(emailModalInvoice.patient_id)}
+                </p>
+              </div>
+              <button onClick={() => setEmailModalInvoice(null)} className="rounded-full p-1 text-slate-400 hover:bg-slate-100">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <p className="mb-3 text-[11px] text-slate-500">Select the document type to send. Only already-generated PDFs can be sent.</p>
+
+            <div className="space-y-1.5">
+              {([
+                { type: "tg",       label: "Invoice (patient / TG)",      path: emailModalInvoice.pdf_path_tg },
+                { type: "tp",       label: "Invoice (insurance / TP)",     path: emailModalInvoice.pdf_path_tp },
+                { type: "reminder", label: "Reminder",                     path: emailModalInvoice.pdf_path_reminder },
+                { type: "receipt",  label: "Patient receipt",              path: emailModalInvoice.pdf_path_receipt },
+              ] as { type: string; label: string; path: string | null }[]).map(({ type, label, path }) => (
+                <div key={type} className={`flex items-center justify-between rounded-lg border px-3 py-2 ${path ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50 opacity-50"}`}>
+                  <div className="flex items-center gap-2">
+                    {path
+                      ? <svg className="h-3.5 w-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" /></svg>
+                      : <svg className="h-3.5 w-3.5 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    }
+                    <span className="text-[12px] text-slate-700">{label}</span>
+                    {!path && <span className="ml-1 text-[10px] text-slate-400 italic">not generated</span>}
+                  </div>
+                  {path && (
+                    <button
+                      type="button"
+                      disabled={sendingEmail.has(emailModalInvoice.id)}
+                      onClick={async () => {
+                        const inv = emailModalInvoice;
+                        setEmailModalInvoice(null);
+                        await handleSendEmail(inv, type);
+                      }}
+                      className="rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+                    >
+                      Send
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-3 text-[10px] text-slate-400">To send a type not yet generated, close this modal and use the PDF ▾ button first.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk email doc-type picker ────────────────────────────────────── */}
+      {bulkEmailDocTypeOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50" onClick={(e) => { if (e.target === e.currentTarget) setBulkEmailDocTypeOpen(false); }}>
+          <div className="relative w-full max-w-xs rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between">
+              <h2 className="text-base font-semibold text-slate-900">Bulk Send Email</h2>
+              <button onClick={() => setBulkEmailDocTypeOpen(false)} className="rounded-full p-1 text-slate-400 hover:bg-slate-100">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <p className="mb-3 text-[11px] text-slate-500">Which document type should be emailed to all {selected.size} selected patient(s)?</p>
+
+            <div className="space-y-1.5">
+              {([
+                { type: "tg",       label: "Invoice (patient / TG)" },
+                { type: "tp",       label: "Invoice (insurance / TP)" },
+                { type: "reminder", label: "Reminder" },
+                { type: "receipt",  label: "Patient receipt" },
+              ] as { type: string; label: string }[]).map(({ type, label }) => (
+                <label key={type} className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${bulkEmailDocType === type ? "border-indigo-300 bg-indigo-50" : "border-slate-200 hover:border-slate-300"}`}>
+                  <input
+                    type="radio"
+                    name="bulkDocType"
+                    value={type}
+                    checked={bulkEmailDocType === type}
+                    onChange={() => setBulkEmailDocType(type)}
+                    className="h-3.5 w-3.5 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-[12px] font-medium text-slate-700">{label}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setBulkEmailDocTypeOpen(false)} className="rounded-full border border-slate-200 px-4 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button
+                type="button"
+                onClick={() => handleBulkSendEmailConfirm(bulkEmailDocType)}
+                className="rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+              >
+                Send {bulkEmailDocType.toUpperCase()} to {selected.size} patient(s)
+              </button>
+            </div>
           </div>
         </div>
       )}

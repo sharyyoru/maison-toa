@@ -706,6 +706,7 @@ export default function MedicalConsultationsCard({
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
   const [pdfDropdownOpen, setPdfDropdownOpen] = useState<string | null>(null);
+  const [emailDropdownOpen, setEmailDropdownOpen] = useState<string | null>(null);
   const [viewPdfDropdownOpen, setViewPdfDropdownOpen] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<{ message: string; details?: string; abortInfo?: string } | null>(null);
   const [generatedPaymentLink, setGeneratedPaymentLink] = useState<{ consultationId: string; url: string } | null>(null);
@@ -2822,7 +2823,7 @@ export default function MedicalConsultationsCard({
     }
   }
 
-  async function handleSendInvoiceEmail(invoiceId: string, pdfPath: string | null) {
+  async function handleSendInvoiceEmail(invoiceId: string, pdfPath: string | null, documentType?: string) {
     if (!patientEmail) {
       alert("Patient has no email address.");
       return;
@@ -2837,7 +2838,7 @@ export default function MedicalConsultationsCard({
       const res = await fetch("/api/invoices/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceId, recipientEmail: patientEmail }),
+        body: JSON.stringify({ invoiceId, recipientEmail: patientEmail, ...(documentType ? { documentType } : {}) }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -8000,19 +8001,58 @@ export default function MedicalConsultationsCard({
                               )}
                             </div>
 
-                            {/* Send Email — visible only when patient has an email */}
-                            {patientEmail && (
+                            {/* Email to patient — dropdown of already-generated doc types */}
+                            <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setEmailDropdownOpen(null); }}>
                               <button
                                 type="button"
-                                onClick={() => handleSendInvoiceEmail(row.id, row.invoice_pdf_path)}
                                 disabled={sendingEmail === row.id}
-                                title={!row.invoice_pdf_path ? "Generate a PDF first" : `Send invoice to ${patientEmail}`}
-                                className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                                title={!patientEmail ? "No email on file for this patient" : undefined}
+                                onClick={() => {
+                                  if (!patientEmail) return;
+                                  setEmailDropdownOpen(emailDropdownOpen === row.id ? null : row.id);
+                                }}
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium transition-colors disabled:opacity-50 ${
+                                  !patientEmail
+                                    ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
+                                    : "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                                }`}
                               >
                                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                                {sendingEmail === row.id ? "Sending..." : "Send Email"}
+                                {sendingEmail === row.id ? "Sending..." : "Email to patient"}
+                                {patientEmail && <svg className="h-2.5 w-2.5 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>}
                               </button>
-                            )}
+
+                              {emailDropdownOpen === row.id && patientEmail && (
+                                <div className="absolute left-0 top-full z-30 mt-1 min-w-[190px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                                  {/* Show only types that have been generated */}
+                                  {[
+                                    { type: "tg", label: "Invoice (patient / TG)", path: row.invoice_pdf_path_tg },
+                                    { type: "tp", label: "Invoice (insurance / TP)", path: row.invoice_pdf_path_tp },
+                                    { type: "reminder", label: "Reminder", path: row.invoice_pdf_path_reminder },
+                                    { type: "receipt", label: "Patient receipt", path: row.invoice_pdf_path_receipt },
+                                  ].map(({ type, label, path }) =>
+                                    path ? (
+                                      <button
+                                        key={type}
+                                        type="button"
+                                        onClick={() => {
+                                          setEmailDropdownOpen(null);
+                                          handleSendInvoiceEmail(row.id, path, type);
+                                        }}
+                                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"
+                                      >
+                                        <svg className="h-3 w-3 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" /></svg>
+                                        {label}
+                                      </button>
+                                    ) : null
+                                  )}
+                                  {/* If nothing generated yet */}
+                                  {!row.invoice_pdf_path_tg && !row.invoice_pdf_path_tp && !row.invoice_pdf_path_reminder && !row.invoice_pdf_path_receipt && (
+                                    <p className="px-3 py-2 text-[11px] text-slate-400 italic">No PDF generated yet. Use Generate PDF first.</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
 
                             <div className="h-4 w-px bg-slate-200" />
 
