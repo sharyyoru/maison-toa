@@ -5,18 +5,6 @@ import { FileText, Download, Eye, Search, FolderOpen, X, Loader2, Pencil } from 
 import { useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
 
-const OnlyOfficeEditor = dynamic(() => import("@/components/OnlyOfficeEditor"), {
-  ssr: false,
-  loading: () => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
-      <div className="text-center">
-        <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-sky-200 border-t-sky-500" />
-        <p className="text-slate-600">Loading editor...</p>
-      </div>
-    </div>
-  ),
-});
-
 const DocxPreviewEditor = dynamic(() => import("@/components/DocxEditor/DocxPreviewEditor"), {
   ssr: false,
   loading: () => (
@@ -117,16 +105,6 @@ export default function PatientTemplatesTab({
   const [editingDocument, setEditingDocument] = useState<EditingDocument | null>(null);
   const [generating, setGenerating] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [useOnlyOffice, setUseOnlyOffice] = useState<boolean | null>(null);
-  const [onlyOfficeFailed, setOnlyOfficeFailed] = useState(false);
-
-  // Check if OnlyOffice URL is configured
-  useEffect(() => {
-    const onlyOfficeUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL;
-    console.log("[Templates] OnlyOffice URL:", onlyOfficeUrl);
-    setUseOnlyOffice(!!onlyOfficeUrl);
-  }, []);
-
   const patientData = {
     firstName: patientFirstName,
     lastName: patientLastName,
@@ -225,25 +203,19 @@ export default function PatientTemplatesTab({
 
   const handleEdit = async (template: Template) => {
     const documentKey = `${patientId}-${template.name}-${Date.now()}`;
-    
-    if (useOnlyOffice) {
-      // Use OnlyOffice
-      setEditingDocument({ template, documentKey });
-    } else {
-      // Fallback: fetch blob for DocxPreviewEditor
-      try {
-        const response = await fetch("/api/templates/preview", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ templateName: template.name, patientId }),
-        });
-        if (!response.ok) throw new Error("Failed to load document");
-        const blob = await response.blob();
-        setEditingDocument({ template, documentKey, blob });
-      } catch (err) {
-        console.error("Error loading document:", err);
-        setError(t("generateError"));
-      }
+
+    try {
+      const response = await fetch("/api/templates/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateName: template.name, patientId }),
+      });
+      if (!response.ok) throw new Error("Failed to load document");
+      const blob = await response.blob();
+      setEditingDocument({ template, documentKey, blob });
+    } catch (err) {
+      console.error("Error loading document:", err);
+      setError(t("generateError"));
     }
   };
 
@@ -262,7 +234,6 @@ export default function PatientTemplatesTab({
 
   const closeEditor = () => {
     setEditingDocument(null);
-    setOnlyOfficeFailed(false);
   };
 
   const closePreview = () => {
@@ -466,49 +437,9 @@ export default function PatientTemplatesTab({
         </div>
       )}
 
-      {/* Document Editor - OnlyOffice or Fallback */}
+      {/* Document Editor */}
       {editingDocument && (
-        useOnlyOffice && !onlyOfficeFailed && !editingDocument.blob ? (
-          <div className="fixed inset-0 z-50 flex flex-col bg-white">
-            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-800 px-4 py-3">
-              <h2 className="text-sm font-semibold text-white">
-                {editingDocument.template.displayName}
-              </h2>
-              <button
-                onClick={closeEditor}
-                className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
-              >
-                {t("close")}
-              </button>
-            </div>
-            <div className="flex-1">
-              <OnlyOfficeEditor
-                documentUrl={`${window.location.origin}/api/templates/serve?template=${encodeURIComponent(editingDocument.template.name)}&patientId=${patientId}`}
-                documentKey={editingDocument.documentKey}
-                documentTitle={editingDocument.template.displayName}
-                fileType="docx"
-                mode="edit"
-                userName={patientName}
-                onClose={closeEditor}
-                onError={async (err) => {
-                  console.error("OnlyOffice error:", err);
-                  // Auto-fallback to DocxPreviewEditor
-                  setOnlyOfficeFailed(true);
-                  try {
-                    const response = await fetch(`/api/templates/serve?template=${encodeURIComponent(editingDocument.template.name)}&patientId=${patientId}`);
-                    if (response.ok) {
-                      const blob = await response.blob();
-                      setEditingDocument({ ...editingDocument, blob });
-                    }
-                  } catch (e) {
-                    console.error("Fallback also failed:", e);
-                    setError(t("loadError"));
-                  }
-                }}
-              />
-            </div>
-          </div>
-        ) : editingDocument.blob ? (
+        editingDocument.blob ? (
           <DocxPreviewEditor
             documentBlob={editingDocument.blob}
             documentTitle={editingDocument.template.displayName}
