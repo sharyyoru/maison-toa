@@ -354,7 +354,11 @@ export async function POST(request: NextRequest) {
       const sumexServices: SumexServiceInput[] = lineItems.map((item: any) => {
         // Resolve tariff_type honoring `catalog_name` first so TMA gestures
         // emit as "TMA". See src/lib/tariffType.ts.
-        const tariffType = deriveTariffType(item);
+        // Remap unknown tariff types (e.g. "999", "TMA") to "590" — Sumex silently returns 204
+        // for unrecognised tariff types. Patient PDFs don't need strict tariff enforcement.
+        const rawTariffType = deriveTariffType(item);
+        const KNOWN_PDF_TARIFFS = new Set(["001","005","007","406","590"]);
+        const tariffType = KNOWN_PDF_TARIFFS.has(rawTariffType) ? rawTariffType : "590";
         const svcGln = isValidGln(item.provider_gln) ? item.provider_gln : provGln;
         const svcRespGln = isValidGln(item.responsible_gln) ? item.responsible_gln : svcGln;
 
@@ -385,11 +389,9 @@ export async function POST(request: NextRequest) {
           calculatedAmount = item.total_price || 0;
         }
 
-        // Use deriveTariffType result directly (falls back to "590" for plain/free-text lines).
-        // For tariff "590", Sumex rejects an empty/whitespace code with [929] even with
-        // ignoreValidate=Yes — use "0" as a safe placeholder when no real code exists.
-        // Do NOT use tariff "999": it is not a recognized Sumex tariff type and causes [813].
-        const resolvedCode = item.code || item.tardoc_code || (tariffType === "590" ? "0" : "");
+        // For tariff "590" always use "0" — any other code causes Sumex to return 204 silently.
+        // For other tariffs use the real code.
+        const resolvedCode = tariffType === "590" ? "0" : (item.code || item.tardoc_code || "");
 
         return {
           tariffType,
@@ -406,8 +408,8 @@ export async function POST(request: NextRequest) {
           unitFactor,
           externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
           amount: calculatedAmount,
-          // TARDOC/ACF/TARMED lines are always VAT-exempt for insurer billing.
-          vatRate: (isTardoc || isTarmed || isAcf) ? 0 : (Number(item.vat_rate_value) || 0),
+          // TARDOC/ACF/TARMED and free-text (590) lines use VAT 0.
+          vatRate: (isTardoc || isTarmed || isAcf || tariffType === "590") ? 0 : (Number(item.vat_rate_value) || 0),
           ignoreValidate: YesNo.Yes,
         };
       });
@@ -654,9 +656,10 @@ export async function POST(request: NextRequest) {
       const sumexServices2: SumexServiceInput[] = lineItems.map((item: any) => {
         const svcGln = isValidGln2(item.provider_gln) ? item.provider_gln : provGln;
         const svcRespGln = isValidGln2(item.responsible_gln) ? item.responsible_gln : svcGln;
-        // Resolve tariff_type honoring `catalog_name` first so TMA gestures
-        // emit as "TMA". See src/lib/tariffType.ts.
-        const tariffType = deriveTariffType(item);
+        // Resolve tariff_type. Remap unknown types to "590" — same logic as insurance path above.
+        const rawTariffType2 = deriveTariffType(item);
+        const KNOWN_PDF_TARIFFS2 = new Set(["001","005","007","406","590"]);
+        const tariffType = KNOWN_PDF_TARIFFS2.has(rawTariffType2) ? rawTariffType2 : "590";
         const isTardoc2 = item.tariff_code === 7 || tariffType === "007";
         const isTarmed2 = item.tariff_code === 1 || tariffType === "001";
         const isAcf2 = tariffType === "005";
@@ -670,11 +673,8 @@ export async function POST(request: NextRequest) {
         } else {
           unit2 = item.unit_price || 0; unitFactor2 = 1; amt2 = item.total_price || 0;
         }
-        // Use deriveTariffType result directly (falls back to "590" for plain/free-text lines).
-        // For tariff "590", Sumex rejects an empty/whitespace code with [929] even with
-        // ignoreValidate=Yes — use "0" as a safe placeholder when no real code exists.
-        // Do NOT use tariff "999": it is not a recognized Sumex tariff type and causes [813].
-        const resolvedCode2 = item.code || item.tardoc_code || (tariffType === "590" ? "0" : "");
+        // For tariff "590" always use "0" — any other code causes Sumex to return 204 silently.
+        const resolvedCode2 = tariffType === "590" ? "0" : (item.code || item.tardoc_code || "");
 
         return {
           tariffType,
@@ -691,7 +691,8 @@ export async function POST(request: NextRequest) {
           unitFactor: unitFactor2,
           externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
           amount: amt2,
-          vatRate: (isTardoc2 || isTarmed2 || isAcf2) ? 0 : (Number(item.vat_rate_value) || 0),
+          // Tariff 590 (free-text): VAT must be 0 — non-zero dVatRate causes GetXML to return 204.
+          vatRate: (isTardoc2 || isTarmed2 || isAcf2 || tariffType === "590") ? 0 : (Number(item.vat_rate_value) || 0),
           ignoreValidate: YesNo.Yes,
         };
       });
@@ -732,7 +733,9 @@ export async function POST(request: NextRequest) {
         // With ORG + feeDetail template + printPatientInvoiceOnly=No → single page
         // "Facture d'honoraires" with service lines table + QR bill (matches sample invoice_65251).
         // printPatientInvoiceOnly=Yes would suppress feeDetail in favour of feeSummary (totals only).
-        lawType: mapSumexLaw(invoiceData.health_insurance_law || "ORG"),
+        // Always ORG for non-insurance path — KVG/UVG here means Sumex expects insurer
+        // data that doesn't exist, causing it to silently return 204 at GetXML.
+        lawType: mapSumexLaw("ORG"),
         esrType: EsrType.QR,
         iban: provIbanSumex,
         paymentPeriod: 30,
