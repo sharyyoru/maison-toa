@@ -173,6 +173,10 @@ export default function InvoicesPage() {
   const [bulkEmailDocTypeOpen, setBulkEmailDocTypeOpen] = useState(false);
   const [bulkEmailDocType, setBulkEmailDocType] = useState<string>("tg");
 
+  // Bulk generate doc-type picker
+  const [bulkGenerateDocTypeOpen, setBulkGenerateDocTypeOpen] = useState(false);
+  const [bulkGenerateDocType, setBulkGenerateDocType] = useState<string>("tg");
+
   // Insurance modal state
   const [insuranceModalOpen, setInsuranceModalOpen] = useState(false);
   const [insuranceTarget, setInsuranceTarget] = useState<InvoiceRow | null>(null);
@@ -472,24 +476,18 @@ export default function InvoicesPage() {
   // Bulk actions
   // ---------------------------------------------------------------------------
 
-  const handleBulkGeneratePdf = async () => {
-    const ids = Array.from(selected);
-    if (ids.length === 0) return;
-    if (!confirm(`Generate/regenerate PDF for ${ids.length} invoice(s)?`)) return;
-    setBulkAction("pdf");
-    for (const id of ids) await handleGeneratePdf(id);
-    setBulkAction(null);
+  const handleBulkGeneratePdf = () => {
+    setBulkGenerateDocType("tg");
+    setBulkGenerateDocTypeOpen(true);
   };
 
-  const handleBulkGenerateReceipt = async () => {
-    const receiptIds = Array.from(selected).filter(id => {
-      const inv = invoices.find(r => r.id === id);
-      return inv && RECEIPT_STATUSES.includes(inv.status);
-    });
-    if (receiptIds.length === 0) { alert("No paid/partial invoices selected."); return; }
-    if (!confirm(`Generate receipt PDF for ${receiptIds.length} invoice(s)?`)) return;
-    setBulkAction("receipt");
-    for (const id of receiptIds) await handleGeneratePdf(id, "receipt");
+  const handleBulkGeneratePdfConfirm = async (docType: string, reminderLevel = 1) => {
+    setBulkGenerateDocTypeOpen(false);
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    if (!confirm(`Generate ${docType.toUpperCase()} PDF for ${ids.length} invoice(s)?`)) return;
+    setBulkAction("pdf");
+    for (const id of ids) await handleGeneratePdf(id, docType as "tg" | "tp" | "reminder" | "receipt", reminderLevel);
     setBulkAction(null);
   };
 
@@ -835,11 +833,7 @@ export default function InvoicesPage() {
           <div className="h-4 w-px bg-sky-200" />
           <button type="button" onClick={handleBulkGeneratePdf} disabled={!!bulkAction} className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50 transition-colors">
             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            {bulkAction === "pdf" ? "Generating..." : "Bulk Generate PDF"}
-          </button>
-          <button type="button" onClick={handleBulkGenerateReceipt} disabled={!!bulkAction} className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 transition-colors">
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            {bulkAction === "receipt" ? "Generating..." : "Bulk Generate Receipt"}
+            {bulkAction === "pdf" ? "Generating..." : "Bulk Generate PDF ▾"}
           </button>
           <button type="button" onClick={handleBulkSendEmail} disabled={!!bulkAction} className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition-colors">
             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
@@ -1249,6 +1243,61 @@ export default function InvoicesPage() {
             </div>
 
             <p className="mt-3 text-[10px] text-slate-400">To send a type not yet generated, close this modal and use the PDF ▾ button first.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk generate doc-type picker ───────────────────────────────────── */}
+      {bulkGenerateDocTypeOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50" onClick={(e) => { if (e.target === e.currentTarget) setBulkGenerateDocTypeOpen(false); }}>
+          <div className="relative w-full max-w-xs rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between">
+              <h2 className="text-base font-semibold text-slate-900">Bulk Generate PDF</h2>
+              <button onClick={() => setBulkGenerateDocTypeOpen(false)} className="rounded-full p-1 text-slate-400 hover:bg-slate-100">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <p className="mb-3 text-[11px] text-slate-500">Which document type should be generated for all {selected.size} selected invoice(s)?</p>
+
+            <div className="space-y-1.5">
+              {([
+                { type: "tg",         label: "Invoice (patient / TG)",     reminder: null },
+                { type: "tp",         label: "Invoice (insurance / TP)",    reminder: null },
+                { type: "reminder_1", label: "Reminder (1st)",              reminder: 1 },
+                { type: "reminder_2", label: "Reminder (2nd)",              reminder: 2 },
+                { type: "reminder_3", label: "Reminder (3rd)",              reminder: 3 },
+                { type: "receipt",    label: "Patient receipt",             reminder: null },
+              ] as { type: string; label: string; reminder: number | null }[]).map(({ type, label }) => (
+                <label key={type} className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${bulkGenerateDocType === type ? "border-violet-300 bg-violet-50" : "border-slate-200 hover:border-slate-300"}`}>
+                  <input
+                    type="radio"
+                    name="bulkGenDocType"
+                    value={type}
+                    checked={bulkGenerateDocType === type}
+                    onChange={() => setBulkGenerateDocType(type)}
+                    className="h-3.5 w-3.5 text-violet-600 focus:ring-violet-500"
+                  />
+                  <span className="text-[12px] font-medium text-slate-700">{label}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setBulkGenerateDocTypeOpen(false)} className="rounded-full border border-slate-200 px-4 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button
+                type="button"
+                onClick={() => {
+                  const isReminder = bulkGenerateDocType.startsWith("reminder_");
+                  const level = isReminder ? parseInt(bulkGenerateDocType.split("_")[1]) : 1;
+                  const baseType = isReminder ? "reminder" : bulkGenerateDocType;
+                  handleBulkGeneratePdfConfirm(baseType, level);
+                }}
+                className="rounded-full bg-violet-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-violet-700"
+              >
+                Generate for {selected.size} invoice(s)
+              </button>
+            </div>
           </div>
         </div>
       )}
