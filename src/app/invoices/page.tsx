@@ -162,8 +162,9 @@ export default function InvoicesPage() {
   const [sendingEmail, setSendingEmail] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<string | null>(null);
 
-  // Per-row PDF generate dropdown
+  // Per-row PDF generate dropdown (fixed-positioned to escape overflow:auto clipping)
   const [pdfDropdownOpen, setPdfDropdownOpen] = useState<string | null>(null);
+  const [pdfDropdownPos, setPdfDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   // Per-row email modal
   const [emailModalInvoice, setEmailModalInvoice] = useState<InvoiceRow | null>(null);
@@ -943,29 +944,22 @@ export default function InvoicesPage() {
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-center gap-1">
 
-                        {/* Generate PDF — dropdown */}
+                        {/* Generate PDF — dropdown (fixed-positioned to escape overflow:auto) */}
                         <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setPdfDropdownOpen(null); }}>
                           <button
                             type="button"
                             disabled={isGenerating}
-                            onClick={() => setPdfDropdownOpen(pdfDropdownOpen === row.id ? null : row.id)}
+                            onClick={(e) => {
+                              if (pdfDropdownOpen === row.id) { setPdfDropdownOpen(null); return; }
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                              setPdfDropdownPos({ top: rect.bottom + 4, left: rect.left });
+                              setPdfDropdownOpen(row.id);
+                            }}
                             className="inline-flex items-center gap-0.5 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50 transition-colors"
                             title="Generate PDF"
                           >
                             {isGenerating ? "..." : "PDF ▾"}
                           </button>
-                          {pdfDropdownOpen === row.id && (
-                            <div className="absolute left-0 top-full z-30 mt-0.5 min-w-[160px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                              <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(row.id, "tg"); }}>Invoice (patient / TG)</button>
-                              <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(row.id, "tp"); }}>Invoice (insurance / TP)</button>
-                              <div className="my-1 border-t border-slate-100" />
-                              <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(row.id, "reminder", 1); }}>Reminder (1st)</button>
-                              <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(row.id, "reminder", 2); }}>Reminder (2nd)</button>
-                              <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(row.id, "reminder", 3); }}>Reminder (3rd)</button>
-                              <div className="my-1 border-t border-slate-100" />
-                              <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(row.id, "receipt"); }}>Patient receipt</button>
-                            </div>
-                          )}
                         </div>
 
                         {/* Email to patient — opens modal picker */}
@@ -1181,6 +1175,27 @@ export default function InvoicesPage() {
           </div>
         </div>
       )}
+      {/* ── PDF dropdown panel — fixed-positioned to escape overflow:auto ── */}
+      {pdfDropdownOpen && (
+        <>
+          {/* backdrop to close on outside click */}
+          <div className="fixed inset-0 z-40" onClick={() => setPdfDropdownOpen(null)} />
+          <div
+            className="fixed z-50 min-w-[168px] rounded-lg border border-slate-200 bg-white py-1 shadow-xl"
+            style={{ top: pdfDropdownPos.top, left: pdfDropdownPos.left }}
+          >
+            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "tg"); }}>Invoice (patient / TG)</button>
+            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "tp"); }}>Invoice (insurance / TP)</button>
+            <div className="my-1 border-t border-slate-100" />
+            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "reminder", 1); }}>Reminder (1st)</button>
+            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "reminder", 2); }}>Reminder (2nd)</button>
+            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "reminder", 3); }}>Reminder (3rd)</button>
+            <div className="my-1 border-t border-slate-100" />
+            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "receipt"); }}>Patient receipt</button>
+          </div>
+        </>
+      )}
+
       {/* ── Email to patient modal (per-row) ─────────────────────────────── */}
       {emailModalInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50" onClick={(e) => { if (e.target === e.currentTarget) setEmailModalInvoice(null); }}>
