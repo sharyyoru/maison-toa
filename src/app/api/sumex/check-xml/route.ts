@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
       // Legacy compat: also accept consultationId as alias
       consultationId,
       patientId: bodyPatientId,
+      skipValidation = false,
     } = body;
 
     const resolvedInvoiceId = invoiceId || consultationId;
@@ -256,7 +257,7 @@ export async function POST(request: NextRequest) {
         externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : 1,
         amount: item.total_price || 0,
         vatRate: 0,
-        ignoreValidate: YesNo.Yes,
+        ignoreValidate: skipValidation ? YesNo.Yes : YesNo.No,
       };
     });
 
@@ -381,10 +382,17 @@ export async function POST(request: NextRequest) {
           ? staffEntity.qual_dignities as string[]
           : (billingEntity?.qual_dignities && (billingEntity.qual_dignities as string[]).length > 0)
             ? billingEntity.qual_dignities as string[]
-            : undefined,
+            // When skipValidation is true, use a placeholder so buildInvoiceRequest doesn't throw.
+            // For normal validation runs, leave undefined so the guard in buildInvoiceRequest catches it.
+            : (skipValidation ? ["0000"] : undefined),
     };
 
-    console.log(`[CheckXML] Building XML: ${sumexServices.length} services, ${sumexDiagnoses.length} diagnoses, IBAN=${provIban}, biller=${provGln}`);
+    // When skipValidation is true and qualDignities still ended up undefined, force placeholder.
+    if (skipValidation && (!sumexInput.qualDignities || sumexInput.qualDignities.length === 0)) {
+      (sumexInput as any).qualDignities = ["0000"];
+    }
+
+    console.log(`[CheckXML] Building XML: ${sumexServices.length} services, ${sumexDiagnoses.length} diagnoses, IBAN=${provIban}, biller=${provGln}, skipValidation=${skipValidation}`);
 
     // Generate XML only (no PDF for check)
     const result = await buildInvoiceRequest(sumexInput);
