@@ -683,12 +683,15 @@ async function setupAddress(
   }
 
   // Postal
+  // Strip trailing canton code from city name (e.g. "Renens VD" → "Renens").
+  // Sumex accepts the full string in SetPostal but then silently returns 204 at GetXML.
+  const cleanCity = (addr.city || "").replace(/\s+[A-Z]{2}$/, "").trim();
   await reqPost("IAddress", "SetPostal", {
     pIAddress: addrHandle,
     bstrStreet: addr.street || "",
     bstrPoBox: addr.poBox || "",
     bstrZip: addr.zip || "",
-    bstrCity: addr.city || "",
+    bstrCity: cleanCity,
     bstrStateCode: addr.stateCode || "",
     bstrCountry: addr.country || "",
     bstrCountryCode: addr.countryCode || "",

@@ -377,10 +377,10 @@ export async function POST(request: NextRequest) {
           unitFactor = 1;
           calculatedAmount = unit * (item.quantity || 1);
         } else if (isTardoc || isAcf) {
-          // TARDOC and ACF: use tp_al (tax points) and tp_al_value (point value / Taxpunktwert).
-          // sumexInvoice.ts defaults unitTT to svc.unitTT ?? 0, so TT component is zero
-          // unless the caller explicitly sets it. This matches the working aestheticclinic pattern.
-          unit = item.tp_al || 0;
+          // TARDOC/ACF: tp_al = MT tax points, tp_tl = TT tax points (technical component).
+          // AR.* codes are pure-TT (tp_al=0) — must pass unitTT/unitFactorTT or Finalize
+          // gets a rounding mismatch and GetXML returns 204 silently.
+          unit = item.tp_al ?? 0;
           unitFactor = item.tp_al_value || 1;
           calculatedAmount = item.total_price || 0;
         } else {
@@ -388,6 +388,10 @@ export async function POST(request: NextRequest) {
           unitFactor = 1;
           calculatedAmount = item.total_price || 0;
         }
+
+        // TT (technical tariff) component for TARDOC/ACF — needed for AR.* codes.
+        const unitTT = (isTardoc || isAcf) && item.tp_tl > 0 ? item.tp_tl : undefined;
+        const unitFactorTT = (isTardoc || isAcf) && item.tp_tl_value > 0 ? item.tp_tl_value : undefined;
 
         // For tariff "590" always use "0" — any other code causes Sumex to return 204 silently.
         // For other tariffs use the real code.
@@ -406,6 +410,8 @@ export async function POST(request: NextRequest) {
           serviceName: item.name || "",
           unit,
           unitFactor,
+          unitTT,
+          unitFactorTT,
           externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
           amount: calculatedAmount,
           // TARDOC/ACF/TARMED and free-text (590) lines use VAT 0.
