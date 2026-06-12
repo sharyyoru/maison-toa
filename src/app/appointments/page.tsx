@@ -816,6 +816,7 @@ export default function CalendarPage() {
   });
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => initialDate);
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
+  const [appointmentsReloadVersion, setAppointmentsReloadVersion] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [patientSearch, setPatientSearch] = useState("");
@@ -1246,7 +1247,7 @@ export default function CalendarPage() {
     return () => {
       isMounted = false;
     };
-  }, [monthStart, monthEnd, view, selectedDate, rangeEndDate]);
+  }, [monthStart, monthEnd, view, selectedDate, rangeEndDate, appointmentsReloadVersion]);
 
   // Compute, per patient, the earliest appointment start_time across all time.
   // Used to render the "new patient" badge only on the first appointment.
@@ -3499,15 +3500,15 @@ export default function CalendarPage() {
     const end = appt.end_time ? new Date(appt.end_time) : null;
     const durationMinutes = end ? Math.round((end.getTime() - start.getTime()) / 60000) : 30;
     
-    // Build new times
+    // Build timezone-explicit timestamps so persisted times match the Swiss
+    // calendar position regardless of the browser or server timezone.
+    const targetDateStr = formatSwissYmd(targetDate);
     const newStartHours = Math.floor(targetMinutes / 60);
     const newStartMins = targetMinutes % 60;
-    const newStartTime = `${formatYmd(targetDate)}T${String(newStartHours).padStart(2, "0")}:${String(newStartMins).padStart(2, "0")}:00`;
-    
-    const newEndMinutes = targetMinutes + durationMinutes;
-    const newEndHours = Math.floor(newEndMinutes / 60);
-    const newEndMins = newEndMinutes % 60;
-    const newEndTime = `${formatYmd(targetDate)}T${String(newEndHours).padStart(2, "0")}:${String(newEndMins).padStart(2, "0")}:00`;
+    const newStartDate = createSwissDateTime(targetDateStr, newStartHours, newStartMins);
+    const newEndDate = new Date(newStartDate.getTime() + durationMinutes * 60 * 1000);
+    const newStartTime = newStartDate.toISOString();
+    const newEndTime = newEndDate.toISOString();
 
     // Optimistic update
     setAppointments(prev => prev.map(a => 
@@ -3541,7 +3542,13 @@ export default function CalendarPage() {
             ? { ...a, provider_id: originalDoctorId, start_time: originalStartTime, end_time: appt.end_time }
             : a
         ));
+        return;
       }
+
+      // Cancel any in-flight calendar load started during the move and reload
+      // from the persisted row. This prevents date navigation from restoring a
+      // stale pre-move time after the optimistic update.
+      setAppointmentsReloadVersion((version) => version + 1);
     } catch (err) {
       console.error("Error moving appointment:", err);
       // Revert on error
