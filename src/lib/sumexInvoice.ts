@@ -703,15 +703,19 @@ async function setupAddress(
     });
   }
 
-  // Phone
+  // Phone — take only the first number if comma/semicolon-separated.
+  // Sumex accepts AddPhone with a multi-value string but then silently returns 204 at GetXML.
   if (addr.phone) {
-    await reqPost("IAddress", "AddPhone", {
-      pIAddress: addrHandle,
-      bstrNumber: addr.phone,
-      bstrLocalCode: addr.phoneLocalCode || "",
-      bstrInternationalCode: "",
-      bstrExt: "",
-    });
+    const firstPhone = addr.phone.split(/[,;]/)[0].trim();
+    if (firstPhone) {
+      await reqPost("IAddress", "AddPhone", {
+        pIAddress: addrHandle,
+        bstrNumber: firstPhone,
+        bstrLocalCode: addr.phoneLocalCode || "",
+        bstrInternationalCode: "",
+        bstrExt: "",
+      });
+    }
   }
 
   return addrHandle;
