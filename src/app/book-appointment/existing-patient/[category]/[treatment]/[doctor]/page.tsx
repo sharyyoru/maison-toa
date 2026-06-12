@@ -972,12 +972,12 @@ function DoctorBookingContent() {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">{t("booking.notes")}</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">{t("booking.notes")} *</label>
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={3}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 outline-none transition-all resize-none"
+                    className={`w-full rounded-xl border px-4 py-3 text-slate-900 focus:ring-2 outline-none transition-all resize-none ${!notes.trim() ? "border-slate-200 focus:border-slate-400 focus:ring-slate-200" : "border-green-400 focus:border-green-400 focus:ring-green-100"}`}
                     placeholder={t("booking.notesPlaceholder")}
                   />
                 </div>
@@ -991,6 +991,10 @@ function DoctorBookingContent() {
                   </button>
                   <button
                     onClick={() => {
+                      if (!notes.trim()) {
+                        setError(t("error.notesRequired") || "Please add a note about your visit before continuing.");
+                        return;
+                      }
                       if (selectedDate && selectedTime) {
                         setStep("confirm");
                         setError(null);
@@ -998,7 +1002,8 @@ function DoctorBookingContent() {
                         setError(t("error.selectDateTime"));
                       }
                     }}
-                    className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors"
+                    disabled={!notes.trim()}
+                    className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t("booking.continue")}
                   </button>

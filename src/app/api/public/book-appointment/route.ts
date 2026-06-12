@@ -744,9 +744,9 @@ export async function POST(request: Request) {
       console.log("Using provider:", providerId, "for doctor:", doctorName);
     }
 
-    // Build reason field - include [Doctor: Name], [Online Booking], [Lang: xx], and category for downstream use
+    // Build reason field - service info only, notes go into the dedicated notes column
     const categoryTag = categoryName ? ` [Category: ${categoryName}]` : "";
-    const reason = `${service}${notes ? ` - ${notes}` : ""} [Doctor: ${doctorName.replace("Dr. ", "")}] [Online Booking] [Lang: ${language}]${categoryTag}`;
+    const reason = `${service} [Doctor: ${doctorName.replace("Dr. ", "")}] [Online Booking] [Lang: ${language}]${categoryTag}`;
 
     const bookingDealStageId = await findBookingDealStageId(supabase);
     if (!bookingDealStageId) {
@@ -796,6 +796,7 @@ export async function POST(request: Request) {
         start_time: appointmentDateObj.toISOString(),
         end_time: apptEnd.toISOString(),
         reason,
+        notes: notes || null,
         location: location || "Geneva",
         status: "scheduled",
         source: "online_booking",
