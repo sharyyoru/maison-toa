@@ -162,6 +162,7 @@ function DoctorBookingContent() {
   const [phone, setPhone] = useState("");
   const [emailNotFoundError, setEmailNotFoundError] = useState(false);
   const [emailChecking, setEmailChecking] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   const [availableDatesSet, setAvailableDatesSet] = useState<Set<string>>(new Set());
   const [nearestAvailableDate, setNearestAvailableDate] = useState<string | null>(null);
@@ -453,18 +454,35 @@ function DoctorBookingContent() {
     return phoneRegex.test(phone.trim());
   };
 
+  const emailCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   async function checkEmailExists(value: string) {
-    if (!isValidEmail(value)) return;
+    if (!isValidEmail(value)) {
+      setEmailVerified(false);
+      return;
+    }
     setEmailChecking(true);
+    setEmailVerified(false);
     try {
       const res = await fetch(`/api/public/check-patient-email?email=${encodeURIComponent(value)}`);
       const data = await res.json();
-      setEmailNotFoundError(!data.exists);
+      const notFound = !data.exists;
+      setEmailNotFoundError(notFound);
+      setEmailVerified(!notFound);
     } catch {
       // silently ignore — don't block booking on network error
+      setEmailVerified(false);
     } finally {
       setEmailChecking(false);
     }
+  }
+
+  function handleEmailChange(value: string) {
+    setEmail(value);
+    setEmailNotFoundError(false);
+    setEmailVerified(false);
+    if (emailCheckTimer.current) clearTimeout(emailCheckTimer.current);
+    emailCheckTimer.current = setTimeout(() => checkEmailExists(value), 600);
   }
 
   async function handleSubmit() {
@@ -766,11 +784,12 @@ function DoctorBookingContent() {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => { setEmail(e.target.value); setEmailNotFoundError(false); }}
+                    onChange={(e) => handleEmailChange(e.target.value)}
                     onBlur={(e) => checkEmailExists(e.target.value)}
-                    className={`w-full rounded-xl border px-4 py-3 text-slate-900 focus:ring-2 outline-none transition-all ${emailNotFoundError ? "border-amber-400 focus:border-amber-400 focus:ring-amber-100" : "border-slate-200 focus:border-slate-400 focus:ring-slate-200"}`}
+                    className={`w-full rounded-xl border px-4 py-3 text-slate-900 focus:ring-2 outline-none transition-all ${emailNotFoundError ? "border-amber-400 focus:border-amber-400 focus:ring-amber-100" : emailVerified ? "border-green-400 focus:border-green-400 focus:ring-green-100" : "border-slate-200 focus:border-slate-400 focus:ring-slate-200"}`}
                   />
                   {emailChecking && <p className="text-xs text-slate-400 mt-1">Checking...</p>}
+                  {emailVerified && !emailChecking && <p className="text-xs text-green-600 mt-1">✓ Account found</p>}
                   {emailNotFoundError && (
                     <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
                       <p className="text-xs text-amber-800 mb-2">
@@ -817,9 +836,10 @@ function DoctorBookingContent() {
                       setStep("datetime");
                       setError(null);
                     }}
-                    className="w-full bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors"
+                    disabled={!emailVerified || emailChecking || emailNotFoundError}
+                    className="w-full bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {t("booking.continue")}
+                    {emailChecking ? "Checking..." : t("booking.continue")}
                   </button>
                 </div>
               </div>
