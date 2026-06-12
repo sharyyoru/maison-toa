@@ -962,6 +962,7 @@ export default function CalendarPage() {
   const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
   const [durationSearch, setDurationSearch] = useState("");
   const [durationDropdownOpen, setDurationDropdownOpen] = useState(false);
+  const preserveDurationOnNextServiceSyncRef = useRef(false);
   const [timeSearch, setTimeSearch] = useState("");
   const [timeDropdownOpen, setTimeDropdownOpen] = useState(false);
   const [createDoctorCalendarId, setCreateDoctorCalendarId] = useState("");
@@ -1745,6 +1746,11 @@ export default function CalendarPage() {
   
   // Auto-update consultation duration when services change
   useEffect(() => {
+    if (preserveDurationOnNextServiceSyncRef.current) {
+      preserveDurationOnNextServiceSyncRef.current = false;
+      return;
+    }
+
     if (selectedServiceIds.length > 0) {
       const calculatedDuration = calculateTotalDuration(
         selectedServiceIds,
@@ -3154,6 +3160,14 @@ export default function CalendarPage() {
     // Extract data from copied appointment
     const { serviceLabel, statusLabel } = getServiceAndStatusFromReason(copiedAppointment.reason);
     const categoryFromReason = getCategoryFromReason(copiedAppointment.reason);
+    const copiedStart = new Date(copiedAppointment.start_time);
+    const copiedEnd = copiedAppointment.end_time ? new Date(copiedAppointment.end_time) : null;
+    const copiedDurationMinutes =
+      !Number.isNaN(copiedStart.getTime()) &&
+      copiedEnd &&
+      !Number.isNaN(copiedEnd.getTime())
+        ? Math.round((copiedEnd.getTime() - copiedStart.getTime()) / (60 * 1000))
+        : 0;
 
     // Handle multiple services (comma-separated) or single service
     const matchedServices: Array<{ id: string; name: string }> = [];
@@ -3219,6 +3233,9 @@ export default function CalendarPage() {
     }
 
     if (matchedServices.length > 0) {
+      // Service selection normally applies the service defaults. During paste,
+      // preserve the copied appointment's actual duration instead.
+      preserveDurationOnNextServiceSyncRef.current = copiedDurationMinutes > 0;
       // Use first service for single-select field (backward compatibility)
       setSelectedServiceId(matchedServices[0].id);
       // Selected services are already rendered as chips. Keep the search input
@@ -3252,15 +3269,10 @@ export default function CalendarPage() {
     setDraftDescription(copiedNotes);
 
     // Set duration from copied appointment
-    const start = new Date(copiedAppointment.start_time);
-    const end = copiedAppointment.end_time ? new Date(copiedAppointment.end_time) : null;
-    if (!Number.isNaN(start.getTime()) && end && !Number.isNaN(end.getTime())) {
-      const diffMinutes = Math.round((end.getTime() - start.getTime()) / (60 * 1000));
-      if (diffMinutes > 0) {
-        setConsultationDuration(diffMinutes);
-        const durationOption = CONSULTATION_DURATION_OPTIONS.find(opt => opt.value === diffMinutes);
-        setDurationSearch(durationOption ? durationOption.label : `${diffMinutes} minutes`);
-      }
+    if (copiedDurationMinutes > 0) {
+      setConsultationDuration(copiedDurationMinutes);
+      const durationOption = CONSULTATION_DURATION_OPTIONS.find(opt => opt.value === copiedDurationMinutes);
+      setDurationSearch(durationOption ? durationOption.label : `${copiedDurationMinutes} minutes`);
     }
     
     // For cross-agenda paste: smart doctor selection
