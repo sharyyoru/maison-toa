@@ -43,7 +43,7 @@ type FilterState = {
 function detectEmailType(subject: string): EmailType {
   const s = subject.toLowerCase();
   if (s.includes("reminder") || s.includes("rappel")) return "reminder";
-  if (s.includes("appointment") || s.includes("rendez-vous") || s.includes("rendez-vous") || s.includes("booking") || s.includes("confirmation")) return "confirmation";
+  if (s.includes("appointment") || s.includes("rendez-vous") || s.includes("booking") || s.includes("confirmation") || s.includes("votre rendez")) return "confirmation";
   if (s.includes("form") || s.includes("formulaire") || s.includes("fiche")) return "form";
   return "other";
 }
