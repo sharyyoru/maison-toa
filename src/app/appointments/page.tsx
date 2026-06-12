@@ -3221,7 +3221,9 @@ export default function CalendarPage() {
     if (matchedServices.length > 0) {
       // Use first service for single-select field (backward compatibility)
       setSelectedServiceId(matchedServices[0].id);
-      setServiceSearch(matchedServices[0].name);
+      // Selected services are already rendered as chips. Keep the search input
+      // empty so a pasted appointment does not display the service twice.
+      setServiceSearch("");
       // Set all matched services for multi-select
       setSelectedServiceIds(matchedServices.map(s => s.id));
       const quantities: Record<string, number> = {};
