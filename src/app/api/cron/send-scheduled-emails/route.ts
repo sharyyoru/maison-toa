@@ -82,16 +82,32 @@ export async function GET(request: Request) {
             email.body
           );
 
-          // Update status in database
+          // Update status in scheduled_emails
+          const sentAt = new Date().toISOString();
           const newStatus = success ? "sent" : "failed";
           await supabase
             .from("scheduled_emails")
             .update({
               status: newStatus,
-              sent_at: success ? new Date().toISOString() : null,
+              sent_at: success ? sentAt : null,
               error: success ? null : "Failed to send via Resend",
             })
             .eq("id", email.id);
+
+          // Log to emails table so it appears in /email-reports
+          if (success) {
+            await supabase.from("emails").insert({
+              patient_id: email.patient_id ?? null,
+              to_address: email.recipient_email,
+              from_address: process.env.EMAIL_FROM_ADDRESS ?? "info@mail.maisontoa.com",
+              subject: email.subject,
+              body: email.body,
+              status: "sent",
+              direction: "outbound",
+              sent_at: sentAt,
+              is_demo: false,
+            });
+          }
 
           return success;
         })
