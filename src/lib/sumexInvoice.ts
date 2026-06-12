@@ -1263,7 +1263,179 @@ export async function buildInvoiceRequest(
         // Initialize the IServiceExInput with physician, patient, treatment data
         await initServiceExInput(svcInputHandle, input);
 
-        for (const svc of tardocServices) {
+        // TARDOC ordering rules — two constraints that must both be satisfied:
+        //
+        // [816] Reference-before-dependant: if service X has referenceCode="Y",
+        //       then Y must have been added (AddServiceEx) before X. Sumex uses
+        //       the reference to look up the session anchor / IServiceExInput.
+        //
+        // [817] Surcharge-after-base: a service whose name starts with "+" is a
+        //       surcharge addendum and must immediately follow its base service
+        //       (the non-surcharge with the largest code number that is still
+        //       less than the surcharge's code number, within the same chapter).
+        //
+        // Algorithm (two-pass):
+        //   Pass 1 — topological sort on referenceCode dependencies so every
+        //            referenced service appears before its dependants.
+        //   Pass 2 — within each chapter prefix, re-insert "+" surcharges so they
+        //            immediately follow their base service.
+        const sortedTardoc = (() => {
+          // Surcharge detection: TARDOC surcharge names contain a standalone "+"
+          // either at the very start (e.g. "+ Consultation ...") or after the code
+          // prefix (e.g. "AA.00.0020 - + Consultation ..."). Both forms must match.
+          const isSurcharge = (s: SumexServiceInput) => {
+            const name = (s.serviceName || "").trim();
+            // Matches: "+ foo", "CODE - + foo", "CODE: + foo"
+            return /(?:^|\s)\+\s/.test(name);
+          };
+          const parseCode = (code: string) => {
+            const parts = (code || "").split(".");
+            const num = parseInt(parts[parts.length - 1], 10) || 0;
+            const prefix = parts.slice(0, -1).join(".");
+            return { prefix, num };
+          };
+
+          // ── Pass 1: topological sort on referenceCode ──
+          // Build adjacency: dependants[ref] = [services that reference ref]
+          const codeToSvc: Record<string, SumexServiceInput> = {};
+          for (const svc of tardocServices) {
+            if (svc.code) codeToSvc[svc.code] = svc;
+          }
+          // Kahn's algorithm: start with services that nobody else references
+          const inDegree: Record<string, number> = {};
+          const deps: Record<string, string[]> = {}; // deps[code] = [refCode]
+          for (const svc of tardocServices) {
+            inDegree[svc.code || ""] = inDegree[svc.code || ""] ?? 0;
+            const ref = svc.referenceCode || "";
+            if (ref && codeToSvc[ref]) {
+              deps[svc.code || ""] = [ref];
+              inDegree[ref] = (inDegree[ref] ?? 0) + 1;
+            }
+          }
+          // seeds: services with inDegree 0 (no one depends on them in "must come first" sense)
+          // — actually we want to emit services whose dependencies have already been emitted.
+          // Simplified: emit unreferenced services first, then dependants.
+          const referencedCodes = new Set(
+            tardocServices.map(s => s.referenceCode || "").filter(Boolean)
+          );
+          // anchors = services that are referenced by others (must come first)
+          const anchors = tardocServices.filter(s => referencedCodes.has(s.code || ""));
+          const dependants = tardocServices.filter(s => !referencedCodes.has(s.code || ""));
+          // Within anchors and within dependants keep original DB order
+          const pass1 = [...anchors, ...dependants];
+
+          // ── Pass 2: surcharge placement within each chapter prefix ──
+          // Group pass1 result by chapter prefix
+          const groups: Record<string, SumexServiceInput[]> = {};
+          const groupOrder: string[] = [];
+          for (const svc of pass1) {
+            const { prefix } = parseCode(svc.code || "");
+            if (!groups[prefix]) { groups[prefix] = []; groupOrder.push(prefix); }
+            groups[prefix].push(svc);
+          }
+
+          const perGroupResult: SumexServiceInput[] = [];
+          for (const prefix of groupOrder) {
+            const group = groups[prefix];
+            const bases = group.filter(s => !isSurcharge(s));
+            const surcharges = group.filter(s => isSurcharge(s))
+              .sort((a, b) => parseCode(a.code||"").num - parseCode(b.code||"").num);
+
+            // For non-surcharge (base) services, referenceCode handling:
+            // - AR.* (room/change) codes: REQUIRE a referenceCode pointing to their
+            //   companion treatment service (MK.*, TK.*, etc.) [815 if missing].
+            //   The DB ref_code may point to a session anchor (e.g. AA.00.0070) which
+            //   is wrong. Find the MK/TK/RG companion in the full service list.
+            // - All other base services: clear referenceCode (must be empty) [817 if set].
+            const allNonSurchargeByCode: Record<string, SumexServiceInput> = {};
+            for (const svc of perGroupResult) {
+              if (!isSurcharge(svc) && svc.code) allNonSurchargeByCode[svc.code] = svc;
+            }
+            // Also include bases not yet in perGroupResult
+            for (const svc of bases) {
+              if (!isSurcharge(svc) && svc.code) allNonSurchargeByCode[svc.code] = svc;
+            }
+
+            for (const base of bases) {
+              const code = base.code || "";
+              if (code.startsWith("AR.")) {
+                // AR codes must reference their treatment companion.
+                // Priority: explicit ref_code if it points to a non-AA service already
+                // in the list; otherwise find the first MK/TK/RG/SK/KK code.
+                const existingRef = base.referenceCode || "";
+                const isValidRef = existingRef && !existingRef.startsWith("AA.") && allNonSurchargeByCode[existingRef];
+                if (!isValidRef) {
+                  // Find companion treatment in full tardocServices list
+                  const companion = tardocServices.find(s =>
+                    !isSurcharge(s) &&
+                    s.code &&
+                    !s.code.startsWith("AR.") &&
+                    !s.code.startsWith("AA.") &&
+                    s !== base
+                  );
+                  (base as SumexServiceInput).referenceCode = companion?.code || "";
+                }
+              } else {
+                // Non-AR base services must have empty referenceCode
+                (base as SumexServiceInput).referenceCode = "";
+              }
+            }
+
+            const ordered: SumexServiceInput[] = [...bases];
+            for (const sur of surcharges) {
+              const surNum = parseCode(sur.code || "").num;
+              // Insert after the last non-surcharge whose code num < surcharge's code num
+              let insertAfter = ordered.length - 1;
+              let baseCode: string | undefined;
+              for (let i = ordered.length - 1; i >= 0; i--) {
+                if (!isSurcharge(ordered[i]) && parseCode(ordered[i].code||"").num < surNum) {
+                  insertAfter = i;
+                  baseCode = ordered[i].code;
+                  break;
+                }
+              }
+              // Override referenceCode to point to the actual immediate base service.
+              // Sumex uses referenceCode to validate the surcharge relationship —
+              // a user-entered ref_code pointing to a session anchor instead of the
+              // base service causes [817] even if the order is correct.
+              (sur as SumexServiceInput).referenceCode = baseCode || "";
+              ordered.splice(insertAfter + 1, 0, sur);
+            }
+            perGroupResult.push(...ordered);
+          }
+
+          // ── Pass 3: enforce referenceCode ordering across groups ──
+          // AR.* codes reference treatment services in other chapters (e.g. MK.*).
+          // After per-group sorting, AR.00 may still precede MK.05 in the final list.
+          // Topological sort: for each service with a non-empty referenceCode, ensure
+          // its referenced service appears before it.
+          const result: SumexServiceInput[] = [];
+          const emitted = new Set<string>();
+
+          const emit = (svc: SumexServiceInput, depth = 0) => {
+            if (depth > perGroupResult.length) return; // cycle guard
+            const ref = svc.referenceCode || "";
+            if (ref && !emitted.has(ref)) {
+              const refSvc = perGroupResult.find(s => s.code === ref);
+              if (refSvc) emit(refSvc, depth + 1);
+            }
+            if (!emitted.has(svc.code || "")) {
+              emitted.add(svc.code || "");
+              result.push(svc);
+            }
+          };
+
+          for (const svc of perGroupResult) {
+            emit(svc);
+          }
+
+          return result;
+        })();
+
+        const reorderedCodes = sortedTardoc.map(s => s.code).join(", ");
+        console.log(`${LOG_PREFIX} TARDOC order after surcharge sort: [${reorderedCodes}]`);
+
+        for (const svc of sortedTardoc) {
           // AR.* room/change codes (serviceType=R): dUnitMT must be 0 (error 755 if non-zero).
           // However, AR codes can still have a real TT component (e.g. AR.00.0140 has tp_tt=24.10).
           // Send dUnitMT=0 / dAmountMT=0, but pass the actual tp_tl as dUnitTT.
