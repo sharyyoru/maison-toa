@@ -3415,22 +3415,38 @@ export default function CalendarPage() {
     setDropTargetMinutes(null);
   }
 
-  function handleColumnDragOver(e: React.DragEvent, doctorId: string, minutes: number) {
+  function getDropTargetMinutes(e: React.DragEvent, column: HTMLDivElement): number {
+    const rect = column.getBoundingClientRect();
+    const relativeY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+    const slotIndex = Math.floor(relativeY / DAY_VIEW_SLOT_HEIGHT);
+    return Math.max(
+      DAY_VIEW_START_MINUTES,
+      Math.min(
+        DAY_VIEW_START_MINUTES + slotIndex * DAY_VIEW_SLOT_MINUTES,
+        DAY_VIEW_END_MINUTES - DAY_VIEW_SLOT_MINUTES,
+      ),
+    );
+  }
+
+  function handleColumnDragOver(e: React.DragEvent, doctorId: string) {
     if (!draggedAppointment) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     setDropTargetDoctorId(doctorId);
-    setDropTargetMinutes(minutes);
+    setDropTargetMinutes(getDropTargetMinutes(e, e.currentTarget as HTMLDivElement));
   }
 
-  function handleColumnDragLeave() {
+  function handleColumnDragLeave(e: React.DragEvent) {
+    const nextTarget = e.relatedTarget as Node | null;
+    if (nextTarget && e.currentTarget.contains(nextTarget)) return;
     setDropTargetDoctorId(null);
     setDropTargetMinutes(null);
   }
 
-  async function handleColumnDrop(e: React.DragEvent, targetCalendarId: string, targetDate: Date, targetMinutes: number) {
+  async function handleColumnDrop(e: React.DragEvent, targetCalendarId: string, targetDate: Date) {
     e.preventDefault();
     if (!draggedAppointment) return;
+    const targetMinutes = getDropTargetMinutes(e, e.currentTarget as HTMLDivElement);
 
     // Convert calendar ID to provider ID
     const targetCalendar = doctorCalendars.find(c => c.id === targetCalendarId);
@@ -4717,6 +4733,9 @@ export default function CalendarPage() {
                                 ref={dayViewContainerRef}
                                 className={`relative flex-1 ${colIdx < doctorColumns.length - 1 ? "border-r border-slate-100" : ""}`}
                                 style={{ touchAction: isDraggingCreate ? 'none' : 'auto' }}
+                                onDragOver={(e) => handleColumnDragOver(e, doctorCol?.id ?? "")}
+                                onDragLeave={handleColumnDragLeave}
+                                onDrop={(e) => handleColumnDrop(e, doctorCol?.id ?? "", date)}
                                 onMouseLeave={() => {
                                   if (isDraggingCreate) handleDragCreateEnd();
                                 }}
@@ -4753,9 +4772,6 @@ export default function CalendarPage() {
                                         handleTouchStart(e, date, totalMinutes, doctorCol?.id ?? null, e.currentTarget);
                                       }}
                                       onContextMenu={(e) => handleSlotContextMenu(e, doctorCol?.id ?? "", date, totalMinutes)}
-                                      onDragOver={(e) => handleColumnDragOver(e, doctorCol?.id ?? "", totalMinutes)}
-                                      onDragLeave={handleColumnDragLeave}
-                                      onDrop={(e) => handleColumnDrop(e, doctorCol?.id ?? "", date, totalMinutes)}
                                       className={`block w-full border-t border-slate-100 cursor-pointer hover:bg-sky-50 transition-colors ${
                                         isInDragRange ? "bg-sky-100" : ""
                                       } ${
@@ -4921,6 +4937,8 @@ export default function CalendarPage() {
                                         {/* Resize handle at bottom - always visible */}
                                         <div
                                           onMouseDown={(e) => handleResizeStart(e, appt)}
+                                          draggable={false}
+                                          onDragStart={(e) => e.preventDefault()}
                                           className={`absolute bottom-0 left-0 right-0 cursor-ns-resize flex items-center justify-center rounded-b-md transition-all ${
                                             resizingAppointment?.id === appt.id 
                                               ? 'h-3 bg-sky-500/30' 
