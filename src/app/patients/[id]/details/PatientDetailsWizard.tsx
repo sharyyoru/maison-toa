@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { sanitizePhone, sanitizeTown } from "@/lib/patientSanitize";
 
 type PatientRecord = {
   id: string;
@@ -139,7 +140,7 @@ export default function PatientDetailsWizard({
     const firstName = (formData.get("first_name") as string | null)?.trim();
     const lastName = (formData.get("last_name") as string | null)?.trim();
     const emailRaw = (formData.get("email") as string | null)?.trim() || null;
-    const phone = (formData.get("phone") as string | null)?.trim() || null;
+    const phone = sanitizePhone((formData.get("phone") as string | null)?.trim());
     if (!firstName || !lastName || !emailRaw || !phone) {
       setError("First name, last name, email, and phone are required.");
       return;
@@ -225,8 +226,7 @@ export default function PatientDetailsWizard({
       (formData.get("street_address") as string | null)?.trim() || null;
     const postalCode =
       (formData.get("postal_code") as string | null)?.trim() || null;
-    const town =
-      (formData.get("town") as string | null)?.trim() || null;
+    const town = sanitizeTown((formData.get("town") as string | null)?.trim());
 
     if (
       !nationality ||
@@ -246,7 +246,7 @@ export default function PatientDetailsWizard({
       current_employer: currentEmployer,
       street_address: streetAddress,
       postal_code: postalCode,
-      town: town,
+      town,
     };
 
     if (gender) {

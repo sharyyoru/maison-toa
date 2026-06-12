@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { sanitizePhone, sanitizeTown } from "@/lib/patientSanitize";
 
 export default function NewPatientForm() {
   const router = useRouter();
@@ -40,13 +41,13 @@ export default function NewPatientForm() {
       );
     const rawPhone = (formData.get("phone") as string | null)?.trim() || "";
     const phone = rawPhone
-      ? `${countryCode} ${rawPhone.replace(/^0+/, "")}`.trim()
+      ? sanitizePhone(`${countryCode} ${rawPhone.replace(/^0+/, "")}`.trim())
       : null;
 
     const dob = (formData.get("dob") as string | null)?.trim() || null;
     const streetAddress = (formData.get("street_address") as string | null)?.trim() || null;
     const postalCode = (formData.get("postal_code") as string | null)?.trim() || null;
-    const town = (formData.get("town") as string | null)?.trim() || null;
+    const town = sanitizeTown((formData.get("town") as string | null)?.trim());
 
     const insuranceProvider = (formData.get("insurance_provider") as string | null)?.trim() || null;
     const insuranceCardNumber = (formData.get("insurance_card_number") as string | null)?.trim() || null;

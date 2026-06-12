@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { sanitizePhone, sanitizeTown } from "@/lib/patientSanitize";
 
 export async function POST(request: Request) {
   try {
@@ -136,11 +137,11 @@ export async function POST(request: Request) {
       first_name: firstName,
       last_name: lastName,
       email: normalizedEmail,
-      phone: fullPhone,
+      phone: sanitizePhone(fullPhone),
       nationality,
       street_address: streetAddress,
       postal_code: postalCode,
-      town,
+      town: sanitizeTown(town),
       profession,
       current_employer: currentEmployer,
       language_preference: language,

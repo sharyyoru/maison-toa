@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { sanitizePhone, sanitizeTown, sanitizeCountry } from "@/lib/patientSanitize";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -71,14 +72,14 @@ export async function POST(request: Request) {
         first_name: first_name.trim(),
         last_name: last_name.trim(),
         email: email.trim().toLowerCase(),
-        phone: `${country_code}${phone.trim().replace(/^0+/, "")}`,
+        phone: sanitizePhone(`${country_code}${phone.trim().replace(/^0+/, "")}`),
         country_code,
         gender: gender || null,
         dob: dob || null,
         street_address: [street_address?.trim(), street_number?.trim()].filter(Boolean).join(" ") || null,
         postal_code: postal_code?.trim() || null,
-        town: town?.trim() || null,
-        country: country?.trim() || null,
+        town: sanitizeTown(town),
+        country: sanitizeCountry(country),
         language_preference: language_preference || null,
         source: "manual",
       })

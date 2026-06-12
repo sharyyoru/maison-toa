@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendEmail, isEmailConfigured } from "@/lib/email";
+import { sanitizePhone, sanitizeTown, sanitizeCountry } from "@/lib/patientSanitize";
 import { brandedEmail, LOGO_URL } from "@/utils/emailTemplate";
 
 // POST /api/forms/submit - Submit form data using token
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
       if (submissionData.first_name) patientUpdate.first_name = submissionData.first_name;
       if (submissionData.last_name) patientUpdate.last_name = submissionData.last_name;
       if (submissionData.email) patientUpdate.email = submissionData.email.toLowerCase();
-      if (submissionData.phone) patientUpdate.phone = submissionData.phone;
+      if (submissionData.phone) patientUpdate.phone = sanitizePhone(submissionData.phone);
       if (submissionData.gender) patientUpdate.gender = submissionData.gender;
       if (submissionData.dob) patientUpdate.dob = submissionData.dob;
       if (submissionData.street_address) {
@@ -90,8 +91,8 @@ export async function POST(request: Request) {
         patientUpdate.street_address = fullAddress;
       }
       if (submissionData.postal_code) patientUpdate.postal_code = submissionData.postal_code;
-      if (submissionData.town) patientUpdate.town = submissionData.town;
-      if (submissionData.country) patientUpdate.country = submissionData.country;
+      if (submissionData.town) patientUpdate.town = sanitizeTown(submissionData.town);
+      if (submissionData.country) patientUpdate.country = sanitizeCountry(submissionData.country);
       if (submissionData.language_preference) patientUpdate.language_preference = submissionData.language_preference;
 
       // Only update if there are fields to update
