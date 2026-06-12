@@ -847,8 +847,6 @@ export default function CalendarPage() {
   const [deletingAgendaId, setDeletingAgendaId] = useState<string | null>(null);
   // Appointment resize state
   const [resizingAppointment, setResizingAppointment] = useState<CalendarAppointment | null>(null);
-  const [resizeStartY, setResizeStartY] = useState<number>(0);
-  const [resizeOriginalEndMinutes, setResizeOriginalEndMinutes] = useState<number>(0);
   // Undo history for appointment changes
   const [appointmentHistory, setAppointmentHistory] = useState<Array<{
     appointmentId: string;
@@ -3397,6 +3395,16 @@ export default function CalendarPage() {
   function handleAppointmentDragStart(e: React.DragEvent, appt: CalendarAppointment) {
     // Prevent any parent elements from also handling this drag
     e.stopPropagation();
+
+    // The appointment container is draggable, so a resize gesture can otherwise
+    // start a native move drag before React has rendered the resize state.
+    if (
+      resizingAppointmentRef.current ||
+      (e.target as HTMLElement).closest("[data-appointment-resize-handle]")
+    ) {
+      e.preventDefault();
+      return;
+    }
     
     // Only allow dragging this specific appointment
     if (draggedAppointment && draggedAppointment.id !== appt.id) {
@@ -3564,8 +3572,11 @@ export default function CalendarPage() {
   // Refs for resize to avoid stale closures
   const resizingAppointmentRef = useRef<CalendarAppointment | null>(null);
   const resizeStartYRef = useRef<number>(0);
+  const resizeStartScrollTopRef = useRef<number>(0);
+  const resizeScrollContainerRef = useRef<HTMLElement | null>(null);
   const resizeOriginalEndMinutesRef = useRef<number>(0);
   const resizeCurrentEndTimeRef = useRef<string>(""); // Track current end time during drag
+  const suppressAppointmentClickRef = useRef(false);
   const appointmentHistoryRef = useRef<typeof appointmentHistory>([]);
 
   // Keep history ref in sync
@@ -3587,9 +3598,16 @@ export default function CalendarPage() {
     // Store in refs for event handlers
     resizingAppointmentRef.current = appt;
     resizeStartYRef.current = e.clientY;
+    const scrollContainer = (e.currentTarget as HTMLElement).closest(".overflow-auto") as HTMLElement | null;
+    resizeScrollContainerRef.current = scrollContainer;
+    resizeStartScrollTopRef.current = scrollContainer?.scrollTop ?? 0;
     resizeOriginalEndMinutesRef.current = endMinutes;
     resizeCurrentEndTimeRef.current = appt.end_time ?? "";
+    suppressAppointmentClickRef.current = false;
     
+    setDraggedAppointment(null);
+    setDropTargetDoctorId(null);
+    setDropTargetMinutes(null);
     setResizingAppointment(appt);
     
     // Add resize cursor to body during drag
@@ -3603,12 +3621,20 @@ export default function CalendarPage() {
       const appt = resizingAppointmentRef.current;
       if (!appt) return;
 
-      // Calculate delta in pixels and convert to minutes
-      // Using smaller divisor for more responsive dragging
-      const deltaY = e.clientY - resizeStartYRef.current;
-      // Each 14 pixels = 15 minutes (half of slot height for smoother feel)
-      const pixelsPerSlot = DAY_VIEW_SLOT_HEIGHT / 2;
-      const deltaMinutes = Math.round(deltaY / pixelsPerSlot) * DAY_VIEW_SLOT_MINUTES;
+      e.preventDefault();
+
+      // Keep resize math aligned with the rendered grid. Include scroll movement
+      // so the handle continues to track the pointer during calendar auto-scroll.
+      const scrollDelta =
+        (resizeScrollContainerRef.current?.scrollTop ?? 0) -
+        resizeStartScrollTopRef.current;
+      const deltaY = e.clientY - resizeStartYRef.current + scrollDelta;
+      const unsnappedEndMinutes =
+        resizeOriginalEndMinutesRef.current +
+        (deltaY / DAY_VIEW_SLOT_HEIGHT) * DAY_VIEW_SLOT_MINUTES;
+      const snappedEndMinutes =
+        Math.round(unsnappedEndMinutes / DAY_VIEW_SLOT_MINUTES) *
+        DAY_VIEW_SLOT_MINUTES;
       
       // Calculate new end time (minimum 15 minutes from start)
       const start = new Date(appt.start_time);
@@ -3617,17 +3643,20 @@ export default function CalendarPage() {
       
       const newEndMinutes = Math.max(
         startMinutes + DAY_VIEW_SLOT_MINUTES, // Minimum 15 min duration
-        Math.min(resizeOriginalEndMinutesRef.current + deltaMinutes, DAY_VIEW_END_MINUTES)
+        Math.min(snappedEndMinutes, DAY_VIEW_END_MINUTES)
       );
       
       // Build new end time
       const newEndHours = Math.floor(newEndMinutes / 60);
       const newEndMins = newEndMinutes % 60;
-      const dateStr = formatYmd(start);
-      const newEndTime = `${dateStr}T${String(newEndHours).padStart(2, "0")}:${String(newEndMins).padStart(2, "0")}:00`;
+      const dateStr = formatSwissYmd(start);
+      const newEndTime = createSwissDateTime(dateStr, newEndHours, newEndMins).toISOString();
+
+      if (resizeCurrentEndTimeRef.current === newEndTime) return;
 
       // Store current end time in ref for mouseup
       resizeCurrentEndTimeRef.current = newEndTime;
+      suppressAppointmentClickRef.current = true;
 
       // Update appointment in state (optimistic)
       setAppointments(prev => prev.map(a => 
@@ -3646,14 +3675,26 @@ export default function CalendarPage() {
 
       // Clear the resizing state
       resizingAppointmentRef.current = null;
+      resizeScrollContainerRef.current = null;
       setResizingAppointment(null);
       
       // Reset cursor
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
 
+      if (suppressAppointmentClickRef.current) {
+        // A native click can fire immediately after mouseup. Keep it suppressed
+        // for this event cycle so resizing does not open the edit modal.
+        setTimeout(() => {
+          suppressAppointmentClickRef.current = false;
+        }, 0);
+      }
+
       // Only save if the end time actually changed
-      if (originalEnd === newEnd || !newEnd) return;
+      if (
+        !newEnd ||
+        new Date(originalEnd).getTime() === new Date(newEnd).getTime()
+      ) return;
 
       // Save to history for undo
       setAppointmentHistory(prev => [...prev, {
@@ -3667,7 +3708,10 @@ export default function CalendarPage() {
         const response = await fetch(`/api/appointments/${appt.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ end_time: newEnd }),
+          body: JSON.stringify({
+            start_time: appt.start_time,
+            end_time: newEnd,
+          }),
         });
 
         if (!response.ok) {
@@ -3694,6 +3738,8 @@ export default function CalendarPage() {
     return () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
     };
   }, []);
 
@@ -3705,6 +3751,8 @@ export default function CalendarPage() {
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
         return;
       }
+
+      if (resizingAppointmentRef.current) return;
 
       // Ctrl/Cmd + Z = Undo resize
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
@@ -4823,9 +4871,18 @@ export default function CalendarPage() {
                                 {/* Appointments for this doctor column */}
                                 {(() => {
                                   // Exclude dragged appointment from overlap calculation to prevent layout shifts
-                                  const appointmentsForOverlap = draggedAppointment 
+                                  const appointmentsForOverlap = draggedAppointment
                                     ? columnAppointments.filter(a => a.id !== draggedAppointment.id)
-                                    : columnAppointments;
+                                    : resizingAppointment
+                                      ? columnAppointments.map((appointment) =>
+                                          appointment.id === resizingAppointment.id
+                                            ? {
+                                                ...appointment,
+                                                end_time: resizingAppointment.end_time,
+                                              }
+                                            : appointment,
+                                        )
+                                      : columnAppointments;
                                   const overlapMap = calculateOverlapPositions(appointmentsForOverlap);
                                   
                                   // For the dragged appointment, calculate its own position without affecting others
@@ -4909,6 +4966,10 @@ export default function CalendarPage() {
                                         <button
                                           type="button"
                                           onClick={() => {
+                                            if (suppressAppointmentClickRef.current) {
+                                              suppressAppointmentClickRef.current = false;
+                                              return;
+                                            }
                                             if (!resizingAppointment && !draggedAppointment) {
                                               openEditModalForAppointment(appt);
                                             }
@@ -4949,6 +5010,7 @@ export default function CalendarPage() {
                                         {/* Resize handle at bottom - always visible */}
                                         <div
                                           onMouseDown={(e) => handleResizeStart(e, appt)}
+                                          data-appointment-resize-handle
                                           draggable={false}
                                           onDragStart={(e) => e.preventDefault()}
                                           className={`absolute bottom-0 left-0 right-0 cursor-ns-resize flex items-center justify-center rounded-b-md transition-all ${
