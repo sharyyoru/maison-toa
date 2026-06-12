@@ -1051,6 +1051,13 @@ export default function CalendarPage() {
           .filter((m) => remaining.includes(m.service_id))
           .map((m) => m.machine_id);
         setSelectedMachineIds([...new Set(machinesForRemaining)]);
+
+        // Keep the category aligned with the remaining service selection.
+        const remainingCategory = remaining
+          .map((id) => serviceOptions.find((service) => service.id === id)?.category_name)
+          .find((category): category is string => Boolean(category)) ?? "";
+        setAppointmentCategory(remainingCategory);
+        setCategorySearch(remainingCategory);
         return remaining;
       }
       // Add service with default quantity of 1
@@ -1058,11 +1065,12 @@ export default function CalendarPage() {
         ...quantities,
         [serviceId]: 1,
       }));
-      // Auto-set category from service if not already set
+      // A newly selected service replaces any category copied from the source
+      // appointment. Keep both the saved value and visible input synchronized.
       const svc = serviceOptions.find((s) => s.id === serviceId);
-      if (svc?.category_name && !appointmentCategory) {
-        setAppointmentCategory(svc.category_name);
-      }
+      const serviceCategory = svc?.category_name ?? "";
+      setAppointmentCategory(serviceCategory);
+      setCategorySearch(serviceCategory);
       // Auto-detect machine from service
       const mapping = serviceMachineMappings.find((m) => m.service_id === serviceId);
       if (mapping) {
@@ -5221,6 +5229,9 @@ export default function CalendarPage() {
                                 setEditServiceId(svc.id);
                                 setEditServiceSearch(svc.name);
                                 setEditServiceDropdownOpen(false);
+                                const serviceCategory = svc.category_name ?? "";
+                                setEditCategory(serviceCategory);
+                                setEditCategorySearch(serviceCategory);
                                 // Auto-select linked machine
                                 const mapping = serviceMachineMappings.find((m) => m.service_id === svc.id);
                                 if (mapping) {
