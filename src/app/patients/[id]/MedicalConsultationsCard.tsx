@@ -4457,17 +4457,37 @@ export default function MedicalConsultationsCard({
                             };
                           });
 
-                        // For TARDOC: set ref_code on additional TARDOC services (reference to the first TARDOC code)
+                        // For TARDOC: derive correct ref_codes using the Sumex TARDOC
+                        // validator catalog (ISearch::MasterCode + SearchAdditionalService).
+                        // This replaces the old naive fallback that blindly set every
+                        // secondary code's ref_code to the first TARDOC code, which caused
+                        // Sumex [817] errors (e.g. AA.00.0020 wrongly referencing AA.00.0070).
                         if (isTardocInvoice) {
                           const tardocOnlyLines = invoiceLines.filter((l) => !!l.tardoc_code);
                           if (tardocOnlyLines.length > 1) {
-                            const mainCode = tardocOnlyLines[0]?.tardoc_code;
-                            if (mainCode) {
-                              for (let i = 1; i < tardocOnlyLines.length; i++) {
-                                if (tardocOnlyLines[i].tardoc_code !== mainCode) {
-                                  tardocOnlyLines[i].ref_code = mainCode;
+                            try {
+                              const suggestRes = await fetch("/api/tardoc/suggest-refs", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  codes: tardocOnlyLines.map((l) => l.tardoc_code),
+                                  lang: 2,
+                                }),
+                              });
+                              if (suggestRes.ok) {
+                                const suggestData = await suggestRes.json();
+                                if (suggestData.success && Array.isArray(suggestData.data)) {
+                                  for (const suggestion of suggestData.data) {
+                                    const line = tardocOnlyLines.find((l) => l.tardoc_code === suggestion.code);
+                                    // Only set if the user hasn't already provided one
+                                    if (line && !line.ref_code) {
+                                      line.ref_code = suggestion.suggestedRef || null;
+                                    }
+                                  }
                                 }
                               }
+                            } catch (err) {
+                              console.warn("[MedicalConsultationsCard] suggest-refs failed, skipping ref_code autofill:", err);
                             }
                           }
                         }
