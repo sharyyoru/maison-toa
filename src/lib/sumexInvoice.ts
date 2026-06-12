@@ -1283,7 +1283,7 @@ export async function buildInvoiceRequest(
           // Surcharge detection: TARDOC surcharge names contain a standalone "+"
           // either at the very start (e.g. "+ Consultation ...") or after the code
           // prefix (e.g. "AA.00.0020 - + Consultation ..."). Both forms must match.
-          const isSurcharge = (s: SumexServiceInput) => {
+          const isSurcharge = (s: InvoiceServiceInput) => {
             const name = (s.serviceName || "").trim();
             // Matches: "+ foo", "CODE - + foo", "CODE: + foo"
             return /(?:^|\s)\+\s/.test(name);
@@ -1297,7 +1297,7 @@ export async function buildInvoiceRequest(
 
           // ── Pass 1: topological sort on referenceCode ──
           // Build adjacency: dependants[ref] = [services that reference ref]
-          const codeToSvc: Record<string, SumexServiceInput> = {};
+          const codeToSvc: Record<string, InvoiceServiceInput> = {};
           for (const svc of tardocServices) {
             if (svc.code) codeToSvc[svc.code] = svc;
           }
@@ -1326,7 +1326,7 @@ export async function buildInvoiceRequest(
 
           // ── Pass 2: surcharge placement within each chapter prefix ──
           // Group pass1 result by chapter prefix
-          const groups: Record<string, SumexServiceInput[]> = {};
+          const groups: Record<string, InvoiceServiceInput[]> = {};
           const groupOrder: string[] = [];
           for (const svc of pass1) {
             const { prefix } = parseCode(svc.code || "");
@@ -1334,7 +1334,7 @@ export async function buildInvoiceRequest(
             groups[prefix].push(svc);
           }
 
-          const perGroupResult: SumexServiceInput[] = [];
+          const perGroupResult: InvoiceServiceInput[] = [];
           for (const prefix of groupOrder) {
             const group = groups[prefix];
             const bases = group.filter(s => !isSurcharge(s));
@@ -1347,7 +1347,7 @@ export async function buildInvoiceRequest(
             //   The DB ref_code may point to a session anchor (e.g. AA.00.0070) which
             //   is wrong. Find the MK/TK/RG companion in the full service list.
             // - All other base services: clear referenceCode (must be empty) [817 if set].
-            const allNonSurchargeByCode: Record<string, SumexServiceInput> = {};
+            const allNonSurchargeByCode: Record<string, InvoiceServiceInput> = {};
             for (const svc of perGroupResult) {
               if (!isSurcharge(svc) && svc.code) allNonSurchargeByCode[svc.code] = svc;
             }
@@ -1373,15 +1373,15 @@ export async function buildInvoiceRequest(
                     !s.code.startsWith("AA.") &&
                     s !== base
                   );
-                  (base as SumexServiceInput).referenceCode = companion?.code || "";
+                  base.referenceCode = companion?.code || "";
                 }
               } else {
                 // Non-AR base services must have empty referenceCode
-                (base as SumexServiceInput).referenceCode = "";
+                base.referenceCode = "";
               }
             }
 
-            const ordered: SumexServiceInput[] = [...bases];
+            const ordered: InvoiceServiceInput[] = [...bases];
             for (const sur of surcharges) {
               const surNum = parseCode(sur.code || "").num;
               // Insert after the last non-surcharge whose code num < surcharge's code num
@@ -1398,7 +1398,7 @@ export async function buildInvoiceRequest(
               // Sumex uses referenceCode to validate the surcharge relationship —
               // a user-entered ref_code pointing to a session anchor instead of the
               // base service causes [817] even if the order is correct.
-              (sur as SumexServiceInput).referenceCode = baseCode || "";
+              sur.referenceCode = baseCode || "";
               ordered.splice(insertAfter + 1, 0, sur);
             }
             perGroupResult.push(...ordered);
@@ -1409,10 +1409,10 @@ export async function buildInvoiceRequest(
           // After per-group sorting, AR.00 may still precede MK.05 in the final list.
           // Topological sort: for each service with a non-empty referenceCode, ensure
           // its referenced service appears before it.
-          const result: SumexServiceInput[] = [];
+          const result: InvoiceServiceInput[] = [];
           const emitted = new Set<string>();
 
-          const emit = (svc: SumexServiceInput, depth = 0) => {
+          const emit = (svc: InvoiceServiceInput, depth = 0) => {
             if (depth > perGroupResult.length) return; // cycle guard
             const ref = svc.referenceCode || "";
             if (ref && !emitted.has(ref)) {
