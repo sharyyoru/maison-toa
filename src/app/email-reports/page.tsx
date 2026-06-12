@@ -28,6 +28,8 @@ type Patient = {
   email: string | null;
 };
 
+type EmailType = "reminder" | "confirmation" | "form" | "manual" | "other";
+
 type FilterState = {
   direction: "all" | "inbound" | "outbound";
   status: "all" | EmailStatus;
@@ -35,6 +37,31 @@ type FilterState = {
   dateTo: string;
   searchQuery: string;
   source: "all" | "automation" | "manual";
+  emailType: "all" | EmailType;
+};
+
+function detectEmailType(subject: string): EmailType {
+  const s = subject.toLowerCase();
+  if (s.includes("reminder") || s.includes("rappel")) return "reminder";
+  if (s.includes("appointment") || s.includes("rendez-vous") || s.includes("rendez-vous") || s.includes("booking") || s.includes("confirmation")) return "confirmation";
+  if (s.includes("form") || s.includes("formulaire") || s.includes("fiche")) return "form";
+  return "other";
+}
+
+const EMAIL_TYPE_LABELS: Record<EmailType, string> = {
+  reminder: "Reminder",
+  confirmation: "Confirmation",
+  form: "Form",
+  manual: "Manual",
+  other: "Other",
+};
+
+const EMAIL_TYPE_STYLES: Record<EmailType, string> = {
+  reminder: "bg-amber-50 text-amber-700",
+  confirmation: "bg-sky-50 text-sky-700",
+  form: "bg-teal-50 text-teal-700",
+  manual: "bg-slate-100 text-slate-600",
+  other: "bg-slate-100 text-slate-500",
 };
 
 type EmailStats = {
@@ -76,6 +103,7 @@ export default function EmailReportsPage() {
     dateTo: "",
     searchQuery: "",
     source: "all",
+    emailType: "all",
   });
 
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
@@ -171,6 +199,12 @@ export default function EmailReportsPage() {
         return false;
       }
 
+      // Email type filter
+      if (filters.emailType !== "all") {
+        const detectedType = detectEmailType(email.subject);
+        if (detectedType !== filters.emailType) return false;
+      }
+
       // Search query
       if (filters.searchQuery) {
         const query = filters.searchQuery.toLowerCase();
@@ -226,6 +260,7 @@ export default function EmailReportsPage() {
       dateTo: "",
       searchQuery: "",
       source: "all",
+      emailType: "all",
     });
   }
 
@@ -392,7 +427,23 @@ export default function EmailReportsPage() {
           </div>
 
           {/* Filter Row */}
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+            {/* Email Type */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-500">Type</label>
+              <select
+                value={filters.emailType}
+                onChange={(e) => setFilters((f) => ({ ...f, emailType: e.target.value as FilterState["emailType"] }))}
+                className="w-full rounded-lg border border-slate-200 bg-white py-2 px-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              >
+                <option value="all">All types</option>
+                <option value="reminder">Reminder</option>
+                <option value="confirmation">Confirmation</option>
+                <option value="form">Form</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
             {/* Direction */}
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-500">Direction</label>
@@ -492,6 +543,7 @@ export default function EmailReportsPage() {
             {paginatedEmails.map((email) => {
               const patient = email.patient_id ? patientMap.get(email.patient_id) : null;
               const isAutomation = !!email.deal_id;
+              const emailType = detectEmailType(email.subject);
 
               return (
                 <div
@@ -522,8 +574,11 @@ export default function EmailReportsPage() {
                       <p className="truncate text-sm font-medium text-slate-900">
                         {email.subject || "(No subject)"}
                       </p>
+                      <span className={`inline-flex flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${EMAIL_TYPE_STYLES[emailType]}`}>
+                        {EMAIL_TYPE_LABELS[emailType]}
+                      </span>
                       {isAutomation && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                        <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700">
                           <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83" />
                           </svg>
@@ -669,6 +724,9 @@ export default function EmailReportsPage() {
                     <p className="text-xs text-slate-500">{formatDate(selectedEmail.created_at)}</p>
                   </div>
                   <div className="ml-auto flex items-center gap-2">
+                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${EMAIL_TYPE_STYLES[detectEmailType(selectedEmail.subject)]}`}>
+                      {EMAIL_TYPE_LABELS[detectEmailType(selectedEmail.subject)]}
+                    </span>
                     <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
                       selectedEmail.status === "sent"
                         ? "bg-emerald-50 text-emerald-700"
