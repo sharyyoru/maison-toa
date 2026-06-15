@@ -130,129 +130,184 @@ export default function FinancialsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showOnlyUnpaid, setShowOnlyUnpaid] = useState(false);
   const [invoicePage, setInvoicePage] = useState(0);
+  const [invoiceTotalCount, setInvoiceTotalCount] = useState(0);
+  const [invoiceHasNextPage, setInvoiceHasNextPage] = useState(false);
   const [patientPage, setPatientPage] = useState(0);
   const ROWS_PER_PAGE = 50;
 
   useEffect(() => {
     let isMounted = true;
 
-    async function load() {
+    async function loadFilterOptions() {
+      const BATCH_SIZE = 1000;
+      const patientsMap: PatientsById = {};
+
+      for (let from = 0; ; from += BATCH_SIZE) {
+        const { data, error: patientsError } = await supabaseClient
+          .from("patients")
+          .select("id, first_name, last_name")
+          .order("last_name", { ascending: true })
+          .range(from, from + BATCH_SIZE - 1);
+
+        if (!isMounted) return;
+        if (patientsError || !data) break;
+
+        for (const row of data as any[]) {
+          const id = row.id as string;
+          patientsMap[id] = {
+            id,
+            first_name: (row.first_name as string | null) ?? null,
+            last_name: (row.last_name as string | null) ?? null,
+          };
+        }
+
+        if (data.length < BATCH_SIZE) break;
+      }
+
+      if (isMounted) {
+        setPatientsById(patientsMap);
+      }
+
+      const { data: providersData } = await supabaseClient
+        .from("providers")
+        .select("id, name")
+        .order("name", { ascending: true });
+
+      if (!isMounted) return;
+
+      const provMap: ProvidersById = {};
+      for (const row of (providersData || []) as any[]) {
+        const id = row.id as string;
+        provMap[id] = {
+          id,
+          name: (row.name as string | null) ?? null,
+        };
+      }
+      setProvidersById(provMap);
+    }
+
+    void loadFilterOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadInvoices() {
       try {
         setLoading(true);
         setError(null);
 
-        const { data, error: invoicesError } = await supabaseClient
+        const from = invoicePage * ROWS_PER_PAGE;
+        const to = from + ROWS_PER_PAGE;
+
+        let query = supabaseClient
           .from("invoices")
           .select(
             "id, patient_id, invoice_number, invoice_date, treatment_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, paid_at, health_insurance_law, billing_type, insurance_name, total_amount, paid_amount, vat_amount, status, is_complimentary, created_by_user_id, created_by_name, is_archived",
           )
-          .eq("is_archived", false)
-          .order("invoice_date", { ascending: false });
+          .eq("is_archived", false);
+
+        if (dateFromFilter) {
+          query = query.gte("invoice_date", dateFromFilter);
+        }
+
+        if (dateToFilter) {
+          query = query.lte("invoice_date", dateToFilter);
+        }
+
+        if (patientFilter !== "all") {
+          query = query.eq("patient_id", patientFilter);
+        }
+
+        if (ownerFilter !== "all") {
+          query = query.or(
+            `provider_id.eq.${ownerFilter},doctor_user_id.eq.${ownerFilter},created_by_user_id.eq.${ownerFilter}`,
+          );
+        }
+
+        if (invoiceTypeFilter !== "all") {
+          if (invoiceTypeFilter === "esthetic") {
+            query = query
+              .is("health_insurance_law", null)
+              .is("billing_type", null);
+          } else {
+            query = query.or(
+              `health_insurance_law.eq.${invoiceTypeFilter},billing_type.eq.${invoiceTypeFilter}`,
+            );
+          }
+        }
+
+        if (statusFilter === "complimentary") {
+          query = query.eq("is_complimentary", true);
+        } else if (statusFilter === "paid") {
+          query = query.in("status", ["PAID", "OVERPAID"]);
+        } else if (statusFilter === "partial") {
+          query = query.eq("status", "PARTIAL_PAID");
+        } else if (statusFilter === "cancelled") {
+          query = query.eq("status", "CANCELLED");
+        } else if (statusFilter === "unpaid") {
+          query = query
+            .eq("is_complimentary", false)
+            .not("status", "in", "(PAID,OVERPAID,PARTIAL_PAID,CANCELLED)");
+        }
+
+        if (showOnlyUnpaid) {
+          query = query
+            .eq("is_complimentary", false)
+            .not("status", "in", "(PAID,OVERPAID)");
+        }
+
+        const { data, error: invoicesError } = await query
+          .order("invoice_date", { ascending: false, nullsFirst: false })
+          .range(from, to);
 
         if (!isMounted) return;
 
         if (invoicesError || !data) {
           setError(invoicesError?.message ?? "Failed to load invoices.");
           setInvoices([]);
-          setPatientsById({});
+          setInvoiceTotalCount(0);
+          setInvoiceHasNextPage(false);
           setLoading(false);
           return;
         }
 
         const rows = data as InvoiceRow[];
-        setInvoices(rows);
-
-        const patientIds = Array.from(
-          new Set(
-            rows
-              .map((row) => row.patient_id)
-              .filter((id): id is string => typeof id === "string" && !!id),
-          ),
-        );
-
-        // Fetch patients in batches of 50 to avoid URL length limits
-        if (patientIds.length > 0) {
-          const BATCH_SIZE = 50;
-          const map: PatientsById = {};
-
-          for (let i = 0; i < patientIds.length; i += BATCH_SIZE) {
-            if (!isMounted) return;
-            const batch = patientIds.slice(i, i + BATCH_SIZE);
-            const { data: patientsData, error: patientsError } =
-              await supabaseClient
-                .from("patients")
-                .select("id, first_name, last_name")
-                .in("id", batch);
-
-            if (!patientsError && patientsData) {
-              for (const row of patientsData as any[]) {
-                const id = row.id as string;
-                map[id] = {
-                  id,
-                  first_name: (row.first_name as string | null) ?? null,
-                  last_name: (row.last_name as string | null) ?? null,
-                };
-              }
-            }
-          }
-
-          if (!isMounted) return;
-          setPatientsById(map);
-        } else {
-          setPatientsById({});
-        }
-
-        // Fetch providers for invoice owners
-        const providerIds = Array.from(
-          new Set(
-            rows
-              .map((row) => row.provider_id)
-              .filter((id): id is string => typeof id === "string" && !!id),
-          ),
-        );
-
-        if (providerIds.length > 0) {
-          const { data: providersData, error: providersError } =
-            await supabaseClient
-              .from("providers")
-              .select("id, name")
-              .in("id", providerIds);
-
-          if (!isMounted) return;
-
-          if (!providersError && providersData) {
-            const provMap: ProvidersById = {};
-            for (const row of providersData as any[]) {
-              const id = row.id as string;
-              provMap[id] = {
-                id,
-                name: (row.name as string | null) ?? null,
-              };
-            }
-            setProvidersById(provMap);
-          } else {
-            setProvidersById({});
-          }
-        } else {
-          setProvidersById({});
-        }
-
+        const visibleRows = rows.slice(0, ROWS_PER_PAGE);
+        const hasNextPage = rows.length > ROWS_PER_PAGE;
+        setInvoices(visibleRows);
+        setInvoiceHasNextPage(hasNextPage);
+        setInvoiceTotalCount(from + visibleRows.length + (hasNextPage ? 1 : 0));
         setLoading(false);
       } catch {
         if (!isMounted) return;
         setError("Failed to load invoices.");
         setInvoices([]);
-        setPatientsById({});
+        setInvoiceTotalCount(0);
+        setInvoiceHasNextPage(false);
         setLoading(false);
       }
     }
 
-    void load();
+    void loadInvoices();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [
+    dateFromFilter,
+    dateToFilter,
+    patientFilter,
+    ownerFilter,
+    invoiceTypeFilter,
+    statusFilter,
+    showOnlyUnpaid,
+    invoicePage,
+  ]);
 
   const normalizedInvoices = useMemo<NormalizedInvoice[]>(() => {
     if (!invoices || invoices.length === 0) return [];
@@ -327,17 +382,21 @@ export default function FinancialsPage() {
 
   const patientOptions = useMemo(() => {
     const map = new Map<string, string>();
-    for (const row of normalizedInvoices) {
-      if (!row.patient_id) continue;
-      if (!map.has(row.patient_id)) {
-        map.set(row.patient_id, row.patientName);
-      }
+    for (const patient of Object.values(patientsById)) {
+      const nameParts = [
+        patient.first_name ? patient.first_name.trim() : "",
+        patient.last_name ? patient.last_name.trim() : "",
+      ].filter(Boolean);
+      map.set(patient.id, nameParts.join(" ") || patient.id);
     }
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [normalizedInvoices]);
+  }, [patientsById]);
 
   const ownerOptions = useMemo(() => {
     const map = new Map<string, string>();
+    for (const provider of Object.values(providersById)) {
+      map.set(provider.id, provider.name || provider.id);
+    }
     for (const row of normalizedInvoices) {
       const key = row.ownerKey || "unknown";
       if (!map.has(key)) {
@@ -345,59 +404,28 @@ export default function FinancialsPage() {
       }
     }
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [normalizedInvoices]);
+  }, [normalizedInvoices, providersById]);
 
   const invoiceTypeOptions = useMemo(() => {
     const map = new Map<string, string>();
+    map.set("esthetic", t("invoiceTypeEsthetic"));
+    map.set("KVG", "KVG");
+    map.set("UVG", "UVG");
+    map.set("MVG", "MVG");
+    map.set("IVG", "IVG");
+    map.set("TP", "TP");
+    map.set("TG", "TG");
     for (const row of normalizedInvoices) {
       if (!map.has(row.invoiceType)) {
         map.set(row.invoiceType, row.invoiceTypeLabel);
       }
     }
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [normalizedInvoices]);
+  }, [normalizedInvoices, t]);
 
   const filteredInvoices = useMemo(() => {
-    const dateFrom = dateFromFilter ? new Date(`${dateFromFilter}T00:00:00`) : null;
-    const dateTo = dateToFilter ? new Date(`${dateToFilter}T23:59:59`) : null;
-
-    return normalizedInvoices.filter((row) => {
-      const invoiceDate = row.invoice_date ? new Date(row.invoice_date) : null;
-
-      if (dateFrom && (!invoiceDate || invoiceDate < dateFrom)) {
-        return false;
-      }
-      if (dateTo && (!invoiceDate || invoiceDate > dateTo)) {
-        return false;
-      }
-      if (patientFilter !== "all" && row.patient_id !== patientFilter) {
-        return false;
-      }
-      if (ownerFilter !== "all" && row.ownerKey !== ownerFilter) {
-        return false;
-      }
-      if (invoiceTypeFilter !== "all" && row.invoiceType !== invoiceTypeFilter) {
-        return false;
-      }
-      if (statusFilter !== "all" && row.filterStatus !== statusFilter) {
-        return false;
-      }
-      if (showOnlyUnpaid) {
-        if (row.is_complimentary) return false;
-        if (row.isPaid) return false;
-      }
-      return true;
-    });
-  }, [
-    normalizedInvoices,
-    dateFromFilter,
-    dateToFilter,
-    patientFilter,
-    ownerFilter,
-    invoiceTypeFilter,
-    statusFilter,
-    showOnlyUnpaid,
-  ]);
+    return normalizedInvoices;
+  }, [normalizedInvoices]);
 
   // Reset pages when filters change
   useEffect(() => {
@@ -413,11 +441,10 @@ export default function FinancialsPage() {
     showOnlyUnpaid,
   ]);
 
-  const totalInvoicePages = Math.max(1, Math.ceil(filteredInvoices.length / ROWS_PER_PAGE));
+  const totalInvoicePages = Math.max(1, Math.ceil(invoiceTotalCount / ROWS_PER_PAGE));
   const paginatedInvoices = useMemo(() => {
-    const start = invoicePage * ROWS_PER_PAGE;
-    return filteredInvoices.slice(start, start + ROWS_PER_PAGE);
-  }, [filteredInvoices, invoicePage, ROWS_PER_PAGE]);
+    return filteredInvoices;
+  }, [filteredInvoices]);
 
   const summary: Summary = useMemo(() => {
     let totalAmount = 0;
@@ -1058,10 +1085,14 @@ export default function FinancialsPage() {
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h2 className="text-xs font-semibold text-slate-900">{t("invoicesHeader")}</h2>
                 <p className="text-[10px] text-slate-500">
-                  {t("showingInvoices", { start: invoicePage * ROWS_PER_PAGE + 1, end: Math.min((invoicePage + 1) * ROWS_PER_PAGE, filteredInvoices.length), total: filteredInvoices.length })}
+                  {t("showingInvoices", {
+                    start: invoiceTotalCount === 0 ? 0 : invoicePage * ROWS_PER_PAGE + 1,
+                    end: Math.min((invoicePage + 1) * ROWS_PER_PAGE, invoiceTotalCount),
+                    total: invoiceHasNextPage ? `${invoiceTotalCount}+` : invoiceTotalCount,
+                  })}
                 </p>
               </div>
-              {filteredInvoices.length === 0 ? (
+              {paginatedInvoices.length === 0 ? (
                 <p className="text-[11px] text-slate-500">
                   {t("noInvoicesMatch")}
                 </p>
@@ -1136,8 +1167,8 @@ export default function FinancialsPage() {
                       </span>
                       <button
                         type="button"
-                        disabled={invoicePage >= totalInvoicePages - 1}
-                        onClick={() => setInvoicePage((p) => Math.min(totalInvoicePages - 1, p + 1))}
+                        disabled={!invoiceHasNextPage}
+                        onClick={() => setInvoicePage((p) => p + 1)}
                         className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {t("next")}
