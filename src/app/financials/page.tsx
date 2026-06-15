@@ -58,6 +58,9 @@ type NormalizedInvoice = InvoiceRow & {
   patientName: string;
   ownerKey: string;
   ownerLabel: string;
+  invoiceType: string;
+  invoiceTypeLabel: string;
+  filterStatus: string;
   statusLabel: string;
 };
 
@@ -121,6 +124,10 @@ export default function FinancialsPage() {
 
   const [patientFilter, setPatientFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [dateFromFilter, setDateFromFilter] = useState<string>("");
+  const [dateToFilter, setDateToFilter] = useState<string>("");
+  const [invoiceTypeFilter, setInvoiceTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showOnlyUnpaid, setShowOnlyUnpaid] = useState(false);
   const [invoicePage, setInvoicePage] = useState(0);
   const [patientPage, setPatientPage] = useState(0);
@@ -274,13 +281,32 @@ export default function FinancialsPage() {
         row.created_by_name ||
         (ownerKey === "unknown" ? t("unassigned") : ownerKey);
 
-      const statusLabel = row.is_complimentary
-        ? t("statusComplimentary")
+      const invoiceType =
+        row.health_insurance_law?.trim() ||
+        row.billing_type?.trim() ||
+        "esthetic";
+      const invoiceTypeLabel =
+        row.health_insurance_law?.trim() ||
+        row.billing_type?.trim() ||
+        t("invoiceTypeEsthetic");
+
+      const filterStatus = row.is_complimentary
+        ? "complimentary"
         : isPaid
-        ? t("statusPaid")
+        ? "paid"
         : row.status === "PARTIAL_PAID"
-        ? t("statusPartial")
+        ? "partial"
         : row.status === "CANCELLED"
+        ? "cancelled"
+        : "unpaid";
+
+      const statusLabel = filterStatus === "complimentary"
+        ? t("statusComplimentary")
+        : filterStatus === "paid"
+        ? t("statusPaid")
+        : filterStatus === "partial"
+        ? t("statusPartial")
+        : filterStatus === "cancelled"
         ? t("statusCancelled")
         : t("statusUnpaid");
 
@@ -291,10 +317,13 @@ export default function FinancialsPage() {
         patientName,
         ownerKey,
         ownerLabel,
+        invoiceType,
+        invoiceTypeLabel,
+        filterStatus,
         statusLabel,
       };
     });
-  }, [invoices, patientsById, providersById]);
+  }, [invoices, patientsById, providersById, t]);
 
   const patientOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -318,12 +347,39 @@ export default function FinancialsPage() {
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [normalizedInvoices]);
 
+  const invoiceTypeOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of normalizedInvoices) {
+      if (!map.has(row.invoiceType)) {
+        map.set(row.invoiceType, row.invoiceTypeLabel);
+      }
+    }
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [normalizedInvoices]);
+
   const filteredInvoices = useMemo(() => {
+    const dateFrom = dateFromFilter ? new Date(`${dateFromFilter}T00:00:00`) : null;
+    const dateTo = dateToFilter ? new Date(`${dateToFilter}T23:59:59`) : null;
+
     return normalizedInvoices.filter((row) => {
+      const invoiceDate = row.invoice_date ? new Date(row.invoice_date) : null;
+
+      if (dateFrom && (!invoiceDate || invoiceDate < dateFrom)) {
+        return false;
+      }
+      if (dateTo && (!invoiceDate || invoiceDate > dateTo)) {
+        return false;
+      }
       if (patientFilter !== "all" && row.patient_id !== patientFilter) {
         return false;
       }
       if (ownerFilter !== "all" && row.ownerKey !== ownerFilter) {
+        return false;
+      }
+      if (invoiceTypeFilter !== "all" && row.invoiceType !== invoiceTypeFilter) {
+        return false;
+      }
+      if (statusFilter !== "all" && row.filterStatus !== statusFilter) {
         return false;
       }
       if (showOnlyUnpaid) {
@@ -332,13 +388,30 @@ export default function FinancialsPage() {
       }
       return true;
     });
-  }, [normalizedInvoices, patientFilter, ownerFilter, showOnlyUnpaid]);
+  }, [
+    normalizedInvoices,
+    dateFromFilter,
+    dateToFilter,
+    patientFilter,
+    ownerFilter,
+    invoiceTypeFilter,
+    statusFilter,
+    showOnlyUnpaid,
+  ]);
 
   // Reset pages when filters change
   useEffect(() => {
     setInvoicePage(0);
     setPatientPage(0);
-  }, [patientFilter, ownerFilter, showOnlyUnpaid]);
+  }, [
+    dateFromFilter,
+    dateToFilter,
+    patientFilter,
+    ownerFilter,
+    invoiceTypeFilter,
+    statusFilter,
+    showOnlyUnpaid,
+  ]);
 
   const totalInvoicePages = Math.max(1, Math.ceil(filteredInvoices.length / ROWS_PER_PAGE));
   const paginatedInvoices = useMemo(() => {
@@ -708,34 +781,92 @@ export default function FinancialsPage() {
       </div>
 
       {activeTab === "overview" && <>
-      <div className="flex flex-wrap items-center gap-3 financials-hide-on-print">
-        <select
-          value={patientFilter}
-          onChange={(event) => setPatientFilter(event.target.value)}
-          className="min-w-[180px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-        >
-          <option value="all">{t("allPatients")}</option>
-          {patientOptions.map(([id, name]) => (
-            <option key={id} value={id}>
-              {name}
-            </option>
-          ))}
-        </select>
+      <div className="grid gap-3 financials-hide-on-print sm:grid-cols-2 lg:grid-cols-6">
+        <label className="space-y-1 text-[11px] font-medium text-slate-500">
+          <span>{t("dateFromFilter")}</span>
+          <input
+            type="date"
+            value={dateFromFilter}
+            onChange={(event) => setDateFromFilter(event.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-normal text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          />
+        </label>
 
-        <select
-          value={ownerFilter}
-          onChange={(event) => setOwnerFilter(event.target.value)}
-          className="min-w-[180px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-        >
-          <option value="all">{t("allOwners")}</option>
-          {ownerOptions.map(([key, label]) => (
-            <option key={key} value={key}>
-              {label}
-            </option>
-          ))}
-        </select>
+        <label className="space-y-1 text-[11px] font-medium text-slate-500">
+          <span>{t("dateToFilter")}</span>
+          <input
+            type="date"
+            value={dateToFilter}
+            onChange={(event) => setDateToFilter(event.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-normal text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          />
+        </label>
 
-        <label className="inline-flex items-center gap-2 text-xs text-slate-600">
+        <label className="space-y-1 text-[11px] font-medium text-slate-500">
+          <span>{t("patientFilter")}</span>
+          <select
+            value={patientFilter}
+            onChange={(event) => setPatientFilter(event.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-normal text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          >
+            <option value="all">{t("allPatients")}</option>
+            {patientOptions.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1 text-[11px] font-medium text-slate-500">
+          <span>{t("practitionerFilter")}</span>
+          <select
+            value={ownerFilter}
+            onChange={(event) => setOwnerFilter(event.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-normal text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          >
+            <option value="all">{t("allPractitioners")}</option>
+            {ownerOptions.map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1 text-[11px] font-medium text-slate-500">
+          <span>{t("invoiceTypeFilter")}</span>
+          <select
+            value={invoiceTypeFilter}
+            onChange={(event) => setInvoiceTypeFilter(event.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-normal text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          >
+            <option value="all">{t("allInvoiceTypes")}</option>
+            {invoiceTypeOptions.map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1 text-[11px] font-medium text-slate-500">
+          <span>{t("statusFilter")}</span>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-normal text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          >
+            <option value="all">{t("allStatuses")}</option>
+            <option value="paid">{t("statusPaid")}</option>
+            <option value="unpaid">{t("statusUnpaid")}</option>
+            <option value="partial">{t("statusPartial")}</option>
+            <option value="cancelled">{t("statusCancelled")}</option>
+            <option value="complimentary">{t("statusComplimentary")}</option>
+          </select>
+        </label>
+
+        <label className="inline-flex items-center gap-2 text-xs text-slate-600 sm:col-span-2 lg:col-span-6">
           <input
             type="checkbox"
             checked={showOnlyUnpaid}
