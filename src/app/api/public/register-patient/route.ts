@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sanitizePhone, sanitizeTown, sanitizeCountry } from "@/lib/patientSanitize";
+import { sanitizePhone, sanitizeTown, sanitizeCountry, stripHtml } from "@/lib/patientSanitize";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -69,8 +69,8 @@ export async function POST(request: Request) {
     const { data: patient, error: patientError } = await supabase
       .from("patients")
       .insert({
-        first_name: first_name.trim(),
-        last_name: last_name.trim(),
+        first_name: stripHtml(first_name) ?? first_name.trim(),
+        last_name: stripHtml(last_name) ?? last_name.trim(),
         email: email.trim().toLowerCase(),
         phone: sanitizePhone(`${country_code}${phone.trim().replace(/^0+/, "")}`),
         country_code,

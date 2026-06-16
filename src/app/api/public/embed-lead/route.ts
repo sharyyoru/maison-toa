@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { stripHtml } from "@/lib/patientSanitize";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -74,14 +75,14 @@ export async function POST(request: NextRequest) {
     const { data: lead, error: insertError } = await supabase
       .from("embed_form_leads")
       .insert({
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
+        first_name: stripHtml(firstName) ?? firstName.trim(),
+        last_name: stripHtml(lastName) ?? lastName.trim(),
         email: email.trim().toLowerCase(),
         phone: phone?.trim() || null,
         country_code: countryCode || "+41",
-        service: service || null,
+        service: stripHtml(service) || null,
         location: location || null,
-        message: message || null,
+        message: stripHtml(message) || null,
         is_existing_patient: isExistingPatient || false,
         form_type: formType,
         source_url: sourceUrl || null,
@@ -121,8 +122,8 @@ export async function POST(request: NextRequest) {
       const { data: newPatient } = await supabase
         .from("patients")
         .insert({
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
+          first_name: stripHtml(firstName) ?? firstName.trim(),
+          last_name: stripHtml(lastName) ?? lastName.trim(),
           email: email.trim().toLowerCase(),
           phone: phone ? `${countryCode || "+41"}${phone.trim().replace(/^0+/, "")}` : null,
           source: `embed_${formType}`,

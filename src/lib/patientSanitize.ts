@@ -9,6 +9,10 @@
  *  - Phone: comma/semicolon-separated multi-number  → keep first only
  *  - Town:  "Renens VD" (city + canton suffix)      → strip trailing 2-letter code
  *  - Country: canton code stored as country          → clear it (belongs in canton field)
+ *
+ * Security:
+ *  - stripHtml: removes all HTML/script tags from free-text fields to prevent XSS
+ *    injection via public-facing forms (booking, registration, leads).
  */
 
 /** Valid Swiss canton abbreviations (ISO 3166-2:CH). */
@@ -47,6 +51,22 @@ const CANTON_CODES = new Set(Object.keys(SWISS_CANTONS));
 const SWISS_SYNONYMS = new Set([
   "suisse", "schweiz", "svizzera", "switzerland", "ch",
 ]);
+
+/**
+ * Strip all HTML tags and potentially dangerous content from a string.
+ * Prevents XSS via public-facing forms (patient names, notes, messages).
+ * Returns null when the input is empty after stripping.
+ */
+export function stripHtml(value: string | null | undefined): string | null {
+  if (!value) return null;
+  // Remove all HTML tags (including <script>, <img onerror=...>, etc.)
+  const stripped = value
+    .replace(/<[^>]*>/g, "")          // strip all tags
+    .replace(/javascript\s*:/gi, "")  // strip javascript: URIs
+    .replace(/on\w+\s*=/gi, "")       // strip inline event handlers (onclick=, onerror=, etc.)
+    .trim();
+  return stripped || null;
+}
 
 /**
  * Sanitize a phone string:

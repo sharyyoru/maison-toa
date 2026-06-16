@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { formatSwissDateWithWeekday, formatSwissTimeAmPm } from "@/lib/swissTimezone";
 import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
 import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
+import { stripHtml } from "@/lib/patientSanitize";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -703,8 +704,8 @@ export async function POST(request: Request) {
       const { data: newPatient, error: patientError } = await supabase
         .from("patients")
         .insert({
-          first_name: firstName,
-          last_name: lastName,
+          first_name: stripHtml(firstName) ?? firstName,
+          last_name: stripHtml(lastName) ?? lastName,
           email: email.toLowerCase(),
           phone: phone || null,
           source: "online_booking",
@@ -746,7 +747,8 @@ export async function POST(request: Request) {
 
     // Build reason field - service info only, notes go into the dedicated notes column
     const categoryTag = categoryName ? ` [Category: ${categoryName}]` : "";
-    const reason = `${service} [Doctor: ${doctorName.replace("Dr. ", "")}] [Online Booking] [Lang: ${language}]${categoryTag}`;
+    const safeService = stripHtml(service) ?? service;
+    const reason = `${safeService} [Doctor: ${doctorName.replace("Dr. ", "")}] [Online Booking] [Lang: ${language}]${categoryTag}`;
 
     const bookingDealStageId = await findBookingDealStageId(supabase);
     if (!bookingDealStageId) {
@@ -796,7 +798,7 @@ export async function POST(request: Request) {
         start_time: appointmentDateObj.toISOString(),
         end_time: apptEnd.toISOString(),
         reason,
-        notes: notes || null,
+        notes: stripHtml(notes) || null,
         location: location || "Geneva",
         status: "scheduled",
         source: "online_booking",
