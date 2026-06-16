@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import InactivityLogout from "@/components/InactivityLogout";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 // Public routes that don't require authentication
@@ -50,5 +51,10 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <InactivityLogout />
+      {children}
+    </>
+  );
 }
