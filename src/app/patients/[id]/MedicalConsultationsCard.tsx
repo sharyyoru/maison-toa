@@ -22,6 +22,7 @@ import InvoiceStatusBadge from "@/components/InvoiceStatusBadge";
 import TardocAccordionTree from "@/components/TardocAccordionTree";
 import AcfAccordionTree from "@/components/AcfAccordionTree";
 import { type MediDataInvoiceStatus } from "@/lib/medidata";
+import { usePatientRealtime } from "./PatientRealtimeContext";
 
 type TaskPriority = "low" | "medium" | "high";
 
@@ -558,6 +559,9 @@ export default function MedicalConsultationsCard({
   const router = useRouter();
   const tc = useTranslations("patient.consultationsCard");
   const tf = useTranslations("patient.form");
+  const { consultationsRevision, billingRevision, medicationRevision } = usePatientRealtime();
+  const pendingRealtimeReloadRef = useRef(false);
+  const [realtimeReloadToken, setRealtimeReloadToken] = useState(0);
 
   // Tab state for switching between Consultations and Medical Records
   const [activeMainTab, setActiveMainTab] = useState<"consultations" | "medical_records">("consultations");
@@ -820,6 +824,21 @@ export default function MedicalConsultationsCard({
   }>({ open: false, prescriptionSheetId: null, isMedication: true });
   const [medPdfGenerating, setMedPdfGenerating] = useState(false);
   const [medEmailSending, setMedEmailSending] = useState(false);
+
+  const realtimeReloadBlocked =
+    newConsultationOpen ||
+    consultationSaving ||
+    editConsultationModalOpen ||
+    editConsultationSaving ||
+    invoiceModalOpen ||
+    editInvoiceSaving ||
+    installmentsSaving ||
+    markingPaid ||
+    taskModalOpen ||
+    taskSaving ||
+    medCreationSuccessModal.open ||
+    medPdfGenerating ||
+    medEmailSending;
 
   const updateMedProduct = (id: string, updates: Partial<MedProduct>) => {
     setMedProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
@@ -1420,7 +1439,31 @@ export default function MedicalConsultationsCard({
     return () => {
       isMounted = false;
     };
-  }, [patientId, showArchived]);
+  }, [patientId, showArchived, realtimeReloadToken]);
+
+  useEffect(() => {
+    const hasRealtimeChange =
+      consultationsRevision > 0 || billingRevision > 0 || medicationRevision > 0;
+    if (!hasRealtimeChange) return;
+
+    if (realtimeReloadBlocked) {
+      pendingRealtimeReloadRef.current = true;
+      return;
+    }
+
+    setRealtimeReloadToken((value) => value + 1);
+  }, [
+    consultationsRevision,
+    billingRevision,
+    medicationRevision,
+    realtimeReloadBlocked,
+  ]);
+
+  useEffect(() => {
+    if (!pendingRealtimeReloadRef.current || realtimeReloadBlocked) return;
+    pendingRealtimeReloadRef.current = false;
+    setRealtimeReloadToken((value) => value + 1);
+  }, [realtimeReloadBlocked]);
 
   useEffect(() => {
     let isMounted = true;

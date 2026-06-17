@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { useTranslations } from "next-intl";
+import { usePatientRealtime } from "./PatientRealtimeContext";
 
 type IntakeSubmission = {
   id: string;
@@ -143,6 +144,8 @@ function calculateBMI(height: number | null, weight: number | null): number | nu
 
 export default function PatientIntakeDataCard({ patientId }: { patientId: string }) {
   const t = useTranslations("patient.intakeData");
+  const { intakeRevision } = usePatientRealtime();
+  const pendingRealtimeReloadRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submission, setSubmission] = useState<IntakeSubmission | null>(null);
@@ -313,6 +316,23 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
       if (data) setSwissInsurers(data);
     });
   }, [loadIntakeData]);
+
+  useEffect(() => {
+    if (intakeRevision === 0) return;
+
+    if (editingSection || saving) {
+      pendingRealtimeReloadRef.current = true;
+      return;
+    }
+
+    void loadIntakeData();
+  }, [intakeRevision, editingSection, saving, loadIntakeData]);
+
+  useEffect(() => {
+    if (!pendingRealtimeReloadRef.current || editingSection || saving) return;
+    pendingRealtimeReloadRef.current = false;
+    void loadIntakeData();
+  }, [editingSection, saving, loadIntakeData]);
 
   if (loading) {
     return (

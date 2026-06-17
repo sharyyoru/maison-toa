@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getAppointmentNotes, getAppointmentTitle, getAppointmentDisplayName } from "@/lib/appointmentUtils";
 import { useTranslations } from "next-intl";
 import { formatSwissAppointmentDateTime } from "@/lib/swissTimezone";
+import { usePatientRealtime } from "./PatientRealtimeContext";
 
 type AppointmentStatus =
   | "scheduled"
@@ -199,7 +200,10 @@ export default function PatientRendezvousTab({
   patientId: string;
 }) {
   const t = useTranslations("patient.rendezvous");
+  const { rendezvousRevision } = usePatientRealtime();
+  const pendingRealtimeReloadRef = useRef(false);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [reloadToken, setReloadToken] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>("future");
@@ -261,7 +265,24 @@ export default function PatientRendezvousTab({
     return () => {
       isMounted = false;
     };
-  }, [patientId]);
+  }, [patientId, reloadToken]);
+
+  useEffect(() => {
+    if (rendezvousRevision === 0) return;
+
+    if (editModalOpen || savingEdit) {
+      pendingRealtimeReloadRef.current = true;
+      return;
+    }
+
+    setReloadToken((value) => value + 1);
+  }, [rendezvousRevision, editModalOpen, savingEdit]);
+
+  useEffect(() => {
+    if (!pendingRealtimeReloadRef.current || editModalOpen || savingEdit) return;
+    pendingRealtimeReloadRef.current = false;
+    setReloadToken((value) => value + 1);
+  }, [editModalOpen, savingEdit]);
 
   const uniqueLocations = useMemo(() => {
     const locs = new Set<string>();

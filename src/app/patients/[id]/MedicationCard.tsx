@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { usePatientRealtime } from "./PatientRealtimeContext";
 
 type MedicationSubTab = "medicine" | "prescription";
 
@@ -83,6 +84,8 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
     const searchParams = useSearchParams();
     const params = useParams();
     const t = useTranslations("patient.medicationCard");
+    const { medicationRevision } = usePatientRealtime();
+    const pendingRealtimeReloadRef = useRef(false);
     
     // Use patientId from URL params (more reliable) or fall back to prop
     const patientId = (params?.id as string) || propPatientId;
@@ -111,21 +114,16 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
     const [newPrescriptionIsPrescription, setNewPrescriptionIsPrescription] = useState(true);
     const searchTimeoutRefs = useRef<Record<string, ReturnType<typeof setTimeout> | null>>({});
 
-    useEffect(() => {
-        loadMedications();
-        loadPatientEmail();
-    }, [patientId]);
-
-    async function loadPatientEmail() {
+    const loadPatientEmail = useCallback(async () => {
         const { data } = await supabaseClient
             .from("patients")
             .select("email")
             .eq("id", patientId)
             .single();
         if (data) setPatientEmail(data.email);
-    }
+    }, [patientId]);
 
-    async function loadMedications() {
+    const loadMedications = useCallback(async () => {
         setLoading(true);
         const { data, error } = await supabaseClient
             .from("patient_prescriptions")
@@ -136,7 +134,58 @@ export default function MedicationCard({ patientId: propPatientId }: { patientId
 
         if (data) setMedications(data);
         setLoading(false);
-    }
+    }, [patientId]);
+
+    useEffect(() => {
+        loadMedications();
+        loadPatientEmail();
+    }, [loadMedications, loadPatientEmail]);
+
+    useEffect(() => {
+        if (medicationRevision === 0) return;
+
+        const editingActive =
+            createPrescriptionModalOpen ||
+            creatingPrescription ||
+            editingMedication !== null ||
+            generatingPdf ||
+            sendingEmail;
+
+        if (editingActive) {
+            pendingRealtimeReloadRef.current = true;
+            return;
+        }
+
+        loadMedications();
+    }, [
+        medicationRevision,
+        createPrescriptionModalOpen,
+        creatingPrescription,
+        editingMedication,
+        generatingPdf,
+        sendingEmail,
+        loadMedications,
+    ]);
+
+    useEffect(() => {
+        const editingActive =
+            createPrescriptionModalOpen ||
+            creatingPrescription ||
+            editingMedication !== null ||
+            generatingPdf ||
+            sendingEmail;
+
+        if (!pendingRealtimeReloadRef.current || editingActive) return;
+        pendingRealtimeReloadRef.current = false;
+        loadMedications();
+    }, [
+        createPrescriptionModalOpen,
+        creatingPrescription,
+        editingMedication,
+        generatingPdf,
+        sendingEmail,
+        loadMedications,
+    ]);
 
     // Filter logic
     const filteredMedications = medications.filter((med) => {

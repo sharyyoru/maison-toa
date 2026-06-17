@@ -1,10 +1,17 @@
 "use client";
 
-import { ReactNode } from "react";
-import Link from "next/link";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
+import { supabaseClient } from "@/lib/supabaseClient";
 import DocumentPreviewTabsWrapper from "./DocumentPreviewTabsWrapper";
 import CrmTabDropdown from "./CrmTabDropdown";
+import {
+  initialPatientRealtimeRevisions,
+  PatientRealtimeProvider,
+  PatientRealtimeRevisions,
+} from "./PatientRealtimeContext";
 
 type MedicalTab =
   | "cockpit"
@@ -34,6 +41,12 @@ export default function PatientPageClientWrapper({
   children,
 }: PatientPageClientWrapperProps) {
   const t = useTranslations("patient.tabs");
+  const router = useRouter();
+  const [revisions, setRevisions] = useState<PatientRealtimeRevisions>(
+    initialPatientRealtimeRevisions,
+  );
+  const pendingRef = useRef<Partial<Record<keyof PatientRealtimeRevisions, boolean>>>({});
+  const debounceRef = useRef<number | null>(null);
 
   const medicalTabs: { id: MedicalTab; label: string }[] = [
     { id: "cockpit", label: t("cockpit") },
@@ -48,16 +61,166 @@ export default function PatientPageClientWrapper({
     { id: "crm", label: t("crm") },
   ];
 
+  useEffect(() => {
+    pendingRef.current = {};
+
+    function queueRefresh(keys: (keyof PatientRealtimeRevisions)[]) {
+      for (const key of keys) pendingRef.current[key] = true;
+
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      debounceRef.current = window.setTimeout(() => {
+        const pendingKeys = Object.keys(pendingRef.current) as (keyof PatientRealtimeRevisions)[];
+        pendingRef.current = {};
+        if (pendingKeys.length === 0) return;
+
+        setRevisions((prev) => {
+          const next = { ...prev };
+          for (const key of pendingKeys) next[key] += 1;
+          return next;
+        });
+
+        if (
+          pendingKeys.includes("patientRevision") ||
+          pendingKeys.includes("billingRevision") ||
+          pendingKeys.includes("intakeRevision")
+        ) {
+          router.refresh();
+        }
+      }, 500);
+    }
+
+    async function queueIfInvoiceBelongsToPatient(
+      payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
+    ) {
+      const row = (payload.new ?? payload.old) as { invoice_id?: string | null };
+      if (!row.invoice_id) return;
+
+      const { data } = await supabaseClient
+        .from("invoices")
+        .select("id")
+        .eq("id", row.invoice_id)
+        .eq("patient_id", patientId)
+        .maybeSingle();
+
+      if (data) queueRefresh(["consultationsRevision", "billingRevision"]);
+    }
+
+    async function queueIfTaskBelongsToPatient(
+      payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
+    ) {
+      const row = (payload.new ?? payload.old) as { task_id?: string | null };
+      if (!row.task_id) return;
+
+      const { data } = await supabaseClient
+        .from("tasks")
+        .select("id")
+        .eq("id", row.task_id)
+        .eq("patient_id", patientId)
+        .maybeSingle();
+
+      if (data) queueRefresh(["crmRevision"]);
+    }
+
+    const channel = supabaseClient.channel(`patient-realtime-${patientId}`);
+
+    channel
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "patients", filter: `id=eq.${patientId}` },
+        () => queueRefresh(["patientRevision"]),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "patient_insurances", filter: `patient_id=eq.${patientId}` },
+        () => queueRefresh(["patientRevision", "intakeRevision", "billingRevision"]),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "consultations", filter: `patient_id=eq.${patientId}` },
+        () => queueRefresh(["consultationsRevision", "billingRevision"]),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "invoices", filter: `patient_id=eq.${patientId}` },
+        () => queueRefresh(["consultationsRevision", "billingRevision", "crmRevision"]),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments", filter: `patient_id=eq.${patientId}` },
+        () => queueRefresh(["rendezvousRevision", "crmRevision"]),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "patient_notes", filter: `patient_id=eq.${patientId}` },
+        () => queueRefresh(["crmRevision"]),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "emails", filter: `patient_id=eq.${patientId}` },
+        () => queueRefresh(["crmRevision"]),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks", filter: `patient_id=eq.${patientId}` },
+        () => queueRefresh(["crmRevision"]),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "deals", filter: `patient_id=eq.${patientId}` },
+        () => queueRefresh(["crmRevision"]),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "patient_prescriptions", filter: `patient_id=eq.${patientId}` },
+        () => queueRefresh(["medicationRevision", "consultationsRevision"]),
+      );
+
+    const intakeTables = [
+      "patient_intake_submissions",
+      "patient_intake_preferences",
+      "patient_health_background",
+      "patient_measurements",
+      "patient_treatment_areas",
+      "patient_treatment_preferences",
+      "patient_intake_photos",
+      "patient_consultation_data",
+    ];
+
+    for (const table of intakeTables) {
+      channel.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table, filter: `patient_id=eq.${patientId}` },
+        () => queueRefresh(["intakeRevision"]),
+      );
+    }
+
+    channel
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoice_line_items" }, queueIfInvoiceBelongsToPatient)
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoice_installments" }, queueIfInvoiceBelongsToPatient)
+      .on("postgres_changes", { event: "*", schema: "public", table: "medidata_submissions" }, queueIfInvoiceBelongsToPatient)
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_comments" }, queueIfTaskBelongsToPatient)
+      .subscribe();
+
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      supabaseClient.removeChannel(channel);
+    };
+  }, [patientId, router]);
+
+  const providerValue = useMemo(() => revisions, [revisions]);
+
   return (
-    <DocumentPreviewTabsWrapper
-      patientId={patientId}
-      medicalTab={medicalTab}
-      medicalTabs={medicalTabs}
-      CrmTabDropdown={
-        <CrmTabDropdown patientId={patientId} isActive={medicalTab === "crm"} />
-      }
-    >
-      {children}
-    </DocumentPreviewTabsWrapper>
+    <PatientRealtimeProvider revisions={providerValue}>
+      <DocumentPreviewTabsWrapper
+        patientId={patientId}
+        medicalTab={medicalTab}
+        medicalTabs={medicalTabs}
+        CrmTabDropdown={
+          <CrmTabDropdown patientId={patientId} isActive={medicalTab === "crm"} />
+        }
+      >
+        {children}
+      </DocumentPreviewTabsWrapper>
+    </PatientRealtimeProvider>
   );
 }

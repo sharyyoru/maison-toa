@@ -10,6 +10,7 @@ import AppointmentModal, { type AppointmentData } from "@/components/Appointment
 import RichTextEditor from "@/components/RichTextEditor";
 import WhatsAppWebConversation from "@/components/WhatsAppWebConversation";
 import { formatSwissDateTime, formatSwissDate, formatSwissShortDate, formatSwissTime } from "@/lib/swissTimezone";
+import { usePatientRealtime } from "./PatientRealtimeContext";
 
 type ActivityTab = "activity" | "notes" | "emails" | "whatsapp" | "tasks" | "deals";
 
@@ -211,6 +212,9 @@ export default function PatientActivityCard({
   
   // Use controlled tab if provided, otherwise use internal state
   const t = useTranslations("patient.activityCard");
+  const { crmRevision } = usePatientRealtime();
+  const pendingRealtimeReloadRef = useRef(false);
+  const [crmReloadToken, setCrmReloadToken] = useState(0);
 
   const activeTab = controlledTab ?? internalTab;
   
@@ -390,6 +394,24 @@ export default function PatientActivityCard({
   const [dealSaveError, setDealSaveError] = useState<string | null>(null);
   const [deletingDealId, setDeletingDealId] = useState<string | null>(null);
 
+  const realtimeReloadBlocked =
+    noteModalOpen ||
+    noteSaving ||
+    emailModalOpen ||
+    emailSaving ||
+    emailAiLoading ||
+    invoiceModalOpen ||
+    invoiceAttaching !== null ||
+    createTaskModalOpen ||
+    editTask !== null ||
+    taskSaving ||
+    taskCommentSavingIds.length > 0 ||
+    dealModalOpen ||
+    editingDeal !== null ||
+    appointmentModalOpen ||
+    dealSaving ||
+    deletingDealId !== null;
+
   const defaultEmailTo = patientEmail ?? "";
 
   const searchParams = useSearchParams();
@@ -514,7 +536,7 @@ export default function PatientActivityCard({
     return () => {
       isMounted = false;
     };
-  }, [patientId]);
+  }, [patientId, crmReloadToken]);
 
   useEffect(() => {
     let isMounted = true;
@@ -623,7 +645,7 @@ export default function PatientActivityCard({
     return () => {
       isMounted = false;
     };
-  }, [patientId]);
+  }, [patientId, crmReloadToken]);
 
   // Load all deals assigned to the current user for navigation
   useEffect(() => {
@@ -807,7 +829,7 @@ export default function PatientActivityCard({
     return () => {
       isMounted = false;
     };
-  }, [patientId]);
+  }, [patientId, crmReloadToken]);
 
   useEffect(() => {
     if (emails.length === 0) {
@@ -1216,7 +1238,24 @@ export default function PatientActivityCard({
       isMounted = false;
       supabaseClient.removeChannel(emailSubscription);
     };
-  }, [patientId]);
+  }, [patientId, crmReloadToken]);
+
+  useEffect(() => {
+    if (crmRevision === 0) return;
+
+    if (realtimeReloadBlocked) {
+      pendingRealtimeReloadRef.current = true;
+      return;
+    }
+
+    setCrmReloadToken((value) => value + 1);
+  }, [crmRevision, realtimeReloadBlocked]);
+
+  useEffect(() => {
+    if (!pendingRealtimeReloadRef.current || realtimeReloadBlocked) return;
+    pendingRealtimeReloadRef.current = false;
+    setCrmReloadToken((value) => value + 1);
+  }, [realtimeReloadBlocked]);
 
   useEffect(() => {
     let isMounted = true;
