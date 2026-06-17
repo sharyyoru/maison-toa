@@ -817,6 +817,8 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => initialDate);
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
   const [appointmentsReloadVersion, setAppointmentsReloadVersion] = useState(0);
+  const appointmentRealtimeDebounceRef = useRef<number | null>(null);
+  const pendingAppointmentRealtimeReloadRef = useRef(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [patientSearch, setPatientSearch] = useState("");
@@ -1131,6 +1133,16 @@ export default function CalendarPage() {
   const [deletingAppointment, setDeletingAppointment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  const appointmentRealtimeReloadBlocked =
+    createModalOpen ||
+    savingCreate ||
+    editModalOpen ||
+    savingEdit ||
+    deletingAppointment ||
+    isDraggingCreate ||
+    draggedAppointment !== null ||
+    resizingAppointment !== null;
+
   // Edit modal: doctor & service editing
   const [editProviderId, setEditProviderId] = useState<string>("");
   const [editProviderSearch, setEditProviderSearch] = useState("");
@@ -1248,6 +1260,52 @@ export default function CalendarPage() {
       isMounted = false;
     };
   }, [monthStart, monthEnd, view, selectedDate, rangeEndDate, appointmentsReloadVersion]);
+
+  useEffect(() => {
+    function scheduleAppointmentsReload() {
+      if (appointmentRealtimeReloadBlocked) {
+        pendingAppointmentRealtimeReloadRef.current = true;
+        return;
+      }
+
+      if (appointmentRealtimeDebounceRef.current) {
+        window.clearTimeout(appointmentRealtimeDebounceRef.current);
+      }
+
+      appointmentRealtimeDebounceRef.current = window.setTimeout(() => {
+        setAppointmentsReloadVersion((version) => version + 1);
+      }, 500);
+    }
+
+    const channel = supabaseClient
+      .channel("appointments-calendar-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        scheduleAppointmentsReload,
+      )
+      .subscribe();
+
+    return () => {
+      if (appointmentRealtimeDebounceRef.current) {
+        window.clearTimeout(appointmentRealtimeDebounceRef.current);
+      }
+      supabaseClient.removeChannel(channel);
+    };
+  }, [appointmentRealtimeReloadBlocked]);
+
+  useEffect(() => {
+    if (!pendingAppointmentRealtimeReloadRef.current || appointmentRealtimeReloadBlocked) return;
+    pendingAppointmentRealtimeReloadRef.current = false;
+
+    if (appointmentRealtimeDebounceRef.current) {
+      window.clearTimeout(appointmentRealtimeDebounceRef.current);
+    }
+
+    appointmentRealtimeDebounceRef.current = window.setTimeout(() => {
+      setAppointmentsReloadVersion((version) => version + 1);
+    }, 500);
+  }, [appointmentRealtimeReloadBlocked]);
 
   // Compute, per patient, the earliest appointment start_time across all time.
   // Used to render the "new patient" badge only on the first appointment.
