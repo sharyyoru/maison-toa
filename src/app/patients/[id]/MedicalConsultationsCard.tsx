@@ -2493,14 +2493,14 @@ export default function MedicalConsultationsCard({
     
     setEditConsultationAutosaveStatus("pending");
     
-    // Set new timer for 3 seconds
+    // Set new timer for 1 second
     editConsultationAutosaveTimerRef.current = setTimeout(() => {
       void handleAutosaveEditConsultation();
-    }, 3000);
+    }, 1000);
   }
 
   // ========== NEW CONSULTATION AUTOSAVE ==========
-  // Creates a draft consultation on first input, then auto-saves every 3 seconds
+  // Creates a draft consultation on first input, then auto-saves after 1 second of inactivity
   
   async function handleNewConsultationAutosave() {
     // Only autosave for "notes" type (not invoices/prescriptions which have complex data)
@@ -2637,10 +2637,10 @@ export default function MedicalConsultationsCard({
     
     setNewConsultationAutosaveStatus("pending");
     
-    // Set new timer for 3 seconds
+    // Set new timer for 1 second
     newConsultationAutosaveTimerRef.current = setTimeout(() => {
       void handleNewConsultationAutosave();
-    }, 3000);
+    }, 1000);
   }
   
   // Cleanup autosave timer when form closes
