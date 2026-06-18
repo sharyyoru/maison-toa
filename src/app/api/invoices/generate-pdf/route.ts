@@ -560,10 +560,13 @@ export async function POST(request: NextRequest) {
       //   TG/KVG default = summary4debitor + detail4debitor ("Facture d'honoraires" + "Justificatif de remboursement")
       //   TP/KVG default = detail4hc ("Tiers Payant Rechnung") — NOT the patient-facing form
       //
-      // For the patient-facing PDF we always want "summary4debitor" regardless of TG or TP mode.
-      // This produces "Facture d'honoraires" (FR) / "Patienten-Rechnung" (DE) with QR bill — 1 page.
-      // printPatientInvoiceOnly=Yes (set above) further suppresses any accompanying detail forms.
-      const printTemplate = tiersMode1 === TiersMode.Payant ? "summary4debitor" : "summary";
+      // Use "feeDetail4debitor" for both TG and TP:
+      //   - Page 1: "Facture d'honoraires" summary with QR bill
+      //   - Page 2+: service line detail ("Justificatif de remboursement")
+      // This lets the accountant/patient see all service lines.
+      // printPatientInvoiceOnly=Yes (set above) ensures only the patient-facing forms are
+      // included, suppressing the TP-specific insurer form (detail4hc).
+      const printTemplate = "feeDetail4debitor";
       const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate, generationAttributes: pdfGenAttrs });
 
       if (!sumexResult.success) {
