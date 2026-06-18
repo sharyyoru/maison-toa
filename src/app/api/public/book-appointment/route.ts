@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { formatSwissDateWithWeekday, formatSwissTimeAmPm } from "@/lib/swissTimezone";
-import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
 import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
 import { stripHtml } from "@/lib/patientSanitize";
+import {
+  formatAppointmentDate,
+  generatePatientConfirmationEmail,
+  generateDoctorNotificationEmail,
+  generatePatientReminderEmail,
+} from "@/lib/appointmentEmails";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -148,259 +152,6 @@ async function sendEmail(to: string, subject: string, html: string) {
     console.error("Error sending email via Resend:", result.error);
     throw new Error(`Failed to send email: ${result.error}`);
   }
-}
-
-function formatDate(date: Date, language = "en"): string {
-  if (language === "fr") {
-    return date.toLocaleDateString("fr-FR", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      timeZone: "Europe/Zurich",
-    });
-  }
-  return formatSwissDateWithWeekday(date);
-}
-
-function formatTime(date: Date, language = "en"): string {
-  if (language === "fr") {
-    return date.toLocaleTimeString("fr-FR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: "Europe/Zurich",
-    });
-  }
-  return formatSwissTimeAmPm(date);
-}
-
-function getSalutation(
-  lastName: string,
-  gender: string | undefined,
-  language: string
-): string {
-  const isFrench = language === "fr";
-
-  if (gender === "female") {
-    return isFrench ? `Chère Madame ${lastName}` : `Dear Ms. ${lastName}`;
-  } else if (gender === "male") {
-    return isFrench ? `Cher Monsieur ${lastName}` : `Dear Mr. ${lastName}`;
-  }
-  // Fallback when gender is unknown or "other"
-  return isFrench ? "Madame, Monsieur," : "Dear Sir or Madam,";
-}
-
-function generatePatientConfirmationEmail(
-  lastName: string,
-  gender: string | undefined,
-  doctorName: string,
-  appointmentDate: Date,
-  service: string,
-  location: string | null,
-  language: string,
-  appointmentId?: string,
-  formUrl?: string
-): string {
-  const isFrench = language === "fr";
-  const salutation = getSalutation(lastName, gender, language);
-
-  // Translations
-  const t = {
-    en: {
-      subject: "Your appointment at Maison Tóā",
-      confirmed: "We are pleased to confirm your appointment at Maison Tóā.",
-      yourAppointment: "Your appointment",
-      date: "Date",
-      time: "Time",
-      treatment: "Treatment",
-      practitioner: "Practitioner",
-      manageAppointment: "You may manage your appointment at any time.",
-      reschedule: "Reschedule my appointment",
-      cancel: "Cancel my appointment",
-      closing: "We look forward to welcoming you.",
-      clinicAddress: "Voie du Chariot 6<br>1003 Lausanne",
-      prepareVisit: "To prepare your visit in the best conditions, please confirm your attendance and complete your patient information form prior to your appointment via the link below.",
-      confirmAndComplete: "Confirm my appointment & complete my file",
-    },
-    fr: {
-      subject: "Votre rendez-vous au sein de Maison Tóā",
-      confirmed: "Nous avons le plaisir de vous confirmer votre rendez-vous au sein de Maison Tóā.",
-      yourAppointment: "Votre rendez-vous",
-      date: "Date",
-      time: "Heure",
-      treatment: "Soin",
-      practitioner: "Praticien",
-      manageAppointment: "Vous avez la possibilité de gérer votre rendez-vous à tout moment.",
-      reschedule: "Modifier mon rendez-vous",
-      cancel: "Annuler mon rendez-vous",
-      closing: "Dans l'attente du plaisir de vous accueillir, nous vous prions d'agréer nos salutations distinguées.",
-      clinicAddress: "Voie du Chariot 6<br>1003 Lausanne",
-      prepareVisit: "Afin de préparer votre venue dans les meilleures conditions, nous vous invitons à confirmer votre présence et à compléter votre fiche patient avant votre rendez-vous via le lien ci-dessous.",
-      confirmAndComplete: "Confirmer ma présence & compléter ma fiche patient",
-    },
-  };
-
-  const texts = isFrench ? t.fr : t.en;
-
-  // Build management URL (placeholder - will be implemented when reschedule/cancel pages exist)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
-  const manageUrl = appointmentId
-    ? `${appUrl}/appointments/manage?id=${appointmentId}`
-    : `${appUrl}/book-appointment`;
-
-  const rows =
-    infoRow(texts.practitioner, doctorName) +
-    infoRow(texts.date, formatDate(appointmentDate, language)) +
-    infoRow(texts.time, formatTime(appointmentDate, language)) +
-    infoRow(texts.treatment, service) +
-    (location ? infoRow(isFrench ? "Lieu" : "Location", location) : "");
-
-  const body = `
-    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">${salutation}</p>
-    <p style="margin: 0 0 20px 0; color: #4a4742;">${texts.confirmed}</p>
-    <p style="margin: 0 0 8px 0; color: #8a8578; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;">${texts.yourAppointment}</p>
-    ${infoTable(rows)}
-    ${formUrl ? `
-    <p style="margin: 24px 0 16px 0; color: #4a4742;">${texts.prepareVisit}</p>
-    <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin: 0 0 24px 0;">
-      <tr>
-        <td>
-          <a href="${formUrl}" style="display: block; background-color: #0ea5e9; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 600;">${texts.confirmAndComplete}</a>
-        </td>
-      </tr>
-    </table>
-    ` : ''}
-    <p style="margin: 16px 0; color: #4a4742;">${texts.manageAppointment}</p>
-    <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin: 24px 0;">
-      <tr>
-        <td style="padding: 0 8px 8px 0;">
-          <a href="${manageUrl}&action=reschedule" style="display: block; background-color: #1a1a18; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500;">${texts.reschedule}</a>
-        </td>
-      </tr>
-      <tr>
-        <td style="padding: 0 8px 0 0;">
-          <a href="${manageUrl}&action=cancel" style="display: block; background-color: #f5f3ef; color: #1a1a18; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500; border: 1px solid #e8e3db;">${texts.cancel}</a>
-        </td>
-      </tr>
-    </table>
-    <p style="margin: 24px 0 0 0; color: #4a4742;">${texts.closing}</p>
-    <p style="margin: 8px 0 0 0; color: #1a1a18; font-weight: 500;">Maison Tóā</p>
-    <img src="${LOGO_URL}" alt="Maison Tóā" width="80" style="display: block; width: 80px; height: auto; margin: 16px 0 0 0;">
-  `;
-
-  return brandedEmail(body);
-}
-
-function generateDoctorNotificationEmail(
-  doctorName: string,
-  patientName: string,
-  patientEmail: string,
-  patientPhone: string | null,
-  appointmentDate: Date,
-  service: string,
-  notes: string | null,
-  location: string | null
-): string {
-  const patientRows =
-    infoRow("Name", patientName) +
-    infoRow("Email", patientEmail) +
-    (patientPhone ? infoRow("Phone", patientPhone) : "");
-
-  const appointmentRows =
-    infoRow("Date", formatDate(appointmentDate)) +
-    infoRow("Time", formatTime(appointmentDate)) +
-    infoRow("Service", service) +
-    (location ? infoRow("Location", location) : "");
-
-  const body = `
-    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">Dear ${doctorName},</p>
-    <p style="margin: 0 0 4px 0; color: #4a4742;">A new appointment has been booked through the online booking portal.</p>
-    <p style="margin: 0 0 4px 0; color: #8a8578; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;">Patient</p>
-    ${infoTable(patientRows)}
-    <p style="margin: 0 0 4px 0; color: #8a8578; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;">Appointment</p>
-    ${infoTable(appointmentRows)}
-    ${notes ? `<p style="margin: 16px 0 4px 0; color: #8a8578; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;">Notes</p>
-    <p style="margin: 0; color: #4a4742; font-size: 14px;">${notes}</p>` : ""}
-  `;
-
-  return brandedEmail(body);
-}
-
-function generatePatientReminderEmail(
-  lastName: string,
-  gender: string | undefined,
-  appointmentDate: Date,
-  service: string,
-  language: string,
-  appointmentId: string
-): string {
-  const isFrench = language === "fr";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
-  const manageUrl = `${appUrl}/appointments/manage?id=${appointmentId}`;
-  const salutation = isFrench
-    ? gender === "female"
-      ? `Ch&egrave;re Madame ${lastName}`
-      : gender === "male"
-        ? `Cher Monsieur ${lastName}`
-        : "Madame, Monsieur,"
-    : gender === "female"
-      ? `Dear Madam ${lastName}`
-      : gender === "male"
-        ? `Dear Sir ${lastName}`
-        : "Dear Sir or Madam,";
-
-  const rows = isFrench
-    ? infoRow("Date", formatDate(appointmentDate, language)) +
-      infoRow("Heure", formatTime(appointmentDate, language)) +
-      infoRow("Soin", service)
-    : infoRow("Date", formatDate(appointmentDate, language)) +
-      infoRow("Time", formatTime(appointmentDate, language)) +
-      infoRow("Treatment", service);
-
-  const body = isFrench
-    ? `
-    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">${salutation}</p>
-    <p style="margin: 0 0 8px 0; color: #4a4742;">Nous souhaitions vous rappeler votre prochain rendez-vous au sein de Maison T&oacute;&#257;.</p>
-    ${infoTable(rows)}
-    <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin: 24px 0;">
-      <tr>
-        <td style="padding: 0 8px 8px 0;">
-          <a href="${manageUrl}&action=reschedule" style="display: block; background-color: #1a1a18; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500;">Modifier mon rendez-vous</a>
-        </td>
-      </tr>
-      <tr>
-        <td style="padding: 0 8px 0 0;">
-          <a href="${manageUrl}&action=cancel" style="display: block; background-color: #f5f3ef; color: #1a1a18; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500; border: 1px solid #e8e3db;">Annuler mon rendez-vous</a>
-        </td>
-      </tr>
-    </table>
-    <p style="margin: 24px 0 0 0; color: #4a4742;">Dans l&rsquo;attente du plaisir de vous accueillir,</p>
-    <p style="margin: 8px 0 0 0; color: #1a1a18; font-weight: 500;">Maison T&oacute;&#257;</p>
-    <img src="${LOGO_URL}" alt="Maison T&oacute;&#257;" width="80" style="display: block; width: 80px; height: auto; margin: 16px 0 0 0;">
-  `
-    : `
-    <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">${salutation}</p>
-    <p style="margin: 0 0 8px 0; color: #4a4742;">This is a reminder of your upcoming appointment at Maison T&oacute;&#257;.</p>
-    ${infoTable(rows)}
-    <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin: 24px 0;">
-      <tr>
-        <td style="padding: 0 8px 8px 0;">
-          <a href="${manageUrl}&action=reschedule" style="display: block; background-color: #1a1a18; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500;">Reschedule my appointment</a>
-        </td>
-      </tr>
-      <tr>
-        <td style="padding: 0 8px 0 0;">
-          <a href="${manageUrl}&action=cancel" style="display: block; background-color: #f5f3ef; color: #1a1a18; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500; border: 1px solid #e8e3db;">Cancel my appointment</a>
-        </td>
-      </tr>
-    </table>
-    <p style="margin: 24px 0 0 0; color: #4a4742;">We look forward to welcoming you.</p>
-    <p style="margin: 8px 0 0 0; color: #1a1a18; font-weight: 500;">Maison T&oacute;&#257;</p>
-    <img src="${LOGO_URL}" alt="Maison T&oacute;&#257;" width="80" style="display: block; width: 80px; height: auto; margin: 16px 0 0 0;">
-  `;
-
-  return brandedEmail(body);
 }
 
 export async function POST(request: Request) {
@@ -890,22 +641,74 @@ export async function POST(request: Request) {
       // Continue without form - non-critical
     }
 
+    // Trigger the appointment-created workflow engine. If an active workflow
+    // handles the booking confirmation, it owns the patient confirmation +
+    // reminder. Otherwise we fall back to the hardcoded emails below so that
+    // confirmations can never silently stop going out.
+    let handledByWorkflow = false;
     try {
-      const patientEmailHtml = generatePatientConfirmationEmail(
-        lastName,
-        patientGender,
-        doctorName,
-        appointmentDateObj,
-        service,
-        location || null,
-        language,
-        appointment.id,
-        formUrl
-      );
-      await sendEmail(email, emailSubject, patientEmailHtml);
-      console.log("✓ Patient confirmation email sent successfully to:", email);
+      const url = new URL(request.url);
+      const baseUrl = `${url.protocol}//${url.host}`;
+
+      const wfRes = await fetch(`${baseUrl}/api/workflows/appointment-created`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appointmentId: appointment.id,
+          patientId,
+          language,
+          formUrl,
+          patient: {
+            first_name: firstName,
+            last_name: lastName,
+            email,
+            phone: phone || null,
+            gender: patientGender,
+          },
+          appointment: {
+            date: appointmentDateObj.toISOString(),
+            service,
+            doctorName,
+            doctorEmail,
+            location: location || null,
+          },
+        }),
+      });
+
+      if (wfRes.ok) {
+        const wfJson = await wfRes.json().catch(() => ({}));
+        if (typeof wfJson?.workflowsRun === "number" && wfJson.workflowsRun > 0) {
+          handledByWorkflow = true;
+          console.log(
+            `✓ Appointment-created workflow handled confirmation (${wfJson.workflowsRun} workflow(s), ${wfJson.actionsRun ?? 0} action(s))`,
+          );
+        }
+      } else {
+        console.warn("Appointment-created workflow returned non-OK status:", wfRes.status);
+      }
     } catch (err) {
-      console.error("✗ Error sending patient email:", err);
+      console.error("✗ Failed to trigger appointment-created workflow:", err);
+      // Fall back to hardcoded emails below.
+    }
+
+    if (!handledByWorkflow) {
+      try {
+        const patientEmailHtml = generatePatientConfirmationEmail(
+          lastName,
+          patientGender,
+          doctorName,
+          appointmentDateObj,
+          service,
+          location || null,
+          language,
+          appointment.id,
+          formUrl
+        );
+        await sendEmail(email, emailSubject, patientEmailHtml);
+        console.log("✓ Patient confirmation email sent successfully to:", email);
+      } catch (err) {
+        console.error("✗ Error sending patient email:", err);
+      }
     }
 
     // Send notification email to doctor
@@ -922,7 +725,7 @@ export async function POST(request: Request) {
       );
       await sendEmail(
         doctorEmail,
-        `New Appointment: ${patientName} - ${formatDate(appointmentDateObj)}`,
+        `New Appointment: ${patientName} - ${formatAppointmentDate(appointmentDateObj)}`,
         doctorEmailHtml
       );
       console.log("✓ Doctor notification email sent successfully to:", doctorEmail);
@@ -934,7 +737,7 @@ export async function POST(request: Request) {
     const reminderDate = new Date(appointmentDateObj);
     reminderDate.setDate(reminderDate.getDate() - 1);
 
-    if (reminderDate.getTime() > Date.now()) {
+    if (!handledByWorkflow && reminderDate.getTime() > Date.now()) {
       try {
         const reminderHtml = generatePatientReminderEmail(
           lastName,

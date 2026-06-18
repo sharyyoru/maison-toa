@@ -600,6 +600,28 @@ export default function WorkflowBuilderPage() {
 
           {data.actionType === "send_email" && (
             <>
+              {/* Email Type */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Type</label>
+                <select
+                  value={(data.config as { email_type?: string }).email_type || "custom"}
+                  onChange={(e) => updateNodeData(selectedNode.id, { config: { ...data.config, email_type: e.target.value } })}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                >
+                  <option value="custom">Custom email</option>
+                  <option value="appointment_confirmation">Booking confirmation (built-in)</option>
+                  <option value="appointment_reminder">Appointment reminder (built-in)</option>
+                  <option value="doctor_notification">Doctor notification (built-in)</option>
+                </select>
+                <p className="mt-1 text-[10px] text-slate-500">Built-in types reproduce the branded Maison Tóā appointment emails (FR/EN, salutation, reschedule/cancel links) and only work with the &quot;Appointment Created&quot; trigger.</p>
+              </div>
+
+              {((data.config as { email_type?: string }).email_type && (data.config as { email_type?: string }).email_type !== "custom") ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  The content, subject, and recipient of this email are generated automatically from the appointment details. Configure when it sends using <strong>Sending Behavior</strong> below.
+                </div>
+              ) : (
+              <>
               {/* Email Template Selection */}
               <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 space-y-3">
                 <label className="block text-xs font-semibold text-sky-800 uppercase tracking-wide">Email Template</label>
@@ -715,6 +737,8 @@ export default function WorkflowBuilderPage() {
                 />
                 <p className="mt-1 text-[10px] text-slate-500">Use {"{{patient.first_name}}"} etc. for variables</p>
               </div>
+              </>
+              )}
 
               {/* Sending Behavior */}
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
@@ -724,7 +748,7 @@ export default function WorkflowBuilderPage() {
                     <input
                       type="radio"
                       name={`send_mode_${selectedNode.id}`}
-                      checked={(data.config as { send_mode?: string }).send_mode !== "delay" && (data.config as { send_mode?: string }).send_mode !== "recurring"}
+                      checked={(data.config as { send_mode?: string }).send_mode !== "delay" && (data.config as { send_mode?: string }).send_mode !== "recurring" && (data.config as { send_mode?: string }).send_mode !== "reminder_before"}
                       onChange={() => updateNodeData(selectedNode.id, { config: { ...data.config, send_mode: "immediate" } })}
                       className="h-4 w-4 text-sky-600 border-slate-300"
                     />
@@ -749,6 +773,16 @@ export default function WorkflowBuilderPage() {
                       className="h-4 w-4 text-sky-600 border-slate-300"
                     />
                     <span className="text-sm text-slate-700">Recurring</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name={`send_mode_${selectedNode.id}`}
+                      checked={(data.config as { send_mode?: string }).send_mode === "reminder_before"}
+                      onChange={() => updateNodeData(selectedNode.id, { config: { ...data.config, send_mode: "reminder_before" } })}
+                      className="h-4 w-4 text-sky-600 border-slate-300"
+                    />
+                    <span className="text-sm text-slate-700">Before appointment</span>
                   </label>
                 </div>
 
@@ -784,6 +818,31 @@ export default function WorkflowBuilderPage() {
                       className="w-16 rounded border border-slate-200 px-2 py-1 text-sm text-slate-900"
                     />
                     <span className="text-slate-600">occurrences</span>
+                  </div>
+                )}
+
+                {(data.config as { send_mode?: string }).send_mode === "reminder_before" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-slate-600">Send</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={(data.config as { before_value?: number }).before_value || 24}
+                        onChange={(e) => updateNodeData(selectedNode.id, { config: { ...data.config, before_value: parseInt(e.target.value) || 1 } })}
+                        className="w-20 rounded border border-slate-200 px-2 py-1 text-sm text-slate-900"
+                      />
+                      <select
+                        value={(data.config as { before_unit?: string }).before_unit || "hours"}
+                        onChange={(e) => updateNodeData(selectedNode.id, { config: { ...data.config, before_unit: e.target.value } })}
+                        className="rounded border border-slate-200 px-2 py-1 text-sm text-slate-900"
+                      >
+                        <option value="hours">hours</option>
+                        <option value="days">days</option>
+                      </select>
+                      <span className="text-slate-600">before the appointment</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500">Requires the &quot;Appointment Created&quot; trigger. Queued and sent by the scheduled-email job. Skipped if the appointment is sooner than this window.</p>
                   </div>
                 )}
               </div>

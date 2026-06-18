@@ -80,6 +80,11 @@ export default function EmailTemplateBuilder({
   initialTemplateId,
 }: EmailTemplateBuilderProps) {
   const emailEditorRef = useRef<any>(null);
+  // The Unlayer editor instance, captured from onLoad/onReady. onLoad fires
+  // reliably under React 19 + react-email-editor 1.7.x, whereas onReady can be
+  // missed — so we never depend solely on onReady for saving.
+  const unlayerRef = useRef<any>(null);
+  const designLoadedRef = useRef(false);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [templateName, setTemplateName] = useState("");
@@ -214,6 +219,8 @@ export default function EmailTemplateBuilder({
     setSubjectTemplate(template.subject_template);
     setView("editor");
     setEditorReady(false);
+    designLoadedRef.current = false;
+    unlayerRef.current = null;
   }
 
   function handleNewTemplate() {
@@ -222,46 +229,85 @@ export default function EmailTemplateBuilder({
     setSubjectTemplate("");
     setView("editor");
     setEditorReady(false);
+    designLoadedRef.current = false;
+    unlayerRef.current = null;
   }
 
-  // Called when editor iframe is created but before it's fully loaded
+  // Load the selected template's saved design into the editor exactly once
+  // per editor session, regardless of whether it is triggered from onLoad or
+  // onReady (whichever fires first under the current React/Unlayer versions).
+  function loadInitialDesign(editor: any) {
+    if (!editor || designLoadedRef.current) return;
+    if (selectedTemplate?.design_json) {
+      editor.loadDesign(selectedTemplate.design_json);
+    }
+    designLoadedRef.current = true;
+  }
+
+  // Called when the editor iframe is created. This fires reliably under
+  // React 19 + react-email-editor 1.7.x, so it is our primary hook for
+  // capturing the editor instance and loading the design.
   function onEditorLoad(unlayer: any) {
-    console.log("Unlayer onLoad - registering selectImage callback", unlayer);
-    
+    unlayerRef.current = unlayer;
+    setEditorReady(true);
+
     // Register custom image selection callback
     unlayer.registerCallback(
       "selectImage",
       function (data: any, done: (data: { url: string }) => void) {
-        console.log("selectImage callback triggered!", data);
         // Store the done callback and open the gallery
         imageSelectDoneRef.current = done;
         setShowImageGallery(true);
         loadGalleryImages();
       }
     );
+
+    loadInitialDesign(unlayer);
   }
 
-  function onEditorReady() {
+  function onEditorReady(unlayer?: any) {
+    const editor = unlayer || unlayerRef.current || emailEditorRef.current?.editor;
+    if (editor) unlayerRef.current = editor;
     setEditorReady(true);
-    if (selectedTemplate?.design_json && emailEditorRef.current) {
-      emailEditorRef.current.editor.loadDesign(selectedTemplate.design_json);
-    }
+    loadInitialDesign(editor);
   }
 
   async function handleSave() {
-    if (!emailEditorRef.current || !editorReady) return;
+    // Resolve the editor instance from any source. We do NOT gate on the
+    // `editorReady` flag alone, because onReady can fail to fire under React 19,
+    // which previously made the Save button silently do nothing.
+    const editor = unlayerRef.current || emailEditorRef.current?.editor;
+    if (!editor || typeof editor.saveDesign !== "function") {
+      setError("The email editor is still loading. Please wait a moment and try again.");
+      return;
+    }
 
     try {
       setSaving(true);
       setError(null);
 
-      // Export design and HTML
-      const design = await new Promise<any>((resolve) => {
-        emailEditorRef.current.editor.saveDesign((design: any) => resolve(design));
+      // Export design and HTML, with timeouts so the Save button can never get
+      // stuck on "Saving..." if the editor callback never fires.
+      const design = await new Promise<any>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error("Timed out reading the design. Please wait for the editor to finish loading and try again.")),
+          20000
+        );
+        editor.saveDesign((design: any) => {
+          clearTimeout(timer);
+          resolve(design);
+        });
       });
 
-      const html = await new Promise<string>((resolve) => {
-        emailEditorRef.current.editor.exportHtml((data: any) => resolve(data.html));
+      const html = await new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error("Timed out exporting the email. Please try again.")),
+          20000
+        );
+        editor.exportHtml((data: any) => {
+          clearTimeout(timer);
+          resolve(data?.html ?? "");
+        });
       });
 
       const templateData = {
@@ -466,6 +512,9 @@ export default function EmailTemplateBuilder({
                   >
                     Use This Template
                   </button>
+                )}
+                {!editorReady && (
+                  <span className="text-xs text-slate-400">Preparing editor…</span>
                 )}
                 <button
                   onClick={handleSave}
