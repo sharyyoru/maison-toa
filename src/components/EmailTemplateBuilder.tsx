@@ -2,6 +2,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
+import { createPortal } from "react-dom";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { Image, Upload, Trash2, X, Loader2 } from "lucide-react";
 
@@ -95,6 +96,9 @@ export default function EmailTemplateBuilder({
   const [success, setSuccess] = useState<string | null>(null);
   const [editorReady, setEditorReady] = useState(false);
   const [view, setView] = useState<"list" | "editor">("list");
+  // Portal is mounted client-side only, so the fullscreen overlay escapes any
+  // transformed/overflow ancestor on the workflow builder page.
+  const [mounted, setMounted] = useState(false);
   
   // AI generation state
   const [aiPrompt, setAiPrompt] = useState("");
@@ -108,9 +112,28 @@ export default function EmailTemplateBuilder({
   const imageSelectDoneRef = useRef<((data: { url: string }) => void) | null>(null);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (open) {
       loadTemplates();
     }
+  }, [open]);
+
+  // Lock background scroll while the fullscreen editor is open.
+  useEffect(() => {
+    if (!open) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
   }, [open]);
 
   // Load images from Supabase emailgallery bucket
@@ -473,11 +496,11 @@ export default function EmailTemplateBuilder({
     onClose();
   }
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex bg-black/50">
-      <div className="flex h-full w-full flex-col bg-white">
+      <div className="flex h-[100dvh] w-[100dvw] min-w-0 flex-col overflow-hidden bg-white">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <div className="flex items-center gap-4">
@@ -634,7 +657,7 @@ export default function EmailTemplateBuilder({
           </div>
         ) : (
           /* Editor View */
-          <div className="flex flex-1 overflow-hidden">
+          <div className="flex min-h-0 flex-1 overflow-hidden">
             {/* Sidebar */}
             <div className="w-80 shrink-0 overflow-auto border-r border-slate-200 bg-slate-50 p-4">
               <div className="space-y-4">
@@ -719,12 +742,14 @@ export default function EmailTemplateBuilder({
             </div>
 
             {/* Email Editor */}
-            <div className="flex-1">
+            <div className="email-template-editor-shell relative flex min-h-0 flex-1">
               <EmailEditor
                 ref={emailEditorRef}
                 onLoad={onEditorLoad}
                 onReady={onEditorReady}
                 projectId={284973}
+                minHeight="calc(100dvh - 73px)"
+                style={{ height: "100%", width: "100%" }}
                 options={{
                   mergeTags: MERGE_TAGS,
                   features: {
@@ -873,6 +898,7 @@ export default function EmailTemplateBuilder({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
