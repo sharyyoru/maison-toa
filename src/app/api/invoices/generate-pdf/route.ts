@@ -526,12 +526,12 @@ export async function POST(request: NextRequest) {
         services: sumexServices,
         transportFrom: provGln,
         transportTo: receiverGln || insurerGln || "",
-        // printPatientInvoiceOnly: suppress all accompanying forms (Rückerstattungsbeleg, TP-Rechnung,
-        // barcode annex) so Sumex prints only the 1-page patient/guarantor summary.
-        // This is the PDF the clinic shows the patient. The TP invoice for the insurer is sent
-        // electronically via MediData XML and does not need to be in this PDF.
-        // Without this flag, a TP invoice with printCopyToGuarantor=Yes produces 3-4 pages.
-        printPatientInvoiceOnly: YesNo.Yes,
+        // printPatientInvoiceOnly=No: required to let feeDetail4debitor render service lines
+        // on page 2. Setting Yes suppresses feeDetail in favour of feeSummary (totals only)
+        // regardless of the print template — giving a 1-page PDF with no service breakdown.
+        // The TP insurer form (detail4hc) is excluded by the "feeDetail4debitor" template
+        // choice itself; we don't need this flag to suppress it.
+        printPatientInvoiceOnly: YesNo.No,
         // printCopyToGuarantor is intentionally NOT set here (defaults to No).
         // Setting it to Yes on a TP invoice forces Sumex to include a guarantor copy page,
         // which is only needed when physically mailing the invoice, not for PDF display.
