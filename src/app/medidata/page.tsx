@@ -1259,10 +1259,10 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
 
                   // A single sub renders exactly as before; multiples get a group header
                   const renderSubRow = (sub: Submission) => (
-                    <div key={sub.id} className={`border-b border-slate-100 last:border-b-0 ${hasMultiple && isGroupExpanded ? "bg-slate-50/60" : ""}`}>
+                    <div key={sub.id} className={hasMultiple && isGroupExpanded ? "bg-slate-50/60" : "border-b border-slate-100 last:border-b-0"}>
                       <button
                         type="button"
-                        className={`grid w-full grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)_minmax(110px,0.9fr)_minmax(90px,0.8fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_32px] gap-3 px-4 py-3 text-left hover:bg-slate-50 ${hasMultiple && isGroupExpanded ? "pl-8" : ""}`}
+                        className="grid w-full grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)_minmax(110px,0.9fr)_minmax(90px,0.8fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_32px] gap-3 px-4 py-3 text-left hover:bg-slate-50"
                         onClick={() => setExpandedSub(expandedSub === sub.id ? null : sub.id)}
                       >
                     <div className="min-w-0">
@@ -1804,7 +1804,12 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                           <InvoicePaymentBadge invoice={latest.invoice} />
                         </div>
                         <div className="min-w-0">
-                          <InvoiceStatusBadge status={latest.status} />
+                          {/* Show all unique statuses across the group so no single one misleads */}
+                          <div className="flex flex-col gap-1">
+                            {Array.from(new Map(groupSubs.map((s) => [s.status, s])).values()).map((s) => (
+                              <InvoiceStatusBadge key={s.status} status={s.status} />
+                            ))}
+                          </div>
                         </div>
                         <div className="flex items-center justify-center">
                           <svg
@@ -1820,13 +1825,16 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                       {isGroupExpanded && (
                         <div className="border-t border-amber-100">
                           {groupSubs.map((sub, idx) => (
-                            <div key={sub.id} className="relative">
-                              <div className="absolute left-4 top-3.5 z-10 pointer-events-none">
-                                <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">
+                            <div key={sub.id} className="flex items-stretch border-b border-slate-100 last:border-b-0">
+                              {/* Submission index gutter — sits beside the row, never overlaps */}
+                              <div className="flex w-8 flex-shrink-0 items-start justify-center pt-3.5">
+                                <span className="rounded-full bg-slate-200 px-1 py-0.5 text-[9px] font-bold text-slate-500">
                                   #{idx + 1}
                                 </span>
                               </div>
-                              {renderSubRow(sub)}
+                              <div className="min-w-0 flex-1">
+                                {renderSubRow(sub)}
+                              </div>
                             </div>
                           ))}
                         </div>
