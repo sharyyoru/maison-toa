@@ -8,6 +8,9 @@ type SendTestEmailRequestBody = {
   bodyTemplate?: string | null;
   bodyHtmlTemplate?: string | null;
   useHtml?: boolean;
+  // Flat map of dot-path -> value (e.g. { "patient.first_name": "Jane" }).
+  // Values provided here override the sample defaults below.
+  variables?: Record<string, string> | null;
 };
 
 function resolvePath(object: unknown, path: string): unknown {
@@ -30,14 +33,26 @@ function decodeHtmlEntities(str: string): string {
     .replace(/&#x7d;/gi, "}");
 }
 
-function renderTemplate(template: string, context: unknown): string {
+function renderTemplate(
+  template: string,
+  context: unknown,
+  variables?: Record<string, string> | null,
+): string {
   if (!template) return "";
 
   // First decode any HTML-encoded curly braces (from Unlayer or other editors)
   const decoded = decodeHtmlEntities(template);
 
   return decoded.replace(/{{\s*([^}]+?)\s*}}/g, (_match, rawPath) => {
-    const value = resolvePath(context, String(rawPath));
+    const path = String(rawPath);
+
+    // User-supplied test values take priority over the sample context.
+    if (variables && Object.prototype.hasOwnProperty.call(variables, path)) {
+      const provided = variables[path];
+      return provided === undefined || provided === null ? "" : String(provided);
+    }
+
+    const value = resolvePath(context, path);
     if (value === undefined || value === null) return "";
     return String(value);
   });
@@ -113,6 +128,8 @@ export async function POST(request: Request) {
       ].join("\n");
     const bodyHtmlTemplate = body.bodyHtmlTemplate ?? null;
     const useHtml = Boolean(body.useHtml);
+    const variables =
+      body.variables && typeof body.variables === "object" ? body.variables : {};
 
     if (!to) {
       return NextResponse.json({ error: "to is required" }, { status: 400 });
@@ -144,14 +161,14 @@ export async function POST(request: Request) {
       },
     };
 
-    const subject = renderTemplate(subjectTemplate, templateContext);
+    const subject = renderTemplate(subjectTemplate, templateContext, variables);
 
     let html: string;
     if (useHtml && bodyHtmlTemplate && bodyHtmlTemplate.trim().length > 0) {
-      const rendered = renderTemplate(bodyHtmlTemplate, templateContext);
+      const rendered = renderTemplate(bodyHtmlTemplate, templateContext, variables);
       html = rendered.trim().length > 0 ? rendered : "<p>(Empty HTML body)</p>";
     } else {
-      const renderedText = renderTemplate(bodyTemplate, templateContext);
+      const renderedText = renderTemplate(bodyTemplate, templateContext, variables);
       html = textToHtml(renderedText || "(Empty body)");
     }
 

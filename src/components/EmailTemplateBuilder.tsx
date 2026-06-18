@@ -4,7 +4,7 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
 import { supabaseClient } from "@/lib/supabaseClient";
-import { Image, Upload, Trash2, X, Loader2 } from "lucide-react";
+import { Image, Upload, Trash2, X, Loader2, Send } from "lucide-react";
 
 // Dynamically import to avoid SSR issues
 const EmailEditor = dynamic(() => import("react-email-editor"), { ssr: false });
@@ -74,6 +74,62 @@ const MERGE_TAGS = {
   },
 };
 
+// Human-friendly label for each known dot-path, derived from MERGE_TAGS.
+const VARIABLE_LABELS: Record<string, string> = {};
+Object.values(MERGE_TAGS).forEach((category) => {
+  Object.values(category.mergeTags).forEach((tag) => {
+    const path = tag.value.replace(/[{}]/g, "").trim();
+    VARIABLE_LABELS[path] = `${category.name} · ${tag.name}`;
+  });
+});
+
+// Sensible sample values used to pre-fill the test-email form.
+const VARIABLE_SAMPLES: Record<string, string> = {
+  "patient.first_name": "Jane",
+  "patient.last_name": "Doe",
+  "patient.email": "jane.doe@example.com",
+  "patient.phone": "+41 22 000 00 00",
+  "patient.full_name": "Jane Doe",
+  "deal.title": "Botox Consultation",
+  "deal.pipeline": "Aesthetics",
+  "deal.stage": "Appointment set",
+  "deal.notes": "Sample notes",
+  "appointment.date": "Monday, 24 June 2026",
+  "appointment.time": "14:30",
+  "appointment.service": "Consultation",
+  "appointment.provider": "Dr. Martin",
+  "clinic.name": "Maison Toa",
+  "clinic.phone": "+41 22 000 00 00",
+  "clinic.address": "Rue du Rhône 1, Geneva",
+  "clinic.website": "https://maisontoa.com",
+};
+
+// Unlayer can HTML-encode the curly braces on export; decode them so we can
+// detect merge tags the same way the server does.
+function decodeBraces(str: string): string {
+  return str
+    .replace(/&#123;/g, "{")
+    .replace(/&#125;/g, "}")
+    .replace(/&lbrace;/g, "{")
+    .replace(/&rbrace;/g, "}")
+    .replace(/&#x7b;/gi, "{")
+    .replace(/&#x7d;/gi, "}");
+}
+
+// Extract the unique set of {{dot.path}} variables found in the given text.
+function extractVariables(text: string): string[] {
+  if (!text) return [];
+  const decoded = decodeBraces(text);
+  const found = new Set<string>();
+  const regex = /{{\s*([^}]+?)\s*}}/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(decoded)) !== null) {
+    const path = match[1].trim();
+    if (path) found.add(path);
+  }
+  return Array.from(found);
+}
+
 export default function EmailTemplateBuilder({
   open,
   onClose,
@@ -103,6 +159,16 @@ export default function EmailTemplateBuilder({
   // AI generation state
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
+
+  // Test email state
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [testRecipient, setTestRecipient] = useState("");
+  const [testVariables, setTestVariables] = useState<Record<string, string>>({});
+  const [detectedVars, setDetectedVars] = useState<string[]>([]);
+  const [testHtml, setTestHtml] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
+  const [testSuccess, setTestSuccess] = useState<string | null>(null);
 
   // Image gallery state
   const [showImageGallery, setShowImageGallery] = useState(false);
@@ -496,6 +562,83 @@ export default function EmailTemplateBuilder({
     onClose();
   }
 
+  // Export the email currently being edited, detect its merge-tag variables,
+  // pre-fill the form, and open the test-email modal.
+  async function openTestModal() {
+    const editor = unlayerRef.current || emailEditorRef.current?.editor;
+    if (!editor || typeof editor.exportHtml !== "function") {
+      setError("The email editor is still loading. Please wait a moment and try again.");
+      return;
+    }
+
+    try {
+      const html = await new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error("Timed out reading the email. Please try again.")),
+          20000
+        );
+        editor.exportHtml((data: any) => {
+          clearTimeout(timer);
+          resolve(data?.html ?? "");
+        });
+      });
+
+      const vars = extractVariables(`${subjectTemplate} ${html}`);
+
+      setTestHtml(html);
+      setDetectedVars(vars);
+      setTestVariables((prev) => {
+        const next: Record<string, string> = {};
+        for (const v of vars) {
+          next[v] = prev[v] ?? VARIABLE_SAMPLES[v] ?? "";
+        }
+        return next;
+      });
+      setTestError(null);
+      setTestSuccess(null);
+      setShowTestModal(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to read the email for testing.");
+    }
+  }
+
+  async function handleSendTest() {
+    const to = testRecipient.trim();
+    if (!to) {
+      setTestError("Please enter a recipient email address.");
+      return;
+    }
+
+    try {
+      setSendingTest(true);
+      setTestError(null);
+      setTestSuccess(null);
+
+      const response = await fetch("/api/workflows/send-test-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to,
+          subjectTemplate: subjectTemplate || `Test: ${templateName || "Email template"}`,
+          bodyHtmlTemplate: testHtml,
+          useHtml: true,
+          variables: testVariables,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to send test email.");
+      }
+
+      setTestSuccess(`Test email sent to ${to}.`);
+    } catch (err) {
+      setTestError(err instanceof Error ? err.message : "Failed to send test email.");
+    } finally {
+      setSendingTest(false);
+    }
+  }
+
   if (!open || !mounted) return null;
 
   return createPortal(
@@ -539,6 +682,13 @@ export default function EmailTemplateBuilder({
                 {!editorReady && (
                   <span className="text-xs text-slate-400">Preparing editor…</span>
                 )}
+                <button
+                  onClick={openTestModal}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-white px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50"
+                >
+                  <Send className="h-4 w-4" />
+                  Send Test
+                </button>
                 <button
                   onClick={handleSave}
                   disabled={saving}
@@ -766,6 +916,134 @@ export default function EmailTemplateBuilder({
           </div>
         )}
       </div>
+
+      {/* Test Email Modal */}
+      {showTestModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <Send className="h-5 w-5 text-sky-600" />
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900">Send Test Email</h3>
+                  <p className="text-sm text-slate-500">
+                    Sends the email you are editing, with the values below.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTestModal(false)}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 space-y-4 overflow-auto px-6 py-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Send to
+                </label>
+                <input
+                  type="email"
+                  value={testRecipient}
+                  onChange={(e) => setTestRecipient(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+
+              <div>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Variable values
+                  </label>
+                  {detectedVars.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTestVariables(() => {
+                          const next: Record<string, string> = {};
+                          for (const v of detectedVars) next[v] = VARIABLE_SAMPLES[v] ?? "";
+                          return next;
+                        })
+                      }
+                      className="text-xs font-medium text-sky-600 hover:underline"
+                    >
+                      Reset to samples
+                    </button>
+                  )}
+                </div>
+
+                {detectedVars.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
+                    No variables detected in this email. The test will send exactly as designed.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {detectedVars.map((path) => (
+                      <div key={path}>
+                        <label className="block text-xs font-medium text-slate-600">
+                          {VARIABLE_LABELS[path] || path}
+                          <code className="ml-1 text-[10px] text-slate-400">{`{{${path}}}`}</code>
+                        </label>
+                        <input
+                          type="text"
+                          value={testVariables[path] ?? ""}
+                          onChange={(e) =>
+                            setTestVariables((prev) => ({ ...prev, [path]: e.target.value }))
+                          }
+                          className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {testError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {testError}
+                </div>
+              )}
+              {testSuccess && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                  {testSuccess}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-3">
+              <button
+                onClick={() => setShowTestModal(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleSendTest}
+                disabled={sendingTest || !testRecipient.trim()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {sendingTest ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Send Test
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Image Gallery Modal */}
       {showImageGallery && (
