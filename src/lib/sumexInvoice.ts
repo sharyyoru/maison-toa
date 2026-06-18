@@ -507,7 +507,7 @@ async function reqPost<T = Record<string, unknown>>(
   const url = `${SUMEX_REQUEST_BASE_URL}/${iface}/${method}`;
   console.log(`${LOG_PREFIX} POST ${iface}/${method}`);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60_000);
+  const timeout = setTimeout(() => controller.abort(), 300_000);
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -537,8 +537,8 @@ async function reqPost<T = Record<string, unknown>>(
     }
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
-      console.error(`${LOG_PREFIX} POST ${iface}/${method} TIMED OUT after 60s`);
-      throw new Error(`Sumex request timed out: ${iface}/${method} did not respond within 60 seconds`);
+      console.error(`${LOG_PREFIX} POST ${iface}/${method} TIMED OUT after 300s`);
+      throw new Error(`Sumex request timed out: ${iface}/${method} did not respond within 300 seconds`);
     }
     throw err;
   } finally {

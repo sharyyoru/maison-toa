@@ -306,6 +306,7 @@ export default function MediDataDashboard() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [subsLoading, setSubsLoading] = useState(false);
   const [expandedSub, setExpandedSub] = useState<string | null>(null);
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [submissionsPage, setSubmissionsPage] = useState(0);
   const [submissionsCount, setSubmissionsCount] = useState(0);
   const [submissionSearch, setSubmissionSearch] = useState("");
@@ -1241,13 +1242,29 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                 <div></div>
               </div>
 
-              {submissions.map((sub) => (
-                <div key={sub.id} className="border-b border-slate-100 last:border-b-0">
-                  <button
-                    type="button"
-                    className="grid w-full grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)_minmax(110px,0.9fr)_minmax(90px,0.8fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_32px] gap-3 px-4 py-3 text-left hover:bg-slate-50"
-                    onClick={() => setExpandedSub(expandedSub === sub.id ? null : sub.id)}
-                  >
+              {(() => {
+                // Group submissions by invoice_number (preserving order of first appearance)
+                const groupMap = new Map<string, Submission[]>();
+                for (const sub of submissions) {
+                  const key = sub.invoice_number;
+                  if (!groupMap.has(key)) groupMap.set(key, []);
+                  groupMap.get(key)!.push(sub);
+                }
+                const groups = Array.from(groupMap.entries());
+
+                return groups.map(([invoiceNumber, groupSubs]) => {
+                  const latest = groupSubs[0]; // already ordered newest-first from DB
+                  const hasMultiple = groupSubs.length > 1;
+                  const isGroupExpanded = expandedGroup === invoiceNumber;
+
+                  // A single sub renders exactly as before; multiples get a group header
+                  const renderSubRow = (sub: Submission) => (
+                    <div key={sub.id} className={`border-b border-slate-100 last:border-b-0 ${hasMultiple && isGroupExpanded ? "bg-slate-50/60" : ""}`}>
+                      <button
+                        type="button"
+                        className={`grid w-full grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)_minmax(110px,0.9fr)_minmax(90px,0.8fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_32px] gap-3 px-4 py-3 text-left hover:bg-slate-50 ${hasMultiple && isGroupExpanded ? "pl-8" : ""}`}
+                        onClick={() => setExpandedSub(expandedSub === sub.id ? null : sub.id)}
+                      >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-slate-900">{sub.invoice_number}</p>
                       <p className="mt-1 text-xs text-slate-500">
@@ -1733,7 +1750,91 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                     </div>
                   )}
                 </div>
-              ))}
+                  );
+
+                  if (!hasMultiple) {
+                    return renderSubRow(latest);
+                  }
+
+                  // Group header row for invoices with multiple submissions
+                  return (
+                    <div key={invoiceNumber} className="border-b border-slate-100 last:border-b-0">
+                      {/* Group header */}
+                      <button
+                        type="button"
+                        className="grid w-full grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)_minmax(110px,0.9fr)_minmax(90px,0.8fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_32px] gap-3 px-4 py-3 text-left hover:bg-amber-50/60 bg-amber-50/30"
+                        onClick={() => setExpandedGroup(isGroupExpanded ? null : invoiceNumber)}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-semibold text-slate-900">{invoiceNumber}</p>
+                            <span className="flex-shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                              {groupSubs.length} submissions
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Latest: {new Date(latest.created_at).toLocaleDateString("fr-CH")}{" "}
+                            {new Date(latest.created_at).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm text-slate-800">{formatPatientName(latest.patient)}</p>
+                          <p className="mt-1 truncate text-xs text-slate-400">{latest.patient_id}</p>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap gap-1">
+                            {latest.billing_type && (
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                                {latest.billing_type}
+                              </span>
+                            )}
+                            {latest.law_type && (
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                                {latest.law_type}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-700">
+                            {latest.invoice_amount != null ? `CHF ${latest.invoice_amount.toFixed(2)}` : "—"}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <InvoicePaymentBadge invoice={latest.invoice} />
+                        </div>
+                        <div className="min-w-0">
+                          <InvoiceStatusBadge status={latest.status} />
+                        </div>
+                        <div className="flex items-center justify-center">
+                          <svg
+                            className={`h-4 w-4 text-amber-500 transition-transform ${isGroupExpanded ? "rotate-180" : ""}`}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </button>
+
+                      {/* Expanded: individual submission rows */}
+                      {isGroupExpanded && (
+                        <div className="border-t border-amber-100">
+                          {groupSubs.map((sub, idx) => (
+                            <div key={sub.id} className="relative">
+                              <div className="absolute left-4 top-3.5 z-10 pointer-events-none">
+                                <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">
+                                  #{idx + 1}
+                                </span>
+                              </div>
+                              {renderSubRow(sub)}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
             </div>
           )}
 
