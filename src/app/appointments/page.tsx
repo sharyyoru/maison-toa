@@ -409,6 +409,7 @@ type CalendarView = "month" | "day" | "range";
 const DAY_VIEW_START_MINUTES = 6 * 60;
 const DAY_VIEW_END_MINUTES = 20 * 60; // 8 PM
 const DAY_VIEW_SLOT_MINUTES = 15;
+const DAY_VIEW_RESIZE_MINUTES = 5;
 const DAY_VIEW_SLOT_HEIGHT = 28;
 
 // Agenda order and initials mapping - matches the official clinic list
@@ -3706,16 +3707,16 @@ export default function CalendarPage() {
         resizeOriginalEndMinutesRef.current +
         (deltaY / DAY_VIEW_SLOT_HEIGHT) * DAY_VIEW_SLOT_MINUTES;
       const snappedEndMinutes =
-        Math.round(unsnappedEndMinutes / DAY_VIEW_SLOT_MINUTES) *
-        DAY_VIEW_SLOT_MINUTES;
+        Math.round(unsnappedEndMinutes / DAY_VIEW_RESIZE_MINUTES) *
+        DAY_VIEW_RESIZE_MINUTES;
       
-      // Calculate new end time (minimum 15 minutes from start)
+      // Calculate new end time
       const start = new Date(appt.start_time);
       const { hour: startH, minute: startM } = getSwissHourMinute(start);
       const startMinutes = startH * 60 + startM;
       
       const newEndMinutes = Math.max(
-        startMinutes + DAY_VIEW_SLOT_MINUTES, // Minimum 15 min duration
+        startMinutes + DAY_VIEW_RESIZE_MINUTES,
         Math.min(snappedEndMinutes, DAY_VIEW_END_MINUTES)
       );
       
