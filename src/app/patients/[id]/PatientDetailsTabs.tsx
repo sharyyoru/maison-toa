@@ -5,6 +5,13 @@ import { useTranslations } from "next-intl";
 
 type TabKey = "primary" | "address" | "insurance";
 
+function formatPatientFileName(firstName?: string | null, lastName?: string | null) {
+  const first = (firstName ?? "").trim();
+  const last = (lastName ?? "").trim();
+  if (last && first) return `${last}, ${first}`;
+  return last || first || "";
+}
+
 export default function PatientDetailsTabs({
   patient,
   insurance,
@@ -21,7 +28,7 @@ export default function PatientDetailsTabs({
   // Defensive: ensure insurance is always an array
   const safeInsurance = Array.isArray(insurance) ? insurance : [];
 
-  const fullName = `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim();
+  const fullName = formatPatientFileName(patient.first_name, patient.last_name);
 
   function handleCopy(value?: string | null) {
     const text = (value ?? "").toString().trim();

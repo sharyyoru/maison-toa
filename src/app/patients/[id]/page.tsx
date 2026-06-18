@@ -52,6 +52,13 @@ type MedicalTab =
   | "form_photos"
   | "medication";
 
+function formatPatientFileName(firstName?: string | null, lastName?: string | null) {
+  const first = (firstName ?? "").trim();
+  const last = (lastName ?? "").trim();
+  if (last && first) return `${last}, ${first}`;
+  return last || first || "Unknown";
+}
+
 async function getPatientWithDetails(id: string) {
   const { data: patient, error } = await supabaseAdmin
     .from("patients")
@@ -318,6 +325,8 @@ export default async function PatientPage({
     genderClasses = "bg-pink-50 text-pink-700 border-pink-200";
   }
 
+  const patientFileName = formatPatientFileName(patient.first_name, patient.last_name);
+
   return (
     <div className="space-y-6">
       <CollapseSidebarOnMount />
@@ -339,7 +348,7 @@ export default async function PatientPage({
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-lg font-semibold text-slate-900">
-                {patient.first_name} {patient.last_name}
+                {patientFileName}
               </h1>
               <VipToggle patientId={patient.id} />
               <PatientEditingPresence patientId={patient.id} />
@@ -415,7 +424,7 @@ export default async function PatientPage({
                     {tPatient("consultationsFor")}
                   </p>
                   <p className="text-base font-semibold text-slate-900">
-                    {patient.first_name} {patient.last_name}
+                    {patientFileName}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
@@ -579,7 +588,7 @@ export default async function PatientPage({
                     {tPatient("consultationsFor")}
                   </p>
                   <p className="text-base font-semibold text-slate-900">
-                    {patient.first_name} {patient.last_name}
+                    {patientFileName}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">

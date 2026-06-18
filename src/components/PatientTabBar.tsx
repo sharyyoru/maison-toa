@@ -7,6 +7,13 @@ import { usePatientTabs } from "./PatientTabsContext";
 // Routes where the tab bar should be hidden
 const HIDDEN_ROUTES = ["/form", "/login", "/book-appointment", "/intake", "/onboarding", "/invoice", "/register"];
 
+function formatPatientFileName(firstName?: string | null, lastName?: string | null) {
+  const first = (firstName ?? "").trim();
+  const last = (lastName ?? "").trim();
+  if (last && first) return `${last}, ${first}`;
+  return last || first || "Unknown";
+}
+
 export default function PatientTabBar() {
   const { tabs, activePatientId, removeTab, clearAllTabs } = usePatientTabs();
   const router = useRouter();
@@ -55,7 +62,7 @@ export default function PatientTabBar() {
         {tabs.map((tab) => {
           const isActive = tab.id === activePatientId;
           const initials = `${tab.firstName?.[0] ?? ""}${tab.lastName?.[0] ?? ""}`.toUpperCase() || "?";
-          const displayName = `${tab.firstName ?? ""} ${tab.lastName ?? ""}`.trim() || "Unknown";
+          const displayName = formatPatientFileName(tab.firstName, tab.lastName);
           const truncatedName = displayName.length > 16 ? displayName.slice(0, 14) + "..." : displayName;
 
           return (
