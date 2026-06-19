@@ -18,6 +18,16 @@ const COUNTRY_LABELS: Record<string, string> = {
   us: "United States",
 };
 
+function normalizePlaceName(placeName: string, countryCode: string) {
+  const trimmed = placeName.trim();
+
+  if (countryCode === "ch") {
+    return trimmed.replace(/\s+\d+.*$/, "").trim();
+  }
+
+  return trimmed;
+}
+
 function orderedCountryCandidates(postalCode: string, requestedCountry: string | null) {
   const normalizedRequested = requestedCountry?.trim().toLowerCase();
   const requestedCode = Object.entries(COUNTRY_LABELS).find(
@@ -54,12 +64,22 @@ export async function GET(request: Request) {
       if (!response.ok) continue;
 
       const data = (await response.json()) as PostalLookupResponse;
-      const place = data.places?.[0];
+      const cities = Array.from(
+        new Set(
+          (data.places || [])
+            .map((place) => {
+              const placeName = place["place name"];
+              return placeName ? normalizePlaceName(placeName, countryCode) : null;
+            })
+            .filter((placeName): placeName is string => Boolean(placeName)),
+        ),
+      ).sort((a, b) => a.localeCompare(b));
 
-      if (place?.["place name"]) {
+      if (cities.length > 0) {
         return NextResponse.json({
           postalCode,
-          city: place["place name"],
+          city: cities[0],
+          cities,
           country: data.country || COUNTRY_LABELS[countryCode] || countryCode.toUpperCase(),
           countryCode: (data["country abbreviation"] || countryCode).toUpperCase(),
         });

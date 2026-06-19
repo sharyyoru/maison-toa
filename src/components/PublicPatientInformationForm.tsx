@@ -365,6 +365,7 @@ export default function PublicPatientInformationForm({
     town: "",
     country: "",
   });
+  const [cityOptions, setCityOptions] = useState<string[]>([]);
 
   const t = copy[language];
 
@@ -382,7 +383,10 @@ export default function PublicPatientInformationForm({
 
   useEffect(() => {
     const postalCode = formData.postal_code.trim();
-    if (postalCode.length < 3) return;
+    if (postalCode.length < 3) {
+      setCityOptions([]);
+      return;
+    }
 
     const controller = new AbortController();
     const timeoutId = window.setTimeout(async () => {
@@ -395,11 +399,23 @@ export default function PublicPatientInformationForm({
           signal: controller.signal,
         });
 
-        if (!response.ok) return;
+        if (!response.ok) {
+          setCityOptions([]);
+          return;
+        }
 
-        const data = (await response.json()) as { city?: string; country?: string };
+        const data = (await response.json()) as {
+          city?: string;
+          cities?: string[];
+          country?: string;
+        };
+        const cities = data.cities?.filter(Boolean) || [];
+        setCityOptions(cities);
 
         setFormData((current) => {
+          const nextTown = cities.includes(current.town)
+            ? current.town
+            : data.city || cities[0] || current.town;
           const canUpdateTown =
             !current.town ||
             (autoFilledAddress.postalCode !== postalCode &&
@@ -411,14 +427,14 @@ export default function PublicPatientInformationForm({
 
           return {
             ...current,
-            town: data.city && canUpdateTown ? data.city : current.town,
+            town: canUpdateTown ? nextTown : current.town,
             country: data.country && canUpdateCountry ? data.country : current.country,
           };
         });
 
         setAutoFilledAddress({
           postalCode,
-          town: data.city || "",
+          town: data.city || cities[0] || "",
           country: data.country || "",
         });
       } catch (lookupError) {
@@ -580,7 +596,18 @@ export default function PublicPatientInformationForm({
                 required
                 busy={postalLookupPending}
               />
-              <TextInput label={required((t.fields as Record<string, string>).town)} value={formData.town} onChange={(value) => update("town", value)} required />
+              {cityOptions.length > 1 ? (
+                <SelectInput
+                  label={required((t.fields as Record<string, string>).town)}
+                  value={formData.town}
+                  onChange={(value) => update("town", value)}
+                  placeholder={(t.options as Record<string, string>).select}
+                  options={cityOptions.map((city) => [city, city])}
+                  required
+                />
+              ) : (
+                <TextInput label={required((t.fields as Record<string, string>).town)} value={formData.town} onChange={(value) => update("town", value)} required />
+              )}
               <TextInput label={required((t.fields as Record<string, string>).country)} value={formData.country} onChange={(value) => update("country", value)} required />
             </div>
           </section>
