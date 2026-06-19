@@ -52,16 +52,37 @@ function formName(language: "en" | "fr") {
   return language === "fr" ? "Informations personnelles" : "Patient Information";
 }
 
-async function findPatientIdByEmail(email: string) {
+type ExistingPatient = {
+  id: string;
+  dob: string | null;
+};
+
+async function findPatientByEmail(email: string): Promise<ExistingPatient | undefined> {
   const { data, error } = await supabaseAdmin
     .from("patients")
-    .select("id")
+    .select("id, dob")
     .ilike("email", email)
     .order("created_at", { ascending: true })
     .limit(1);
 
   if (error) throw error;
-  return data?.[0]?.id as string | undefined;
+  return data?.[0] as ExistingPatient | undefined;
+}
+
+function dobMatches(existingDob: string | null, submittedDob: string) {
+  if (!existingDob) return false;
+  return existingDob.slice(0, 10) === submittedDob;
+}
+
+function dobMismatchResponse(language: "en" | "fr") {
+  const message = language === "fr"
+    ? "Cette adresse e-mail existe déjà, mais la date de naissance ne correspond pas. Veuillez utiliser une autre adresse e-mail afin de créer un nouveau dossier patient."
+    : "This email address already exists, but the date of birth does not match. Please use a different email address so a new patient record can be created.";
+
+  return NextResponse.json(
+    { error: message, code: "EMAIL_DOB_MISMATCH" },
+    { status: 409 },
+  );
 }
 
 export async function POST(request: Request) {
@@ -147,10 +168,15 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString(),
     };
 
-    let patientId = await findPatientIdByEmail(email);
+    let existingPatient = await findPatientByEmail(email);
+    let patientId = existingPatient?.id;
     let action: "created" | "updated" = "updated";
 
     if (patientId) {
+      if (!dobMatches(existingPatient?.dob ?? null, dob)) {
+        return dobMismatchResponse(formLanguage);
+      }
+
       const { error: updateError } = await supabaseAdmin
         .from("patients")
         .update(patientFields)
@@ -171,8 +197,13 @@ export async function POST(request: Request) {
         const duplicateEmail = insertError.code === "23505";
         if (!duplicateEmail) throw insertError;
 
-        patientId = await findPatientIdByEmail(email);
+        existingPatient = await findPatientByEmail(email);
+        patientId = existingPatient?.id;
         if (!patientId) throw insertError;
+
+        if (!dobMatches(existingPatient?.dob ?? null, dob)) {
+          return dobMismatchResponse(formLanguage);
+        }
 
         const { error: updateAfterConflictError } = await supabaseAdmin
           .from("patients")
