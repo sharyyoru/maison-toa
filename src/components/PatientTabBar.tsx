@@ -10,7 +10,7 @@ const HIDDEN_ROUTES = ["/form", "/login", "/book-appointment", "/intake", "/onbo
 function formatPatientFileName(firstName?: string | null, lastName?: string | null) {
   const first = (firstName ?? "").trim();
   const last = (lastName ?? "").trim();
-  if (last && first) return `${last}, ${first}`;
+  if (last && first) return `${last} ${first}`;
   return last || first || "Unknown";
 }
 
