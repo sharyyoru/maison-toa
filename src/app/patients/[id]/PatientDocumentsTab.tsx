@@ -167,6 +167,9 @@ export default function PatientDocumentsTab({
   const [searchQuery, setSearchQuery] = useState("");
   const [enlargedImage, setEnlargedImage] = useState<{ url: string; name: string } | null>(null);
   const [previewModal, setPreviewModal] = useState<{ url: string; name: string; mimeType: string; uploadedAt: string | null } | null>(null);
+  const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState<string | null>(null);
+  const [selectedFilePreviewLoading, setSelectedFilePreviewLoading] = useState(false);
+  const [beforeAfterImages, setBeforeAfterImages] = useState<{ url: string; name: string; created_at: string | undefined }[]>([]);
   
   // Email sharing state
   const [selectedFilesForEmail, setSelectedFilesForEmail] = useState<Set<string>>(new Set());
@@ -456,61 +459,104 @@ export default function PatientDocumentsTab({
     return Array.from(types);
   }, [items]);
 
-  const beforeAfterImages = useMemo(
-    () =>
-      items
-        .filter(
-          (item) =>
-            item.kind === "file" &&
-            ["jpg", "jpeg", "png", "gif", "webp"].includes(
-              getExtension(item.name),
-            ),
-        )
-        .map((item) => {
-          const fullPath = [patientId, item.path].filter(Boolean).join("/");
-          const { data } = supabaseClient.storage
-            .from(BUCKET_NAME)
-            .getPublicUrl(fullPath);
-          const url = data.publicUrl ?? null;
-          return url
-            ? {
-                url,
-                name: item.name,
-                created_at: item.created_at || item.updated_at || undefined,
-              }
-            : null;
-        })
-        .filter(
-          (image): image is { url: string; name: string; created_at: string | undefined } => image !== null,
-        ),
-    [items, patientId],
-  );
-
-  const selectedFilePreviewUrl = useMemo(() => {
-    if (!selectedFile || selectedFile.kind !== "file") return null;
-
-    let baseUrl: string;
-    
-    // For patient-docs files, use the pre-fetched publicUrl
-    if (selectedFile.source === "patient-docs" && selectedFile.publicUrl) {
-      baseUrl = selectedFile.publicUrl;
-    } else {
-      // For patient_document bucket files
-      const fullPath = [patientId, selectedFile.path]
-        .filter(Boolean)
-        .join("/");
-
-      const { data } = supabaseClient.storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(fullPath);
-
-      baseUrl = data.publicUrl;
+  const getFileAccessUrl = useCallback(async (item: ListedItem, expiresIn = 3600) => {
+    if (item.source === "patient-docs" && item.publicUrl) {
+      return item.publicUrl;
     }
 
-    // Add cache-busting parameter to ensure fresh content after edits
-    const cacheBuster = `?v=${refreshKey}-${selectedFile.updated_at || Date.now()}`;
-    return baseUrl ? baseUrl + cacheBuster : null;
-  }, [patientId, selectedFile, refreshKey]);
+    const fullPath = [patientId, item.path].filter(Boolean).join("/");
+    const params = new URLSearchParams({
+      bucket: BUCKET_NAME,
+      path: fullPath,
+      expiresIn: String(expiresIn),
+    });
+
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    if (!token) {
+      throw new Error("You must be logged in to preview documents.");
+    }
+
+    const response = await fetch(`/api/documents/signed-url?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok || !payload.signedUrl) {
+      throw new Error(payload.error || `Failed to create access URL for ${item.name}`);
+    }
+
+    return payload.signedUrl as string;
+  }, [patientId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadBeforeAfterImages() {
+      const imageItems = items.filter(
+        (item) =>
+          item.kind === "file" &&
+          ["jpg", "jpeg", "png", "gif", "webp"].includes(getExtension(item.name)),
+      );
+
+      try {
+        const images = await Promise.all(
+          imageItems.map(async (item) => ({
+            url: await getFileAccessUrl(item),
+            name: item.name,
+            created_at: item.created_at || item.updated_at || undefined,
+          })),
+        );
+
+        if (!cancelled) setBeforeAfterImages(images);
+      } catch (err) {
+        console.error("Failed to load before/after image URLs:", err);
+        if (!cancelled) setBeforeAfterImages([]);
+      }
+    }
+
+    void loadBeforeAfterImages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [items, getFileAccessUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSelectedFilePreviewUrl() {
+      if (!selectedFile || selectedFile.kind !== "file") {
+        setSelectedFilePreviewUrl(null);
+        setSelectedFilePreviewLoading(false);
+        return;
+      }
+
+      setSelectedFilePreviewLoading(true);
+      setSelectedFilePreviewUrl(null);
+
+      try {
+        const url = await getFileAccessUrl(selectedFile);
+        if (!cancelled) setSelectedFilePreviewUrl(url);
+      } catch (err: any) {
+        if (!cancelled) {
+          setSelectedFilePreviewUrl(null);
+          setError(err?.message || "Unable to generate a preview URL for this file.");
+        }
+      } finally {
+        if (!cancelled) setSelectedFilePreviewLoading(false);
+      }
+    }
+
+    void loadSelectedFilePreviewUrl();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFile, refreshKey, getFileAccessUrl]);
 
   async function handleFilesSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const files = event.target.files;
@@ -682,16 +728,7 @@ export default function PatientDocumentsTab({
         const item = items.find(i => i.path === itemPath);
         if (!item || item.kind !== "file") return null;
         
-        let fileUrl: string;
-        if (item.source === "patient-docs" && item.publicUrl) {
-          fileUrl = item.publicUrl;
-        } else {
-          const fullPath = [patientId, item.path].filter(Boolean).join("/");
-          const { data } = supabaseClient.storage
-            .from(BUCKET_NAME)
-            .getPublicUrl(fullPath);
-          fileUrl = data.publicUrl;
-        }
+        const fileUrl = await getFileAccessUrl(item);
         
         const response = await fetch(fileUrl);
         if (!response.ok) throw new Error(`Failed to fetch ${item.name}`);
@@ -768,16 +805,12 @@ export default function PatientDocumentsTab({
       // Get URLs for selected files
       const fileUrls: { name: string; url: string }[] = [];
       for (const itemPath of Array.from(selectedFilesForEmail)) {
-        const fullPath = [patientId, itemPath].filter(Boolean).join("/");
-        const { data } = supabaseClient.storage
-          .from(BUCKET_NAME)
-          .getPublicUrl(fullPath);
-        
         const item = items.find(i => i.path === itemPath);
-        if (data.publicUrl && item) {
+        if (item) {
+          const url = await getFileAccessUrl(item, 60 * 60 * 24);
           fileUrls.push({
             name: item.name,
-            url: data.publicUrl,
+            url,
           });
         }
       }
@@ -1213,22 +1246,12 @@ export default function PatientDocumentsTab({
                       );
                     }
 
-                    // For patient-docs files, use the pre-fetched publicUrl
-                    let thumbUrl: string;
+                    // Private patient-documents files need signed URLs. Avoid fetching thumbnails
+                    // during render; preview actions request a signed URL on demand.
+                    let thumbUrl = "";
                     if (item.source === "patient-docs" && item.publicUrl) {
                       thumbUrl = item.publicUrl;
-                    } else {
-                      const fullPath = [patientId, item.path]
-                        .filter(Boolean)
-                        .join("/");
-                      const { data } = supabaseClient.storage
-                        .from(BUCKET_NAME)
-                        .getPublicUrl(fullPath);
-                      thumbUrl = data.publicUrl;
                     }
-                    // Add cache-busting parameter to ensure fresh content after edits
-                    const cacheBuster = `?v=${refreshKey}-${item.updated_at || Date.now()}`;
-                    const previewUrl = thumbUrl + cacheBuster;
                     const ext = getExtension(item.name);
                     const isImageThumb = [
                       "jpg",
@@ -1310,14 +1333,19 @@ export default function PatientDocumentsTab({
                         {/* Preview button */}
                         <button
                           type="button"
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
-                            setPreviewModal({
-                              url: previewUrl,
-                              name: item.name,
-                              mimeType,
-                              uploadedAt: uploadDate || null,
-                            });
+                            try {
+                              const url = await getFileAccessUrl(item);
+                              setPreviewModal({
+                                url,
+                                name: item.name,
+                                mimeType,
+                                uploadedAt: uploadDate || null,
+                              });
+                            } catch (err: any) {
+                              setError(err?.message || "Unable to generate a preview URL for this file.");
+                            }
                           }}
                           className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[10px] font-medium text-sky-700 hover:bg-sky-100 hover:border-sky-300 transition-colors"
                           title="Preview"
@@ -1332,13 +1360,18 @@ export default function PatientDocumentsTab({
                         {documentPreviewTabs && (
                           <button
                             type="button"
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              documentPreviewTabs?.addTab({
-                                name: item.name,
-                                url: previewUrl,
-                                mimeType,
-                              });
+                              try {
+                                const url = await getFileAccessUrl(item);
+                                documentPreviewTabs?.addTab({
+                                  name: item.name,
+                                  url,
+                                  mimeType,
+                                });
+                              } catch (err: any) {
+                                setError(err?.message || "Unable to generate a preview URL for this file.");
+                              }
                             }}
                             className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-colors"
                             title="Preview in Tab"
@@ -1444,6 +1477,11 @@ export default function PatientDocumentsTab({
                 <p className="text-[11px] text-slate-500">
                   {t("selectFilePreview")}
                 </p>
+              ) : selectedFilePreviewLoading ? (
+                <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-500" />
+                  <span>Loading preview...</span>
+                </div>
               ) : !selectedFilePreviewUrl ? (
                 <p className="text-[11px] text-slate-500">
                   {t("noPreviewUrl")}
