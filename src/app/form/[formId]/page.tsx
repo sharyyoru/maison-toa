@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { getFormById, FormDefinition, FormField, FormSection } from "@/lib/formDefinitions";
 import Image from "next/image";
+import PublicPatientInformationForm from "@/components/PublicPatientInformationForm";
 
 type FormData = Record<string, string | boolean | string[]>;
 
@@ -447,6 +448,14 @@ export default function PublicFormPage() {
 
     loadForm();
   }, [formId, token]);
+
+  if (!token && (formId === "patient-information-en" || formId === "patient-information-fr")) {
+    return (
+      <PublicPatientInformationForm
+        initialLanguage={formId === "patient-information-fr" ? "fr" : "en"}
+      />
+    );
+  }
 
   const handleFieldChange = (fieldId: string, value: string | boolean | string[]) => {
     setFormData((prev) => ({
