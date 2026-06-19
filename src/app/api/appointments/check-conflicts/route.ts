@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+function formatPatientFileName(firstName?: string | null, lastName?: string | null) {
+  const first = (firstName ?? '').trim();
+  const last = (lastName ?? '').trim();
+  if (last && first) return `${last}, ${first}`;
+  return last || first || 'Unknown';
+}
+
 export async function POST(request: Request) {
   try {
     const { providers, providerIds, startTime, endTime, excludeAppointmentId, machineIds } = await request.json();
@@ -152,7 +159,7 @@ export async function POST(request: Request) {
         // Format conflict details
         const formattedConflicts = conflictingAppointments.map((appt: any) => ({
           appointmentId: appt.id,
-          patientName: `${appt.patient?.first_name || ''} ${appt.patient?.last_name || ''}`.trim() || 'Unknown',
+          patientName: formatPatientFileName(appt.patient?.first_name, appt.patient?.last_name),
           startTime: appt.start_time,
           endTime: appt.end_time,
           location: appt.location || 'Unknown location'

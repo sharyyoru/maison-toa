@@ -172,6 +172,13 @@ type AppointmentPatientSuggestion = {
   phone: string | null;
 };
 
+function formatPatientFileName(firstName?: string | null, lastName?: string | null) {
+  const first = (firstName ?? "").trim();
+  const last = (lastName ?? "").trim();
+  if (last && first) return `${last}, ${first}`;
+  return last || first || "";
+}
+
 type ServiceOption = {
   id: string;
   name: string;
@@ -2798,8 +2805,10 @@ export default function CalendarPage() {
       }
 
       const fullName =
-        `${(data.first_name ?? "").toString()} ${(data.last_name ?? "").toString()}`
-          .trim() || "Unnamed patient";
+        formatPatientFileName(
+          (data.first_name ?? "").toString(),
+          (data.last_name ?? "").toString(),
+        ) || "Unnamed patient";
 
       const suggestion: AppointmentPatientSuggestion = {
         id: data.id as string,
@@ -3292,7 +3301,10 @@ export default function CalendarPage() {
     console.log('[Paste] Total matched services:', matchedServices.length, matchedServices.map(s => s.name));
 
     if (copiedAppointment.patient?.id) {
-      const patientName = `${copiedAppointment.patient.first_name ?? ""} ${copiedAppointment.patient.last_name ?? ""}`.trim();
+      const patientName = formatPatientFileName(
+        copiedAppointment.patient.first_name,
+        copiedAppointment.patient.last_name,
+      );
       setCreatePatientId(copiedAppointment.patient.id);
       setCreatePatientName(patientName);
       setCreatePatientSearch(patientName);
@@ -3487,7 +3499,7 @@ export default function CalendarPage() {
     // Create a custom drag image
     const dragImage = document.createElement("div");
     dragImage.className = "bg-sky-100 border border-sky-300 rounded px-2 py-1 text-xs shadow-lg";
-    dragImage.textContent = `${appt.patient?.first_name ?? ""} ${appt.patient?.last_name ?? ""}`.trim() || "Appointment";
+    dragImage.textContent = formatPatientFileName(appt.patient?.first_name, appt.patient?.last_name) || "Appointment";
     dragImage.style.position = "absolute";
     dragImage.style.top = "-1000px";
     dragImage.style.left = "-1000px";
@@ -4152,7 +4164,7 @@ export default function CalendarPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
               <span className="truncate">
-                Copied: {copiedAppointment.patient ? `${copiedAppointment.patient.first_name ?? ""} ${copiedAppointment.patient.last_name ?? ""}`.trim() : "Appointment"}
+                Copied: {copiedAppointment.patient ? formatPatientFileName(copiedAppointment.patient.first_name, copiedAppointment.patient.last_name) : "Appointment"}
               </span>
               <button
                 type="button"
@@ -4661,11 +4673,10 @@ export default function CalendarPage() {
                             appt.reason,
                           );
 
-                          const patientName = `${appt.patient?.first_name ?? ""} ${
-                            appt.patient?.last_name ?? ""
-                          }`
-                            .trim()
-                            .replace(/\s+/g, " ");
+                          const patientName = formatPatientFileName(
+                            appt.patient?.first_name,
+                            appt.patient?.last_name,
+                          );
 
                           const doctorFromReason = getDoctorNameFromReason(appt.reason);
                           const providerName = (appt.provider?.name ?? "").trim().toLowerCase();
@@ -4925,7 +4936,10 @@ export default function CalendarPage() {
                                   const dragDuration = dragEnd ? Math.round((dragEnd.getTime() - dragStart.getTime()) / 60000) : 30;
                                   const previewTop = ((dropTargetMinutes - DAY_VIEW_START_MINUTES) / DAY_VIEW_SLOT_MINUTES) * DAY_VIEW_SLOT_HEIGHT;
                                   const previewHeight = (dragDuration / DAY_VIEW_SLOT_MINUTES) * DAY_VIEW_SLOT_HEIGHT;
-                                  const patientName = `${draggedAppointment.patient?.first_name ?? ""} ${draggedAppointment.patient?.last_name ?? ""}`.trim();
+                                  const patientName = formatPatientFileName(
+                                    draggedAppointment.patient?.first_name,
+                                    draggedAppointment.patient?.last_name,
+                                  );
                                   
                                   return (
                                     <div
@@ -5009,7 +5023,10 @@ export default function CalendarPage() {
                                     const { statusLabel: dayStatusLabel } = getServiceAndStatusFromReason(appt.reason);
                                     const dayStatusIcon = getStatusIcon(dayStatusLabel);
 
-                                    const patientName = `${appt.patient?.first_name ?? ""} ${appt.patient?.last_name ?? ""}`.trim().replace(/\s+/g, " ");
+                                    const patientName = formatPatientFileName(
+                                      appt.patient?.first_name,
+                                      appt.patient?.last_name,
+                                    );
                                     const patientPhone = appt.patient?.phone ?? null;
                                     const patientEmail = appt.patient?.email ?? null;
                                     const durationMins = end && !Number.isNaN(end.getTime()) 
@@ -5159,7 +5176,7 @@ export default function CalendarPage() {
               <div>
                 <div className="font-medium">Paste here</div>
                 <div className="text-[10px] text-slate-500">
-                  {`${copiedAppointment.patient?.first_name ?? ""} ${copiedAppointment.patient?.last_name ?? ""}`.trim() || "Appointment"} → {doctorCalendars.find(c => c.id === pasteContextMenu.doctorId)?.name ?? "Doctor"}
+                  {formatPatientFileName(copiedAppointment.patient?.first_name, copiedAppointment.patient?.last_name) || "Appointment"} → {doctorCalendars.find(c => c.id === pasteContextMenu.doctorId)?.name ?? "Doctor"}
                 </div>
               </div>
             </button>
@@ -5226,7 +5243,7 @@ export default function CalendarPage() {
                         href={`/patients/${editingAppointment.patient.id}`}
                         className="text-[11px] text-sky-600 font-bold hover:text-sky-700 hover:underline"
                       >
-                        {`${editingAppointment.patient.first_name ?? ""} ${editingAppointment.patient.last_name ?? ""}`.trim() || "Unknown patient"}
+                        {formatPatientFileName(editingAppointment.patient.first_name, editingAppointment.patient.last_name) || "Unknown patient"}
                       </Link>
                     ) : (
                       <p className="text-[11px] text-slate-800 font-medium">
@@ -5755,7 +5772,7 @@ export default function CalendarPage() {
                           type="button"
                           onClick={() => handlePasteAppointment()}
                           className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-sky-300 bg-sky-50 text-sky-600 shadow-sm hover:bg-sky-100"
-                          title={`Paste: ${copiedAppointment.patient ? `${copiedAppointment.patient.first_name ?? ""} ${copiedAppointment.patient.last_name ?? ""}`.trim() : "Copied appointment"}`}
+                          title={`Paste: ${copiedAppointment.patient ? formatPatientFileName(copiedAppointment.patient.first_name, copiedAppointment.patient.last_name) : "Copied appointment"}`}
                         >
                           <svg
                             className="h-3 w-3"
@@ -5827,8 +5844,7 @@ export default function CalendarPage() {
                           </div>
                         ) : (
                           filteredCreatePatientSuggestions.map((p) => {
-                            const name = `${p.first_name ?? ""} ${p.last_name ?? ""}`
-                              .trim() || t("modal.unnamedPatient");
+                            const name = formatPatientFileName(p.first_name, p.last_name) || t("modal.unnamedPatient");
                             const details =
                               p.email || p.phone || t("modal.noContactDetails");
                             return (
