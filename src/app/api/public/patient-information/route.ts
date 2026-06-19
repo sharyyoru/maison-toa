@@ -28,6 +28,21 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_GENDERS = new Set(["male", "female", "other"]);
 const VALID_LANGUAGES = new Set(["en", "fr", "de", "it"]);
 const YES_NO = new Set(["yes", "no"]);
+const VALID_SPECIALTY_INTERESTS = new Set([
+  "aesthetic_medicine",
+  "dermatology",
+  "plastic_surgery",
+  "laser_treatments",
+  "other",
+]);
+const VALID_REFERRAL_SOURCES = new Set([
+  "google",
+  "social_media",
+  "friend_family",
+  "medical_referral",
+  "advertising",
+  "other",
+]);
 
 function cleanText(value: string | undefined) {
   return stripHtml(value)?.trim() || null;
@@ -56,9 +71,32 @@ export async function POST(request: Request) {
     const firstName = cleanText(body.first_name);
     const lastName = cleanText(body.last_name);
     const phone = cleanText(body.phone);
+    const dob = cleanText(body.dob);
+    const streetAddressLine = cleanText(body.street_address);
+    const streetNumber = cleanText(body.street_number);
+    const postalCode = cleanText(body.postal_code);
+    const town = cleanText(body.town);
+    const country = cleanText(body.country);
+    const sanitizedCountry = sanitizeCountry(country);
     const formLanguage = body.form_language === "fr" ? "fr" : "en";
 
-    if (!firstName || !lastName || !email || !phone) {
+    if (
+      !firstName ||
+      !lastName ||
+      !email ||
+      !phone ||
+      !body.gender ||
+      !dob ||
+      !streetAddressLine ||
+      !streetNumber ||
+      !postalCode ||
+      !town ||
+      !country ||
+      !sanitizedCountry ||
+      !body.language_preference ||
+      !body.specialty_interest ||
+      !body.referral_source
+    ) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -66,15 +104,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
     }
 
+    if (!VALID_GENDERS.has(body.gender)) {
+      return NextResponse.json({ error: "Invalid gender" }, { status: 400 });
+    }
+
+    if (!VALID_LANGUAGES.has(body.language_preference)) {
+      return NextResponse.json({ error: "Invalid preferred language" }, { status: 400 });
+    }
+
     if (!YES_NO.has(body.email_communications || "") || !YES_NO.has(body.photo_consent || "")) {
       return NextResponse.json({ error: "Missing required communication preferences" }, { status: 400 });
+    }
+
+    if (!VALID_SPECIALTY_INTERESTS.has(body.specialty_interest)) {
+      return NextResponse.json({ error: "Invalid specialty interest" }, { status: 400 });
+    }
+
+    if (!VALID_REFERRAL_SOURCES.has(body.referral_source)) {
+      return NextResponse.json({ error: "Invalid referral source" }, { status: 400 });
     }
 
     if (body.consent_understood !== true || !body.signature?.startsWith("data:image/png;base64,")) {
       return NextResponse.json({ error: "Missing required consent and signature" }, { status: 400 });
     }
 
-    const streetAddress = [cleanText(body.street_address), cleanText(body.street_number)]
+    const streetAddress = [streetAddressLine, streetNumber]
       .filter(Boolean)
       .join(" ") || null;
 
@@ -83,21 +137,15 @@ export async function POST(request: Request) {
       last_name: lastName,
       email,
       phone: sanitizePhone(phone),
-      language_preference:
-        body.language_preference && VALID_LANGUAGES.has(body.language_preference)
-          ? body.language_preference
-          : formLanguage,
+      gender: body.gender,
+      dob,
+      street_address: streetAddress,
+      postal_code: postalCode,
+      town: sanitizeTown(town),
+      country: sanitizedCountry,
+      language_preference: body.language_preference,
       updated_at: new Date().toISOString(),
     };
-
-    if (body.gender && VALID_GENDERS.has(body.gender)) patientFields.gender = body.gender;
-    if (cleanText(body.dob)) patientFields.dob = cleanText(body.dob);
-    if (streetAddress) patientFields.street_address = streetAddress;
-    if (cleanText(body.postal_code)) patientFields.postal_code = cleanText(body.postal_code);
-    if (sanitizeTown(cleanText(body.town))) patientFields.town = sanitizeTown(cleanText(body.town));
-    if (sanitizeCountry(cleanText(body.country))) {
-      patientFields.country = sanitizeCountry(cleanText(body.country));
-    }
 
     let patientId = await findPatientIdByEmail(email);
     let action: "created" | "updated" = "updated";
@@ -144,11 +192,11 @@ export async function POST(request: Request) {
       last_name: lastName,
       email,
       phone: sanitizePhone(phone),
-      street_address: cleanText(body.street_address),
-      street_number: cleanText(body.street_number),
-      postal_code: cleanText(body.postal_code),
-      town: sanitizeTown(cleanText(body.town)),
-      country: sanitizeCountry(cleanText(body.country)),
+      street_address: streetAddressLine,
+      street_number: streetNumber,
+      postal_code: postalCode,
+      town: sanitizeTown(town),
+      country: sanitizedCountry,
     };
 
     const { error: submissionError } = await supabaseAdmin

@@ -359,6 +359,12 @@ export default function PublicPatientInformationForm({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [postalLookupPending, setPostalLookupPending] = useState(false);
+  const [autoFilledAddress, setAutoFilledAddress] = useState({
+    postalCode: "",
+    town: "",
+    country: "",
+  });
 
   const t = copy[language];
 
@@ -373,6 +379,68 @@ export default function PublicPatientInformationForm({
       language_preference: current.language_preference || nextLanguage,
     }));
   };
+
+  useEffect(() => {
+    const postalCode = formData.postal_code.trim();
+    if (postalCode.length < 3) return;
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        setPostalLookupPending(true);
+        const params = new URLSearchParams({ postalCode });
+        if (formData.country.trim()) params.set("country", formData.country.trim());
+
+        const response = await fetch(`/api/public/postal-code?${params.toString()}`, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) return;
+
+        const data = (await response.json()) as { city?: string; country?: string };
+
+        setFormData((current) => {
+          const canUpdateTown =
+            !current.town ||
+            (autoFilledAddress.postalCode !== postalCode &&
+              current.town === autoFilledAddress.town);
+          const canUpdateCountry =
+            !current.country ||
+            (autoFilledAddress.postalCode !== postalCode &&
+              current.country === autoFilledAddress.country);
+
+          return {
+            ...current,
+            town: data.city && canUpdateTown ? data.city : current.town,
+            country: data.country && canUpdateCountry ? data.country : current.country,
+          };
+        });
+
+        setAutoFilledAddress({
+          postalCode,
+          town: data.city || "",
+          country: data.country || "",
+        });
+      } catch (lookupError) {
+        if (!controller.signal.aborted) {
+          console.error("Postal code lookup failed:", lookupError);
+        }
+      } finally {
+        if (!controller.signal.aborted) setPostalLookupPending(false);
+      }
+    }, 450);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    autoFilledAddress.country,
+    autoFilledAddress.postalCode,
+    autoFilledAddress.town,
+    formData.country,
+    formData.postal_code,
+  ]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -479,7 +547,7 @@ export default function PublicPatientInformationForm({
               <TextInput type="email" label={required((t.fields as Record<string, string>).email)} value={formData.email} onChange={(value) => update("email", value)} required />
               <TextInput type="tel" label={required((t.fields as Record<string, string>).phone)} value={formData.phone} onChange={(value) => update("phone", value)} required />
               <SelectInput
-                label={(t.fields as Record<string, string>).gender}
+                label={required((t.fields as Record<string, string>).gender)}
                 value={formData.gender}
                 onChange={(value) => update("gender", value)}
                 placeholder={(t.options as Record<string, string>).select}
@@ -487,8 +555,9 @@ export default function PublicPatientInformationForm({
                   ["male", (t.options as Record<string, string>).male],
                   ["female", (t.options as Record<string, string>).female],
                 ]}
+                required
               />
-              <TextInput type="date" label={(t.fields as Record<string, string>).dob} value={formData.dob} onChange={(value) => update("dob", value)} />
+              <TextInput type="date" label={required((t.fields as Record<string, string>).dob)} value={formData.dob} onChange={(value) => update("dob", value)} required />
             </div>
           </section>
 
@@ -501,12 +570,18 @@ export default function PublicPatientInformationForm({
             </p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <TextInput label={(t.fields as Record<string, string>).street_address} value={formData.street_address} onChange={(value) => update("street_address", value)} />
+                <TextInput label={required((t.fields as Record<string, string>).street_address)} value={formData.street_address} onChange={(value) => update("street_address", value)} required />
               </div>
-              <TextInput label={(t.fields as Record<string, string>).street_number} value={formData.street_number} onChange={(value) => update("street_number", value)} />
-              <TextInput label={(t.fields as Record<string, string>).postal_code} value={formData.postal_code} onChange={(value) => update("postal_code", value)} />
-              <TextInput label={(t.fields as Record<string, string>).town} value={formData.town} onChange={(value) => update("town", value)} />
-              <TextInput label={(t.fields as Record<string, string>).country} value={formData.country} onChange={(value) => update("country", value)} />
+              <TextInput label={required((t.fields as Record<string, string>).street_number)} value={formData.street_number} onChange={(value) => update("street_number", value)} required />
+              <TextInput
+                label={required((t.fields as Record<string, string>).postal_code)}
+                value={formData.postal_code}
+                onChange={(value) => update("postal_code", value)}
+                required
+                busy={postalLookupPending}
+              />
+              <TextInput label={required((t.fields as Record<string, string>).town)} value={formData.town} onChange={(value) => update("town", value)} required />
+              <TextInput label={required((t.fields as Record<string, string>).country)} value={formData.country} onChange={(value) => update("country", value)} required />
             </div>
           </section>
 
@@ -516,7 +591,7 @@ export default function PublicPatientInformationForm({
             </h2>
             <div className="mt-4">
               <SelectInput
-                label={(t.fields as Record<string, string>).language_preference}
+                label={required((t.fields as Record<string, string>).language_preference)}
                 value={formData.language_preference}
                 onChange={(value) => update("language_preference", value)}
                 placeholder={(t.options as Record<string, string>).select}
@@ -526,6 +601,7 @@ export default function PublicPatientInformationForm({
                   ["de", (t.options as Record<string, string>).german],
                   ["it", (t.options as Record<string, string>).italian],
                 ]}
+                required
               />
             </div>
           </section>
@@ -566,7 +642,7 @@ export default function PublicPatientInformationForm({
             </h2>
             <div className="mt-4 space-y-4">
               <SelectInput
-                label={(t.fields as Record<string, string>).specialty_interest}
+                label={required((t.fields as Record<string, string>).specialty_interest)}
                 value={formData.specialty_interest}
                 onChange={(value) => update("specialty_interest", value)}
                 placeholder={(t.options as Record<string, string>).select}
@@ -577,9 +653,10 @@ export default function PublicPatientInformationForm({
                   ["laser_treatments", (t.options as Record<string, string>).laser_treatments],
                   ["other", (t.options as Record<string, string>).other],
                 ]}
+                required
               />
               <SelectInput
-                label={(t.fields as Record<string, string>).referral_source}
+                label={required((t.fields as Record<string, string>).referral_source)}
                 value={formData.referral_source}
                 onChange={(value) => update("referral_source", value)}
                 placeholder={(t.options as Record<string, string>).select}
@@ -591,6 +668,7 @@ export default function PublicPatientInformationForm({
                   ["advertising", (t.options as Record<string, string>).advertising],
                   ["other", (t.options as Record<string, string>).other],
                 ]}
+                required
               />
             </div>
           </section>
@@ -647,23 +725,30 @@ function TextInput({
   onChange,
   type = "text",
   required: isRequired = false,
+  busy = false,
 }: {
   label: React.ReactNode;
   value: string;
   onChange: (value: string) => void;
   type?: string;
   required?: boolean;
+  busy?: boolean;
 }) {
   return (
     <label className="block space-y-1">
       <span className="block text-sm font-medium text-slate-700">{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required={isRequired}
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
-      />
+      <span className="relative block">
+        <input
+          type={type}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          required={isRequired}
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
+        />
+        {busy ? (
+          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
+        ) : null}
+      </span>
     </label>
   );
 }
@@ -674,12 +759,14 @@ function SelectInput({
   onChange,
   placeholder,
   options,
+  required: isRequired = false,
 }: {
-  label: string;
+  label: React.ReactNode;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   options: [string, string][];
+  required?: boolean;
 }) {
   return (
     <label className="block space-y-1">
@@ -687,6 +774,7 @@ function SelectInput({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        required={isRequired}
         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
       >
         <option value="">{placeholder}</option>
