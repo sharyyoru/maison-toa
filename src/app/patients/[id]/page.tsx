@@ -81,6 +81,23 @@ async function getPatientWithDetails(id: string) {
   return { patient, insurance: insurance ?? [] } as const;
 }
 
+async function hasSocialPhotoConsent(patientId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("patient_form_submissions")
+    .select("submission_data")
+    .eq("patient_id", patientId)
+    .eq("status", "submitted")
+    .order("submitted_at", { ascending: false })
+    .limit(20);
+
+  if (error || !data) return false;
+
+  return data.some((submission) => {
+    const submissionData = submission.submission_data as Record<string, unknown> | null;
+    return submissionData?.photo_consent === "yes";
+  });
+}
+
 type InvoiceStatus = "OPEN" | "PAID" | "CANCELLED" | "OVERPAID" | "PARTIAL_LOSS" | "PARTIAL_PAID";
 
 type InvoiceSummary = {
@@ -253,7 +270,7 @@ export default async function PatientPage({
   const gender = genderRaw ? genderRaw.toLowerCase() : null;
 
   // Always use medical mode - CRM is now a tab
-  const mode: "medical" = "medical";
+  const mode = "medical" as const;
 
   const rawPaymentMethodFilter = (() => {
     const value = resolvedSearchParams?.payment_method;
@@ -270,7 +287,10 @@ export default async function PatientPage({
       ? rawPaymentMethodFilter
       : null;
 
-  const invoiceSummary = await getInvoiceSummary(id, paymentMethodFilter);
+  const [invoiceSummary, hasSocialConsent] = await Promise.all([
+    getInvoiceSummary(id, paymentMethodFilter),
+    hasSocialPhotoConsent(id),
+  ]);
 
   const crPlayerIdRaw = (() => {
     const value = resolvedSearchParams?.cr_player_id;
@@ -366,6 +386,12 @@ export default async function PatientPage({
                 </span>
               ) : null}
               <AgeBadge patientId={patient.id} dob={rawDob || null} age={age} />
+              {hasSocialConsent ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">
+                  <span aria-hidden="true">📷</span>
+                  Social
+                </span>
+              ) : null}
             </div>
           </div>
           <div className="flex items-center gap-2">

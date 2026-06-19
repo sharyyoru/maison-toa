@@ -173,6 +173,11 @@ export default function PatientPageClientWrapper({
         "postgres_changes",
         { event: "*", schema: "public", table: "patient_prescriptions", filter: `patient_id=eq.${patientId}` },
         () => queueRefresh(["medicationRevision", "consultationsRevision"]),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "patient_form_submissions", filter: `patient_id=eq.${patientId}` },
+        () => queueRefresh(["patientRevision"]),
       );
 
     const intakeTables = [
