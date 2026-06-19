@@ -1864,12 +1864,40 @@ function PaymentImportHistory() {
     setItemsLoading(true);
     const { data } = await supabaseClient
       .from("bank_payment_import_items")
-      .select("*, matched_invoice:matched_invoice_id(patient:patient_id(first_name, last_name))")
+      .select("*, matched_invoice:matched_invoice_id(invoice_number, patient_id, reference_number, patients:patient_id(first_name, last_name))")
       .eq("import_id", importId)
       .order("booking_date", { ascending: true });
-    const mapped = ((data as any[]) || []).map((item) => {
-      const p = item.matched_invoice?.patient;
-      const patientName = p ? [p.first_name, p.last_name].filter(Boolean).join(" ") : null;
+
+    const rawItems = (data as any[]) || [];
+
+    // Collect reference_numbers for unmatched items so we can look up patient via invoice
+    const unmatchedRefs = rawItems
+      .filter((item) => !item.matched_invoice_id && item.reference_number)
+      .map((item) => item.reference_number as string);
+
+    // For unmatched items, try to find the invoice (and thus patient) by reference_number
+    let refToPatient: Record<string, string> = {};
+    if (unmatchedRefs.length > 0) {
+      const { data: refInvoices } = await supabaseClient
+        .from("invoices")
+        .select("reference_number, patients:patient_id(first_name, last_name)")
+        .in("reference_number", unmatchedRefs);
+      for (const inv of (refInvoices as any[]) || []) {
+        const p = inv.patients;
+        if (p && inv.reference_number) {
+          refToPatient[inv.reference_number] = [p.first_name, p.last_name].filter(Boolean).join(" ");
+        }
+      }
+    }
+
+    const mapped = rawItems.map((item) => {
+      // Primary: patient from matched invoice FK join
+      const p = item.matched_invoice?.patients ?? item.matched_invoice?.patient;
+      let patientName = p ? [p.first_name, p.last_name].filter(Boolean).join(" ") : null;
+      // Fallback: patient found via reference_number → invoice lookup
+      if (!patientName && item.reference_number) {
+        patientName = refToPatient[item.reference_number] ?? null;
+      }
       const { matched_invoice: _, ...rest } = item;
       return { ...rest, matched_patient_name: patientName } as ImportItem;
     });
