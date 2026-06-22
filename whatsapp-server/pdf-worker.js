@@ -52,7 +52,6 @@ async function processJob(job) {
   const { id, invoice_id, invoice_type, reminder_level } = job;
   log(`Processing job ${id} — invoice ${invoice_id} (${invoice_type}${invoice_type === 'reminder' ? ` L${reminder_level}` : ''})`);
 
-  // Mark as processing
   const { error: processingError } = await supabase
     .from('pdf_generation_jobs')
     .update({ status: 'processing', started_at: new Date().toISOString() })
@@ -113,9 +112,6 @@ async function poll() {
   if (!isRunning) return;
 
   try {
-    // Fetch up to MAX_CONCURRENT pending jobs that are not already being processed
-    // by another worker. We also re-fetch jobs in 'processing' that have been stuck
-    // for a long time (e.g. > 10 minutes) to recover from crashed workers.
     const { data: pendingJobs, error } = await supabase
       .from('pdf_generation_jobs')
       .select('*')
@@ -168,3 +164,5 @@ main().catch(err => {
   log('Fatal error:', err);
   process.exit(1);
 });
+
+module.exports = { main, shutdown };

@@ -216,13 +216,3 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[WA] Server listening on http://localhost:${PORT}`);
 });
-
-// ── PDF generation worker (async queue) ───────────────────────────────────────
-// Loaded in the same Railway process so both WhatsApp bot and PDF worker share
-// one deployment. The PDF worker polls Supabase for pending jobs and calls the
-// Sumex PDF generation endpoint.
-if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  require('./pdf-worker');
-} else {
-  console.log('[WA] SUPABASE_SERVICE_ROLE_KEY not set — PDF worker disabled');
-}
