@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="/css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="/script/jquery-1.12.2.min.js"></script>
+	<script src="/script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>API browser of generalInvoiceRequest500 COM module</span>
+<p>
+
+<ul id='breadcrumb'>
+    <li><a href="../index.html">generalInvoiceRequest500</a></li>
+    <li><a href="index.html">Type definitions</a></li>
+    <li><span>RequestSubtype</span></li>
+</ul>
+<br>
+
+<table class='tdata'>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler01'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> RequestSubtype enumeration type</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr01'>
+	<td class='tdata_td0102' colspan='3'>
+	RequestSubtype specifies teh request with respect to its modification from the standard data space. Such a modification can be seen as a request variation, subsuming a specific data set, where the set of discrete subtypes is encoded by a terminal set of tokens.
+	</td>
+	<td class='tdata_td03'><img src="/images/space.gif" alt="space" width="60" height="1"></td>
+</tr>
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler02'><i class='fa fa-caret-down fa-lg fa-fw'></i></a> Set of enumeration values</th>
+	<th class='tdata_th03'><span class='small'>4 elements</span></th>
+</tr>
+
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enRequestSubtypeNormal</span>: <span class="inout">0</span></span></td>
+	<td class='tdata_td02 ' colspan='2'>the subtype <B>normal</B> defines the standard (normal) XML infoset describing an ordinary invoice/reminder  (Default)</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enRequestSubtypeCopy</span>: <span class="inout">1</span></span></td>
+	<td class='tdata_td02 altbck' colspan='2'>the subtype <B>copy</B> qualifies the XML infoset as the exact copy of a previously defined XML infoset except for the copy flag</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enRequestSubtypeRefund</span>: <span class="inout">2</span></span></td>
+	<td class='tdata_td02 ' colspan='2'>the subtype <B>refund</B> acts on a prior defined normal XML infoset notably sent to and paid by a health care insurance. In other words it is an announcement to the insurance company to pay back certain services of an invoice (qualified by a negative quantity), whereas the services with zero quantity are correctly invoiced</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enRequestSubtypeStorno</span>: <span class="inout">3</span></span></td>
+	<td class='tdata_td02 altbck' colspan='2'>the subtype <B>storno</B> acts on a prior defined normal XML infoset by negating all quantities in order to cancel the invoice/reminder as a whole.</td>
+	<td class='tdata_td03'></td>
+</tr>			
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+
+</table>
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='/images/arrow_down.png' alt='' style='display:none;'><img src='/images/arrow_right.png' alt='' style='display:none;'><img src='/images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

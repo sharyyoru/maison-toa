@@ -1181,9 +1181,9 @@ export default function InvoicesPage() {
             <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "tg"); }}>Invoice (patient / TG)</button>
             <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "tp"); }}>Invoice (insurance / TP)</button>
             <div className="my-1 border-t border-slate-100" />
-            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "reminder", 1); }}>Reminder (1st)</button>
-            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "reminder", 2); }}>Reminder (2nd)</button>
-            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "reminder", 3); }}>Reminder (3rd)</button>
+            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "reminder", 1); }}>Reminder (1st) — no fee</button>
+            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "reminder", 2); }}>Reminder (2nd) — +5 CHF</button>
+            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "reminder", 3); }}>Reminder (3rd) — +10 CHF</button>
             <div className="my-1 border-t border-slate-100" />
             <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "receipt"); }}>Patient receipt</button>
           </div>
@@ -1264,9 +1264,9 @@ export default function InvoicesPage() {
               {([
                 { type: "tg",         label: "Invoice (patient / TG)",     reminder: null },
                 { type: "tp",         label: "Invoice (insurance / TP)",    reminder: null },
-                { type: "reminder_1", label: "Reminder (1st)",              reminder: 1 },
-                { type: "reminder_2", label: "Reminder (2nd)",              reminder: 2 },
-                { type: "reminder_3", label: "Reminder (3rd)",              reminder: 3 },
+                { type: "reminder_1", label: "Reminder (1st) — no fee",      reminder: 1 },
+                { type: "reminder_2", label: "Reminder (2nd) — +5 CHF",      reminder: 2 },
+                { type: "reminder_3", label: "Reminder (3rd) — +10 CHF",     reminder: 3 },
                 { type: "receipt",    label: "Patient receipt",             reminder: null },
               ] as { type: string; label: string; reminder: number | null }[]).map(({ type, label }) => (
                 <label key={type} className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${bulkGenerateDocType === type ? "border-violet-300 bg-violet-50" : "border-slate-200 hover:border-slate-300"}`}>

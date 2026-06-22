@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="/css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="/script/jquery-1.12.2.min.js"></script>
+	<script src="/script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>API browser of generalInvoiceRequest500 COM module</span>
+<p>
+
+<ul id='breadcrumb'>
+    <li><a href="../index.html">generalInvoiceRequest500</a></li>
+    <li><a href="index.html">IGeneralInvoiceResult</a></li>
+    <li><span>GetNextServiceEx</span></li>
+</ul>
+<br>
+
+ <table class='tdata'>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler01'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> IGeneralInvoiceResult::GetNextServiceEx method</th>
+	<th class='tdata_th03'><img src="/images/space.gif" alt="space" width="20" height="1"></th>
+</tr>
+<tr class='tdata_tr01'>
+	<td class='tdata_td0102' colspan='3' style='padding-top: 8px;'>
+Gets the next &quot;extended&quot; service from the list of services.
+<BR>&nbsp;<BR>
+Please note, that  &quot;extended&quot; qualifies as being added by the <a class='tlink' href='../IGeneralInvoiceRequest/AddServiceEx_method.html'>IGeneralInvoiceRequest::AddServiceEx</A> method. 
+<BR>&nbsp;<BR>
+VARIANT_FALSE is returned if the end of the service list is reached.
+	</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler04'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Restful webservice calling syntax</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;'><span class='nowrap'><span class="inout">[POST]</span></td>
+<td class='tdata_td034' colspan='3'><a href="../restapi_howto.html" class='hlink'><span class="base_name">/baseURL/</span></a><span class="methode_name">IGeneralInvoiceResult/GetNextServiceEx</span></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;text-align: center;'><span class="title_name">[JSON input data]</span></td>
+	<td class='tdata_td024' ><span class='arg_type'>pIGeneralInvoiceResult:</span></td>
+	<td class='tdata_td034' colspan='2'><span class='methode_arg'>longValue</span>, &nbsp;&nbsp; <i>//interface address</i><br></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;text-align: center;'><span class="title_name">[JSON result data]</span></td>
+	<td class='tdata_td024' ><span class='arg_type'>pbstrTariffType:</span><br>
+<span class='arg_type'>pbstrCode:</span><br>
+<span class='arg_type'>pbstrReferenceCode:</span><br>
+<span class='arg_type'>pdQuantity:</span><br>
+<span class='arg_type'>plSessionNumber:</span><br>
+<span class='arg_type'>plGroupSize:</span><br>
+<span class='arg_type'>pdDateBegin:</span><br>
+<span class='arg_type'>pdDateEnd:</span><br>
+<span class='arg_type'>pbstrProviderGLN:</span><br>
+<span class='arg_type'>pbstrResponsibleGLN:</span><br>
+<a href='../types/SideType_type.html' class='hlink'><span class='arg_type'>peSide:</span></a><br>
+<span class='arg_type'>pbstrServiceName:</span><br>
+<span class='arg_type'>pdUnitMT:</span><br>
+<span class='arg_type'>pdUnitFactorMT:</span><br>
+<span class='arg_type'>pdUnitInternalScalingFactorMT:</span><br>
+<span class='arg_type'>pdUnitExternalScalingFactorMT:</span><br>
+<span class='arg_type'>pdAmountMT:</span><br>
+<span class='arg_type'>pdUnitTT:</span><br>
+<span class='arg_type'>pdUnitFactorTT:</span><br>
+<span class='arg_type'>pdUnitInternalScalingFactorTT:</span><br>
+<span class='arg_type'>pdUnitExternalScalingFactorTT:</span><br>
+<span class='arg_type'>pdAmountTT:</span><br>
+<span class='arg_type'>pdAmount:</span><br>
+<span class='arg_type'>pdVatRate:</span><br>
+<span class='arg_type'>pbstrRemark:</span><br>
+<span class='arg_type'>pbstrSectionCode:</span><br>
+<span class='arg_type'>plServiceAttributes:</span><br>
+<a href='../types/TreatmentType_type.html' class='hlink'><span class='arg_type'>peTreatmentType:</span></a><br>
+<a href='../types/BillingRoleType_type.html' class='hlink'><span class='arg_type'>peBillingRole:</span></a><br>
+<a href='../types/MedicalRoleType_type.html' class='hlink'><span class='arg_type'>peMedicalRole:</span></a><br>
+<span class='arg_type'>plID:</span><br>
+<span class='arg_type'>pbStatus:</span></td>
+	<td class='tdata_td034' colspan='2'><span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>"stringISODateValue"</span>,<br>
+<span class='methode_arg'>"stringISODateValue"</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>booleanValue</span><br>&nbsp;</td>
+</tr>
+
+
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;text-align: center;'><span class="title_name">[HTTP result status]</span></td>
+	<td class='tdata_td01' valign='top'><span class="arg_type">200</span></td>
+	<td class='tdata_td02' valign='top'>Return status 200 signals a successful method call</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">204</span></td>
+	<td class='tdata_td02 altbck'>Return status 204 (noContent) signals that the end of an iteration is reached</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">&gt;= 400</span></td>
+	<td class='tdata_td02'>Return status &gt;= 400 signals an unsuccessful function call. The returned <span class="title_name">JSON{errorCode: code, errorText:"text"}</span> supplies the error message the same as GetAbortInfo() would do.</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler02'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> C/C++ calling syntax</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td014'><span class='nowrap'><a href="../types/hresult_type.html" class='hlink'><span class="arg_type">HRESULT</span></a> <span class="methode_name">GetNextServiceEx(</span></span></td>
+	<td class='tdata_td024'>			<a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a>
+			<br><a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a>
+			<br><a href="../types/DATE_type.html" class='hlink'><span class="arg_type">DATE</span></a>
+			<br><a href="../types/DATE_type.html" class='hlink'><span class="arg_type">DATE</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/SideType_type.html" class='hlink'><span class="arg_type">SideType</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a>
+			<br><a href="../types/TreatmentType_type.html" class='hlink'><span class="arg_type">TreatmentType</span></a>
+			<br><a href="../types/BillingRoleType_type.html" class='hlink'><span class="arg_type">BillingRoleType</span></a>
+			<br><a href="../types/MedicalRoleType_type.html" class='hlink'><span class="arg_type">MedicalRoleType</span></a>
+			<br><a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a>
+			<br><a href="../types/VARIANT_BOOL_type.html" class='hlink'><span class="arg_type">VARIANT_BOOL</span></a>
+</td>
+	<td class='tdata_td034'>			<span class="methode_arg">*pbstrTariffType,</span>
+			<br><span class="methode_arg">*pbstrCode,</span>
+			<br><span class="methode_arg">*pbstrReferenceCode,</span>
+			<br><span class="methode_arg">*pdQuantity,</span>
+			<br><span class="methode_arg">*plSessionNumber,</span>
+			<br><span class="methode_arg">*plGroupSize,</span>
+			<br><span class="methode_arg">*pdDateBegin,</span>
+			<br><span class="methode_arg">*pdDateEnd,</span>
+			<br><span class="methode_arg">*pbstrProviderGLN,</span>
+			<br><span class="methode_arg">*pbstrResponsibleGLN,</span>
+			<br><span class="methode_arg">*peSide,</span>
+			<br><span class="methode_arg">*pbstrServiceName,</span>
+			<br><span class="methode_arg">*pdUnitMT,</span>
+			<br><span class="methode_arg">*pdUnitFactorMT,</span>
+			<br><span class="methode_arg">*pdUnitInternalScalingFactorMT,</span>
+			<br><span class="methode_arg">*pdUnitExternalScalingFactorMT,</span>
+			<br><span class="methode_arg">*pdAmountMT,</span>
+			<br><span class="methode_arg">*pdUnitTT,</span>
+			<br><span class="methode_arg">*pdUnitFactorTT,</span>
+			<br><span class="methode_arg">*pdUnitInternalScalingFactorTT,</span>
+			<br><span class="methode_arg">*pdUnitExternalScalingFactorTT,</span>
+			<br><span class="methode_arg">*pdAmountTT,</span>
+			<br><span class="methode_arg">*pdAmount,</span>
+			<br><span class="methode_arg">*pdVatRate,</span>
+			<br><span class="methode_arg">*pbstrRemark,</span>
+			<br><span class="methode_arg">*pbstrSectionCode,</span>
+			<br><span class="methode_arg">*plServiceAttributes,</span>
+			<br><span class="methode_arg">*peTreatmentType,</span>
+			<br><span class="methode_arg">*peBillingRole,</span>
+			<br><span class="methode_arg">*peMedicalRole,</span>
+			<br><span class="methode_arg">*plID,</span>
+			<br><span class="methode_arg">*pbStatus);</span>
+</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr class='tdata_tr02'>
+	<td class='tdata_td0102' style='padding-top: 8px;text-align: center;'><span class="title_name">[C/C++ return value]</span></td>
+	<td class='tdata_td01'><span class="arg_type">S_OK</span></td>
+	<td class='tdata_td02'>This value is returned if the function call was successful.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">S_FALSE</span></td>
+	<td class='tdata_td02 altbck'>This value is returned if the end of an iteration is reached</td>	
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">E_<i>name</i></span></td>
+	<td class='tdata_td02'>This value is returned if the function call was unsuccessful and an error exception was generated. Note that if you are using SmartPointers an exception is thrown under these conditions.</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler03'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Calling argument description</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pbstrTariffType</span></td>
+	<td class='tdata_td134 '>The official tariff type as defined by <a class='tlink' href="http://www.forum-datenaustausch.ch" TARGET="TOP">Forum Datenaustausch</A></td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pbstrCode</span></td>
+	<td class='tdata_td134 altbck'>The service code.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pbstrReferenceCode</span></td>
+	<td class='tdata_td134 '>The reference code.
+<BR>&nbsp;<BR>
+The reference code might be empty since not all services request one.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pdQuantity</span></td>
+	<td class='tdata_td134 altbck'>The floating point quantity.
+<BR>&nbsp;<BR>
+Note that quantity changes the sign if a storno request is produced.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*plSessionNumber</span></td>
+	<td class='tdata_td134 '><B>lSessionNumber</B> defines either a specific <B>patient contact</B> with an unique number over the entire treatment period or <BR>a day-based <B>session number</B>. The session number divides the day into a series of individual treatment units (sessions), whereby by default <BR>each day starts with the number 1 and is incremented by 1 for each new treatment unit.
+<BR>&nbp;<BR>
+Some tariffs do not include a session concept, others such as TARMED/TARDOC rely heavily on this paradigm.
+<BR>
+For tariffs without a session concept, simply enter 1 as the session number for all services on one day.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*plGroupSize</span></td>
+	<td class='tdata_td134 altbck'>lGroupSize defines the participating <B>group size</B> of a service whose quantity is calculated by the &quot;Divisor Method&quot;. A value of &lt; 2 means that there is no group size dependency!</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/DATE_type.html" class='hlink'><span class="arg_type">DATE</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pdDateBegin</span></td>
+	<td class='tdata_td134 '>The date of the service's prescription</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/DATE_type.html" class='hlink'><span class="arg_type">DATE</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pdDateEnd</span></td>
+	<td class='tdata_td134 altbck'>The date of the last prescription of the service if and only if the service was applied over a period of time.
+<BR>&nbsp;<BR>
+dDateEnd=0.0 is returned for all cases where no end date of  the prescription was defined.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pbstrProviderGLN</span></td>
+	<td class='tdata_td134 '>The GLN of the service provider as supplied by <a class='tlink' href='http://www.refdata.ch/' TARGET='_newTab'>Stiftung Refdata</A>
+<BR>&nbsp;<BR>
+<B>Note</B> if bstrProviderGLN is undefined and bstrResponsibleGLN is defined then bstrResponsibleGLN is copied into the bstrProviderGLN variable. If both variables are undefined the pseudo GLN "2099999999998" is set.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pbstrResponsibleGLN</span></td>
+	<td class='tdata_td134 altbck'>The GLN of the responsible for the service as supplied by <a class='tlink' href='http://www.refdata.ch/' TARGET='_newTab'>Stiftung Refdata</A>
+<BR>&nbsp;<BR>
+<B>Note</B> if bstrResponsibleGLN is undefined and bstrProviderGLN is defined then bstrProviderGLN is copied into the bstrResponsibleGLN variable. If both variables are undefined the pseudo EAN "2099999999998" is set.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/SideType_type.html" class='hlink'><span class="arg_type">SideType</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*peSide</span></td>
+	<td class='tdata_td134 '>The body side dependency of the service</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pbstrServiceName</span></td>
+	<td class='tdata_td134 altbck'>The name of the service as defined by the used tariff</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pdUnitMT</span></td>
+	<td class='tdata_td134 '>Tax points of the medical part (TP_MT) of the service.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pdUnitFactorMT</span></td>
+	<td class='tdata_td134 altbck'>Tax point value of the medical part (TPV_MT) of the service.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pdUnitInternalScalingFactorMT</span></td>
+	<td class='tdata_td134 '>The internal scaling factor of the medical part of the service.
+<BR>&nbsp;<BR>
+This is a modulation factor to represent percent services and is mostly 1.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pdUnitExternalScalingFactorMT</span></td>
+	<td class='tdata_td134 altbck'><B>dUnitExternalScalingFactorMT</B> is an external scaling factor for the medical part laying in the provider's responsibility that modulates the corresponding service outside the official tariff structure.
+<BR>
+The dUnitExternalScalingFactorMT is used for <B>discounting or surcharging</B> and can even take a zero value to supply a <B>charge free service</B>.
+<BR>&nbsp;<BR>
+For tariff  <B>&#171;007 - TarDoc&#187;</B> the tariff owner <a class='tlink' href="https://oaat-otma.ch/" TARGET="TOP">&quot;OAAT-OTMA&quot;</A> will use the <BR>external factor as an additional control element within its cost neutrality project. It is currently unclear how, where and when the <BR>corresponding data will be made available. It is also unclear whether this is a date-historical usage of the factor.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pdAmountMT</span></td>
+	<td class='tdata_td134 '>The amount in CHF for the medical part of the service.
+<BR>&nbsp;<BR>
+Note that amount changes the sign if a storno request is produced due to the sign change of dQuantity.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pdUnitTT</span></td>
+	<td class='tdata_td134 altbck'>Tax points of the technical part (TP_TT) of the service.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pdUnitFactorTT</span></td>
+	<td class='tdata_td134 '>Tax point value of the technical part (TPV_TT) of the service.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pdUnitInternalScalingFactorTT</span></td>
+	<td class='tdata_td134 altbck'>The internal scaling factor of the technical part of the service.
+<BR>&nbsp;<BR>
+This is a modulation factor to represent percent services and is mostly 1.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pdUnitExternalScalingFactorTT</span></td>
+	<td class='tdata_td134 '><B>dUnitExternalScalingFactorTT</B> is an external scaling factor for the technical part laying in the provider's responsibility that modulates the corresponding service outside the official tariff structure.
+<BR>
+The dUnitExternalScalingFactorTT is used for <B>discounting or surcharging</B> and can even take a zero value to supply a <B>charge free service</B>.
+<BR>&nbsp;<BR>
+For tariff  <B>&#171;007 - TarDoc&#187;</B> the tariff owner <a class='tlink' href="https://oaat-otma.ch/" TARGET="TOP">&quot;OAAT-OTMA&quot;</A> will use the <BR>external factor as an additional control element within its cost neutrality project. It is currently unclear how, where and when the <BR>corresponding data will be made available. It is also unclear whether this is a date-historical usage of the factor.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pdAmountTT</span></td>
+	<td class='tdata_td134 altbck'>The amount in CHF for the technical part of the service.
+<BR>&nbsp;<BR>
+Note that amount changes the sign if a storno request is produced due to the sign change of dQuantity.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pdAmount</span></td>
+	<td class='tdata_td134 '>The amount in CHF of the service as sum over  dAmountMT + dAmountTT
+<BR>&nbsp;<BR>
+Note that amount changes the sign if a storno request is produced due to the sign change of dQuantity.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pdVatRate</span></td>
+	<td class='tdata_td134 altbck'>The VAT rate as real number that was applied to this service.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pbstrRemark</span></td>
+	<td class='tdata_td134 '>An optional remark for the given service</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pbstrSectionCode</span></td>
+	<td class='tdata_td134 altbck'>The optional <B>bstrSectionCode</B> stems from a variable set defined by <a class='tlink' href="https://oaat-otma.ch/" TARGET="TOP">&quot;OAAT-OTMA - Reglement Fachbereiche&quot;</A>, that designates the service-providing department within a hospital or medical practice, e.g. 'M100.06' for the gastroenterology department. 
+<BR>&nbsp;<BR>
+The list of all departments is documented elsewhere on the <a class='tlink' href="https://oaat-otma.ch/" TARGET="TOP">&quot;OAAT-OTMA&quot;</A> website, whereby the tariffs used, the law applied or special contracts stipulates the application/usage of the section code (primarily for body@role=hospital, body@role=rehab_clinic, body@role=psychiatric_clinic).</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*plServiceAttributes</span></td>
+	<td class='tdata_td134 '>lServiceAttributes is a 32-bit integer where each bit position defines a special information. 
+<BR>&nbsp;<BR>
+Defined bit positions as of <B>February 2021</B>
+<BR>
+<TABLE BORDER="1" >
+<TR VALIGN="TOP" BGCOLOR="#557EEF">
+<TD ALIGN="CENTER" NOWRAP><FONT COLOR="#EEEEEE"><B>Bit</B></FONT></TD>
+<TD ALIGN="CENTER" NOWRAP><FONT COLOR="#EEEEEE"><B>Meaning</B></FONT></TD>
+</TR>
+<TR ALIGN='LEFT' VALIGN='TOP' BGCOLOR="#EEEEEE">
+<TD style='margin: 2px; padding: 3px;' NOWRAP><FONT COLOR="#333333">Bit 1:<br>(0x000001)</FONT></TD>
+<TD style='margin: 2px; padding: 3px;'><B>Code207: no drug substitution due to medical reasons. Applies to drug services only!</B>
+<BR>&nbsp;<BR>
+If this bit (&quot;Code207&quot;) is set, the service provider declares that the drug prescribed must not be substituted due to medical reasons.
+</TD>
+</TR>
+<TR ALIGN='LEFT' VALIGN='TOP' style='margin: 2px; padding: 3px;' BGCOLOR="#EEEEEE">
+<TD style='margin: 2px; padding: 3px;' NOWRAP><FONT COLOR="#333333">Bit 2:<br>(0x000002)</FONT></TD>
+<TD style='margin: 2px; padding: 3px;'><B>franchisefree_12e_d: Franchise exemption according to Art. 12e lit. D KLV</B>
+<BR>&nbsp;<BR>
+If this bit (&quot;franchisefree_12e_d&quot;) is set, the service provider declares that the service was prescribed as part of a preventive care program and the health care company must bill this service as franchise-free.	
+</TD>
+</TR>
+</TABLE></td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/TreatmentType_type.html" class='hlink'><span class="arg_type">TreatmentType</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*peTreatmentType</span></td>
+	<td class='tdata_td134 altbck'>The type of treatment (ambulatory or stationary) defined by the <a class='tlink' href='../IServiceExInput/SetTreatment_method.html'>IServiceExInput::SetTreatment</A> method.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/BillingRoleType_type.html" class='hlink'><span class="arg_type">BillingRoleType</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*peBillingRole</span></td>
+	<td class='tdata_td134 '>The ServiceExInput-relevant billing role applied for this service  defined by the <a class='tlink' href='../IServiceExInput/SetPhysician_method.html'>IServiceExInput::SetPhysician</A> method.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/MedicalRoleType_type.html" class='hlink'><span class="arg_type">MedicalRoleType</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*peMedicalRole</span></td>
+	<td class='tdata_td134 altbck'>The ServiceExInput-relevant medical role applied for this service defined by the <a class='tlink' href='../IServiceExInput/SetPhysician_method.html'>IServiceExInput::SetPhysician</A> method.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*plID</span></td>
+	<td class='tdata_td134 '>This is the returned internal ID of the service record.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out,retval]</span> <a href="../types/VARIANT_BOOL_type.html" class='hlink'><span class="arg_type">VARIANT_BOOL</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pbStatus</span></td>
+	<td class='tdata_td134 altbck'>Return status of the method. If pbStatus is VARIANT_FALSE the end of data is reached</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr>
+	<td class='tdata_td03' style='margin:0; padding-bottom:5px; border-bottom: 2px solid #3360b3;'><img src="/images/space.gif" alt="space" width="160" height="1"></td>
+	<td class='tdata_td03' style='margin:0; padding-bottom:5px; border-bottom: 2px solid #3360b3;' colspan='3'></td>
+</tr>
+</table>
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='/images/arrow_down.png' alt='' style='display:none;'><img src='/images/arrow_right.png' alt='' style='display:none;'><img src='/images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

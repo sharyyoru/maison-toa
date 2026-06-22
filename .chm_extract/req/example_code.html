@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="../../../../../../css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="../../../../../../script/jquery-1.12.2.min.js"></script>
+	<script src="../../../../../../script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>Code snippets for using the generalInvoiceRequestManager</span>
+<p>&nbsp;<br>
+
+	<div class="toggle toggle-primary" data-plugin-toggle data-plugin-options="{ 'isAccordion': true }">
+		<section class="toggle">
+			<label>VB code snippet for using the generalInvoiceRequestManager</label>
+			<div class="toggle-content">
+<pre>
+<code class='vb'>
+Private Sub GeneralInvoiceRequestExampleButton_Click()
+
+On Error GoTo Err_Trap
+
+Dim bStatus As Boolean
+
+'### init variables
+Dim strFrom As String
+strFrom = "2001001302112"
+Dim strVia As String
+strVia = "2001000012345"
+Dim strTo As String
+strTo = "2034567890000"
+Dim dBirthdate As Date
+dBirthdate = DateValue("1964-2-28")
+Dim eSex As SexType
+eSex = enMale
+Dim eCanton As CantonType
+eCanton = enBS
+Dim eLaw As LawType
+eLaw = enKVG
+Dim eTreatType As TreatmentType
+eTreatType = enAmbulatory
+Dim eRole As RoleType
+eRole = enRolePhysician
+Dim ePlace As PlaceType
+ePlace = enPlacePractice
+Dim eTitle As String
+eTitle = ""
+Dim dTreatmentEnd As Date
+dTreatmentEnd = DateValue("2025-01-31")
+Dim dTreatmentStart As Date
+dTreatmentStart = DateValue("2025-01-01")
+Dim strPatientInsID As String
+strPatientInsID = "123.45.678-012"
+Dim eTreatmentReason As TreatmentReasonType
+eTreatmentReason = enDisease
+Dim eTreatmentType As TreatmentType
+eTreatmentType = enAmbulatory
+Dim eMedicalRole As MedicalRoleType
+eMedicalRole = enMedicalRoleSelfEmployed
+Dim eBillingRole As BillingRoleType
+eBillingRole = enBillingRoleBoth
+Dim strEanProvider As String
+strEanProvider = "2034567890111"
+Dim strEanResponsible As String
+strEanResponsible = "2034567890333"
+
+'### create the main GeneralInvoiceRequestManager interface
+Dim generalInvoiceRequestManagerEx As GENERALINVOICEREQUESTMANAGER500Lib.GeneralInvoiceRequestManager
+Set generalInvoiceRequestManagerEx = New GeneralInvoiceRequestManager
+
+'### generate the dependend GeneralInvoiceRequest interface (allows to input data)
+Dim generalInvoiceRequestEx As GENERALINVOICEREQUESTMANAGER500Lib.GeneralInvoiceRequest
+Set generalInvoiceRequestEx = generalInvoiceRequestManagerEx.GeneralInvoiceRequest
+
+'### start the input of data
+generalInvoiceRequestEx.Initialize(enGerman)
+
+'### generate some routing/transport as well as some identifying data (required for XML only)
+bStatus = generalInvoiceRequestEx.SetTransport(strFrom, "", "", strVia, strTo, "")
+bStatus = generalInvoiceRequestEx.SetPackage("GeneralInvoiceRequestExample", 10001, 4, "sumex1")
+
+'### set processing instruction regarding printing at the intermediate's side (required for XML only)
+bStatus = generalInvoiceRequestEx.SetProcessing(enNo, enNo, "")
+
+'###############################################################################
+'### start with the invoice relevant data, followed by the various address data
+'###############################################################################
+'### set data triple of the invoice (required)
+bStatus = generalInvoiceRequestEx.SetRequest(eRole, ePlace, "", enRequestInvoice, enRequestSubtypeNormal,  _
+                      "", "some optional remark")
+
+'### set the tiers mode (TG or TP)  (required)
+bStatus = generalInvoiceRequestEx.SetTiers(enTiersGarant,enNo, enNo, "", 0.0)
+
+'### set invoice related data  (required)
+bStatus = generalInvoiceRequestEx.SetInvoice("InvoiceID20170612", dTreatmentEnd, 0)
+
+'### set the applicable law (required)
+bStatus = generalInvoiceRequestEx.SetLaw(enKVG, 0, "", strPatientInsID)
+
+'### create an address interface that is need to add all the following addresses
+'### do not forget to initialize the IAddress interface befor using it
+Dim addressEx As GENERALINVOICEREQUESTMANAGER500Lib.Address
+Set addressEx = generalInvoiceRequestEx.CreateAddress
+
+'### define the creditor address and the corresponding esr information (required)
+addressEx.Initialize()
+bStatus = addressEx.SetCompany("CreditorenAllianz beider Basel", " GmbH & Co KG", "")
+bStatus = addressEx.SetPostal("Billerweg 128", "", "4002", "Basel", "BS", "", "")
+
+Dim lPaymentPeriod As Long
+lPaymentPeriod = 25
+bStatus = generalInvoiceRequestEx.SetEsrQR(enEsrQR, "CH0930769016110591261", "21000003139471430009017", _
+                                         "", addressEx, lPaymentPeriod)
+
+'### define the biller of the invoice (required)
+'### note that phone, fax and online data are optional
+addressEx.Initialize
+bStatus = addressEx.SetCompany("Biller AG", "Abteilung Inkasso", "")
+bStatus = addressEx.SetPostal("Billerweg 128", "", "4414", "Frenkendorf", "BL", "", "")
+bStatus = addressEx.AddPhone("956 99 00", "061", "", "")
+bStatus = addressEx.SetOnline("info@biller.ch", "")
+bStatus = generalInvoiceRequestEx.SetBillerGLN("2011234567890", addressEx)
+
+'### define the provider of the medical data (required)
+'### note that only the required parts are defined here
+addressEx.Initialize
+bStatus = addressEx.SetPerson("Aerztin", "Patricia", "Frau", "Dr. med.", "")
+bStatus = addressEx.SetPostal("Arztgasse 17b5", "", "4000", "Basel", "BS","", "")
+bStatus = generalInvoiceRequestEx.SetProviderGLN(strEanProvider,strEanProvider, _
+                                                 addressEx)
+
+'### define the health insurance (required in case of tiers payant only)
+addressEx.Initialize
+bStatus = addressEx.SetCompany("Krankenkasse AG", "Sektion Basel", "")
+bStatus = addressEx.SetPostal("Kassengraben 222", "", "4000", "Basel", "BS", "", "")
+bStatus = generalInvoiceRequestEx.SetInsurance("2034567890222", addressEx)
+
+'### define the patient (required)
+'### note that more data are needed here (sex, birthdate,ssn). data from the insurance 
+'### card can be supplied as well 
+addressEx.Initialize
+bStatus = addressEx.SetPerson("Muster", "Peter", "Herr", "", "c/o Mieter Karl")
+bStatus = addressEx.SetPostal("Musterstrasse 5", "", "7304", "Maienfeld", "GR", "", "")
+bStatus = generalInvoiceRequestEx.SetPatient(eSex, enGenderDiverse, dBirthdate, "756.1234.5678.90", addressEx)
+
+'### define a referrer if any (optional)
+addressEx.Initialize
+bStatus = addressEx.SetPerson("Ueberweiser", "Herbert", "Herr", "Dr. med.", "")
+bStatus = addressEx.SetPostal("Referrerstrasse 11", "", "5000", "Aarau", "AG", "", "")
+bStatus = generalInvoiceRequestEx.AddPartner(enReferrer,"","2034567890333", "R-2345-67", addressEx)
+
+'### define the employer of the patient (optional)
+addressEx.Initialize
+bStatus = addressEx.SetCompany("Arbeitgeber AG", "R&D", "")
+bStatus = addressEx.SetPostal("Arbeitsplatz 3-5", "", "4410", "Liestal", "BL", "")
+bStatus = generalInvoiceRequestEx.AddPartner(enEmployer,"","7600123456789", "", addressEx)
+
+'###############################################################################
+'### define some treatment data for an ambulatory case and supply a drug service
+'### and a Tarmed consultation
+'###############################################################################
+'### set treatment information (required)
+bStatus = generalInvoiceRequestEx.SetTreatment("","",dTreatmentStart, dTreatmentEnd, eCanton, _
+                                               eTreatmentType, eTreatmentReason,0,0)
+
+'### add a diagnosis (optional)
+bStatus = generalInvoiceRequestEx.AddDiagnosis(enDiagnosisCantonal, "G1", "Einfacher Infekt")
+
+'### add a drug service (auto expansion of TP needs an installed validator)
+Dim lID as Long
+bStatus = generalInvoiceRequestEx.AddService("402", "7680573380018", "", _
+                            1, 1, 1, _
+                            dTreatmentStart, 0, _
+                            strEanProvider, strEanResponsible, enSideNone, _
+                            "Co Amoxi Mepha, Disp Tabl 625 mg, 10 Stk", 27.20, _
+                            1, 1, 27.20, 0, _
+                            "", _
+                            "M100.2", enYes, 0, _
+                            lID)
+
+
+'###############################################################################
+'### add ServiceExInput data - the tarmed validator is required here and must be 
+'### installed. Furthermore to input services via the AddServiceEx method, the
+'### auxiliary interface ServiceExInput must be used
+'###############################################################################
+Dim serviceInputEx As ServiceExInput
+Set serviceInputEx = generalInvoiceRequestEx.CreateServiceExInput("001")
+
+'### define the various data for the tarmed validation later on - cf tarmedValidator usage 
+serviceInputEx.ExternalFactor_MT = 1
+serviceInputEx.ExternalFactor_TT = 1
+
+bStatus = serviceInputEx.SetPhysician(eMedicalRole,eBillingRole,strEanProvider,strEanResponsible,"M100.2")
+bStatus = serviceInputEx.SetPatient(dBirthdate, eSex)
+
+Dim strEanSection As String
+strEanSection = "7634567890000"
+bStatus = serviceInputEx.SetTreatment(eCanton, eLaw, eTreatmentType, strEanSection)
+
+'### add a Tarmed consultation service triple. Note that TP and service text are auto expaned
+'### by the validator based on the remaining input data
+Dim lSession As Long
+lSession = 1
+Dim lStatus As Long
+bStatus = generalInvoiceRequestEx.AddServiceEx(serviceInputEx, "001", "00.0010", "", _
+                                1, lSession, 1, _
+                                dTreatmentStart, dTreatmentStart, _
+                                enSideNone, "", _
+                                0, 0.92, 1, 1, 0, _
+                                0, 0.92, 1, 1, 0, _
+                                0, 0, _
+                                "", enNo, 0, _
+                                lID)
+
+bStatus = generalInvoiceRequestEx.AddServiceEx(serviceInputEx, "001", "00.0020", "00.0010", _
+                                1, lSession, 1, _
+                                dTreatmentStart, 0,_
+                                enSideNone, "", _
+                                0, 0.92, 1, 1, 0, _
+                                0, 0.92, 1, 1, 0, _
+                                0, 0, _
+                                "", enNo, 0, _
+                                lID)
+
+bStatus = generalInvoiceRequestEx.AddServiceEx(serviceInputEx, "001", "00.0030", "00.0010", _
+                                1, lSession, 1, _
+                                dTreatmentStart, 0, _
+                                enSideNone, "", _
+                                0, 0.92, 1, 1, 0, _
+                                0, 0.92, 1, 1, 0, _
+                                0, 0, _
+                                "", enNo, 0, _
+                                lID)
+
+'### finalize the input
+Dim dRoundDifference As Double
+bStatus = generalInvoiceRequestEx.Finalize(dRoundDifference)
+
+'### preview the invoice out as defined by the data 
+Dim lTimestamp As Interger
+Dim generalInvoiceResultEx As GENERALINVOICEREQUESTMANAGER500Lib.GeneralInvoiceResult
+bStatus = generalInvoiceRequestManagerEx.Print("",0,enYes,enYes,  _
+                                  lTimestamp,generalInvoiceResultEx)
+Set generalInvoiceResultEx = Nothing
+
+
+'### finally produce the XML infoset
+'### note that the interface generalInvoiceResultEx is returned by the method
+'### if the call was successful - it must not be created! 
+Dim lGenerationAttribute As Long
+lGenerationAttribute = 0
+Dim lValidationError As Long
+Dim strXMLFile As String
+Dim strUsedXSDSchema As String
+bStatus = generalInvoiceRequestManagerEx.GetXML(lGenerationAttribute, strXMLFile, lValidationError, _
+                                                lTimestamp, strUsedXSDSchema, generalInvoiceResultEx)
+
+'### copy the XML infoset away
+Dim strTargetFile As String
+strTargetFile = "C:\\GeneralInvoiceRequestExample.xml"
+FileCopy strXMLFile, strTargetFile
+
+
+'### relase all resources
+Set serviceInputEx = Nothing
+Set addressEx = Nothing
+Set generalInvoiceResultEx = Nothing
+Set generalInvoiceRequestEx = Nothing
+Set generalInvoiceRequestManagerEx = Nothing
+
+Exit Sub
+
+'### error situation
+Err_Trap:
+    MsgBox "Error: " & Err.Description, vbCritical, _
+           "Opps! Error" & Str$(Err.Number)
+
+'### release all resources
+Set serviceInputEx = Nothing
+Set addressEx = Nothing
+Set generalInvoiceResultEx = Nothing
+Set generalInvoiceRequestEx = Nothing
+Set generalInvoiceRequestManagerEx = Nothing
+
+End Sub
+</code>
+</pre>				
+			</div>
+		</section>
+		<section class="toggle active">
+			<label>CS code snippet for using the generalInvoiceRequestManager</label>
+			<div class="toggle-content">
+<pre>
+<code class='cs'>
+private void generalInvoiceRequestExampleButton_Click()
+{
+    ServiceExInput serviceInputEx;
+    GENERALINVOICEREQUESTMANAGER500Lib.Address addressEx;
+    GENERALINVOICEREQUESTMANAGER500Lib.GeneralInvoiceRequest generalInvoiceRequestEx;
+    GENERALINVOICEREQUESTMANAGER500Lib.GeneralInvoiceRequestManager generalInvoiceRequestManagerEx;
+    GENERALINVOICEREQUESTMANAGER500Lib.GeneralInvoiceResult generalInvoiceResultEx;
+
+    try
+    {
+        bool bStatus;
+        // ### init variables
+        string strFrom = "2001001302112";
+        string strVia = "2001000012345";
+        string strTo = "2034567890000";
+        DateTime dBirthdate = DateTime.ParseExact("1964-02-28", "yyyy-MM-dd", 
+                                                  System.Globalization.CultureInfo.InvariantCulture);
+        SexType eSex = SexType.enMale;
+        CantonType eCanton = CantonType.enBS;
+        LawType eLaw = LawType.enKVG;
+        TreatmentType eTreatType = TreatmentType.enAmbulatory;
+        RoleType eRole = RoleType.enRolePhysician;
+        PlaceType ePlace = PlaceType.enPlacePractice;
+        string eTitle = "";
+        DateTime dTreatmentEnd = DateTime.ParseExact("2025-01-31", "yyyy-MM-dd", 
+                                                     System.Globalization.CultureInfo.InvariantCulture);
+        DateTime dTreatmentStart = DateTime.ParseExact("2025-01-01", "yyyy-MM-dd", 
+                                                       System.Globalization.CultureInfo.InvariantCulture);
+        string strPatientInsID = "123.45.678-012";
+        TreatmentReasonType eTreatmentReason = TreatmentReasonType.enDisease;
+        TreatmentType eTreatmentType = TreatmentType.enAmbulatory;
+        MedicalRoleType eMedicalRole = MedicalRoleType.enMedicalRoleSelfEmployed;
+        BillingRoleType eBillingRole = BillingRoleType.enBillingRoleBoth;
+        string strEanProvider = "2034567890111";
+        string strEanResponsible = "2034567890333";
+
+        // ### create the main GeneralInvoiceRequestManager interface
+        generalInvoiceRequestManagerEx = new GeneralInvoiceRequestManager();
+
+        // ### generate the dependend GeneralInvoiceRequest interface (allows to input data)
+        generalInvoiceRequestEx = generalInvoiceRequestManagerEx.GeneralInvoiceRequest;
+
+        // ### start the input of data
+        generalInvoiceRequestEx.Initialize(LanguageType.enGerman);
+
+        // ### generate some routing/transport  as well as some identifying data (required for XML only)
+        bStatus = generalInvoiceRequestEx.SetTransport(strFrom, "", "", strVia, strTo, "");
+        bStatus = generalInvoiceRequestEx.SetPackage("GeneralInvoiceRequestExample", 10001, 4, "sumex1");
+
+        // ### set processing instruction regarding printing at the intermediate's side (required for XML only)
+        bStatus = generalInvoiceRequestEx.SetProcessing(YesNoType.enNo, YesNoType.enNo, "");
+
+        // ###############################################################################
+        // ### start with the invoice relevant data, followed by the various address data
+        // ###############################################################################
+        // ### set data triple of the invoice (required)
+        bStatus = generalInvoiceRequestEx.SetRequest(eRole, ePlace, "", enRequestInvoice, enRequestSubtypeNormal, 
+                              "", "some optional remark");
+
+        // ### set the tiers mode (TG or TP)  (required)
+        bStatus = generalInvoiceRequestEx.SetTiers(TiersModeType.enTiersGarant,enNo, enNo, "", 0.0);
+
+        // ### set invoice related data  (required)
+        bStatus = generalInvoiceRequestEx.SetInvoice("InvoiceID20170612", dTreatmentEnd, 0);
+
+        // ### set the applicable law (required)
+        bStatus = generalInvoiceRequestEx.SetLaw(LawType.enKVG, DateTime.MinValue, "", strPatientInsID);
+
+        // ### create an address interface that is need to add all the following addresses
+        // ### do not forget to initialize the IAddress interface befor using it
+        addressEx = generalInvoiceRequestEx.CreateAddress;
+
+        // ### define the creditor address and the corresponding esr information (required)
+        addressEx.Initialize();	
+        bStatus = addressEx.SetCompany("CreditorenAllianz beider Basel", " GmbH & Co KG", "");
+        bStatus = addressEx.SetPostal("Billerweg 128", "", "4002", "Basel", "BS", "", "");
+
+        int lPaymentPeriod = 25;
+        bStatus = generalInvoiceRequestEx.SetEsrQR(enEsrQR, "CH0930769016110591261", "21000003139471430009017",
+                                         "", addressEx, lPaymentPeriod);
+
+        // ### define the biller of the invoice (required)
+        // ### note that phone, fax and online data are optional
+        addressEx.Initialize();
+        bStatus = addressEx.SetCompany("Biller AG", "Abteilung Inkasso", "");
+        bStatus = addressEx.SetPostal("Billerweg 128", "", "4414", "Frenkendorf", "BL", "", "");
+        bStatus = addressEx.AddPhone("956 99 00", "061", "", "");
+        bStatus = addressEx.SetOnline("info@biller.ch", "");
+        bStatus = generalInvoiceRequestEx.SetBillerGLN("2011234567890", addressEx);
+
+        // ### define the provider of the medical data (required)
+        // ### note that only the required parts are defined here
+        addressEx.Initialize();
+        bStatus = addressEx.SetPerson("Aerztin", "Patricia", "Frau", "Dr. med.", "");
+        bStatus = addressEx.SetPostal("Arztgasse 17b5", "", "4000", "Basel", "BS", "", "");
+        bStatus = generalInvoiceRequestEx.SetProviderGLN(strEanProvider,strEanProvider,addressEx);
+
+        // ### define the health insurance (required in case of tiers payant only)
+        addressEx.Initialize();
+        bStatus = addressEx.SetCompany("Krankenkasse AG", "Sektion Basel", "");
+        bStatus = addressEx.SetPostal("Kassengraben 222", "", "4000", "Basel", "BS", "", "");
+        bStatus = generalInvoiceRequestEx.SetInsurance("2034567890222", addressEx);
+
+        // ### define the patient (required)
+        // ### note that more data are needed here (sex, birthdate,ssn) as well as insurance card data
+        addressEx.Initialize();
+        bStatus = addressEx.SetPerson("Muster", "Peter", "Herr", "", "c/o Mieter Karl");
+        bStatus = addressEx.SetPostal("Musterstrasse 5", "", "7304", "Maienfeld", "", "");
+        bStatus = generalInvoiceRequestEx.SetPatient(eSex, enGenderDiverse, dBirthdate, "756.1234.5678.90", addressEx);
+
+        // ### define a referrer if any (optional)
+        addressEx.Initialize();
+        bStatus = addressEx.SetPerson("Ueberweiser", "Herbert", "Herr", "Dr. med.", "");
+        bStatus = addressEx.SetPostal("Referrerstrasse 11", "", "5000", "Aarau", "AG", "", "");
+        bStatus = generalInvoiceRequestEx.AddPartner(enReferrer,"","2034567890333", "R-2345-67", addressEx);
+
+        // ### define the employer of the patient (optional)
+        addressEx.Initialize();
+        bStatus = addressEx.SetCompany("Arbeitgeber AG", "R&D", "");
+        bStatus = addressEx.SetPostal("Arbeitsplatz 3-5", "", "4410", "Liestal", "BL", "", "");
+        bStatus = generalInvoiceRequestEx.AddPartner(enEmployer,"","7600123456789", "", addressEx);
+
+        // ###############################################################################
+        // ### define some treatment data for an ambulatory case and supply a drug service
+        // ### and a Tarmed consultation
+        // ###############################################################################
+        // ### set treatment information (required)
+        bStatus = generalInvoiceRequestEx.SetTreatment("", "", dTreatmentStart, dTreatmentEnd,  
+                                                       eCanton, eTreatmentType, eTreatmentReason, 
+                                                       DateTime.MinValue,DateTime.MinValue);
+
+        // ### add a diagnosis (optional)
+        bStatus = generalInvoiceRequestEx.AddDiagnosis(DiagnosisType.enDiagnosisCantonal, "G1", "");
+
+        int lID;
+        // ### add a drug service (auto expansion of TP needs an installed validator)
+        bStatus = generalInvoiceRequestEx.AddService("402", "7680573380018", "",
+                                        1, 1,1,
+                                        dTreatmentStart, DateTime.MinValue,enSideNone,
+                                        strEanProvider, strEanResponsible,
+                                        "Co Amoxi Mepha, Disp Tabl 625 mg, 10 Stk", 27.20,
+                                        1, 1, 0, 0,
+                                        "",
+                                        "M100.2", YesNoType.enNo, 0,
+                                        out lID);
+
+        // ###############################################################################
+        // ### add ServiceExInput data - the tarmed validator is required here and must be 
+        // ### installed. Furthermore to input services via the AddServiceEx method, the
+        // ### auxiliary interface ServiceExInput must be used
+        // ###############################################################################
+        serviceInputEx = generalInvoiceRequestEx.get_CreateServiceExInput("001");
+
+        // ### define the various data for the tarmed validation later on - cf tarmedValidator usage 
+        serviceInputEx.ExternalFactor_MT = 1;
+        serviceInputEx.ExternalFactor_TT = 1;
+
+        bStatus = serviceInputEx.SetPhysician(eMedicalRole,eBillingRole,strEanProvider,strEanResponsible,"M100.2");
+        bStatus = serviceInputEx.SetPatient(dBirthdate, eSex);
+
+        string strEanSection = "7634567890000";
+        bStatus = serviceInputEx.SetTreatment(eCanton, eLaw, eTreatmentType, strEanSection);
+
+        // ### add a Tarmed consultation service triple. Note that TP and service text are auto expaned
+        // ### by the validator based on the remaining input data
+        int lSession = 1;
+        int lStatus;
+
+        bStatus = generalInvoiceRequestEx.AddServiceEx(serviceInputEx, "001", "00.0010", "",
+                                        1, lSession,1,
+                                        dTreatmentStart, DateTime.MinValue,
+                                        SideType.enSideNone, "",
+                                        0, 0.92, 1, 1,0,
+                                        0, 0.92, 1, 1,0,
+                                        0, 0,
+                                        "", YesNoType.enNo, 0,
+                                        out lID);
+
+        bStatus = generalInvoiceRequestEx.AddServiceEx(serviceInputEx, "001", "00.0020", "00.0010",
+                                        1, lSession,1,
+                                        dTreatmentStart, DateTime.MinValue,
+                                        SideType.enSideNone, "",
+                                        0, 0.92, 1, 1,0,
+                                        0, 0.92, 1, 1,0,
+                                        0, 0,
+                                        "", YesNoType.enNo, 0,
+                                        out lID);
+
+        bStatus = generalInvoiceRequestEx.AddServiceEx(serviceInputEx, "001", "00.0030", "00.0010",
+                                        1, lSession,1,
+                                        dTreatmentStart, DateTime.MinValue,
+                                        SideType.enSideNone, "",
+                                        0, 0.92, 1, 1, 0,
+                                        0, 0.92, 1, 1, 0,
+                                        0, 0,
+                                        "", YesNoType.enNo, 0,
+                                        out lID);
+
+
+        // ### finalize the input
+        double dRoundDifference;
+        bStatus = generalInvoiceRequestEx.Finalize(out dRoundDifference);
+
+        // ### finally produce the XML infoset
+        // ### note that the interface generalInvoiceResultEx is returned by the method
+        // ### if the call was successful - it must not be created! 
+        int lGenerationAttribute = 0;
+        int lValidationError;
+        int lTimestamp = 0;
+
+        string strXMLFile;
+        string strUsedXSDSchema;
+        bStatus = generalInvoiceRequestManagerEx.GetXML(lGenerationAttribute, out strXMLFile, 
+                                                        out lValidationError, ref lTimestamp,
+                                                        out strUsedXSDSchema, out generalInvoiceResultEx);
+
+        // ### copy the XML infoset away
+        string strTargetFile = "GeneralInvoiceRequestExample.xml";
+        System.IO.File.Copy(strXMLFile, strTargetFile);
+    }
+    catch (Exception ex)
+    {
+        MessageBox.Show("Opps! Error " + ex.ToString(), "OK");
+    }
+
+    finally
+    {
+        // ### relase all resources
+        serviceInputEx = null;
+        addressEx = null;
+        generalInvoiceResultEx = null;
+        generalInvoiceRequestEx = null;
+        generalInvoiceRequestManagerEx = null;
+
+    }
+}
+</code>
+</pre>				
+			</div>
+		</section>
+	</div>
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='../../../../../../images/arrow_down.png' alt='' style='display:none;'><img src='../../../../../../images/arrow_right.png' alt='' style='display:none;'><img src='../../../../../../images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

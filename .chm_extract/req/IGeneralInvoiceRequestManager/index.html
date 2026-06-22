@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="/css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="/script/jquery-1.12.2.min.js"></script>
+	<script src="/script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>API browser of generalInvoiceRequest500 COM module</span>
+<p>
+
+<ul id='breadcrumb'>
+    <li><a href="../index.html">generalInvoiceRequest500</a></li>
+    <li><span>IGeneralInvoiceRequestManager</span></li>
+</ul>
+<br>
+
+<table class='tdata'>
+<tr>
+	<th class='tdata_th0102' colspan='2'><a href="#" class='handler01'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> IGeneralInvoiceRequestManager interface</th>
+	<th class='tdata_th03'><span class='small'>V5.00/27 Nov 2024&nbsp;</span></th>
+</tr>
+<tr class='tdata_tr01'>
+	<td class='tdata_td0102' colspan='2'>
+	The IGeneralInvoiceRequestManager interface provides all the necessary tools to produce an invoice or a reminder of type generalInvoiceRequest_500 for all roles and places.
+<BR>&nbsp;<BR>
+Firstly, an instance of the IGeneralInvoiceRequest interface is created by the GetGeneralInvoiceRequest property. All the invoice/reminder related data and parameters can be set by the supplied interface methods like SetPatient, SetTreatment,...
+<BR>&nbsp;<BR>
+After all information is defined the invoice/reminder is printed or a XML infoset is produced which can be electronically transported to a recipient. In the latter case the invoice/reminder optionally can be signed and/or encrypted .
+<BR>&nbsp;<BR>
+Due to the processing attributes &quot;storno&quot; and &quot;copy&quot; a previously generated invoice or reminder can be canceled or a copy can be produced (cf. <a class='tlink' href='../processing.html'>Notes about processing attributes</A>).
+	</td>
+	<td class='tdata_td03'><img src="/images/space.gif" alt="space" width="60" height="1"></td>
+</tr>
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='2'><a href="#" class='handler02'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Methods</th>
+	<th class='tdata_th03'><span class='small'>9 methods</span></th>
+</tr>
+	<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><a href="GetAbortInfo_method.html" class='tlink'>GetAbortInfo</a></span></td>
+	<td class='tdata_td02 '>Get the abort information string with the error coded in the module language</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><a href="GetLogSettings_method.html" class='tlink'>GetLogSettings</a></span></td>
+	<td class='tdata_td02 altbck'>Get the log settings for the module.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><a href="GetXML_method.html" class='tlink'>GetXML</a></span></td>
+	<td class='tdata_td02 '>The GetXML method generates the XML infoset based on the data of the IGeneralInvoiceRequest interface and the XML generation attributes, validates the XML against the XSD schema, and stores the XML content as UTF8 file in the internal working directory</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><a href="LoadXML_method.html" class='tlink'>LoadXML</a></span></td>
+	<td class='tdata_td02 altbck'>Loads a previously generated XML infoset back into memory for further processing via the returned interface handles</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><a href="Print_method.html" class='tlink'>Print</a></span></td>
+	<td class='tdata_td02 '>The Print method validates the defined invoice/reminder data and prints the request on the local printer</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><a href="PrintAdjust_method.html" class='tlink'>PrintAdjust</a></span></td>
+	<td class='tdata_td02 altbck'>Shows the print object adjustment dialog that allows to move print objects of a .vps report generator file</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><a href="PrintSetup_method.html" class='tlink'>PrintSetup</a></span></td>
+	<td class='tdata_td02 '>Shows the printer setup dialog that allows to define the printer and its settings</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><a href="SetLogo_method.html" class='tlink'>SetLogo</a></span></td>
+	<td class='tdata_td02 altbck'>Optionally sets a logo to be <b>locally printed</b> atop of the patient's summary invoice</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><a href="SetLogSettings_method.html" class='tlink'>SetLogSettings</a></span></td>
+	<td class='tdata_td02 '>Sets the log setting preferences for the module</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='2'><a href="#" class='handler03'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Properties</th>
+	<th class='tdata_th03'><span class='small'>9 properties</span></th>
+</tr>
+	<tr class='tdata_tr03'>
+	<td class='tdata_td01'><span class='nowrap'><span class="inout">[get]</span> <a href="CreateGeneralInvoiceRequestManager_property.html" class='tlink'>CreateGeneralInvoiceRequestManager</a></span></td>
+	<td class='tdata_td02 '>Creates an instance of the main IGeneralInvoiceRequestManager interface</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><span class='nowrap'><span class="inout">[put]</span> <a href="DestructGeneralInvoiceRequest_property.html" class='tlink'>DestructGeneralInvoiceRequest</a></span></td>
+	<td class='tdata_td02 altbck'>Destructs/invalidates this IGeneralInvoiceRequest interface instance</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><span class='nowrap'><span class="inout">[put]</span> <a href="DestructGeneralInvoiceRequestManager_property.html" class='tlink'>DestructGeneralInvoiceRequestManager</a></span></td>
+	<td class='tdata_td02 '>Destructs/invalidates a main instance of the IGeneralInvoiceRequestManager interface</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><span class='nowrap'><span class="inout">[put]</span> <a href="DestructGeneralInvoiceResult_property.html" class='tlink'>DestructGeneralInvoiceResult</a></span></td>
+	<td class='tdata_td02 altbck'>Destructs/invalidates this IGeneralInvoiceResult interface instance.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><span class='nowrap'><span class="inout">[get]</span> <a href="GeneralInvoiceRequest_property.html" class='tlink'>GeneralInvoiceRequest</a></span></td>
+	<td class='tdata_td02 '>Gets the IGeneralInvoiceRequest interface instance</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><span class='nowrap'><span class="inout">[get/put]</span> <a href="ModuleLanguage_property.html" class='tlink'>ModuleLanguage</a></span></td>
+	<td class='tdata_td02 altbck'>Get/Set the language for the module i.e</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><span class='nowrap'><span class="inout">[get]</span> <a href="ModuleVersion_property.html" class='tlink'>ModuleVersion</a></span></td>
+	<td class='tdata_td02 '>Get the version of the GeneralInvoiceRequestManager module.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><span class='nowrap'><span class="inout">[get]</span> <a href="ModuleVersionText_property.html" class='tlink'>ModuleVersionText</a></span></td>
+	<td class='tdata_td02 altbck'>Get the version of the GeneralInvoiceRequestManager  module in  textual form.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><span class='nowrap'><span class="inout">[get/put]</span> <a href="Modus_property.html" class='tlink'>Modus</a></span></td>
+	<td class='tdata_td02 '>Gets/Sets the operation modus of the module</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr>
+	<td class='tdata_td03' colspan='3'>&nbsp;</td>
+</tr>
+<tr>
+	<td class='tdata_td03' style='margin:0; padding-bottom:5px; border-bottom: 2px solid #3360b3;'><img src="/images/space.gif" alt="space" width="160" height="1"></td>
+	<td class='tdata_td03' style='margin:0; padding-bottom:5px; border-bottom: 2px solid #3360b3;' colspan='3'></td>
+</tr>
+
+</table>
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='/images/arrow_down.png' alt='' style='display:none;'><img src='/images/arrow_right.png' alt='' style='display:none;'><img src='/images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

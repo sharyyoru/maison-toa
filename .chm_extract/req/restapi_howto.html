@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="../../../../../../css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="../../../../../../script/jquery-1.12.2.min.js"></script>
+	<script src="../../../../../../script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>Introduction, overview and usage of the Restful Webservice Server</span>
+<br>&nbsp;<br>
+<p>
+The application <b>generalInvoiceRequestManagerServer500.exe</b> is a Restful Webservice Server, that has the same interface methods/properties as the 
+COM module generalInvoiceRequestManager500.dll. 
+<br>
+This allows to create a programming semantically similar to the COM approach but under the Restful Webservice paradigm. Consequently, 
+on the Restful Client side there are no prevailing dependencies on Microsoft platforms and/or on Microsoft resources such as the database 
+technology. Of course, the installation location of the server software is still subject to these restrictions. 
+<br>&nbsp;<br>
+In the next section of this document, the installation, configuration and operation of generalInvoiceRequestManagerServer500.exe will be addressed.
+</p>
+
+<TABLE BORDER="0">
+<TR>
+	<TD BGCOLOR='#0088cc' nowrap><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>Installation, registration and parameterization:</b></TD>
+	<td></td>
+</TR>
+<TR>
+	<td colspan='2'>
+By installing the installer object <b>generalInvoiceRequestManager500</b> the COM module <b>generalInvoiceRequestManager500.dll</b> as well as the out-of-process proxy 
+component <b>oopGeneralInvoiceRequestManager500.exe</b> is automatically 
+installed/registered in the system. However, the <b>generalInvoiceRequestManagerServer500.exe</b> 
+must be installed manually as a system service.	
+	</td>
+</TR>
+<TR>
+<td valign='top' nowrap>
+<code style=' color: #0088cc; font-size: 13px; font-weight: 800; padding: 4px; margin-top: 6px; margin-bottom: 6px;'>generalInvoiceRequestManagerServer500.exe -help</code>
+</td>
+<TD>
+Creates a help window with the the name and full version of the applicationb as well as the currently define Webservice Endpoint. 
+Furthermore the complete list of command line switches is shown.
+</td>
+</TR>
+
+<TR>
+<td valign='top' style='background-color: #ebf0f9;' nowrap>
+<code style=' color: #0088cc; font-size: 13px; font-weight: 800; padding: 4px; margin-top: 6px; margin-bottom: 6px;'>generalInvoiceRequestManagerServer500.exe -install</code>
+</td>
+<TD style='background-color: #ebf0f9;'>
+Installs/registers the Restful Webservice Server as a system service. Please take into account, that <b>the installation must be performed under administrator privileges</b>
+</td>
+</TR>
+
+<TR>
+<td valign='top' nowrap>
+<code style=' color: #0088cc; font-size: 13px; font-weight: 800; padding: 4px; margin-top: 6px; margin-bottom: 6px;'>generalInvoiceRequestManagerServer500.exe -uninstall</code>
+</td>
+<TD>
+Uninstalls the system service component. Please take into account, that <b>the uninstallation must be performed under administrator privileges</b>
+</td>
+</TR>
+
+<TR>
+<td align='top' style='background-color: #ebf0f9;' nowrap>
+<code style=' color: #0088cc; font-size: 13px; font-weight: 800; padding: 4px; margin-top: 6px; margin-bottom: 6px;'>generalInvoiceRequestManagerServer500.exe -setport X</code>
+</td>
+<TD style='background-color: #ebf0f9;'>
+Sets the port X as part of the Webservice Endpoint	
+</td>
+</TR>
+
+<TR>
+	<td>&nbsp;</td>
+	<td></td>
+</TR>
+<TR>
+	<TD BGCOLOR='#0088cc' nowrap><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>Restful Webservice Endpoint:</b></TD>
+	<td></td>
+</TR>
+<TR>
+	<td colspan='2'>
+Installing generalInvoiceRequestManagerServer500.exe as a service activates the Restful Webservice Endpoint:
+<center><code style=' color: #0088cc; font-size: 13px; font-weight: 800; padding: 4px; margin-top: 6px; margin-bottom: 6px;'>http://localhost:35430/generalInvoiceRequestManagerServer500</code></center>
+which is subsumed as <a href='igeneralinvoicerequestmanager/creategeneralinvoicerequestmanager_property.html' class='hlink'><b>baseURL</b></a> in the subsequent API documentation.
+<br>&nbsp;<br>
+To run the webservice under a different URL or under https protocol, a permanent webservice target endpoint mapping is performed on the target system.
+<br>
+For example, under Apache, the following rewrite rule is defined:
+<pre>
+<code class='javascript'>&lt;VirtualHost *:*&gt;
+    ProxyPreserveHost Off
+	Header always set Access-Control-Allow-Origin "*"
+	Header always set Access-Control-Max-Age "1000"
+	Header always set Access-Control-Allow-Headers "x-requested-with, Content-Type, origin, authorization, accept, client-security-token"
+
+	ProxyPass /generalInvoiceRequestManager/500/ http://localhost:35430/generalInvoiceRequestManagerServer500/
+	ProxyPassReverse /generalInvoiceRequestManager/500/ http://localhost:35430/generalInvoiceRequestManagerServer500/
+&lt;/VirtualHost&gt;</code>		
+</pre>
+	</td>
+</TR>
+
+<TR>
+	<td>&nbsp;</td>
+	<td></td>
+</TR>
+<TR>
+	<TD BGCOLOR='#0088cc' nowrap><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>Restful Webservice Operation:</b></TD>
+	<td></td>
+</TR>
+<TR>
+	<td colspan='2'>
+The service might be modified after installation, for example to start under a different account, to extend the recovery properties or to change the startup type. 
+Finally, this should be set to 'Automatic' or 'Automatic (Delayed start)' so that the service is automatically available after a system restart.
+	</td>
+</TR>
+
+<TR>
+	<td>&nbsp;</td>
+	<td></td>
+</TR>
+<TR>
+	<TD BGCOLOR='#0088cc' nowrap><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>Remarks about programming:</b></TD>
+	<td></td>
+</TR>
+<TR>
+	<td colspan='2'>
+In the rest of this document we will discuss programming of the Restful web service and the differences to the
+C/C++ programming of the classic COM component.
+<br>&nbsp;<br>
+As already mentioned, Restful programming is analogous to C++ programming with the addition that each instance of an interface 
+(including the main interface) is created via
+the corresponding GET function. For example, an instance of the main interface is created with:
+</td>
+</TR>
+<TR>
+<td valign='top' nowrap>
+<code style=' color: #0088cc; font-size: 13px; font-weight: 800; padding: 4px; margin-top: 6px; margin-bottom: 6px;'>baseURL/IGeneralInvoiceRequestManager/GetCreateGeneralInvoiceRequestManager</code>
+</td>
+<TD>
+returns the instance address as JSON out{pIGeneralInvoiceRequestManager: longValue,...}
+</td>
+</TR>
+<TR>
+	<td colspan='2'>
+In every further call of a method or a property of the main interface this instance address must be included as part of the JSON-In. 
+The termination/deletion of an instance must be done via the corresponding PUT Destruct property:
+	</td>
+</TR>
+<TR>
+<td valign='top' nowrap>
+<code style=' color: #0088cc; font-size: 13px; font-weight: 800; padding: 4px; margin-top: 6px; margin-bottom: 6px;'>baseURL/IGeneralInvoiceRequestManager/PutDestructGeneralInvoiceRequestManager</code>
+</td>
+<TD>
+with JSON-In{pIGeneralInvoiceRequestManager: longValue}, deletes the corresponding main instance AND all at that moment 
+still active dependent subinstances (subinstances which have been generated by the explicit main instance).
+</td>
+</TR>
+<TR>
+	<td colspan='2'>
+It should be noted that the webserver generalInvoiceRequestManagerServer500.exe performs an internal management of the generated instances and automatically 
+deletes instances that have no activity for a defined period of 1 hour. If after the deletion a 
+rest call with such an instance is made, an error (HTTP Status >= 400) is generated and the instance address is marked as unknown.
+	</td>
+</TR>
+
+<TR>
+	<td>&nbsp;</td>
+	<td></td>
+</TR>
+<TR>
+	<TD BGCOLOR='#0088cc' nowrap><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>Code snippet:</b></TD>
+	<td></td>
+</TR>
+<TR>
+	<td colspan='2'>
+	Minimal code snippet to load an XML and produce a PDF representation of that input data:
+	
+<pre>
+<code class='javascript'>		
+  http://localhost:35430/generalInvoiceRequestManagerServer500/IGeneralInvoiceRequestManager/GetCreateGeneralInvoiceRequestManager
+    returns JSON-Out{pIGeneralInvoiceRequestManager: 45467}
+		
+  http://localhost:35430/generalInvoiceRequestManagerServer500/IGeneralInvoiceRequestManager/PutModuleLanguage
+    JSON-IN(pIGeneralInvoiceRequestManager: 45467, eLanguage: 0}
+		
+  http://localhost:35430/generalInvoiceRequestManagerServer500/IGeneralInvoiceRequestManager/LoadXML
+     JSON-IN(pIGeneralInvoiceRequestManager: 45467, bstrInputFile: "test.xml"}
+    + <application/octet-stream> C:\test.xml
+    returns JSON-Out{pIGeneralInvoiceRequest: 5788991, pIInvoiceResponse: 5788981,
+	                 pbstrUsedSchema: "generalInvoiceRequest_500.xsd", pbStatus: "true"}
+					 	
+  http://localhost:35430/generalInvoiceRequestManagerServer500/IGeneralInvoiceRequestManager/Print
+    JSON-IN(pIGeneralInvoiceRequestManager: 45467, bstrPrintTemplate: "", bstrSenderID:"",
+	        ePrintPreview:1, eSortTimeTariff:0, lGenerationAttributes:0, plTimestamp:0}
+    returns JSON-Out{pIInvoiceResponse: 5788981, plTimestamp:1734303600, pbStatus: "true",
+	                 pbstrPDFFile: "/generalInvoiceRequestManagerServer500/files/88d26dae.pdf" }
+			
+  http://localhost:35430/generalInvoiceRequestManagerServer500/IGeneralInvoiceRequest/PutDestructGeneralInvoiceRequest  
+    JSON-IN(pIGeneralInvoiceRequest: 5788991}
+		
+  http://localhost:35430/generalInvoiceRequestManagerServer500/IGeneralInvoiceResponse/PutDestructGeneralInvoiceResponse  
+    JSON-IN(pIGeneralInvoiceRequest: 5788981}
+		
+  http://localhost:35430/generalInvoiceRequestManagerServer500/IGeneralInvoiceRequestManager/PutDestructGeneralInvoiceRequestManager   
+    JSON-IN{pIGeneralInvoiceRequestManager:45467}</code>		
+</pre>
+	</td>
+</TR>
+</TABLE>
+<p>
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='../../../../../../images/arrow_down.png' alt='' style='display:none;'><img src='../../../../../../images/arrow_right.png' alt='' style='display:none;'><img src='../../../../../../images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

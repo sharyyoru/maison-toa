@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="../../../../../../css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="../../../../../../script/jquery-1.12.2.min.js"></script>
+	<script src="../../../../../../script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>General use of the generalInvoiceRequest ATL COM module</span>
+<BR><IMG SRC="../../../../../../images/space.gif" WIDTH="1" HEIGHT="20" BORDER="0"><BR>
+<IMG SRC="../../../../../../images/xmlmanagers/generalInvoiceRequest/generaluse.gif" WIDTH="490" HEIGHT="286" BORDER="0" HSPACE="10" ALIGN=RIGHT>
+&nbsp;<BR>
+The IGeneralInvoiceRequestManager interface provides all the necessary tools to produce an invoice, a reminder or a credit advice for all roles and places.
+<P>
+Firstly, an instance of the IGeneralInvoiceRequest interface is created by the GetGeneralInvoiceRequest property. 
+All the invoice/reminder related data and parameters can be set by the supplied interface methods as 
+<A HREF="IGeneralInvoiceRequest/SetPatient_method.html">SetPatient</A>, 
+<A HREF="IGeneralInvoiceRequest/SetTreatment_method.html">SetTreatment</A>,...
+<P>
+Two auxiliary input interfaces <A HREF="index.html">IAddress</A> and <A HREF="index.html">IServiceExInput</A> are available for setting addresses and
+extended service related data (Tarmed is such a extended service type).
+<P>
+After all information is defined the invoice or reminder is printed or a XML infoset is produced which can be electronically transported 
+to the recipient. In the latter case the invoice/reminder optionally can be signed and/or encrypted .
+<P>
+Due to he processing attributes "storno" and "copy" a previously generated invoice or reminder can be canceled or a copy can be produced 
+(cf. <A HREF='processing.html'>Notes about processing attributes</A>).
+<P>&nbsp;<BR>
+To get a staring point there is a <A HREF="example_code.html">Visual Basic code snippet</A> provided 
+that can be used for using the generalInvoiceRequest module.
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='../../../../../../images/arrow_down.png' alt='' style='display:none;'><img src='../../../../../../images/arrow_right.png' alt='' style='display:none;'><img src='../../../../../../images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

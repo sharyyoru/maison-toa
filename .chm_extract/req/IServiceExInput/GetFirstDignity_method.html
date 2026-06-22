@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="/css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="/script/jquery-1.12.2.min.js"></script>
+	<script src="/script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>API browser of generalInvoiceRequest500 COM module</span>
+<p>
+
+<ul id='breadcrumb'>
+    <li><a href="../index.html">generalInvoiceRequest500</a></li>
+    <li><a href="index.html">IServiceExInput</a></li>
+    <li><span>GetFirstDignity</span></li>
+</ul>
+<br>
+
+ <table class='tdata'>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler01'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> IServiceExInput::GetFirstDignity method</th>
+	<th class='tdata_th03'><img src="/images/space.gif" alt="space" width="20" height="1"></th>
+</tr>
+<tr class='tdata_tr01'>
+	<td class='tdata_td0102' colspan='3' style='padding-top: 8px;'>
+Retrieves the first Qualitative Dignity from the list of dignities.
+<BR>&nbsp;<BR>
+VARIANT_FALSE is returned if the end of the qualitative dignity list is reached.
+	</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler04'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Restful webservice calling syntax</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;'><span class='nowrap'><span class="inout">[POST]</span></td>
+<td class='tdata_td034' colspan='3'><a href="../restapi_howto.html" class='hlink'><span class="base_name">/baseURL/</span></a><span class="methode_name">IServiceExInput/GetFirstDignity</span></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;text-align: center;'><span class="title_name">[JSON input data]</span></td>
+	<td class='tdata_td024' ><span class='arg_type'>pIServiceExInput:</span><br>
+<span class='arg_type'>bstrGLN:</span><br>
+<span class='arg_type'>bstrQLCode:</span></td>
+	<td class='tdata_td034' colspan='2'><span class='methode_arg'>longValue</span>, &nbsp;&nbsp; <i>//interface address</i><br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span><br></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;text-align: center;'><span class="title_name">[JSON result data]</span></td>
+	<td class='tdata_td024' ><span class='arg_type'>pbstrGLN:</span><br>
+<span class='arg_type'>pbstrQLCode:</span><br>
+<span class='arg_type'>pbStatus:</span></td>
+	<td class='tdata_td034' colspan='2'><span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>booleanValue</span><br>&nbsp;</td>
+</tr>
+
+
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;text-align: center;'><span class="title_name">[HTTP result status]</span></td>
+	<td class='tdata_td01' valign='top'><span class="arg_type">200</span></td>
+	<td class='tdata_td02' valign='top'>Return status 200 signals a successful method call</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">204</span></td>
+	<td class='tdata_td02 altbck'>Return status 204 (noContent) signals that the end of an iteration is reached</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">&gt;= 400</span></td>
+	<td class='tdata_td02'>Return status &gt;= 400 signals an unsuccessful function call. The returned <span class="title_name">JSON{errorCode: code, errorText:"text"}</span> supplies the error message the same as GetAbortInfo() would do.</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler02'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> C/C++ calling syntax</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td014'><span class='nowrap'><a href="../types/hresult_type.html" class='hlink'><span class="arg_type">HRESULT</span></a> <span class="methode_name">GetFirstDignity(</span></span></td>
+	<td class='tdata_td024'>			<a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/VARIANT_BOOL_type.html" class='hlink'><span class="arg_type">VARIANT_BOOL</span></a>
+</td>
+	<td class='tdata_td034'>			<span class="methode_arg">bstrGLN,</span>
+			<br><span class="methode_arg">bstrQLCode,</span>
+			<br><span class="methode_arg">*pbstrGLN,</span>
+			<br><span class="methode_arg">*pbstrQLCode,</span>
+			<br><span class="methode_arg">*pbStatus);</span>
+</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr class='tdata_tr02'>
+	<td class='tdata_td0102' style='padding-top: 8px;text-align: center;'><span class="title_name">[C/C++ return value]</span></td>
+	<td class='tdata_td01'><span class="arg_type">S_OK</span></td>
+	<td class='tdata_td02'>This value is returned if the function call was successful.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">S_FALSE</span></td>
+	<td class='tdata_td02 altbck'>This value is returned if the end of an iteration is reached</td>	
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">E_<i>name</i></span></td>
+	<td class='tdata_td02'>This value is returned if the function call was unsuccessful and an error exception was generated. Note that if you are using SmartPointers an exception is thrown under these conditions.</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler03'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Calling argument description</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">bstrGLN</span></td>
+	<td class='tdata_td134 '>Input search parameter criterion acting on the provider's GLN.
+<BR>&nbsp;<BR>
+Use the wildcard symbol (*) to include all records, supply an empty string to not use the GLN as a search criterion.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">bstrQLCode</span></td>
+	<td class='tdata_td134 altbck'>Input search parameter criterion acting on the Qualitative Dignity.
+<BR>&nbsp;<BR>
+Use the wildcard symbol (*) to include all records, supply an empty string to not use the Qualitative Dignity as a search criterion.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pbstrGLN</span></td>
+	<td class='tdata_td134 '>The first GLN number fulfilling the search criterion.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pbstrQLCode</span></td>
+	<td class='tdata_td134 altbck'>The first Qualitative Dignity fulfilling the search criterion.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out,retval]</span> <a href="../types/VARIANT_BOOL_type.html" class='hlink'><span class="arg_type">VARIANT_BOOL</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pbStatus</span></td>
+	<td class='tdata_td134 '>Return status of the method. If pbStatus is VARIANT_FALSE the end of data is reached</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr>
+	<td class='tdata_td03' style='margin:0; padding-bottom:5px; border-bottom: 2px solid #3360b3;'><img src="/images/space.gif" alt="space" width="160" height="1"></td>
+	<td class='tdata_td03' style='margin:0; padding-bottom:5px; border-bottom: 2px solid #3360b3;' colspan='3'></td>
+</tr>
+</table>
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='/images/arrow_down.png' alt='' style='display:none;'><img src='/images/arrow_right.png' alt='' style='display:none;'><img src='/images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

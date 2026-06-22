@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="/css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="/script/jquery-1.12.2.min.js"></script>
+	<script src="/script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>API browser of generalInvoiceRequest500 COM module</span>
+<p>
+
+<ul id='breadcrumb'>
+    <li><a href="../index.html">generalInvoiceRequest500</a></li>
+    <li><a href="index.html">IGeneralInvoiceRequest</a></li>
+    <li><span>AddServiceEx</span></li>
+</ul>
+<br>
+
+ <table class='tdata'>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler01'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> IGeneralInvoiceRequest::AddServiceEx method</th>
+	<th class='tdata_th03'><img src="/images/space.gif" alt="space" width="20" height="1"></th>
+</tr>
+<tr class='tdata_tr01'>
+	<td class='tdata_td0102' colspan='3' style='padding-top: 8px;'>
+Adds a service from an extended tariff to the list of services. 
+<br>
+The term "extended" means a tariff whose services are splitted into a medical and technical part (like the Tarmed) as opposed to a simple tariff with  a (code, name, tax point) structure. Note, that the IServiceExInput interface is needed to define further data even if a corresponding validator is not used.
+<BR>&nbsp;<BR>
+<B>Auto-expansion</B>: under the condition that the corresponding validator is installed and eIgnoreValidate=enNo then bstrText, dUnitMT, dUnitTT, dUnitInternalScalingFactorMT, dUnitInternalScalingFactorTT, dAmountMT, dAmountTT and dAmount are auto-expanded to the correct values by the validator if and only if these values are set empty or 0, respectively.
+<BR>&nbsp;<BR>
+If the return status is VARIANT_FALSE then the service record is not added!
+	</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler04'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Restful webservice calling syntax</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;'><span class='nowrap'><span class="inout">[POST]</span></td>
+<td class='tdata_td034' colspan='3'><a href="../restapi_howto.html" class='hlink'><span class="base_name">/baseURL/</span></a><span class="methode_name">IGeneralInvoiceRequest/AddServiceEx</span></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;text-align: center;'><span class="title_name">[JSON input data]</span></td>
+	<td class='tdata_td024' ><span class='arg_type'>pIGeneralInvoiceRequest:</span><br>
+<span class='arg_type'>pIServiceExInput:</span><br>
+<span class='arg_type'>bstrTariffType:</span><br>
+<span class='arg_type'>bstrCode:</span><br>
+<span class='arg_type'>bstrReferenceCode:</span><br>
+<span class='arg_type'>dQuantity:</span><br>
+<span class='arg_type'>lSessionNumber:</span><br>
+<span class='arg_type'>lGroupSize:</span><br>
+<span class='arg_type'>dDateBegin:</span><br>
+<span class='arg_type'>dDateEnd:</span><br>
+<a href='../types/SideType_type.html' class='hlink'><span class='arg_type'>eSide:</span></a><br>
+<span class='arg_type'>bstrServiceName:</span><br>
+<span class='arg_type'>dUnitMT:</span><br>
+<span class='arg_type'>dUnitFactorMT:</span><br>
+<span class='arg_type'>dUnitInternalScalingFactorMT:</span><br>
+<span class='arg_type'>dUnitExternalScalingFactorMT:</span><br>
+<span class='arg_type'>dAmountMT:</span><br>
+<span class='arg_type'>dUnitTT:</span><br>
+<span class='arg_type'>dUnitFactorTT:</span><br>
+<span class='arg_type'>dUnitInternalScalingFactorTT:</span><br>
+<span class='arg_type'>dUnitExternalScalingFactorTT:</span><br>
+<span class='arg_type'>dAmountTT:</span><br>
+<span class='arg_type'>dAmount:</span><br>
+<span class='arg_type'>dVatRate:</span><br>
+<span class='arg_type'>bstrRemark:</span><br>
+<a href='../types/YesNoType_type.html' class='hlink'><span class='arg_type'>eIgnoreValidate:</span></a><br>
+<span class='arg_type'>lServiceAttributes:</span></td>
+	<td class='tdata_td034' colspan='2'><span class='methode_arg'>longValue</span>, &nbsp;&nbsp; <i>//interface address</i><br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>variantDateValue | "stringISODateValue"</span>,<br>
+<span class='methode_arg'>variantDateValue | "stringISODateValue"</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>doubleValue</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>longValue</span><br></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;text-align: center;'><span class="title_name">[JSON result data]</span></td>
+	<td class='tdata_td024' ><span class='arg_type'>plID:</span><br>
+<span class='arg_type'>pbStatus:</span></td>
+	<td class='tdata_td034' colspan='2'><span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>booleanValue</span><br>&nbsp;</td>
+</tr>
+
+
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;text-align: center;'><span class="title_name">[HTTP result status]</span></td>
+	<td class='tdata_td01' valign='top'><span class="arg_type">200</span></td>
+	<td class='tdata_td02' valign='top'>Return status 200 signals a successful method call</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">204</span></td>
+	<td class='tdata_td02 altbck'>Return status 204 (noContent) signals that the end of an iteration is reached</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">&gt;= 400</span></td>
+	<td class='tdata_td02'>Return status &gt;= 400 signals an unsuccessful function call. The returned <span class="title_name">JSON{errorCode: code, errorText:"text"}</span> supplies the error message the same as GetAbortInfo() would do.</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler02'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> C/C++ calling syntax</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td014'><span class='nowrap'><a href="../types/hresult_type.html" class='hlink'><span class="arg_type">HRESULT</span></a> <span class="methode_name">AddServiceEx(</span></span></td>
+	<td class='tdata_td024'>			<a href="../types/IServiceExInput_type.html" class='hlink'><span class="arg_type">IServiceExInput</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a>
+			<br><a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a>
+			<br><a href="../types/DATE_type.html" class='hlink'><span class="arg_type">DATE</span></a>
+			<br><a href="../types/DATE_type.html" class='hlink'><span class="arg_type">DATE</span></a>
+			<br><a href="../types/SideType_type.html" class='hlink'><span class="arg_type">SideType</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a>
+			<br><a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/YesNoType_type.html" class='hlink'><span class="arg_type">YesNoType</span></a>
+			<br><a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a>
+			<br><a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a>
+			<br><a href="../types/VARIANT_BOOL_type.html" class='hlink'><span class="arg_type">VARIANT_BOOL</span></a>
+</td>
+	<td class='tdata_td034'>			<span class="methode_arg">*pIServiceExInput,</span>
+			<br><span class="methode_arg">bstrTariffType,</span>
+			<br><span class="methode_arg">bstrCode,</span>
+			<br><span class="methode_arg">bstrReferenceCode,</span>
+			<br><span class="methode_arg">dQuantity,</span>
+			<br><span class="methode_arg">lSessionNumber,</span>
+			<br><span class="methode_arg">lGroupSize,</span>
+			<br><span class="methode_arg">dDateBegin,</span>
+			<br><span class="methode_arg">dDateEnd,</span>
+			<br><span class="methode_arg">eSide,</span>
+			<br><span class="methode_arg">bstrServiceName,</span>
+			<br><span class="methode_arg">dUnitMT,</span>
+			<br><span class="methode_arg">dUnitFactorMT,</span>
+			<br><span class="methode_arg">dUnitInternalScalingFactorMT,</span>
+			<br><span class="methode_arg">dUnitExternalScalingFactorMT,</span>
+			<br><span class="methode_arg">dAmountMT,</span>
+			<br><span class="methode_arg">dUnitTT,</span>
+			<br><span class="methode_arg">dUnitFactorTT,</span>
+			<br><span class="methode_arg">dUnitInternalScalingFactorTT,</span>
+			<br><span class="methode_arg">dUnitExternalScalingFactorTT,</span>
+			<br><span class="methode_arg">dAmountTT,</span>
+			<br><span class="methode_arg">dAmount,</span>
+			<br><span class="methode_arg">dVatRate,</span>
+			<br><span class="methode_arg">bstrRemark,</span>
+			<br><span class="methode_arg">eIgnoreValidate,</span>
+			<br><span class="methode_arg">lServiceAttributes,</span>
+			<br><span class="methode_arg">*plID,</span>
+			<br><span class="methode_arg">*pbStatus);</span>
+</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr class='tdata_tr02'>
+	<td class='tdata_td0102' style='padding-top: 8px;text-align: center;'><span class="title_name">[C/C++ return value]</span></td>
+	<td class='tdata_td01'><span class="arg_type">S_OK</span></td>
+	<td class='tdata_td02'>This value is returned if the function call was successful.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">S_FALSE</span></td>
+	<td class='tdata_td02 altbck'>This value is returned if the end of an iteration is reached</td>	
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">E_<i>name</i></span></td>
+	<td class='tdata_td02'>This value is returned if the function call was unsuccessful and an error exception was generated. Note that if you are using SmartPointers an exception is thrown under these conditions.</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler03'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Calling argument description</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/IServiceExInput_type.html" class='hlink'><span class="arg_type">IServiceExInput</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pIServiceExInput</span></td>
+	<td class='tdata_td134 '>The instance of the IServiceExInput interface used for the given tariff.
+<BR>&nbsp;<BR>
+Please note, that even if a validator is not used for the given tariff, IServiceExInput still holds data that is required to produce a standard compliant XML infoset like the billingRole and medicalRole. Therefore, the instance can not be NULL!</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">bstrTariffType</span></td>
+	<td class='tdata_td134 altbck'>The official tariff type as defined by <a class='tlink' href="http://www.forum-datenaustausch.ch" TARGET="TOP">Forum Datenaustausch</A></td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">bstrCode</span></td>
+	<td class='tdata_td134 '>The service code.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">bstrReferenceCode</span></td>
+	<td class='tdata_td134 altbck'>The reference code if one must be supplied.
+<BR>&nbsp;<BR>
+Supply an empty string if there is no reference code to set.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">dQuantity</span></td>
+	<td class='tdata_td134 '>The floating point quantity.
+<BR>&nbsp;<BR>
+Note that quantity changes the sign if a storno request is produced.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">lSessionNumber</span></td>
+	<td class='tdata_td134 altbck'><B>lSessionNumber</B> defines either a specific <B>patient contact</B> with an unique number over the entire treatment period or <BR>a day-based <B>session number</B>. The session number divides the day into a series of individual treatment units (sessions), whereby by default <BR>each day starts with the number 1 and is incremented by 1 for each new treatment unit.
+<BR>&nbp;<BR>
+Some tariffs do not include a session concept, others such as TARMED/TARDOC rely heavily on this paradigm.
+<BR>
+For tariffs without a session concept, simply enter 1 as the session number for all services on one day.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">lGroupSize</span></td>
+	<td class='tdata_td134 '>lGroupSize defines the participating <B>group size</B> of a service whose quantity is calculated by the &quot;Divisor Method&quot;. A value of &lt; 2 means that there is no group size dependency!</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/DATE_type.html" class='hlink'><span class="arg_type">DATE</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">dDateBegin</span></td>
+	<td class='tdata_td134 altbck'>The date of the service's prescription</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/DATE_type.html" class='hlink'><span class="arg_type">DATE</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">dDateEnd</span></td>
+	<td class='tdata_td134 '>The date of the last prescription of the service if and only if the service was applied over a period of time.
+<BR>&nbsp;<BR>
+dDateEnd is ignored if the condition (dDateEnd &gt; dDateBegin+1) is not true! Therefore dDateEnd=0 is supplied for the vast majority of services.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/SideType_type.html" class='hlink'><span class="arg_type">SideType</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">eSide</span></td>
+	<td class='tdata_td134 altbck'>The body side dependency of the service</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">bstrServiceName</span></td>
+	<td class='tdata_td134 '>The name of the service as defined by the used tariff</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">dUnitMT</span></td>
+	<td class='tdata_td134 altbck'>Tax points of the medical part (TP_MT) of the service.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">dUnitFactorMT</span></td>
+	<td class='tdata_td134 '>Tax point value of the medical part (TPV_MT) of the service.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">dUnitInternalScalingFactorMT</span></td>
+	<td class='tdata_td134 altbck'>The internal scaling factor of the medical part of the service.
+<BR>&nbsp;<BR>
+This is a modulation factor to represent percent services and is mostly 1 - set  the factor 0 to auto-expand it depending on the service.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">dUnitExternalScalingFactorMT</span></td>
+	<td class='tdata_td134 '><B>dUnitExternalScalingFactorMT</B> is an external scaling factor for the medical part laying in the provider's responsibility that modulates the corresponding service outside the official tariff structure.
+<BR>
+The dUnitExternalScalingFactorMT is used for <B>discounting or surcharging</B> and can even take a zero value to supply a <B>charge free service</B>.
+<BR>&nbsp;<BR>
+For tariff  <B>&#171;007 - TarDoc&#187;</B> the tariff owner <a class='tlink' href="https://oaat-otma.ch/" TARGET="TOP">&quot;OAAT-OTMA&quot;</A> will use the <BR>external factor as an additional control element within its cost neutrality project. It is currently unclear how, where and when the <BR>corresponding data will be made available. It is also unclear whether this is a date-historical usage of the factor.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">dAmountMT</span></td>
+	<td class='tdata_td134 altbck'>The amount in CHF for the medical part of the service.
+<BR>&nbsp;<BR>
+Note that amount changes the sign if a storno request is produced due to the sign change of dQuantity.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">dUnitTT</span></td>
+	<td class='tdata_td134 '>Tax points of the technical part (TP_TT) of the service.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">dUnitFactorTT</span></td>
+	<td class='tdata_td134 altbck'>Tax point value of the technical part (TPV_TT) of the service.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">dUnitInternalScalingFactorTT</span></td>
+	<td class='tdata_td134 '>The internal scaling factor of the technical part of the service.
+<BR>&nbsp;<BR>
+This is a modulation factor to represent percent services and is mostly 1 - set  the factor 0 to auto-expand it depending on the service.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">dUnitExternalScalingFactorTT</span></td>
+	<td class='tdata_td134 altbck'><B>dUnitExternalScalingFactorTT</B> is an external scaling factor for the technical part laying in the provider's responsibility that modulates the corresponding service outside the official tariff structure.
+<BR>
+The dUnitExternalScalingFactorTT is used for <B>discounting or surcharging</B> and can even take a zero value to supply a <B>charge free service</B>.
+<BR>&nbsp;<BR>
+For tariff  <B>&#171;007 - TarDoc&#187;</B> the tariff owner <a class='tlink' href="https://oaat-otma.ch/" TARGET="TOP">&quot;OAAT-OTMA&quot;</A> will use the <BR>external factor as an additional control element within its cost neutrality project. It is currently unclear how, where and when the <BR>corresponding data will be made available. It is also unclear whether this is a date-historical usage of the factor.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">dAmountTT</span></td>
+	<td class='tdata_td134 '>The amount in CHF for the technical part of the service.
+<BR>&nbsp;<BR>
+Note that amount changes the sign if a storno request is produced due to the sign change of dQuantity.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">dAmount</span></td>
+	<td class='tdata_td134 altbck'>The amount in CHF for the service as sum over  dAmountMT + dAmountTT
+<BR>&nbsp;<BR>
+Note that amount changes the sign if a storno request is produced due to the sign change of dQuantity.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/double_type.html" class='hlink'><span class="arg_type">double</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">dVatRate</span></td>
+	<td class='tdata_td134 '>The VAT rate in percent or as real number that should be applied to this service.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">bstrRemark</span></td>
+	<td class='tdata_td134 altbck'>An optional remark for the given service
+<BR>&nbsp;<BR>
+<B>Patch for populating service attributes</B><BR>
+If service attribute keywords <center> {<b>Code207</b> | <b>Franchisefree_12e_d</b>}</center>are supplied (case-independent) as part of the remark, than these keywords are<b> migrated into the<i> lServiceAttributes</i> variable</b> and thereafter removed from the remark.<br>Thus, this is an alternative method of setting lServiceAttributes - cf. below.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/YesNoType_type.html" class='hlink'><span class="arg_type">YesNoType</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">eIgnoreValidate</span></td>
+	<td class='tdata_td134 '>Flag indicating whether the validation must be ignored that is whether the corresponding validator must be called or not.
+<BR>&nbsp;<BR>
+This flag might be useful in the following situation: the user wants to add the service even if the validation failed, perhaps he has a special agreement with the insurance or patient.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">lServiceAttributes</span></td>
+	<td class='tdata_td134 altbck'>lServiceAttributes is a 32-bit integer where each bit position defines a special information. 
+<BR>&nbsp;<BR>
+Defined bit positions as of <B>February 2021</B>
+<BR>
+<TABLE BORDER="1" >
+<TR VALIGN="TOP" BGCOLOR="#557EEF">
+<TD ALIGN="CENTER" NOWRAP><FONT COLOR="#EEEEEE"><B>Bit</B></FONT></TD>
+<TD ALIGN="CENTER" NOWRAP><FONT COLOR="#EEEEEE"><B>Meaning</B></FONT></TD>
+</TR>
+<TR ALIGN='LEFT' VALIGN='TOP' BGCOLOR="#EEEEEE">
+<TD style='margin: 2px; padding: 3px;' NOWRAP><FONT COLOR="#333333">Bit 1:<br>(0x000001)</FONT></TD>
+<TD style='margin: 2px; padding: 3px;'><B>Code207: no drug substitution due to medical reasons. Applies to drug services only!</B>
+<BR>&nbsp;<BR>
+If this bit (&quot;Code207&quot;) is set, the service provider declares that the drug prescribed must not be substituted due to medical reasons.
+</TD>
+</TR>
+<TR ALIGN='LEFT' VALIGN='TOP' style='margin: 2px; padding: 3px;' BGCOLOR="#EEEEEE">
+<TD style='margin: 2px; padding: 3px;' NOWRAP><FONT COLOR="#333333">Bit 2:<br>(0x000002)</FONT></TD>
+<TD style='margin: 2px; padding: 3px;'><B>franchisefree_12e_d: Franchise exemption according to Art. 12e lit. D KLV</B>
+<BR>&nbsp;<BR>
+If this bit (&quot;franchisefree_12e_d&quot;) is set, the service provider declares that the service was prescribed as part of a preventive care program and the health care company must bill this service as franchise-free.	
+</TD>
+</TR>
+</TABLE></td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*plID</span></td>
+	<td class='tdata_td134 '>This is the returned internal ID of the service record.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out,retval]</span> <a href="../types/VARIANT_BOOL_type.html" class='hlink'><span class="arg_type">VARIANT_BOOL</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pbStatus</span></td>
+	<td class='tdata_td134 altbck'>Return status of the method. If pbStatus is VARIANT_FALSE then an error occurred and GetAbortInfo should be called to retrieve the error string.</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr>
+	<td class='tdata_td03' style='margin:0; padding-bottom:5px; border-bottom: 2px solid #3360b3;'><img src="/images/space.gif" alt="space" width="160" height="1"></td>
+	<td class='tdata_td03' style='margin:0; padding-bottom:5px; border-bottom: 2px solid #3360b3;' colspan='3'></td>
+</tr>
+</table>
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='/images/arrow_down.png' alt='' style='display:none;'><img src='/images/arrow_right.png' alt='' style='display:none;'><img src='/images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

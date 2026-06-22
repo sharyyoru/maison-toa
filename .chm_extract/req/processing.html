@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="../../../../../../css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="../../../../../../script/jquery-1.12.2.min.js"></script>
+	<script src="../../../../../../script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>Process attributes...</span>
+<BR><IMG SRC="../../../../../../images/space.gif" WIDTH="1" HEIGHT="20" BORDER="0"><BR>
+<P>
+An XML request is primarily defined by its topmost object reference (cf. "<A HREF="refobject.html">Overview over "<B>Object reference</B></A>"), and the RequestType of the <A HREF="igeneralinvoicerequest/setrequest_method.html">SetRequest</A> method, respecively. 
+However, the RequestSubtype parameter of the <A HREF="igeneralinvoicerequest/setrequest_method.html">SetRequest</A> method can be seen as a request variation, subsuming a specific data set.
+<P> 
+<TABLE BORDER="0" CELLPADDING="3" CELLSPACING="3">
+<TR>
+	<TD BGCOLOR='#0088cc'><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>&quot;enRequestSubtypeNormal&quot; attribute</b></TD>
+</TR>
+</TABLE>
+<p>
+<BLOCKQUOTE>
+The <B>normal</B> attribute defines the standard (normal) XML infoset describing an ordinary invoice/reminder (Default)
+</BLOCKQUOTE>
+<P> 
+<TABLE BORDER="0" CELLPADDING="3" CELLSPACING="3">
+<TR>
+	<TD BGCOLOR='#0088cc'><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>&quot;enRequestSubtypeCopy&quot; attribute</b></TD>
+</TR>
+</TABLE>
+<p>
+<BLOCKQUOTE>
+The <B>copy</B> attribute defines the XML request as an identical copy of an initial request.
+<P>
+It is considered an error to send a XML request with turned on copy attribute without having prior sent a "normal" request.
+</BLOCKQUOTE>
+<P> 
+<TABLE BORDER="0" CELLPADDING="3" CELLSPACING="3">
+<TR>
+	<TD BGCOLOR='#0088cc'><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>&quot;enRequestSubtypeRefund&quot; attribute</b></TD>
+</TR>
+</TABLE>
+<p>
+<BLOCKQUOTE>
+The <B>refund</B> attribute acts on a prior defined normal XML infoset notably sent to and paid by a health care insurance. 
+In other words it is an announcement to the insurance company to pay back certain services of an invoice (qualified by a negative quantity), 
+whereas the services with zero quantity are correctly invoiced.
+<P>
+It is considered an error to send a XML request with turned on copy attribute without having prior sent a "normal" request.
+</BLOCKQUOTE>
+<P> 
+<TABLE BORDER="0" CELLPADDING="3" CELLSPACING="3">
+<TR>
+	<TD BGCOLOR='#0088cc'><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>&quot;enRequestSubtypeStorno&quot; attribute</b></TD>
+</TR>
+</TABLE>
+<p>
+<BLOCKQUOTE>
+The <B>storno</B> attribute cancels the XML request defined by the topmost reference object. 
+<P>
+It is considered an error to send a XML request with turned on storno attribute without having prior sent a "normal" request.
+</BLOCKQUOTE>
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='../../../../../../images/arrow_down.png' alt='' style='display:none;'><img src='../../../../../../images/arrow_right.png' alt='' style='display:none;'><img src='../../../../../../images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

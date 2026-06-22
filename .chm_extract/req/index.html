@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="../../../../../../css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="../../../../../../script/jquery-1.12.2.min.js"></script>
+	<script src="../../../../../../script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>API browser of <!-- begin_fullname_version -->generalInvoiceRequest500<!-- end_fullname_version --> COM module</span>
+<table class='tparam'>
+	<tr>
+		<td class="tparam_td01" NOWRAP><b>Interface version:</b></td>
+		<td class="tparam_td02"><!-- begin_interface_version -->5.00<!-- end_interface_version --></td>
+	</tr>
+	<tr>
+		<td class="tparam_td01" NOWRAP><b>Interface date:</b></td>
+		<td class="tparam_td02"><!-- begin_interface_date -->27 Nov 2024<!-- end_interface_date --></td>
+	</tr>
+</table>
+<br>
+
+<table class='tdata'>
+<tr>
+	<td class='tdata_td0102' colspan='2'>
+<!-- begin_interface_description -->The GeneralInvoiceRequestManager is an ATL COM module which provides methods to generate invoices, reminders for all roles and places. Such an object is printed or a XML infoset is produced which can be transported electronically to the recipient. In the latter case the object optionally can be signed and/or encrypted .<BR>&nbsp;<BR>Due to the processing attributes &quot;storno&quot; and &quot;copy&quot; a previously generated object can be canceled or a copy can be produced.<BR>&nbsp;<BR>The subchapter <a class='tlink' href='refobject.html'>object reference</A> provides an in-depth description of the concept of "object reference".<!-- end_interface_description -->
+	</td>
+	<td class='tdata_td03'><img src="../../../../../../images/space.gif" alt="space" width="80" height="1" border="0"></td>
+</tr>
+<tr>
+	<td class='tdata_td03' colspan='3'>&nbsp;</td>
+</tr>
+<tr>
+	<th class='tdata_th0102' colspan='2'><a href="#" class='handler01'><img src='../../../../../../images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Interfaces</th>
+	<th class='tdata_th03'><span class='small'><!-- begin_interface_numinterface -->5<!-- end_interface_numinterface --> interface</span></th>
+</tr>
+<!-- begin_insert_section -->
+<tr class='tdata_tr01'>
+	<td class='tdata_td01'><span class='nowrap'><a href="IAddress/index.html" class='tlink'>IAddress</a></span></td>
+	<td class='tdata_td02 '>The utility interface <b>IAddress</b> is available  for setting and retrieving structured address data.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr01'>
+	<td class='tdata_td01'><span class='nowrap'><a href="IGeneralInvoiceRequest/index.html" class='tlink'>IGeneralInvoiceRequest</a></span></td>
+	<td class='tdata_td02 altbck'>With the <b> IGeneralInvoiceRequest</b> interface all invoice/reminder related data can be set/defined by the interface's methods.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr01'>
+	<td class='tdata_td01'><span class='nowrap'><a href="IGeneralInvoiceRequestManager/index.html" class='tlink'>IGeneralInvoiceRequestManager</a></span></td>
+	<td class='tdata_td02 '>The main interface <b>IGeneralInvoiceRequestManager</b> -creatable in its own right- provides methods to generate invoices or reminders for all roles and places. Furthermore,  created XML infosets can be loaded back into memory for further processing.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr01'>
+	<td class='tdata_td01'><span class='nowrap'><a href="IGeneralInvoiceResult/index.html" class='tlink'>IGeneralInvoiceResult</a></span></td>
+	<td class='tdata_td02 altbck'>The interface <b>IGeneralInvoiceResult</b> allows to read back all data that have been defined with the <b>IGeneralInvoiceRequest</b> interface or by loading a  previously generated XML infoset.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr01'>
+	<td class='tdata_td01'><span class='nowrap'><a href="IServiceExInput/index.html" class='tlink'>IServiceExInput</a></span></td>
+	<td class='tdata_td02 '>The utility interface <b>IServiceExInput</b> provides methods and properties that allow to input data for Tarmed-like validators.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<!-- end_insert_section -->
+<tr>
+	<td class='tdata_td03' colspan='3'>&nbsp;</td>
+</tr>
+<tr>
+	<th class='tdata_th0102' colspan='2'><a href="#" class='handler02'><img src='../../../../../../images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Types</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><a href="types/index.html" class='tlink'>type definitions</a></td>
+	<td class='tdata_td02'>List of all used builtin, composite and enumeration types</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr>
+	<td class='tdata_td03' colspan='3'>&nbsp;</td>
+</tr>
+<tr>
+	<th class='tdata_th0102' colspan='2'><a href="#" class='handler03'><img src='../../../../../../images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Important documents about the usage and handling</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="generaluse.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02'><b>General usage</b> of the generalInvoiceRequest500 COM module - an overview</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="changes450to500.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02 altbck'>List of major <b>changes</b> between the schema files <b>generalInvoiceRequest450 vs generalInvoiceRequest500</b></td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="architecture64bit.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02'>What to do in a <b>64bit environment</b> - is there a <b>64bit Sumex1 COM dll</b>?</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="pseudocode.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02 altbck'><b>Pseudo service codes</b> in AddService allows to controll the underlying validators</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="refobject.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02'>Overview of the <b>concept</b> of &quot;Object reference&quot;</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="processing.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02 altbck'>Notes about the <b>processing attributes</b></td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="howtomake.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02'>Overview about <b>how to best generate</b> a reminder, storno,...</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="printer.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02 altbck'>How to set the <b>default printer</b> for a certain invoice/reminder</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="printing_switches.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02'><b>Syntax</b> of the printTemplate variable of the <b>Print method</b></td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="print_stamps.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02 altbck'>How to print <b>electronic stamps</b> onto an invoice/reminder</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="generate_pdf.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02'>How to <b>generate a PDF archive file</b> of a invoice/reminder</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="example_code.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02 altbck'><b>VB/CS code snippet</b> for using the generalInvoiceRequest500 COM module</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="restapi_howto.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02'><b>generalInvoiceRequestManagerServer500</b>: Introduction, overview and usage of the Restful Webservice Server</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td01'><a href="example_loadxml.html" class='tlink'>Document</a></td>
+	<td class='tdata_td02 altbck'>Detailed example with <B>curl.exe</B> for the <b>Restful call LoadXML</b> </td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr>
+	<td class='tdata_td03' colspan='3'>&nbsp;</td>
+</tr>
+</table>
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='../../../../../../images/arrow_down.png' alt='' style='display:none;'><img src='../../../../../../images/arrow_right.png' alt='' style='display:none;'><img src='../../../../../../images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

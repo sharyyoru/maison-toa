@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="/css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="/script/jquery-1.12.2.min.js"></script>
+	<script src="/script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>API browser of generalInvoiceRequest500 COM module</span>
+<p>
+
+<ul id='breadcrumb'>
+    <li><a href="../index.html">generalInvoiceRequest500</a></li>
+    <li><a href="index.html">Type definitions</a></li>
+    <li><span>PartnerType</span></li>
+</ul>
+<br>
+
+<table class='tdata'>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler01'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> PartnerType enumeration type</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr01'>
+	<td class='tdata_td0102' colspan='3'>
+	PartnerType is the type/flavor of a partner encoded by a terminal set of tokens. The partner specification was primarily demanded by the 
+<a class='tlink' href="https://www.finma.ch" TARGET="TOP">&quot;FinMa - Swiss Financial Market Supervisory Authority&quot;</A> to enhance the billing transparency in VVG cases.
+	</td>
+	<td class='tdata_td03'><img src="/images/space.gif" alt="space" width="60" height="1"></td>
+</tr>
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler02'><i class='fa fa-caret-down fa-lg fa-fw'></i></a> Set of enumeration values</th>
+	<th class='tdata_th03'><span class='small'>16 elements</span></th>
+</tr>
+
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enEmployer</span>: <span class="inout">1</span></span></td>
+	<td class='tdata_td02 ' colspan='2'> the role/flavor of the partner is <B>employer</B></td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enReferrer</span>: <span class="inout">2</span></span></td>
+	<td class='tdata_td02 altbck' colspan='2'>the role/flavor of the partner is <B>referrer</B></td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enServiceProvider</span>: <span class="inout">3</span></span></td>
+	<td class='tdata_td02 ' colspan='2'>the role/flavor of the partner is <B>service provider|service responsible</B> that is an entity that does provide a service or is responsible for the provision of the service</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enPrimaryClinician</span>: <span class="inout">4</span></span></td>
+	<td class='tdata_td02 altbck' colspan='2'> the role/flavor of the partner is <B>primary clinician</B> that is a synonym of the main treating physician</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enLeadDoctor</span>: <span class="inout">5</span></span></td>
+	<td class='tdata_td02 ' colspan='2'>the role/flavor of the partner is <B>lead doctor</B> that is an entity that is responsible for the whole case</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enAssistantPhysician</span>: <span class="inout">6</span></span></td>
+	<td class='tdata_td02 altbck' colspan='2'>the role/flavor of the partner is an <B>assistant physician</B> in the current treatment</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enSeniorPhysician</span>: <span class="inout">7</span></span></td>
+	<td class='tdata_td02 ' colspan='2'>the role/flavor of the partner is a <B>senior physician</B> in the current treatment</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enChiefPhysician</span>: <span class="inout">8</span></span></td>
+	<td class='tdata_td02 altbck' colspan='2'>the role/flavor of the partner is a <B>chief physician</B> in the current treatment</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enSurgeon</span>: <span class="inout">9</span></span></td>
+	<td class='tdata_td02 ' colspan='2'>the role/flavor of the partner is a <B>surgeon</B> in the current treatment.</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enAnaesthetist</span>: <span class="inout">10</span></span></td>
+	<td class='tdata_td02 altbck' colspan='2'>the role/flavor of the partner is an <B>anaesthetist</B> in the current treatment</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enConsultantDoctor</span>: <span class="inout">11</span></span></td>
+	<td class='tdata_td02 ' colspan='2'> the role/flavor of the partner is a <B>consultant doctor</B> in the current treatment</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enInternist</span>: <span class="inout">12</span></span></td>
+	<td class='tdata_td02 altbck' colspan='2'>the role/flavor of the partner is an <B>internist</B> in the current treatment</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enCoCare</span>: <span class="inout">13</span></span></td>
+	<td class='tdata_td02 ' colspan='2'>the role/flavor of the partner is a <B>co-carer</B> in the current treatment</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enRadiologist</span>: <span class="inout">14</span></span></td>
+	<td class='tdata_td02 altbck' colspan='2'> the role/flavor of the partner is <B>radiologist</B> in the current treatment</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enNuclearMedicine</span>: <span class="inout">15</span></span></td>
+	<td class='tdata_td02 ' colspan='2'>the role/flavor of the partner is a <B>nuclear medicine specialist</B> in the current treatment</td>
+	<td class='tdata_td03'></td>
+</tr>			
+<tr class='tdata_tr02'>
+	<td class='tdata_td01'><span class='nowrap'><span class="arg_type">enOther</span>: <span class="inout">16</span></span></td>
+	<td class='tdata_td02 altbck' colspan='2'>the role/flavor of the partner is <B>other</B> that is none of the specific pre-defined roles holds true</td>
+	<td class='tdata_td03'></td>
+</tr>			
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+
+</table>
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='/images/arrow_down.png' alt='' style='display:none;'><img src='/images/arrow_right.png' alt='' style='display:none;'><img src='/images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

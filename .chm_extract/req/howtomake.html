@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="../../../../../../css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="../../../../../../script/jquery-1.12.2.min.js"></script>
+	<script src="../../../../../../script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>How to best make...</span>
+<BR><IMG SRC="../../../../../../images/space.gif" WIDTH="1" HEIGHT="20" BORDER="0"><BR>
+
+The following list describes the easiest way to generate e.g. a reminder or storno request given that the initial invoice
+was successfully produced and the XML infoset <B>invoiceXML</B> was archived on a local disk.
+<P>
+<TABLE BORDER="0" CELLPADDING="3" CELLSPACING="3">
+<TR>
+	<TD BGCOLOR='#0088cc'><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>copy of an invoice</b></TD>
+</TR>
+</TABLE>
+<div style='margin: 4px 0 12px 20px;'>
+This can be accomplished by calling the following 4 methods:
+<OL TYPE="1" START="1">
+	<LI><A HREF='IGeneralInvoiceRequestManager/LoadXML_method.html'><B>IGeneralInvoiceRequestManager::LoadXML</B></A> using invoiceXML as input file
+	<LI><A HREF='IGeneralInvoiceResult/GetRequest_method.html'><B>IGeneralInvoiceResult::GetRequest</B></A> to retrieve the parameters
+	<LI><A HREF='IGeneralInvoiceRequest/SetRequest_method.html'><B>IGeneralInvoiceRequest::SetRequest</B></A> with eRequestSubtype=enRequestSubtypeCopy 
+	<LI><A HREF='IGeneralInvoiceRequestManager/GetXML_method.html'><B>IGeneralInvoiceRequestManager::GetXML</B></A>
+</OL>
+<div>
+
+<TABLE BORDER="0" CELLPADDING="3" CELLSPACING="3">
+<TR>
+	<TD BGCOLOR='#0088cc'><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>storno of an invoice</b></TD>
+</TR>
+</TABLE>
+<div style='margin: 4px 0 12px 20px;'>
+This can be accomplished by calling the following 5 methods:
+<OL TYPE="1" START="1">
+	<LI><A HREF='igeneralinvoicerequestmanager/loadxml_method.html'><B>IGeneralInvoiceRequestManager::LoadXML</B></A> using invoiceXML as input file
+	<LI><A HREF='igeneralinvoiceresult/getrequest_method.html'><B>IGeneralInvoiceResult::GetRequest</B></A> to retrieve the parameters
+	<LI><A HREF='igeneralinvoicerequest/setrequest_method.html'><B>IGeneralInvoiceRequest::SetRequest</B></A> with eRequestSubtype=enRequestSubtypeStorno 
+	<LI>Possibly <A HREF='igeneralinvoicerequest/settransport_method.html'><B>IGeneralInvoiceRequest::SetTransport</B></A> with bstrToGLN='noRecipientGLN' 
+	<LI><A HREF='igeneralinvoicerequestmanager/getxml_method.html'><B>IGeneralInvoiceRequestManager::GetXML</B></A>
+</OL>
+</div>
+
+<TABLE BORDER="0" CELLPADDING="3" CELLSPACING="3">
+<TR>
+	<TD BGCOLOR='#0088cc'><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>refund of a invoice (TP only)</b></TD>
+</TR>
+</TABLE>
+<div style='margin: 4px 0 12px 20px;'>
+This can be accomplished by calling the following 4 methods:
+<OL TYPE="1" START="1">
+	<LI><A HREF='IGeneralInvoiceRequestManager/LoadXML_method.html'><B>IGeneralInvoiceRequestManager::LoadXML</B></A> using invoiceXML as input file
+	<LI><A HREF='IGeneralInvoiceResult/GetRequest_method.html'><B>IGeneralInvoiceResult::GetRequest</B></A> to retrieve the parameters
+	<LI><A HREF='IGeneralInvoiceRequest/SetRequest_method.html'><B>IGeneralInvoiceRequest::SetRequest</B></A> with eRequestSubtype=enRequestSubtypeRefund 
+	<BR><B>and</B> defining the variable bstrRefundList="ID1, ID2,..." 
+	<LI><A HREF='IGeneralInvoiceRequestManager/GetXML_method.html'><B>IGeneralInvoiceRequestManager::GetXML</B></A>
+</OL>
+</div>
+
+<TABLE BORDER="0" CELLPADDING="3" CELLSPACING="3">
+<TR>
+	<TD BGCOLOR='#0088cc'><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>create a reminder</b></TD>
+</TR>
+</TABLE>
+<div style='margin: 4px 0 12px 20px;'>
+This can be accomplished by calling the following 3 methods:
+<OL TYPE="1" START="1">
+	<LI><A HREF='IGeneralInvoiceRequestManager/LoadXML_method.html'><B>IGeneralInvoiceRequestManager::LoadXML</B></A> using invoiceXML as input file
+	<LI><A HREF='IGeneralInvoiceRequest/SetReminder_method.html'><B>IGeneralInvoiceRequest::SetReminder</B></A> using lRequestTimestamp=0
+	<LI><A HREF='IGeneralInvoiceRequestManager/GetXML_method.html'><B>IGeneralInvoiceRequestManager::GetXML</B></A> - store as <B>reminderXML</B> and possibly <B>lRequestTimestamp</B>
+</OL>
+</div>
+
+<TABLE BORDER="0" CELLPADDING="3" CELLSPACING="3">
+<TR>
+	<TD BGCOLOR='#0088cc'><b style='color: #ffffff; margin:6px; padding:6px; line-height: 180%; font-size: 140%;'>Claiming deductible/franchise</b></TD>
+</TR>
+</TABLE>
+<div style='margin: 4px 0 12px 20px;'>
+This can be accomplished by calling the following 3 methods:
+<OL TYPE="1" START="1">
+	<LI><A HREF='IGeneralInvoiceRequestManager/LoadXML_method.html'><B>IGeneralInvoiceRequestManager::LoadXML</B></A> using reminderXML as input file
+	<LI><A HREF='IGeneralInvoiceRequest/SetTiers_method.html'><B>IGeneralInvoiceRequest::SetTiers</B></A> with eTiersMode=enTiersGarant 
+	<BR><B>and</B> dAmountPrepaid= -'amount already paid' (negative amount!!)
+	<LI><A HREF='IGeneralInvoiceRequestManager/GetXML_method.html'><B>IGeneralInvoiceRequestManager::GetXML</B></A>
+	 or 
+	<A HREF='IGeneralInvoiceRequestManager/GetXML_method.html'><B>IGeneralInvoiceRequestManager::Print</B></A>
+</OL>
+</div>
+
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='../../../../../../images/arrow_down.png' alt='' style='display:none;'><img src='../../../../../../images/arrow_right.png' alt='' style='display:none;'><img src='../../../../../../images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

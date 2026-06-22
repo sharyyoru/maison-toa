@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+    <TITLE></TITLE>
+	<meta charset="windows-1252">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<STYLE TYPE="text/css">
+	<!--			
+			  BODY {font-size:  9pt !important; font-family: Arial,Helvetica,sans-serif;}
+
+			.TITEL {font-size: 12pt !important; 
+					font-family: Arial,Helvetica,sans-serif;
+					font-weight: 700;}
+			.TOPIC {font-size:  9pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+					font-weight: 600;}
+			.MOTTO {font-size:  8pt !important; 
+					font-family: Arial,Helvetica,sans-serif;}
+		   .COPY   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+			.NAV   {font-size:  8pt; font-family: Arial,Helvetica,sans-serif;}
+
+		   .SEARCH {font-size:  8pt !important; font-family: "Arial Narrow",Arial, sans-serif;}
+
+		  .SECTION {font-size: 11pt !important;font-family: Arial,Helvetica,sans-serif;font-weight: 700;}
+		 .HIERACHY  {font-size:  9pt; font-family: Arial,Helvetica,sans-serif;}
+		  .PGMCODE  {font-size:  9pt!important; font-family: Courier, monospace;}
+	-->    
+	</STYLE>
+	<link rel="stylesheet" href="/css/api/style_api_chm.css">
+	<style>
+		body {
+			margin: 10px 10px 0 10px;
+		}
+		.api_arrow {
+			border: 0;
+			padding: 0 6px 0 6px;
+		}
+	</style>
+	<script src="/script/jquery-1.12.2.min.js"></script>
+	<script src="/script/jquery_api.js"></script> 
+</HEAD>
+<BODY>
+	
+<span class='page_title'>API browser of generalInvoiceRequest500 COM module</span>
+<p>
+
+<ul id='breadcrumb'>
+    <li><a href="../index.html">generalInvoiceRequest500</a></li>
+    <li><a href="index.html">IGeneralInvoiceRequestManager</a></li>
+    <li><span>Print</span></li>
+</ul>
+<br>
+
+ <table class='tdata'>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler01'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> IGeneralInvoiceRequestManager::Print method</th>
+	<th class='tdata_th03'><img src="/images/space.gif" alt="space" width="20" height="1"></th>
+</tr>
+<tr class='tdata_tr01'>
+	<td class='tdata_td0102' colspan='3' style='padding-top: 8px;'>
+The Print method validates the defined invoice/reminder data and prints the request on the local printer. The printer selection is done via the used report generator template file. If the template file was not connected to a printer with the <a class='tlink' href='PrintSetup_method.html'>PrintSetup</A> method then the default printer with its default settings is used.
+<BR>&nbsp;<BR>
+The bstrPrintTemplate variable obeys a special syntax and can optionally be used to set special print commands like using electronic webstamps, producing PDFs or changing print objects dynamically.
+<UL>
+<LI><a class='tlink' href="../print_stamps.html"><B>"How to print webstamps"</B></A> is a description how to integrate electronic stamps into the invoice/reminder
+<LI><a class='tlink' href="../generate_pdf.html"><B>"How to generate PDF archive file"</B></A> is a description about generating PDF archive files of the invoice/reminder 
+<LI><a class='tlink' href="../printing_switches.html"><B>"How to use an alternate print template"</B></A> is a description about overriding the default  print template
+<LI><a class='tlink' href="../printing_switches.html"><B>"Syntax of the printTemplate variable"</B></A>
+</UL>
+<BR>
+<B>IMPORTANT LICENSE NOTE</B>
+The report engine used is Hexatech's ViewPro (<a class='tlink' href="http://www.hexatech.com" TARGET="HEXA">www.hexatech.com</A>). If you supply your own template files then you must have your own ViewPro license. By using this COM module you implicitly agree upon this restriction!
+	</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler04'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Restful webservice calling syntax</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;'><span class='nowrap'><span class="inout">[POST]</span></td>
+<td class='tdata_td034' colspan='3'><a href="../restapi_howto.html" class='hlink'><span class="base_name">/baseURL/</span></a><span class="methode_name">IGeneralInvoiceRequestManager/Print</span></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;text-align: center;'><span class="title_name">[JSON input data]</span></td>
+	<td class='tdata_td024' ><span class='arg_type'>pIGeneralInvoiceRequestManager:</span><br>
+<span class='arg_type'>bstrPrintTemplate:</span><br>
+<span class='arg_type'>lGenerationAttributes:</span><br>
+<a href='../types/YesNoType_type.html' class='hlink'><span class='arg_type'>ePrintPreview:</span></a><br>
+<a href='../types/YesNoType_type.html' class='hlink'><span class='arg_type'>eAddressRight:</span></a><br>
+<span class='arg_type'>plTimestamp:</span></td>
+	<td class='tdata_td034' colspan='2'><span class='methode_arg'>longValue</span>, &nbsp;&nbsp; <i>//interface address</i><br>
+<span class='methode_arg'>"utf8StringValue"</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>longValue</span><br></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;text-align: center;'><span class="title_name">[JSON result data]</span></td>
+	<td class='tdata_td024' ><span class='arg_type'>plTimestamp:</span><br>
+<span class='arg_type'>pIGeneralInvoiceResult:</span><br>
+<span class='arg_type'>pbStatus:</span><br>
+<span class='arg_type'>pbstrPDFFile:</span></td>
+	<td class='tdata_td034' colspan='2'><span class='methode_arg'>longValue</span>,<br>
+<span class='methode_arg'>booleanValue</span>,<br>
+<span class='methode_arg'>"utf8StringValue"</span><br>&nbsp;</td>
+</tr>
+
+
+<tr class='tdata_tr04'>
+	<td class='tdata_td014' style='padding-top: 8px;text-align: center;'><span class="title_name">[HTTP result status]</span></td>
+	<td class='tdata_td01' valign='top'><span class="arg_type">200</span></td>
+	<td class='tdata_td02' valign='top'>Return status 200 signals a successful method call</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">204</span></td>
+	<td class='tdata_td02 altbck'>Return status 204 (noContent) signals that the end of an iteration is reached</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr04'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">&gt;= 400</span></td>
+	<td class='tdata_td02'>Return status &gt;= 400 signals an unsuccessful function call. The returned <span class="title_name">JSON{errorCode: code, errorText:"text"}</span> supplies the error message the same as GetAbortInfo() would do.</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler02'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> C/C++ calling syntax</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td014'><span class='nowrap'><a href="../types/hresult_type.html" class='hlink'><span class="arg_type">HRESULT</span></a> <span class="methode_name">Print(</span></span></td>
+	<td class='tdata_td024'>			<a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a>
+			<br><a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a>
+			<br><a href="../types/YesNoType_type.html" class='hlink'><span class="arg_type">YesNoType</span></a>
+			<br><a href="../types/YesNoType_type.html" class='hlink'><span class="arg_type">YesNoType</span></a>
+			<br><a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a>
+			<br><a href="../types/IGeneralInvoiceResult_type.html" class='hlink'><span class="arg_type">IGeneralInvoiceResult</span></a>
+			<br><a href="../types/VARIANT_BOOL_type.html" class='hlink'><span class="arg_type">VARIANT_BOOL</span></a>
+</td>
+	<td class='tdata_td034'>			<span class="methode_arg">bstrPrintTemplate,</span>
+			<br><span class="methode_arg">lGenerationAttributes,</span>
+			<br><span class="methode_arg">ePrintPreview,</span>
+			<br><span class="methode_arg">eAddressRight,</span>
+			<br><span class="methode_arg">*plTimestamp,</span>
+			<br><span class="methode_arg">**pIGeneralInvoiceResult,</span>
+			<br><span class="methode_arg">*pbStatus,</span>
+</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr class='tdata_tr02'>
+	<td class='tdata_td0102' style='padding-top: 8px;text-align: center;'><span class="title_name">[C/C++ return value]</span></td>
+	<td class='tdata_td01'><span class="arg_type">S_OK</span></td>
+	<td class='tdata_td02'>This value is returned if the function call was successful.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">S_FALSE</span></td>
+	<td class='tdata_td02 altbck'>This value is returned if the end of an iteration is reached</td>	
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr02'>
+	<td class='tdata_td014'></td>	
+	<td class='tdata_td01'><span class="arg_type">E_<i>name</i></span></td>
+	<td class='tdata_td02'>This value is returned if the function call was unsuccessful and an error exception was generated. Note that if you are using SmartPointers an exception is thrown under these conditions.</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr><td style='margin:0; padding: 0' colspan='4'><img src="/images/space.gif" alt="space" width="2" height="8"></td></tr>
+<tr>
+	<th class='tdata_th0102' colspan='3'><a href="#" class='handler03'><img src='/images/arrow_down.png' alt='/images/arrow_right.png' width='16' height='16' class='api_arrow'></a> Calling argument description</th>
+	<th class='tdata_th03'></th>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">bstrPrintTemplate</span></td>
+	<td class='tdata_td134 '>The bstrPrintTemplate variable is used to explicitly change print template reports and/or print objects as defined in <a class='tlink' href="../printing_switches.html"><B>"Syntax of the printTemplate variable"</B></A>.
+<BR>&nbsp;<BR>
+If bstrPrintTemplate is empty then the default print template of the defined data language (<a class='tlink' href='../IGeneralInvoiceRequest/Initialize_method.html'> IGeneralInvoiceRequest:: Initialize</A> method) is used.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">lGenerationAttributes</span></td>
+	<td class='tdata_td134 altbck'>This variable overrules the default behavior of the print process.
+<BR>&nbsp;<BR>
+lGenerationAttributes is a 32-bit integer where the possible &quot;commands&quot; are values from the <a class='tlink' href="../types/generationAttributes_type.html">generationAttributes</A> data type ORed together to form the overall command.
+<BR>&nbsp;<BR>
+Besides the manipulation of the printed ESR parameters the <b>downgrade to version V440</b> can be enforced here!</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/YesNoType_type.html" class='hlink'><span class="arg_type">YesNoType</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">ePrintPreview</span></td>
+	<td class='tdata_td134 '>A Boolean that defines if print preview is used (enYes) or printing is done (enNo)
+<p>
+<span class="inout">In Restful Webservice system:</span> ePrintPreview is automatically set to <b>enNo</b> no matter what the input value is. Furthermore, printing is automatically redirected to a PDF output file since there are no printers available.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in]</span> <a href="../types/YesNoType_type.html" class='hlink'><span class="arg_type">YesNoType</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">eAddressRight</span></td>
+	<td class='tdata_td134 altbck'>A Boolean that defines on which side -left or right- the receiver address should be printed.
+<BR>&nbsp;<BR>
+Note that left-sided addressing is only allowed for the summary invoice/reminder forms. The parameter is silently ignored for the detailed invoice/reminder forms.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[in,out]</span> <a href="../types/long_type.html" class='hlink'><span class="arg_type">long</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*plTimestamp</span></td>
+	<td class='tdata_td134 '>The timestamp of the XML document as epoch time (seconds elapsed since 1.1.1970) that is used as timestamp of the topmost object reference from that point on.
+<BR>&nbsp;<BR>
+If the timestamp for the topmost object reference was already set (e.g. to produce a copy) then this same timestamp is returned.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/IGeneralInvoiceResult_type.html" class='hlink'><span class="arg_type">IGeneralInvoiceResult</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">**pIGeneralInvoiceResult</span></td>
+	<td class='tdata_td134 altbck'>The IGeneralInvoiceResult interface handle that allows to get all loaded data back.
+<BR>
+ The handle is NULL if an error occurred.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out,retval]</span> <a href="../types/VARIANT_BOOL_type.html" class='hlink'><span class="arg_type">VARIANT_BOOL</span></a></span></td>
+	<td class='tdata_td124 '><span class="methode_arg">*pbStatus</span></td>
+	<td class='tdata_td134 '>Return status of the method. If pbStatus is VARIANT_FALSE then an error occurred and GetAbortInfo should be called to retrieve the error string.</td>
+	<td class='tdata_td03'></td>
+</tr>
+<tr class='tdata_tr03'>
+	<td class='tdata_td114'><span class='nowrap'><span class="inout">[out]</span> <a href="../types/BSTR_type.html" class='hlink'><span class="arg_type">BSTR</span></a></span></td>
+	<td class='tdata_td124 altbck'><span class="methode_arg">*pbstrPDFFile</span></td>
+	<td class='tdata_td134 altbck'><span class='inout'>In Restful webservice output:</span><br>&nbsp;<br>
+pbstrPDFFile is a <b>relative URL</b> to a PDF file holding the result of the Print method. Therefore, after receiving the <b>JSON result data</b> do <span class='inout'>GET</span> pbstrPDFile such as to have the produced printout.</td>
+	<td class='tdata_td03'></td>
+</tr>
+
+<tr>
+	<td class='tdata_td03' style='margin:0; padding-bottom:5px; border-bottom: 2px solid #3360b3;'><img src="/images/space.gif" alt="space" width="160" height="1"></td>
+	<td class='tdata_td03' style='margin:0; padding-bottom:5px; border-bottom: 2px solid #3360b3;' colspan='3'></td>
+</tr>
+</table>
+
+
+<br><span class='small'>&copy; by <a href="http://www.sumex1.net" class='hlink' target='TOP'>sumex1.net</a> &nbsp;-&nbsp;all rights reserved</span>
+<!-- images will not show up unless explicitly loaded here -->
+<br><img src='/images/arrow_down.png' alt='' style='display:none;'><img src='/images/arrow_right.png' alt='' style='display:none;'><img src='/images/breadcrumb.png' alt='' style='display:none;'>
+</BODY>
+</HTML>

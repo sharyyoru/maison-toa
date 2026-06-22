@@ -551,6 +551,7 @@ export async function POST(request: NextRequest) {
           reminderLevel: Number(reminderLevel) || 1,
           reminderText: `Rappel de paiement (${reminderLevel}${reminderLevel === 1 ? "er" : "ème"} rappel)`,
           reminderDate: new Date().toISOString().split("T")[0],
+          reminderAmount: Number(reminderLevel) === 2 ? 5 : Number(reminderLevel) === 3 ? 10 : 0,
         } : {}),
       };
 
@@ -824,6 +825,7 @@ export async function POST(request: NextRequest) {
           reminderLevel: Number(reminderLevel) || 1,
           reminderText: `Rappel de paiement (${reminderLevel}${reminderLevel === 1 ? "er" : "ème"} rappel)`,
           reminderDate: new Date().toISOString().split("T")[0],
+          reminderAmount: Number(reminderLevel) === 2 ? 5 : Number(reminderLevel) === 3 ? 10 : 0,
         } : {}),
       };
 
