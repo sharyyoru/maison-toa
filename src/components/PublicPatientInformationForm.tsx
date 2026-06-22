@@ -373,6 +373,7 @@ export default function PublicPatientInformationForm({
   const [addressLookupPending, setAddressLookupPending] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [addressSuggestionsOpen, setAddressSuggestionsOpen] = useState(false);
+  const suppressNextAddressLookupRef = useRef(false);
   const [autoFilledAddress, setAutoFilledAddress] = useState({
     postalCode: "",
     town: "",
@@ -473,6 +474,11 @@ export default function PublicPatientInformationForm({
 
   useEffect(() => {
     const query = formData.street_address.trim();
+    if (suppressNextAddressLookupRef.current) {
+      suppressNextAddressLookupRef.current = false;
+      return;
+    }
+
     if (query.length < 3) {
       setAddressSuggestions([]);
       setAddressSuggestionsOpen(false);
@@ -515,6 +521,7 @@ export default function PublicPatientInformationForm({
   }, [formData.street_address]);
 
   const selectAddressSuggestion = (suggestion: AddressSuggestion) => {
+    suppressNextAddressLookupRef.current = true;
     setFormData((current) => ({
       ...current,
       street_address: suggestion.street || current.street_address,
@@ -669,6 +676,7 @@ export default function PublicPatientInformationForm({
                   suggestions={addressSuggestions}
                   suggestionsOpen={addressSuggestionsOpen}
                   onSelectSuggestion={selectAddressSuggestion}
+                  onCloseSuggestions={() => setAddressSuggestionsOpen(false)}
                   busy={addressLookupPending}
                   required
                 />
@@ -839,6 +847,7 @@ function AddressInput({
   suggestions,
   suggestionsOpen,
   onSelectSuggestion,
+  onCloseSuggestions,
   busy = false,
   required: isRequired = false,
 }: {
@@ -849,6 +858,7 @@ function AddressInput({
   suggestions: AddressSuggestion[];
   suggestionsOpen: boolean;
   onSelectSuggestion: (suggestion: AddressSuggestion) => void;
+  onCloseSuggestions: () => void;
   busy?: boolean;
   required?: boolean;
 }) {
@@ -861,6 +871,10 @@ function AddressInput({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onFocus={onFocus}
+          onBlur={() => window.setTimeout(onCloseSuggestions, 120)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") onCloseSuggestions();
+          }}
           required={isRequired}
           autoComplete="street-address"
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
