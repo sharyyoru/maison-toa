@@ -163,7 +163,7 @@ export function PDFJobNotificationsProvider({ children }: { children: ReactNode 
     const accessToken = sessionData?.session?.access_token;
     if (!accessToken) return false;
     try {
-      const res = await fetch(`/api/invoices/pdf-jobs/${jobId}/retry`, {
+      const res = await fetch(`/api/invoices/pdf-jobs/retry/${jobId}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -183,7 +183,7 @@ export function PDFJobNotificationsProvider({ children }: { children: ReactNode 
     const accessToken = sessionData?.session?.access_token;
     if (!accessToken) return false;
     try {
-      const res = await fetch(`/api/invoices/pdf-jobs/${jobId}/flag`, {
+      const res = await fetch(`/api/invoices/pdf-jobs/flag/${jobId}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}` },
       });
