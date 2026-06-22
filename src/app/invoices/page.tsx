@@ -165,6 +165,7 @@ export default function InvoicesPage() {
   const [generatingPdf, setGeneratingPdf] = useState<Set<string>>(new Set());
   const [sendingEmail, setSendingEmail] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<string | null>(null);
+  const [pdfToast, setPdfToast] = useState<{ message: string; type: "success" | "info" } | null>(null);
 
   // Per-row PDF generate dropdown (fixed-positioned to escape overflow:auto clipping)
   const [pdfDropdownOpen, setPdfDropdownOpen] = useState<string | null>(null);
@@ -401,6 +402,13 @@ export default function InvoicesPage() {
   };
 
   const handleGeneratePdf = async (invoiceId: string, invoiceType: "tg" | "tp" | "reminder" | "receipt" = "tg", reminderLevel = 1) => {
+    // Guard: don't send duplicate if already queued
+    if (pdfNotifications.hasPendingJob(invoiceId, invoiceType, reminderLevel)) {
+      setPdfToast({ message: "Already queued — check the notification bell", type: "info" });
+      setTimeout(() => setPdfToast(null), 4000);
+      return;
+    }
+
     const { data: sessionData } = await supabaseClient.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
     const userId = sessionData?.session?.user?.id;
@@ -425,8 +433,13 @@ export default function InvoicesPage() {
       });
       const data = await res.json();
       if (data.success || data.jobId) {
-        // Refresh jobs so the in-progress indicator appears immediately
         void pdfNotifications.refreshJobs();
+        const invoice = invoices.find(i => i.id === invoiceId);
+        const label = data.message === "A job for this invoice/type is already queued"
+          ? "Already queued — check the notification bell"
+          : "Queued for PDF generation — check the notification bell";
+        setPdfToast({ message: `${invoice?.invoice_number || "Invoice"}: ${label}`, type: "success" });
+        setTimeout(() => setPdfToast(null), 4000);
       } else {
         alert("Failed: " + (data.error || "Unknown error"));
       }
@@ -510,9 +523,17 @@ export default function InvoicesPage() {
 
   const handleBulkGeneratePdfConfirm = async (docType: string, reminderLevel = 1) => {
     setBulkGenerateDocTypeOpen(false);
-    const ids = Array.from(selected);
+    let ids = Array.from(selected);
     if (ids.length === 0) return;
-    if (!confirm(`Generate ${docType.toUpperCase()} PDF for ${ids.length} invoice(s)?`)) return;
+    // Guard: skip invoices that already have a pending job for this type
+    ids = ids.filter(id => !pdfNotifications.hasPendingJob(id, docType, reminderLevel));
+    if (ids.length === 0) {
+      alert("All selected invoices are already queued for this PDF type.");
+      return;
+    }
+    const skipped = selected.size - ids.length;
+    const confirmMsg = `Generate ${docType.toUpperCase()} PDF for ${ids.length} invoice(s)?${skipped > 0 ? ` (${skipped} already queued, skipped)` : ""}`;
+    if (!confirm(confirmMsg)) return;
     setBulkAction("pdf");
     for (const id of ids) await handleGeneratePdf(id, docType as "tg" | "tp" | "reminder" | "receipt", reminderLevel);
     setBulkAction(null);
@@ -1414,6 +1435,33 @@ export default function InvoicesPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* PDF Queue Toast */}
+      {pdfToast && (
+        <div className="fixed bottom-4 right-4 z-[9999] flex items-start gap-3 rounded-xl border border-emerald-200 bg-white px-4 py-3 shadow-xl animate-[fade-in-up_0.3s_ease-out]">
+          <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${pdfToast.type === "success" ? "bg-emerald-100" : "bg-sky-100"}`}>
+            <svg className={`h-4 w-4 ${pdfToast.type === "success" ? "text-emerald-600" : "text-sky-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className={`text-xs font-semibold ${pdfToast.type === "success" ? "text-emerald-900" : "text-sky-900"}`}>
+              {pdfToast.type === "success" ? "PDF Queued" : "Already Queued"}
+            </p>
+            <p className={`text-[11px] ${pdfToast.type === "success" ? "text-emerald-700" : "text-sky-700"}`}>
+              {pdfToast.message}
+            </p>
+          </div>
+          <button
+            onClick={() => setPdfToast(null)}
+            className="ml-2 rounded-full p-1 text-emerald-400 hover:bg-emerald-100 hover:text-emerald-600 transition-colors"
+          >
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
     </div>

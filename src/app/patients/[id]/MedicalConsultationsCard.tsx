@@ -716,6 +716,7 @@ export default function MedicalConsultationsCard({
   const [emailDropdownOpen, setEmailDropdownOpen] = useState<string | null>(null);
   const [viewPdfDropdownOpen, setViewPdfDropdownOpen] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<{ message: string; details?: string; abortInfo?: string } | null>(null);
+  const [pdfSuccessToast, setPdfSuccessToast] = useState<{ invoiceNumber: string | null; type: string; message: string } | null>(null);
   const [generatedPaymentLink, setGeneratedPaymentLink] = useState<{ consultationId: string; url: string } | null>(null);
   const [paymentLinkCopied, setPaymentLinkCopied] = useState(false);
 
@@ -2818,6 +2819,16 @@ export default function MedicalConsultationsCard({
 
   async function handleGenerateInvoicePdf(invoiceId: string, invoiceType: "tg" | "tp" | "reminder" | "receipt" = "tp", reminderLevel = 1) {
     try {
+      // Guard against double-queueing if the context already knows about this job
+      if (invoicePdfJobStatus(invoiceId, invoiceType, reminderLevel)) {
+        setPdfSuccessToast({
+          invoiceNumber: null,
+          type: invoiceType,
+          message: "Already queued — watch the notification bell for updates",
+        });
+        return;
+      }
+
       console.log("Queueing PDF for invoice ID:", invoiceId, "type:", invoiceType);
       setGeneratingPdf(invoiceId);
       setPdfError(null);
@@ -2855,6 +2866,17 @@ export default function MedicalConsultationsCard({
         setGeneratingPdf(null);
         return;
       }
+
+      const row = consultations.find(r => r.id === invoiceId || r.invoice_id === invoiceId);
+      const invoiceNumber = row?.consultation_id || row?.linked_invoice_number || null;
+      setPdfSuccessToast({
+        invoiceNumber,
+        type: invoiceType,
+        message: data.message === "A job for this invoice/type is already queued"
+          ? "Already queued — watch the notification bell for updates"
+          : "Queued for PDF generation — check the notification bell",
+      });
+      setTimeout(() => setPdfSuccessToast(null), 4000);
 
       // Refresh jobs so the in-progress badge appears immediately
       void pdfNotifications.refreshJobs();
@@ -9402,6 +9424,34 @@ export default function MedicalConsultationsCard({
           setInsuranceBillingTarget(null);
         }}
       />
+
+      {/* PDF Queued Success Toast */}
+      {pdfSuccessToast && typeof document !== "undefined" && createPortal(
+        <div className="fixed bottom-4 right-4 z-[9999] flex items-start gap-3 rounded-xl border border-emerald-200 bg-white px-4 py-3 shadow-xl animate-[fade-in-up_0.3s_ease-out]">
+          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+            <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-emerald-900">
+              {pdfSuccessToast.invoiceNumber ? `Invoice ${pdfSuccessToast.invoiceNumber}` : "PDF"} queued
+            </p>
+            <p className="text-[11px] text-emerald-700">
+              {pdfSuccessToast.message}
+            </p>
+          </div>
+          <button
+            onClick={() => setPdfSuccessToast(null)}
+            className="ml-2 rounded-full p-1 text-emerald-400 hover:bg-emerald-100 hover:text-emerald-600 transition-colors"
+          >
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>,
+        document.body
+      )}
 
       {/* PDF Generation Error Modal */}
       {pdfError && typeof document !== "undefined" && createPortal(
