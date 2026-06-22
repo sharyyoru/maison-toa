@@ -446,6 +446,12 @@ export async function POST(request: NextRequest) {
         paymentRemark = `Acompte reçu / Anzahlung erhalten: ${paidAmt.toFixed(2)} CHF — Solde / Restbetrag: ${remaining.toFixed(2)} CHF`;
       }
 
+      // Combine accountant-visible invoice notes with any payment status remark
+      const invoiceNotes = (invoiceData.notes || "").trim();
+      const combinedRemark = invoiceNotes && paymentRemark
+        ? `${invoiceNotes}\n${paymentRemark}`
+        : invoiceNotes || paymentRemark || undefined;
+
       const tiersMode1 = mapSumexTiers(effectiveTiersMode);
       // amountPrepaid is only allowed in Tiers Garant (TG) — error [926] if sent for TP/TS
       const amountPrepaid1 = tiersMode1 === TiersMode.Garant ? paidAmt : 0;
@@ -456,7 +462,7 @@ export async function POST(request: NextRequest) {
         placeType: PlaceType.Practice,
         requestType: invoiceType === "reminder" ? RequestType.Reminder : RequestType.Invoice,
         requestSubtype: RequestSubtype.Normal,
-        remark: paymentRemark || undefined,
+        remark: combinedRemark,
         tiersMode: tiersMode1,
         amountPrepaid: amountPrepaid1 || undefined,
         vatNumber: (billingEntityData as any)?.vatuid || "",
@@ -722,6 +728,12 @@ export async function POST(request: NextRequest) {
         paymentRemark2 = `Acompte reçu / Anzahlung erhalten: ${paidAmt2.toFixed(2)} CHF — Solde / Restbetrag: ${remaining2.toFixed(2)} CHF`;
       }
 
+      // Combine accountant-visible invoice notes with any payment status remark
+      const invoiceNotes2 = (invoiceData.notes || "").trim();
+      const combinedRemark2 = invoiceNotes2 && paymentRemark2
+        ? `${invoiceNotes2}\n${paymentRemark2}`
+        : invoiceNotes2 || paymentRemark2 || undefined;
+
       const tiersMode2 = mapSumexTiers("TG");
       // amountPrepaid only allowed in TG — keep consistent even though this path is always TG
       const amountPrepaid2 = tiersMode2 === TiersMode.Garant ? paidAmt2 : 0;
@@ -732,7 +744,7 @@ export async function POST(request: NextRequest) {
         placeType: PlaceType.Practice,
         requestType: invoiceType === "reminder" ? RequestType.Reminder : RequestType.Invoice,
         requestSubtype: RequestSubtype.Normal,
-        remark: paymentRemark2 || undefined,
+        remark: combinedRemark2,
         tiersMode: tiersMode2,
         amountPrepaid: amountPrepaid2 || undefined,
         vatNumber: (billingEntityData as any)?.vatuid || "",

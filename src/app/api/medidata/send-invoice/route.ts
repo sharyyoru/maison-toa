@@ -575,6 +575,7 @@ export async function POST(request: NextRequest) {
       tiersMode,
       amountPrepaid: amountPrepaid || undefined,
       vatNumber: billingEntity?.vatuid || "",
+      remark: (invoiceRecord?.notes || "").trim() || undefined,
       invoiceId: invoiceNumber,
       invoiceDate,
       reminderLevel: reminderLevel || 0,

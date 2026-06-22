@@ -89,6 +89,9 @@ export interface Invoice {
   pdf_generated_at: string | null;
   cash_receipt_path: string | null;
 
+  // Internal / printed remarks
+  notes: string | null;
+
   // Swiss insurance billing
   health_insurance_law: HealthInsuranceLaw | null;
   billing_type: BillingType | null;

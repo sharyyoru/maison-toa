@@ -623,6 +623,7 @@ export default function MedicalConsultationsCard({
   const [invoiceCanton, setInvoiceCanton] = useState<SwissCanton>(DEFAULT_CANTON);
   const [invoiceLawType, setInvoiceLawType] = useState("KVG");
   const [invoiceAccidentDate, setInvoiceAccidentDate] = useState("");
+  const [invoiceNotes, setInvoiceNotes] = useState("");
   const [tardocSearchQuery, setTardocSearchQuery] = useState("");
   const [tardocSearchResults, setTardocSearchResults] = useState<any[]>([]);
   const [tardocSearchLoading, setTardocSearchLoading] = useState(false);
@@ -2983,6 +2984,7 @@ export default function MedicalConsultationsCard({
         setInvoiceCanton((inv.treatment_canton as SwissCanton) || DEFAULT_CANTON);
         setInvoiceLawType(inv.health_insurance_law || "KVG");
         setInvoiceAccidentDate(inv.accident_date || "");
+        setInvoiceNotes(inv.notes || "");
 
         // Date & time
         if (inv.treatment_date || inv.invoice_date) {
@@ -4657,6 +4659,7 @@ export default function MedicalConsultationsCard({
                             is_complimentary: invoiceIsComplimentaryForInsert,
                             payment_method: paymentMethod,
                             appointment_id: invoiceApptLinkEnabled && invoiceAppointmentId ? invoiceAppointmentId : null,
+                            notes: invoiceNotes.trim() || null,
                         };
 
                         // Add TARDOC-specific invoice fields
@@ -5675,6 +5678,20 @@ export default function MedicalConsultationsCard({
                           );
                         })()}
                       </div>
+                    </div>
+
+                    {/* ── Invoice notes (printed on generated invoice) ── */}
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-medium text-slate-700">
+                        Commentaire / Remarque (affiché sur la facture)
+                      </label>
+                      <textarea
+                        value={invoiceNotes}
+                        onChange={(e) => setInvoiceNotes(e.target.value)}
+                        placeholder="ex. facture fournie 2 semaines avant l’opération"
+                        rows={2}
+                        className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      />
                     </div>
 
                     {/* ── Appointment link (optional, for deposit invoices) ── */}
