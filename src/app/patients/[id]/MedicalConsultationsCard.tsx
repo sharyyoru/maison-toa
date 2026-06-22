@@ -23,6 +23,7 @@ import TardocAccordionTree from "@/components/TardocAccordionTree";
 import AcfAccordionTree from "@/components/AcfAccordionTree";
 import { type MediDataInvoiceStatus } from "@/lib/medidata";
 import { usePatientRealtime } from "./PatientRealtimeContext";
+import { usePDFJobNotifications } from "@/components/PDFJobNotificationsContext";
 
 type TaskPriority = "low" | "medium" | "high";
 
@@ -559,6 +560,7 @@ export default function MedicalConsultationsCard({
   const router = useRouter();
   const tc = useTranslations("patient.consultationsCard");
   const tf = useTranslations("patient.form");
+  const pdfNotifications = usePDFJobNotifications();
   const { consultationsRevision, billingRevision, medicationRevision } = usePatientRealtime();
   const pendingRealtimeReloadRef = useRef(false);
   const [realtimeReloadToken, setRealtimeReloadToken] = useState(0);
@@ -2816,55 +2818,88 @@ export default function MedicalConsultationsCard({
 
   async function handleGenerateInvoicePdf(invoiceId: string, invoiceType: "tg" | "tp" | "reminder" | "receipt" = "tp", reminderLevel = 1) {
     try {
-      console.log("Generating PDF for invoice ID:", invoiceId, "type:", invoiceType);
+      console.log("Queueing PDF for invoice ID:", invoiceId, "type:", invoiceType);
       setGeneratingPdf(invoiceId);
       setPdfError(null);
 
-      const response = await fetch("/api/invoices/generate-pdf", {
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const userId = sessionData?.session?.user?.id;
+      if (!accessToken) {
+        setPdfError({ message: "You must be signed in to queue PDF generation" });
+        setGeneratingPdf(null);
+        return;
+      }
+
+      const response = await fetch("/api/invoices/queue-pdf", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceId, invoiceType, reminderLevel }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          invoiceId,
+          invoiceType,
+          reminderLevel,
+          createdByUserId: userId,
+        }),
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
+      if (!response.ok || (!data.success && !data.jobId)) {
         setPdfError({
-          message: data.error || "Failed to generate PDF",
+          message: data.error || "Failed to queue PDF",
           details: data.details || undefined,
-          abortInfo: data.abortInfo || undefined,
         });
         setGeneratingPdf(null);
         return;
       }
 
-      if (data.pdfUrl && typeof window !== "undefined") {
-        window.open(data.pdfUrl, "_blank", "noopener,noreferrer");
-      }
-
-      if (data.paymentUrl) {
-        setGeneratedPaymentLink({ consultationId: invoiceId, url: data.paymentUrl });
-        setPaymentLinkCopied(false);
-      }
-
-      // Update local state with the pdf path so buttons reflect immediately
-      if (data.pdfPath) {
-        const typeKey = invoiceType === "tg" ? "invoice_pdf_path_tg" : invoiceType === "tp" ? "invoice_pdf_path_tp" : invoiceType === "reminder" ? "invoice_pdf_path_reminder" : "invoice_pdf_path_receipt";
-        setConsultations((prev) =>
-          prev.map((row) =>
-            row.id === invoiceId
-              ? { ...row, invoice_pdf_path: data.pdfPath, [typeKey]: data.pdfPath }
-              : row,
-          ),
-        );
-      }
-
+      // Refresh jobs so the in-progress badge appears immediately
+      void pdfNotifications.refreshJobs();
       setGeneratingPdf(null);
     } catch (error) {
-      console.error("Error generating PDF:", error);
-      setPdfError({ message: error instanceof Error ? error.message : "Failed to generate PDF" });
+      console.error("Error queueing PDF:", error);
+      setPdfError({ message: error instanceof Error ? error.message : "Failed to queue PDF" });
       setGeneratingPdf(null);
     }
+  }
+
+  async function handleCancelPdfJob(invoiceId: string, invoiceType: "tg" | "tp" | "reminder" | "receipt" = "tp", reminderLevel = 1) {
+    try {
+      const { data } = await supabaseClient
+        .from("pdf_generation_jobs")
+        .delete()
+        .eq("invoice_id", invoiceId)
+        .eq("invoice_type", invoiceType)
+        .eq("reminder_level", invoiceType === "reminder" ? reminderLevel : 1)
+        .in("status", ["pending", "processing"])
+        .select("id");
+
+      void pdfNotifications.refreshJobs();
+      console.log(`Cancelled ${data?.length || 0} queued PDF job(s) for ${invoiceId} ${invoiceType}`);
+    } catch (err) {
+      console.error("Error cancelling PDF job:", err);
+    }
+  }
+
+  function invoicePdfJobStatus(invoiceId: string, invoiceType: "tg" | "tp" | "reminder" | "receipt" = "tp", reminderLevel = 1): "pending" | "processing" | null {
+    const job = pdfNotifications.jobs.find(
+      j =>
+        j.invoice_id === invoiceId &&
+        j.invoice_type === invoiceType &&
+        (invoiceType !== "reminder" || (j.reminder_level || 1) === reminderLevel) &&
+        (j.status === "pending" || j.status === "processing"),
+    );
+    return job ? (job.status as "pending" | "processing") : null;
+  }
+
+  function anyInvoicePdfJobStatus(invoiceId: string): { type: string; status: "pending" | "processing" } | null {
+    const job = pdfNotifications.jobs.find(
+      j => j.invoice_id === invoiceId && (j.status === "pending" || j.status === "processing"),
+    );
+    return job ? { type: job.invoice_type, status: job.status as "pending" | "processing" } : null;
   }
 
   async function handleSendInvoiceEmail(invoiceId: string, pdfPath: string | null, documentType?: string) {
@@ -7918,10 +7953,20 @@ export default function MedicalConsultationsCard({
                                 View PDF
                               </button>
                             ) : null}
-                            <button type="button" onClick={() => handleGenerateInvoicePdf(linkedInvoice.id)} disabled={generatingPdf === linkedInvoice.id} className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50">
-                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                              {generatingPdf === linkedInvoice.id ? "Generating..." : linkedInvoice.invoice_pdf_path ? "Regenerate PDF" : "Generate PDF"}
-                            </button>
+                            {(() => {
+                              const linkedQueued = anyInvoicePdfJobStatus(linkedInvoice.id);
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => linkedQueued ? handleCancelPdfJob(linkedInvoice.id, "tg") : handleGenerateInvoicePdf(linkedInvoice.id)}
+                                  disabled={generatingPdf === linkedInvoice.id}
+                                  className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50"
+                                >
+                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                  {generatingPdf === linkedInvoice.id ? "Queueing..." : linkedQueued ? `⏳ ${linkedQueued.status === "processing" ? "Processing" : "Queued"} — Cancel` : linkedInvoice.invoice_pdf_path ? "Regenerate PDF" : "Generate PDF"}
+                                </button>
+                              );
+                            })()}
                             <div className="h-4 w-px bg-slate-200" />
                             <button type="button" onClick={() => handleEditInvoice(linkedInvoice)} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50 transition-colors">
                               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
@@ -8059,36 +8104,52 @@ export default function MedicalConsultationsCard({
                               )}
                             </div>
                             <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setPdfDropdownOpen(null); }}>
-                              <button
-                                type="button"
-                                onClick={() => setPdfDropdownOpen(pdfDropdownOpen === row.id ? null : row.id)}
-                                disabled={generatingPdf === row.id}
-                                className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50"
-                              >
-                                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                {generatingPdf === row.id ? "Generating..." : "Generate PDF"}
-                                <svg className="h-3 w-3 ml-0.5" fill="none" viewBox="0 0 20 20" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8l4 4 4-4" /></svg>
-                              </button>
+                              {(() => {
+                                const queued = anyInvoicePdfJobStatus(row.id);
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPdfDropdownOpen(pdfDropdownOpen === row.id ? null : row.id)}
+                                    disabled={generatingPdf === row.id || !!queued}
+                                    className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-70"
+                                  >
+                                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                    {generatingPdf === row.id ? "Queueing..." : queued ? `⏳ ${queued.status === "processing" ? "Processing" : "Queued"} (${queued.type.toUpperCase()})` : "Generate PDF"}
+                                    <svg className="h-3 w-3 ml-0.5" fill="none" viewBox="0 0 20 20" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8l4 4 4-4" /></svg>
+                                  </button>
+                                );
+                              })()}
                               {pdfDropdownOpen === row.id && (
-                                <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                                  <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGenerateInvoicePdf(row.id, "tg"); }}>
-                                    Invoice (patient / TG)
-                                  </button>
-                                  <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGenerateInvoicePdf(row.id, "tp"); }}>
-                                    Invoice (insurance / TP)
-                                  </button>
-                                  <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGenerateInvoicePdf(row.id, "reminder", 1); }}>
-                                    Reminder (1st)
-                                  </button>
-                                  <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGenerateInvoicePdf(row.id, "reminder", 2); }}>
-                                    Reminder (2nd)
-                                  </button>
-                                  <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGenerateInvoicePdf(row.id, "reminder", 3); }}>
-                                    Reminder (3rd)
-                                  </button>
-                                  <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGenerateInvoicePdf(row.id, "receipt"); }}>
-                                    Patient receipt
-                                  </button>
+                                <div className="absolute left-0 top-full mt-1 z-50 w-52 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                                  {[
+                                    { type: "tg", label: "Invoice (patient / TG)", reminderLevel: 1 },
+                                    { type: "tp", label: "Invoice (insurance / TP)", reminderLevel: 1 },
+                                    { type: "reminder", label: "Reminder (1st)", reminderLevel: 1 },
+                                    { type: "reminder", label: "Reminder (2nd)", reminderLevel: 2 },
+                                    { type: "reminder", label: "Reminder (3rd)", reminderLevel: 3 },
+                                    { type: "receipt", label: "Patient receipt", reminderLevel: 1 },
+                                  ].map(({ type, label, reminderLevel }) => {
+                                    const status = invoicePdfJobStatus(row.id, type as any, reminderLevel);
+                                    const isQueued = !!status;
+                                    return (
+                                      <button
+                                        key={`${type}-${reminderLevel}`}
+                                        type="button"
+                                        className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-[11px] ${isQueued ? "text-amber-700 hover:bg-amber-50" : "text-slate-700 hover:bg-violet-50"}`}
+                                        onClick={() => {
+                                          setPdfDropdownOpen(null);
+                                          if (isQueued) {
+                                            handleCancelPdfJob(row.id, type as any, reminderLevel);
+                                          } else {
+                                            handleGenerateInvoicePdf(row.id, type as any, reminderLevel);
+                                          }
+                                        }}
+                                      >
+                                        <span>{label}</span>
+                                        {isQueued && <span className="text-[10px] font-medium">{status === "processing" ? "🔄 Cancel" : "⏳ Cancel"}</span>}
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>

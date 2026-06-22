@@ -437,6 +437,23 @@ export default function InvoicesPage() {
     }
   };
 
+  const handleCancelPdfJob = async (invoiceId: string, invoiceType: "tg" | "tp" | "reminder" | "receipt" = "tg", reminderLevel = 1) => {
+    try {
+      const { data } = await supabaseClient
+        .from("pdf_generation_jobs")
+        .delete()
+        .eq("invoice_id", invoiceId)
+        .eq("invoice_type", invoiceType)
+        .eq("reminder_level", invoiceType === "reminder" ? reminderLevel : 1)
+        .in("status", ["pending", "processing"])
+        .select("id");
+      void pdfNotifications.refreshJobs();
+      console.log(`Cancelled ${data?.length || 0} queued PDF job(s) for ${invoiceId} ${invoiceType}`);
+    } catch (err) {
+      console.error("Error cancelling PDF job:", err);
+    }
+  };
+
   const handleSendEmail = async (invoice: InvoiceRow, documentType?: string) => {
     const email = patientEmail(invoice.patient_id);
     if (!email) { alert("Patient has no email address."); return; }
@@ -1201,17 +1218,41 @@ export default function InvoicesPage() {
           {/* backdrop to close on outside click */}
           <div className="fixed inset-0 z-40" onClick={() => setPdfDropdownOpen(null)} />
           <div
-            className="fixed z-50 min-w-[168px] rounded-lg border border-slate-200 bg-white py-1 shadow-xl"
+            className="fixed z-50 min-w-[180px] rounded-lg border border-slate-200 bg-white py-1 shadow-xl"
             style={{ top: pdfDropdownPos.top, left: pdfDropdownPos.left }}
           >
-            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "tg"); }}>Invoice (patient / TG)</button>
-            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "tp"); }}>Invoice (insurance / TP)</button>
-            <div className="my-1 border-t border-slate-100" />
-            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "reminder", 1); }}>Reminder (1st) — no fee</button>
-            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "reminder", 2); }}>Reminder (2nd) — +5 CHF</button>
-            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "reminder", 3); }}>Reminder (3rd) — +10 CHF</button>
-            <div className="my-1 border-t border-slate-100" />
-            <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-violet-50" onClick={() => { setPdfDropdownOpen(null); handleGeneratePdf(pdfDropdownOpen, "receipt"); }}>Patient receipt</button>
+            {[
+              { type: "tg", label: "Invoice (patient / TG)", reminderLevel: 1 },
+              { type: "tp", label: "Invoice (insurance / TP)", reminderLevel: 1 },
+              { type: "reminder", label: "Reminder (1st) — no fee", reminderLevel: 1 },
+              { type: "reminder", label: "Reminder (2nd) — +5 CHF", reminderLevel: 2 },
+              { type: "reminder", label: "Reminder (3rd) — +10 CHF", reminderLevel: 3 },
+              { type: "receipt", label: "Patient receipt", reminderLevel: 1 },
+            ].map(({ type, label, reminderLevel }, idx) => {
+              const isReminder = type === "reminder";
+              const isQueued = pdfNotifications.hasPendingJob(pdfDropdownOpen, type, reminderLevel);
+              const isDivider = idx === 1 || idx === 4;
+              return (
+                <div key={`${type}-${reminderLevel}`}>
+                  {isDivider && <div className="my-1 border-t border-slate-100" />}
+                  <button
+                    type="button"
+                    className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-[11px] ${isQueued ? "text-amber-700 hover:bg-amber-50" : "text-slate-700 hover:bg-violet-50"}`}
+                    onClick={() => {
+                      setPdfDropdownOpen(null);
+                      if (isQueued) {
+                        handleCancelPdfJob(pdfDropdownOpen, type as any, reminderLevel);
+                      } else {
+                        handleGeneratePdf(pdfDropdownOpen, type as any, reminderLevel);
+                      }
+                    }}
+                  >
+                    <span>{label}</span>
+                    {isQueued && <span className="text-[10px] font-medium">{isReminder && reminderLevel > 1 ? `L${reminderLevel}` : "Cancel"}</span>}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </>
       )}

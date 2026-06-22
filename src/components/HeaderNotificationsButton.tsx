@@ -231,7 +231,7 @@ export default function HeaderNotificationsButton() {
                   <span className="text-[10px] text-slate-500">{pdfCtx.pendingCount} active</span>
                 )}
               </div>
-              <div className="max-h-80 overflow-y-auto">
+              <div className="max-h-96 overflow-y-auto">
                 {pdfCtx.loading ? (
                   <p className="px-4 py-6 text-center text-xs text-slate-500">{t("loadingUser")}</p>
                 ) : pdfCtx.jobs.length === 0 ? (
@@ -240,37 +240,111 @@ export default function HeaderNotificationsButton() {
                   pdfCtx.jobs.map((job) => (
                     <div
                       key={job.id}
-                      className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 ${
+                      className={`group border-b border-slate-50 px-4 py-3 text-left transition-colors hover:bg-slate-50 ${
                         job.status === "pending" || job.status === "processing" ? "bg-sky-50/30" : ""
                       }`}
                     >
-                      <div className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
-                        job.status === "completed" ? "bg-emerald-100 text-emerald-600" :
-                        job.status === "failed" ? "bg-rose-100 text-rose-600" :
-                        "bg-amber-100 text-amber-600"
-                      }`}>
-                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                          <polyline points="14 2 14 8 20 8" />
-                        </svg>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-xs font-medium text-slate-900">
-                            #{job.invoice_number || job.invoice_id.slice(0, 8)} — {typeLabel(job.invoice_type, job.reminder_level)}
-                          </p>
-                          <span className="flex-shrink-0 text-[10px] text-slate-400">
-                            {formatTimeAgo(job.completed_at || job.created_at)}
-                          </span>
+                      <div className="flex items-start gap-3">
+                        <button
+                          type="button"
+                          onClick={() => job.patient_id && router.push(`/patients/${job.patient_id}`)}
+                          className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
+                            job.status === "completed" ? "bg-emerald-100 text-emerald-600" :
+                            job.status === "failed" ? "bg-rose-100 text-rose-600" :
+                            "bg-amber-100 text-amber-600"
+                          } ${!job.patient_id ? "cursor-default" : "cursor-pointer"}`}
+                        >
+                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                          </svg>
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={() => job.patient_id && router.push(`/patients/${job.patient_id}`)}
+                            className="block w-full text-left"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="truncate text-xs font-medium text-slate-900">
+                                {getPatientName(job.patients)} — #{job.invoice_number || job.invoice_id.slice(0, 8)}
+                              </p>
+                              <span className="flex-shrink-0 text-[10px] text-slate-400">
+                                {formatTimeAgo(job.completed_at || job.created_at)}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600">
+                              {statusLabel(job.status)} — {typeLabel(job.invoice_type, job.reminder_level)}
+                            </p>
+                          </button>
+                          {job.error_message && (
+                            <p className="mt-0.5 line-clamp-2 text-[10px] text-rose-500" title={job.error_message}>
+                              {job.error_message}
+                            </p>
+                          )}
+                          {job.support_flagged_at && (
+                            <p className="mt-0.5 text-[10px] text-amber-600">
+                              Flagged for support
+                            </p>
+                          )}
+                          {/* Actions */}
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {job.status === "completed" && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void pdfCtx.viewJobPdf(job)}
+                                  className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100"
+                                >
+                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                  View file
+                                </button>
+                                {job.patients?.email && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void pdfCtx.sendJobEmail(job)}
+                                    className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-1 text-[10px] font-medium text-sky-700 hover:bg-sky-100"
+                                  >
+                                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                    Send to patient
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDropdownOpen(false);
+                                router.push(`/patients/${job.patient_id || ""}`);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-200"
+                            >
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                              Patient
+                            </button>
+                            {job.status === "failed" && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void pdfCtx.retryJob(job.id)}
+                                  className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-100"
+                                >
+                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                  Retry
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void pdfCtx.flagJob(job.id)}
+                                  title="Flag for support"
+                                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium ${job.support_flagged_at ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                                >
+                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                  {job.support_flagged_at ? "Flagged" : "Need help"}
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-[11px] text-slate-600">
-                          {statusLabel(job.status)}
-                        </p>
-                        {job.error_message && (
-                          <p className="mt-0.5 truncate text-[10px] text-rose-500" title={job.error_message}>
-                            {job.error_message}
-                          </p>
-                        )}
                       </div>
                     </div>
                   ))

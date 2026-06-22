@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 /**
  * POST /api/invoices/queue-pdf
  *
- * Queues a PDF generation job to be picked up by the Railway worker.
+ * Queues a PDF generation job to be picked up by the Vercel Cron worker.
  * Returns immediately with the job ID.
  *
  * Body: {

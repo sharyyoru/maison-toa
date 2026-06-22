@@ -24,8 +24,17 @@ export type PdfJobNotification = {
   completed_at: string | null;
   error_message: string | null;
   pdf_url: string | null;
+  pdf_path: string | null;
   patient_id: string | null;
   retry_count: number;
+  support_flagged_at: string | null;
+  support_flagged_by_user_id: string | null;
+  patients: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+  } | null;
 };
 
 type PDFJobNotificationsContextValue = {
@@ -38,6 +47,10 @@ type PDFJobNotificationsContextValue = {
   markCompletedAsRead: () => void;
   getJobsForInvoice: (invoiceId: string) => PdfJobNotification[];
   hasPendingJob: (invoiceId: string, invoiceType: string, reminderLevel?: number) => boolean;
+  retryJob: (jobId: string) => Promise<boolean>;
+  flagJob: (jobId: string) => Promise<boolean>;
+  sendJobEmail: (job: PdfJobNotification) => Promise<boolean>;
+  viewJobPdf: (job: PdfJobNotification) => Promise<boolean>;
 };
 
 const PDFJobNotificationsContext = createContext<PDFJobNotificationsContextValue | undefined>(
@@ -145,6 +158,83 @@ export function PDFJobNotificationsProvider({ children }: { children: ReactNode 
     [jobs]
   );
 
+  const retryJob = useCallback(async (jobId: string): Promise<boolean> => {
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) return false;
+    try {
+      const res = await fetch(`/api/invoices/pdf-jobs/${jobId}/retry`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (res.ok) {
+        await refreshJobs();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("[PDFJobsContext] retryJob error:", err);
+      return false;
+    }
+  }, [refreshJobs]);
+
+  const flagJob = useCallback(async (jobId: string): Promise<boolean> => {
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) return false;
+    try {
+      const res = await fetch(`/api/invoices/pdf-jobs/${jobId}/flag`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (res.ok) {
+        await refreshJobs();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("[PDFJobsContext] flagJob error:", err);
+      return false;
+    }
+  }, [refreshJobs]);
+
+  const sendJobEmail = useCallback(async (job: PdfJobNotification): Promise<boolean> => {
+    if (!job.patients?.email || !job.pdf_path) return false;
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) return false;
+    try {
+      const res = await fetch("/api/invoices/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          invoiceId: job.invoice_id,
+          recipientEmail: job.patients.email,
+          documentType: job.invoice_type,
+        }),
+      });
+      return res.ok;
+    } catch (err) {
+      console.error("[PDFJobsContext] sendJobEmail error:", err);
+      return false;
+    }
+  }, []);
+
+  const viewJobPdf = useCallback(async (job: PdfJobNotification): Promise<boolean> => {
+    if (!job.pdf_path) return false;
+    try {
+      const { data, error } = await supabaseClient.storage
+        .from("invoice-pdfs")
+        .createSignedUrl(job.pdf_path, 60);
+      if (error || !data?.signedUrl) return false;
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      return true;
+    } catch (err) {
+      console.error("[PDFJobsContext] viewJobPdf error:", err);
+      return false;
+    }
+  }, []);
+
   return (
     <PDFJobNotificationsContext.Provider
       value={{
@@ -157,6 +247,10 @@ export function PDFJobNotificationsProvider({ children }: { children: ReactNode 
         markCompletedAsRead,
         getJobsForInvoice,
         hasPendingJob,
+        retryJob,
+        flagJob,
+        sendJobEmail,
+        viewJobPdf,
       }}
     >
       {children}

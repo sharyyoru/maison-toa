@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabaseAdmin
       .from("pdf_generation_jobs")
-      .select("*")
+      .select("*, patients:patient_id (id, first_name, last_name, email)")
       .order("created_at", { ascending: false })
       .limit(limit);
 
