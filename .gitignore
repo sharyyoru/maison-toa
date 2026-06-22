@@ -75,6 +75,8 @@ UPDATE-EXECUTION-SUMMARY.md
 src/app/api/admin/
 *.pdf
 *.md
+!docs/*.md
+!docs/**/*.md
 *.sql
 !supabase/migrations/*.sql
 backfill-machine-assignments (2) (1).xlsx
