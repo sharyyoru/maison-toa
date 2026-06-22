@@ -10,6 +10,7 @@ import { ShellSidebar, ShellHeader, ShellFrame } from "@/components/ShellVisibil
 import HeaderUser from "@/components/HeaderUser";
 import HeaderCommentsButton from "@/components/HeaderCommentsButton";
 import HeaderNotificationsButton from "@/components/HeaderNotificationsButton";
+import HeaderPdfJobsButton from "@/components/HeaderPdfJobsButton";
 import HeaderTasksButton from "@/components/HeaderTasksButton";
 import HeaderWhatsAppButton from "@/components/HeaderWhatsAppButton";
 import GlobalPatientSearch from "@/components/GlobalPatientSearch";
@@ -575,6 +576,7 @@ export default async function RootLayout({
                       <CrmLanguageToggle />
                       <HeaderTasksButton />
                       <HeaderNotificationsButton />
+                      <HeaderPdfJobsButton />
                       <HeaderCommentsButton />
                       <HeaderWhatsAppButton />
                       <HeaderUser />

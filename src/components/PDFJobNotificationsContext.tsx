@@ -87,7 +87,7 @@ export function PDFJobNotificationsProvider({ children }: { children: ReactNode 
 
     try {
       setError(null);
-      const res = await fetch("/api/invoices/pdf-jobs?limit=50", {
+      const res = await fetch("/api/invoices/pdf-jobs?limit=50&forAll=true", {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
