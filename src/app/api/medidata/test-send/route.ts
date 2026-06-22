@@ -61,6 +61,31 @@ export async function POST(request: NextRequest) {
       clinic_canton: "GE",
     };
 
+    // Helper to resolve a provider address from the providers table. The
+    // medidata_config table may not contain address columns, so we fall back to
+    // the provider record linked to the invoice.
+    async function resolveProvider(invoice: any) {
+      let provider: any = null;
+      if (invoice.provider_id) {
+        const { data } = await supabaseAdmin
+          .from("providers")
+          .select("id, name, street, street_no, zip_code, city, canton, gln, zsr, iban, qual_dignities, specialty")
+          .eq("id", invoice.provider_id)
+          .single();
+        provider = data;
+      }
+      if (!provider && invoice.provider_gln) {
+        const { data } = await supabaseAdmin
+          .from("providers")
+          .select("id, name, street, street_no, zip_code, city, canton, gln, zsr, iban, qual_dignities, specialty")
+          .eq("gln", invoice.provider_gln)
+          .limit(1)
+          .maybeSingle();
+        provider = data;
+      }
+      return provider;
+    }
+
     const results: Array<{
       invoiceId: string;
       invoiceNumber: string;
@@ -84,6 +109,18 @@ export async function POST(request: NextRequest) {
           results.push({ invoiceId, invoiceNumber: "?", doctor: "?", success: false, error: `Invoice not found: ${invErr?.message}` });
           continue;
         }
+
+        // Resolve provider address for biller/provider fallback
+        const provider = await resolveProvider(inv);
+        const providerStreet = provider?.street ? `${provider.street}${provider.street_no ? ` ${provider.street_no}` : ""}` : "";
+        const providerZip = provider?.zip_code || "";
+        const providerCity = provider?.city || "";
+        const providerCanton = provider?.canton || inv.treatment_canton || config.clinic_canton || "VD";
+        const providerName = provider?.name || inv.provider_name || config.clinic_name;
+        const providerIban = provider?.iban || inv.provider_iban || "CH0930788000050249289";
+        const providerGln = provider?.gln || inv.provider_gln || inv.doctor_gln || config.clinic_gln;
+        const providerZsr = provider?.zsr || inv.provider_zsr || inv.doctor_zsr || config.clinic_zsr || undefined;
+        const qualDignities = provider?.qual_dignities || [provider?.specialty].filter(Boolean);
 
         // Get patient
         const { data: patient } = await supabaseAdmin
@@ -143,9 +180,9 @@ export async function POST(request: NextRequest) {
         }
 
         // ── 3. Build Sumex1 XML ──
-        const doctorGln = inv.doctor_gln || inv.provider_gln || config.clinic_gln;
-        const doctorZsr = inv.doctor_zsr || inv.provider_zsr || config.clinic_zsr;
-        const canton = inv.treatment_canton || config.clinic_canton || "VD";
+        const doctorGln = providerGln;
+        const doctorZsr = providerZsr;
+        const canton = providerCanton;
         const invoiceDate = typeof inv.invoice_date === "string" ? inv.invoice_date.split("T")[0] : new Date().toISOString().split("T")[0];
         const treatmentDate = inv.treatment_date ? new Date(inv.treatment_date).toISOString().split("T")[0] : invoiceDate;
         const treatmentDateEnd = inv.treatment_date_end ? new Date(inv.treatment_date_end).toISOString().split("T")[0] : treatmentDate;
@@ -209,25 +246,26 @@ export async function POST(request: NextRequest) {
           lawType,
           insuredId: inv.patient_card_number || "80756012345678901",
           esrType: EsrType.QR,
-          iban: inv.provider_iban || "CH0930788000050249289",
+          iban: providerIban,
           paymentPeriod: 30,
-          billerGln: config.clinic_gln,
-          billerZsr: config.clinic_zsr || undefined,
+          billerGln: providerGln,
+          billerZsr: providerZsr || undefined,
           billerAddress: {
-            companyName: config.clinic_name,
-            street: config.clinic_address_street || "",
-            zip: config.clinic_address_postal_code || "",
-            city: config.clinic_address_city || "",
+            companyName: providerName,
+            street: providerStreet || config.clinic_address_street || "",
+            zip: providerZip || config.clinic_address_postal_code || "",
+            city: providerCity || config.clinic_address_city || "",
             stateCode: canton,
           },
           providerGln: doctorGln,
           providerZsr: doctorZsr,
+          qualDignities: qualDignities.length > 0 ? qualDignities : undefined,
           providerAddress: {
-            familyName: (inv.doctor_name || "").split(" ").slice(-1)[0] || config.clinic_name,
+            familyName: (inv.doctor_name || "").split(" ").slice(-1)[0] || providerName,
             givenName: (inv.doctor_name || "").split(" ").slice(0, -1).join(" "),
-            street: config.clinic_address_street || "",
-            zip: config.clinic_address_postal_code || "",
-            city: config.clinic_address_city || "",
+            street: providerStreet || config.clinic_address_street || "",
+            zip: providerZip || config.clinic_address_postal_code || "",
+            city: providerCity || config.clinic_address_city || "",
             stateCode: canton,
           },
           insuranceGln: receiverGln,
