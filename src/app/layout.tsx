@@ -17,6 +17,7 @@ import CrmLanguageToggle from "@/components/CrmLanguageToggle";
 import { CommentsUnreadProvider } from "@/components/CommentsUnreadContext";
 import { TasksNotificationsProvider } from "@/components/TasksNotificationsContext";
 import { EmailNotificationsProvider } from "@/components/EmailNotificationsContext";
+import { PDFJobNotificationsProvider } from "@/components/PDFJobNotificationsContext";
 import { PatientTabsProvider } from "@/components/PatientTabsContext";
 import PatientTabBar from "@/components/PatientTabBar";
 import { AuthProvider } from "@/components/AuthContext";
@@ -59,6 +60,7 @@ export default async function RootLayout({
           <CommentsUnreadProvider>
           <TasksNotificationsProvider>
           <EmailNotificationsProvider>
+          <PDFJobNotificationsProvider>
           <PatientTabsProvider>
           <ShellFrame>
           <div className="flex min-h-[80vh] flex-1 overflow-hidden">
@@ -587,6 +589,7 @@ export default async function RootLayout({
           </div>
           </ShellFrame>
           </PatientTabsProvider>
+          </PDFJobNotificationsProvider>
           </EmailNotificationsProvider>
           </TasksNotificationsProvider>
           </CommentsUnreadProvider>

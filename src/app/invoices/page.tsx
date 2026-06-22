@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 import InsuranceBillingModal from "@/components/InsuranceBillingModal";
+import { usePDFJobNotifications } from "@/components/PDFJobNotificationsContext";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -131,6 +132,7 @@ function insuranceBadge(status: string | null | undefined, billingType: string |
 // ---------------------------------------------------------------------------
 
 export default function InvoicesPage() {
+  const pdfNotifications = usePDFJobNotifications();
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [patientsById, setPatientsById] = useState<PatientsById>({});
   const [loading, setLoading] = useState(true);
@@ -399,33 +401,37 @@ export default function InvoicesPage() {
   };
 
   const handleGeneratePdf = async (invoiceId: string, invoiceType: "tg" | "tp" | "reminder" | "receipt" = "tg", reminderLevel = 1) => {
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    const userId = sessionData?.session?.user?.id;
+    if (!accessToken) {
+      alert("You must be signed in to queue PDF generation.");
+      return;
+    }
     setGeneratingPdf(prev => new Set(prev).add(invoiceId));
     try {
-      const res = await fetch("/api/invoices/generate-pdf", {
+      const res = await fetch("/api/invoices/queue-pdf", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceId, invoiceType, reminderLevel }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          invoiceId,
+          invoiceType,
+          reminderLevel,
+          createdByUserId: userId,
+        }),
       });
       const data = await res.json();
-      if (data.pdfUrl) {
-        window.open(data.pdfUrl, "_blank");
-        // Update both the generic pdf_path and the specific typed column in local state
-        const typedCol = invoiceType === "tg" ? "pdf_path_tg"
-          : invoiceType === "tp" ? "pdf_path_tp"
-          : invoiceType === "reminder" ? "pdf_path_reminder"
-          : "pdf_path_receipt";
-        setInvoices(prev => prev.map(r => r.id === invoiceId ? {
-          ...r,
-          pdf_path: data.pdfPath || r.pdf_path,
-          [typedCol]: data.pdfPath || r[typedCol as keyof InvoiceRow],
-          pdf_generated_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        } : r));
+      if (data.success || data.jobId) {
+        // Refresh jobs so the in-progress indicator appears immediately
+        void pdfNotifications.refreshJobs();
       } else {
         alert("Failed: " + (data.error || "Unknown error"));
       }
     } catch {
-      alert("Failed to generate PDF");
+      alert("Failed to queue PDF");
     } finally {
       setGeneratingPdf(prev => { const n = new Set(prev); n.delete(invoiceId); return n; });
     }
@@ -962,7 +968,7 @@ export default function InvoicesPage() {
                         <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setPdfDropdownOpen(null); }}>
                           <button
                             type="button"
-                            disabled={isGenerating}
+                            disabled={isGenerating || pdfNotifications.hasPendingJob(row.id, "tg") || pdfNotifications.hasPendingJob(row.id, "tp") || pdfNotifications.hasPendingJob(row.id, "reminder") || pdfNotifications.hasPendingJob(row.id, "receipt")}
                             onClick={(e) => {
                               if (pdfDropdownOpen === row.id) { setPdfDropdownOpen(null); return; }
                               const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -972,7 +978,7 @@ export default function InvoicesPage() {
                             className="inline-flex items-center gap-0.5 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50 transition-colors"
                             title="Generate PDF"
                           >
-                            {isGenerating ? "..." : "PDF ▾"}
+                            {isGenerating || (pdfNotifications.hasPendingJob(row.id, "tg") || pdfNotifications.hasPendingJob(row.id, "tp") || pdfNotifications.hasPendingJob(row.id, "reminder") || pdfNotifications.hasPendingJob(row.id, "receipt")) ? "⏳ PDF" : "PDF ▾"}
                           </button>
                         </div>
 

@@ -4852,6 +4852,18 @@ export default function MedicalConsultationsCard({
                           }
                         }
 
+                        // ── Auto-queue patient (TG) PDF generation in background ──
+                        // The Railway worker will pick this up and generate the PDF async.
+                        fetch("/api/invoices/queue-pdf", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            invoiceId: invoiceRow.id,
+                            invoiceType: "tg",
+                            createdByUserId,
+                          }),
+                        }).catch(err => console.error("[AutoQueuePDF] Failed to queue TG PDF:", err));
+
                         // Save installments to DB if payment term is installment
                         if (invoicePaymentTerm === "installment" && invoiceInstallments.length > 0) {
                           const totalAmount = invoiceTotalAmountForInsert || 0;
