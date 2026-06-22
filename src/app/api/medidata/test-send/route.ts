@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
         // ── 3. Build Sumex1 XML ──
         const doctorGln = inv.doctor_gln || inv.provider_gln || config.clinic_gln;
         const doctorZsr = inv.doctor_zsr || inv.provider_zsr || config.clinic_zsr;
-        const canton = inv.treatment_canton || config.clinic_canton || "GE";
+        const canton = inv.treatment_canton || config.clinic_canton || "VD";
         const invoiceDate = typeof inv.invoice_date === "string" ? inv.invoice_date.split("T")[0] : new Date().toISOString().split("T")[0];
         const treatmentDate = inv.treatment_date ? new Date(inv.treatment_date).toISOString().split("T")[0] : invoiceDate;
         const treatmentDateEnd = inv.treatment_date_end ? new Date(inv.treatment_date_end).toISOString().split("T")[0] : treatmentDate;

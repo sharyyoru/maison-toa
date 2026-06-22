@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
       "zug": "ZG", "zürich": "ZH", "zurich": "ZH",
     };
     const normalizeCanton = (c: string | null | undefined): string => {
-      if (!c) return "GE";
+      if (!c) return "VD";
       if (c.length === 2) return c.toUpperCase();
       return CANTON_NAME_TO_CODE[c.toLowerCase()] || c.toUpperCase().slice(0, 2);
     };

@@ -612,7 +612,7 @@ export default function TardocGroupsTab() {
             {groups.map((group) => {
               const itemCount = group.tardoc_group_items?.length || 0;
               const totalPrice = (group.tardoc_group_items || []).reduce((sum, item) => {
-                const canton = (group.canton || "GE") as SwissCanton;
+                const canton = (group.canton || DEFAULT_CANTON) as SwissCanton;
                 const tv = (group.tax_point_value != null ? Number(group.tax_point_value) : null) ?? CANTON_TAX_POINT_VALUES[canton] ?? 0.96;
                 if (item.tariff_type === "402" || item.tardoc_code?.startsWith("mat:")) {
                   return sum + (item.unit_price ?? 0) * item.quantity;

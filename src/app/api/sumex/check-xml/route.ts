@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
       : "";
     const provZip = billingEntity?.zip_code || "";
     const provCity = billingEntity?.city || "";
-    const provCanton = billingEntity?.canton || invoice.treatment_canton || "GE";
+    const provCanton = billingEntity?.canton || invoice.treatment_canton || "VD";
 
     // IBAN: validate, strip spaces, fallback to QR-IBAN
     const provIban = sanitizeIban(billingEntity?.iban)

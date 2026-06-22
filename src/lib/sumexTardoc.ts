@@ -546,7 +546,7 @@ export type ValidationResult = {
  */
 export async function validateServices(
   services: ValidationServiceInput[],
-  canton: string = "GE",
+  canton: string = "VD",
   lawType: number = 1, // 1=KVG
   language: SumexLanguage = 2,
 ): Promise<ValidationResult> {

@@ -100,7 +100,7 @@ export async function generateTiersPayantPdf(
   const insurerGln = insurer?.gln || invoice.insurance_gln || "";
   const insurerName = insurer?.name || invoice.insurance_name || "";
   const patientSsn = patient.avs_number || invoice.patient_ssn || "";
-  const canton = invoice.treatment_canton || provider.canton || "GE";
+  const canton = invoice.treatment_canton || provider.canton || "VD";
   const lawType = invoice.health_insurance_law || "KVG";
   const lawLabel = lawType === "KVG" ? "LAMal" : lawType === "UVG" ? "LAA" : lawType === "IVG" ? "LAI" : lawType === "MVG" ? "LAM" : lawType;
   const billingType = invoice.billing_type || "TP";

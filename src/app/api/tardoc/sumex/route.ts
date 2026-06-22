@@ -28,7 +28,7 @@ export const runtime = "nodejs";
  *   group:      Service group code for searchServiceGroup
  *   mainOnly:   "1" to return only main services (default "0")
  *   lang:       "1"=DE, "2"=FR (default), "3"=IT
- *   canton:     Swiss canton code for price calc (default "GE")
+ *   canton:     Swiss canton code for price calc (default "VD")
  *   parent:     Parent code for chapters (default "" = root)
  */
 export async function GET(request: NextRequest) {

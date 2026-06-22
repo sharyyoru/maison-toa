@@ -47,8 +47,8 @@ export const CANTON_TAX_POINT_VALUES: Record<SwissCanton, number> = {
   ZH: 0.93,
 };
 
-// Default canton for the clinic (Geneva)
-export const DEFAULT_CANTON: SwissCanton = "GE";
+// Default canton for the clinic (Lausanne, Vaud)
+export const DEFAULT_CANTON: SwissCanton = "VD";
 
 // Cost neutrality factor for TARMED to TARDOC transition
 export const COST_NEUTRALITY_FACTOR = 0.95;

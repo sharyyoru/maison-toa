@@ -246,7 +246,7 @@ async function handleBuildFromConsultation(body: Record<string, unknown>) {
   // Treatment dates
   const treatmentBegin = consultation.date || invoiceDate;
   const treatmentEnd = consultation.end_date || consultation.date || invoiceDate;
-  const canton = consultation.canton || clinicConfig?.canton || "GE";
+  const canton = consultation.canton || clinicConfig?.canton || "VD";
 
   const input: SumexInvoiceInput = {
     language: 2, // FR
