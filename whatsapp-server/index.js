@@ -21,7 +21,6 @@ const { getAllActiveSessions, getRecentLogs, getReconnectableSessions, updateSes
 const fs = require('fs');
 const path = require('path');
 const { startQueueProcessor, stopQueueProcessor, getQueueStats } = require('./queue-processor');
-const { main: startPdfWorker, shutdown: stopPdfWorker } = require('./pdf-worker');
 
 const app = express();
 const server = http.createServer(app);
@@ -260,9 +259,6 @@ server.listen(PORT, () => {
   // Start queue processor after server is listening
   startQueueProcessor();
 
-  // Start async PDF generation worker
-  startPdfWorker();
-
   // Auto-reconnect sessions that were active before redeploy
   autoReconnectSessions();
 });
@@ -316,7 +312,6 @@ async function autoReconnectSessions() {
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
   stopQueueProcessor();
-  stopPdfWorker();
 
   // Destroy all active WhatsApp clients (flushes LocalAuth session to disk)
   await destroyAllClients();
