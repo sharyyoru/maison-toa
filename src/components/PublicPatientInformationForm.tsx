@@ -31,6 +31,16 @@ type FormData = {
   signature: string;
 };
 
+type AddressSuggestion = {
+  label: string;
+  street: string;
+  number: string;
+  postalCode: string;
+  city: string;
+  country: string;
+  countryCode: string;
+};
+
 const emptyFormData: FormData = {
   first_name: "",
   last_name: "",
@@ -360,6 +370,9 @@ export default function PublicPatientInformationForm({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [postalLookupPending, setPostalLookupPending] = useState(false);
+  const [addressLookupPending, setAddressLookupPending] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [addressSuggestionsOpen, setAddressSuggestionsOpen] = useState(false);
   const [autoFilledAddress, setAutoFilledAddress] = useState({
     postalCode: "",
     town: "",
@@ -457,6 +470,68 @@ export default function PublicPatientInformationForm({
     formData.country,
     formData.postal_code,
   ]);
+
+  useEffect(() => {
+    const query = formData.street_address.trim();
+    if (query.length < 3) {
+      setAddressSuggestions([]);
+      setAddressSuggestionsOpen(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        setAddressLookupPending(true);
+        const params = new URLSearchParams({ query });
+
+        const response = await fetch(`/api/public/address-search?${params.toString()}`, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          setAddressSuggestions([]);
+          setAddressSuggestionsOpen(false);
+          return;
+        }
+
+        const data = (await response.json()) as { suggestions?: AddressSuggestion[] };
+        const suggestions = data.suggestions || [];
+        setAddressSuggestions(suggestions);
+        setAddressSuggestionsOpen(suggestions.length > 0);
+      } catch (lookupError) {
+        if (!controller.signal.aborted) {
+          console.error("Address lookup failed:", lookupError);
+        }
+      } finally {
+        if (!controller.signal.aborted) setAddressLookupPending(false);
+      }
+    }, 500);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [formData.street_address]);
+
+  const selectAddressSuggestion = (suggestion: AddressSuggestion) => {
+    setFormData((current) => ({
+      ...current,
+      street_address: suggestion.street || current.street_address,
+      street_number: suggestion.number || current.street_number,
+      postal_code: suggestion.postalCode || current.postal_code,
+      town: suggestion.city || current.town,
+      country: suggestion.country || current.country,
+    }));
+    setCityOptions(suggestion.city ? [suggestion.city] : []);
+    setAddressSuggestions([]);
+    setAddressSuggestionsOpen(false);
+    setAutoFilledAddress({
+      postalCode: suggestion.postalCode,
+      town: suggestion.city,
+      country: suggestion.country,
+    });
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -586,7 +661,17 @@ export default function PublicPatientInformationForm({
             </p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <TextInput label={required((t.fields as Record<string, string>).street_address)} value={formData.street_address} onChange={(value) => update("street_address", value)} required />
+                <AddressInput
+                  label={required((t.fields as Record<string, string>).street_address)}
+                  value={formData.street_address}
+                  onChange={(value) => update("street_address", value)}
+                  onFocus={() => setAddressSuggestionsOpen(addressSuggestions.length > 0)}
+                  suggestions={addressSuggestions}
+                  suggestionsOpen={addressSuggestionsOpen}
+                  onSelectSuggestion={selectAddressSuggestion}
+                  busy={addressLookupPending}
+                  required
+                />
               </div>
               <TextInput label={required((t.fields as Record<string, string>).street_number)} value={formData.street_number} onChange={(value) => update("street_number", value)} required />
               <TextInput
@@ -743,6 +828,70 @@ export default function PublicPatientInformationForm({
         <footer className="mt-8 text-center text-xs text-slate-500">{t.secure as string}</footer>
       </main>
     </div>
+  );
+}
+
+function AddressInput({
+  label,
+  value,
+  onChange,
+  onFocus,
+  suggestions,
+  suggestionsOpen,
+  onSelectSuggestion,
+  busy = false,
+  required: isRequired = false,
+}: {
+  label: React.ReactNode;
+  value: string;
+  onChange: (value: string) => void;
+  onFocus: () => void;
+  suggestions: AddressSuggestion[];
+  suggestionsOpen: boolean;
+  onSelectSuggestion: (suggestion: AddressSuggestion) => void;
+  busy?: boolean;
+  required?: boolean;
+}) {
+  return (
+    <label className="relative block space-y-1">
+      <span className="block text-sm font-medium text-slate-700">{label}</span>
+      <span className="relative block">
+        <input
+          type="text"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onFocus={onFocus}
+          required={isRequired}
+          autoComplete="street-address"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
+        />
+        {busy ? (
+          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
+        ) : null}
+      </span>
+      {suggestionsOpen ? (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          {suggestions.map((suggestion) => (
+            <button
+              key={`${suggestion.label}-${suggestion.postalCode}-${suggestion.city}`}
+              type="button"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                onSelectSuggestion(suggestion);
+              }}
+              className="block w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-sky-50 hover:text-sky-700"
+            >
+              <span className="block font-medium text-slate-900">
+                {[suggestion.street, suggestion.number].filter(Boolean).join(" ")}
+              </span>
+              <span className="block text-slate-500">
+                {[suggestion.postalCode, suggestion.city, suggestion.country].filter(Boolean).join(", ")}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </label>
   );
 }
 
