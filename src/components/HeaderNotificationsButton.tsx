@@ -15,6 +15,7 @@ export default function HeaderNotificationsButton() {
   const pdfCtx = usePDFJobNotifications();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("emails");
+  const [emailToast, setEmailToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const emailCount = emailCtx.unreadCount ?? 0;
@@ -302,7 +303,11 @@ export default function HeaderNotificationsButton() {
                                 {job.patients?.email && (
                                   <button
                                     type="button"
-                                    onClick={() => void pdfCtx.sendJobEmail(job)}
+                                    onClick={async () => {
+                                      const result = await pdfCtx.sendJobEmail(job);
+                                      setEmailToast({ message: result.message, type: result.ok ? "success" : "error" });
+                                      setTimeout(() => setEmailToast(null), 4000);
+                                    }}
                                     className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-1 text-[10px] font-medium text-sky-700 hover:bg-sky-100"
                                   >
                                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
@@ -352,6 +357,33 @@ export default function HeaderNotificationsButton() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Email send toast */}
+      {emailToast && (
+        <div className={`fixed bottom-4 right-4 z-[9999] flex items-start gap-3 rounded-xl border px-4 py-3 shadow-xl animate-[fade-in-up_0.3s_ease-out] ${emailToast.type === "success" ? "border-emerald-200 bg-white" : "border-rose-200 bg-white"}`}>
+          <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${emailToast.type === "success" ? "bg-emerald-100" : "bg-rose-100"}`}>
+            <svg className={`h-4 w-4 ${emailToast.type === "success" ? "text-emerald-600" : "text-rose-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className={`text-xs font-semibold ${emailToast.type === "success" ? "text-emerald-900" : "text-rose-900"}`}>
+              {emailToast.type === "success" ? "Email sent" : "Email failed"}
+            </p>
+            <p className={`text-[11px] ${emailToast.type === "success" ? "text-emerald-700" : "text-rose-700"}`}>
+              {emailToast.message}
+            </p>
+          </div>
+          <button
+            onClick={() => setEmailToast(null)}
+            className="ml-2 rounded-full p-1 text-slate-400 hover:bg-slate-100 transition-colors"
+          >
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
     </div>

@@ -49,7 +49,7 @@ type PDFJobNotificationsContextValue = {
   hasPendingJob: (invoiceId: string, invoiceType: string, reminderLevel?: number) => boolean;
   retryJob: (jobId: string) => Promise<boolean>;
   flagJob: (jobId: string) => Promise<boolean>;
-  sendJobEmail: (job: PdfJobNotification) => Promise<boolean>;
+  sendJobEmail: (job: PdfJobNotification) => Promise<{ ok: boolean; message: string }>;
   viewJobPdf: (job: PdfJobNotification) => Promise<boolean>;
 };
 
@@ -198,11 +198,18 @@ export function PDFJobNotificationsProvider({ children }: { children: ReactNode 
     }
   }, [refreshJobs]);
 
-  const sendJobEmail = useCallback(async (job: PdfJobNotification): Promise<boolean> => {
-    if (!job.patients?.email || !job.pdf_path) return false;
+  const sendJobEmail = useCallback(async (job: PdfJobNotification): Promise<{ ok: boolean; message: string }> => {
+    if (!job.patients?.email) {
+      return { ok: false, message: "Patient has no email address" };
+    }
+    if (!job.pdf_path) {
+      return { ok: false, message: "PDF path is missing" };
+    }
     const { data: sessionData } = await supabaseClient.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
-    if (!accessToken) return false;
+    if (!accessToken) {
+      return { ok: false, message: "You must be signed in" };
+    }
     try {
       const res = await fetch("/api/invoices/send-email", {
         method: "POST",
@@ -213,10 +220,14 @@ export function PDFJobNotificationsProvider({ children }: { children: ReactNode 
           documentType: job.invoice_type,
         }),
       });
-      return res.ok;
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        return { ok: true, message: `Sent to ${job.patients.email}` };
+      }
+      return { ok: false, message: data.error || "Failed to send email" };
     } catch (err) {
       console.error("[PDFJobsContext] sendJobEmail error:", err);
-      return false;
+      return { ok: false, message: err instanceof Error ? err.message : "Failed to send email" };
     }
   }, []);
 
