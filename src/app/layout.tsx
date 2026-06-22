@@ -19,6 +19,7 @@ import { CommentsUnreadProvider } from "@/components/CommentsUnreadContext";
 import { TasksNotificationsProvider } from "@/components/TasksNotificationsContext";
 import { EmailNotificationsProvider } from "@/components/EmailNotificationsContext";
 import { PDFJobNotificationsProvider } from "@/components/PDFJobNotificationsContext";
+import { InsuranceSubmissionNotificationsProvider } from "@/components/InsuranceSubmissionNotificationsContext";
 import { PatientTabsProvider } from "@/components/PatientTabsContext";
 import PatientTabBar from "@/components/PatientTabBar";
 import { AuthProvider } from "@/components/AuthContext";
@@ -62,6 +63,7 @@ export default async function RootLayout({
           <TasksNotificationsProvider>
           <EmailNotificationsProvider>
           <PDFJobNotificationsProvider>
+          <InsuranceSubmissionNotificationsProvider>
           <PatientTabsProvider>
           <ShellFrame>
           <div className="flex min-h-[80vh] flex-1 overflow-hidden">
@@ -591,6 +593,7 @@ export default async function RootLayout({
           </div>
           </ShellFrame>
           </PatientTabsProvider>
+          </InsuranceSubmissionNotificationsProvider>
           </PDFJobNotificationsProvider>
           </EmailNotificationsProvider>
           </TasksNotificationsProvider>

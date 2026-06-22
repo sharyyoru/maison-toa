@@ -5,6 +5,7 @@ import { supabaseClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 import InsuranceBillingModal from "@/components/InsuranceBillingModal";
 import { usePDFJobNotifications } from "@/components/PDFJobNotificationsContext";
+import { useInsuranceSubmissionNotifications } from "@/components/InsuranceSubmissionNotificationsContext";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -133,6 +134,7 @@ function insuranceBadge(status: string | null | undefined, billingType: string |
 
 export default function InvoicesPage() {
   const pdfNotifications = usePDFJobNotifications();
+  const insuranceNotifications = useInsuranceSubmissionNotifications();
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [patientsById, setPatientsById] = useState<PatientsById>({});
   const [loading, setLoading] = useState(true);
@@ -737,7 +739,7 @@ export default function InvoicesPage() {
       setBulkInsProgress(i + 1);
 
       try {
-        const res = await fetch("/api/medidata/send-invoice", {
+        const res = await fetch("/api/medidata/queue-submission", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -762,18 +764,15 @@ export default function InvoicesPage() {
         const data = await res.json();
 
         if (!res.ok) {
-          const errMsg = data.abortInfo
-            ? `${data.error}: ${data.abortInfo}`
-            : data.details || data.error || "Unknown error";
+          const errMsg = data.details || data.error || "Unknown error";
           results.push({ invoiceId: v.invoiceId, invoiceNumber: v.invoiceNumber, patientName: v.patientName, status: "error", message: errMsg });
         } else {
-          const transmitted = data.submission?.transmitted;
           results.push({
             invoiceId: v.invoiceId,
             invoiceNumber: v.invoiceNumber,
             patientName: v.patientName,
             status: "success",
-            message: transmitted ? `Sent — ref: ${data.submission.messageId || "—"}` : "Created as draft (proxy not configured)",
+            message: `Queued — job ${data.jobId?.slice(0, 8) || "—"}`,
           });
         }
       } catch (err) {
@@ -1036,14 +1035,20 @@ export default function InvoicesPage() {
                         )}
 
                         {row.patient_id && (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenInsurance(row)}
-                            className="inline-flex items-center gap-0.5 rounded border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[9px] font-medium text-teal-700 hover:bg-teal-100 transition-colors"
-                            title="Send to insurance via MediData"
-                          >
-                            Insurance
-                          </button>
+                          (() => {
+                            const insPending = insuranceNotifications.hasPendingJob(row.id);
+                            return (
+                              <button
+                                type="button"
+                                disabled={insPending}
+                                onClick={() => handleOpenInsurance(row)}
+                                className={`inline-flex items-center gap-0.5 rounded border border-teal-200 px-1.5 py-0.5 text-[9px] font-medium transition-colors ${insPending ? "bg-teal-100 text-teal-800 cursor-not-allowed" : "bg-teal-50 text-teal-700 hover:bg-teal-100"}`}
+                                title={insPending ? "Insurance submission queued" : "Send to insurance via MediData"}
+                              >
+                                {insPending ? "⏳ Insurance" : "Insurance"}
+                              </button>
+                            );
+                          })()
                         )}
                       </div>
                     </td>

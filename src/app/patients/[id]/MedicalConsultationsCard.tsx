@@ -19,6 +19,7 @@ import {
 } from "@/lib/tardoc";
 import InsuranceBillingModal from "@/components/InsuranceBillingModal";
 import InvoiceStatusBadge from "@/components/InvoiceStatusBadge";
+import { useInsuranceSubmissionNotifications } from "@/components/InsuranceSubmissionNotificationsContext";
 import TardocAccordionTree from "@/components/TardocAccordionTree";
 import AcfAccordionTree from "@/components/AcfAccordionTree";
 import { type MediDataInvoiceStatus } from "@/lib/medidata";
@@ -561,6 +562,7 @@ export default function MedicalConsultationsCard({
   const tc = useTranslations("patient.consultationsCard");
   const tf = useTranslations("patient.form");
   const pdfNotifications = usePDFJobNotifications();
+  const insuranceNotifications = useInsuranceSubmissionNotifications();
   const { consultationsRevision, billingRevision, medicationRevision } = usePatientRealtime();
   const pendingRealtimeReloadRef = useRef(false);
   const [realtimeReloadToken, setRealtimeReloadToken] = useState(0);
@@ -8008,10 +8010,20 @@ export default function MedicalConsultationsCard({
                               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
                               {checkingXmlId === linkedInvoice.id ? "Checking..." : "Check XML"}
                             </button>
-                            <button type="button" onClick={() => { setInsuranceBillingTarget(linkedInvoice); setInsuranceBillingModalOpen(true); }} className="inline-flex items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 py-1 text-[10px] font-medium text-teal-700 hover:bg-teal-100 transition-colors">
-                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                              Insurance
-                            </button>
+                            {(() => {
+                              const insurancePending = insuranceNotifications.hasPendingJob(linkedInvoice.id);
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={insurancePending}
+                                  onClick={() => { setInsuranceBillingTarget(linkedInvoice); setInsuranceBillingModalOpen(true); }}
+                                  className={`inline-flex items-center gap-1 rounded-md border border-teal-200 px-2 py-1 text-[10px] font-medium transition-colors ${insurancePending ? "bg-teal-100 text-teal-800 cursor-not-allowed" : "bg-teal-50 text-teal-700 hover:bg-teal-100"}`}
+                                >
+                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                  {insurancePending ? "⏳ Insurance" : "Insurance"}
+                                </button>
+                              );
+                            })()}
                             {linkedIsCash && linkedInvoice.invoice_is_paid && linkedInvoice.cash_receipt_path && (
                               <button type="button" onClick={() => handleViewCashReceipt(linkedInvoice.cash_receipt_path)} className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700 hover:bg-amber-100 transition-colors">
                                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z" /></svg>
@@ -8359,14 +8371,20 @@ export default function MedicalConsultationsCard({
                             </button>
 
                             {/* Insurance */}
-                            <button
-                              type="button"
-                              onClick={() => { setInsuranceBillingTarget(row); setInsuranceBillingModalOpen(true); }}
-                              className="inline-flex items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 py-1 text-[10px] font-medium text-teal-700 hover:bg-teal-100 transition-colors"
-                            >
-                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                              Insurance
-                            </button>
+                            {(() => {
+                              const insurancePending = insuranceNotifications.hasPendingJob(row.id);
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={insurancePending}
+                                  onClick={() => { setInsuranceBillingTarget(row); setInsuranceBillingModalOpen(true); }}
+                                  className={`inline-flex items-center gap-1 rounded-md border border-teal-200 px-2 py-1 text-[10px] font-medium transition-colors ${insurancePending ? "bg-teal-100 text-teal-800 cursor-not-allowed" : "bg-teal-50 text-teal-700 hover:bg-teal-100"}`}
+                                >
+                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                  {insurancePending ? "⏳ Insurance" : "Insurance"}
+                                </button>
+                              );
+                            })()}
                           </div>
                         </div>
                       );

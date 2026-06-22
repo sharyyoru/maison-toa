@@ -398,7 +398,7 @@ export default function InsuranceBillingModal({
     setError(null);
 
     try {
-      const response = await fetch("/api/medidata/send-invoice", {
+      const response = await fetch("/api/medidata/queue-submission", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -425,20 +425,8 @@ export default function InsuranceBillingModal({
       const data = await response.json();
 
       if (!response.ok) {
-        // Parse specific error types for user-friendly messages
         const errMsg = data.error || "Unknown error";
-        const details = data.details || data.abortInfo || "";
-        if (errMsg.includes("Sumex") || errMsg.includes("XML")) {
-          throw new Error(`XML generation failed: ${details || errMsg}. Please check invoice line items and try again.`);
-        } else if (errMsg.includes("Patient not found")) {
-          throw new Error("Patient not found. Please verify the patient record exists.");
-        } else if (errMsg.includes("Invoice not found")) {
-          throw new Error("Invoice not found. The invoice may have been deleted.");
-        } else if (errMsg.includes("not configured") || errMsg.includes("PROXY")) {
-          throw new Error("MediData is not configured. Please check Settings → MediData Connection.");
-        } else {
-          throw new Error(details ? `${errMsg}: ${details}` : errMsg);
-        }
+        throw new Error(errMsg);
       }
 
       // Update the invoice record with insurance fields
@@ -458,8 +446,14 @@ export default function InsuranceBillingModal({
         })
         .eq("id", consultationId);
 
-      setSuccess(data.submission);
-      onSuccess?.(data.submission);
+      const queuedSubmission = {
+        jobId: data.jobId,
+        status: data.status,
+        message: data.message,
+        transmitted: false,
+      };
+      setSuccess(queuedSubmission);
+      onSuccess?.(queuedSubmission);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred. Please try again.");
     } finally {
@@ -500,7 +494,23 @@ export default function InsuranceBillingModal({
         {success ? (
           <div className="space-y-4">
             {/* Main status banner */}
-            {success.transmitted ? (
+            {success.jobId ? (
+              <div className="rounded-xl bg-sky-50 border border-sky-200 p-5">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-100">
+                    <svg className="h-5 w-5 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sky-900">Insurance Submission Queued</p>
+                    <p className="mt-0.5 text-sm text-sky-700">
+                      Submission <span className="font-mono font-medium">#{success.jobId.slice(0, 8)}</span> is queued. It will be processed in the background and you will see the result in the PDF & Insurance queue icon.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : success.transmitted ? (
               <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-5">
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100">
@@ -556,7 +566,8 @@ export default function InsuranceBillingModal({
               </div>
             )}
 
-            {/* Invoice details card */}
+            {/* Invoice details card — only for synchronous submission results */}
+            {!success.jobId && (
             <div className="rounded-xl border border-slate-200 p-4">
               <h3 className="mb-3 text-sm font-semibold text-slate-800">Submission Details</h3>
               <div className="space-y-2.5 text-sm">
@@ -611,6 +622,7 @@ export default function InsuranceBillingModal({
                 </div>
               )}
             </div>
+            )}
 
             <div className="flex justify-end gap-2">
               <button
