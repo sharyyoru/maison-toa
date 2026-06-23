@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
       durationMinutes,
       language,
       skipValidation = false,
+      validateOnly = false,
     } = body as {
       invoiceId?: string;
       consultationId?: string;
@@ -116,6 +117,7 @@ export async function POST(request: NextRequest) {
       durationMinutes?: number;
       language?: 1 | 2 | 3;
       skipValidation?: boolean;
+      validateOnly?: boolean;
     };
 
     // ── Resolve the invoice (primary) or fall back to consultation ──
@@ -722,6 +724,31 @@ export async function POST(request: NextRequest) {
         }, { status: 500 });
       }
       console.log(`[SendInvoice] XML service count OK: ${xmlServiceCount}/${sentCount}`);
+    }
+
+    // Validation-only path: return XML generation details without uploading/transmitting
+    if (validateOnly) {
+      return NextResponse.json({
+        success: true,
+        validation: true,
+        invoiceNumber,
+        xmlGenerated: !!xmlContent,
+        xmlVersion: '5.00',
+        sumex1Schema: sumexResult.usedSchema,
+        validationError: sumexResult.validationError,
+        servicesRequested: sumexResult.servicesRequested,
+        servicesAccepted: sumexResult.servicesAccepted,
+        rejectedServices: sumexResult.rejectedServices,
+        xmlServiceCount: xmlContent ? (xmlContent.match(/<invoice:service_ex/g) || []).length + (xmlContent.match(/<invoice:service\b/g) || []).length : 0,
+        servicesCount: sumexServices.length,
+        total,
+        services: services.map(s => ({
+          code: s.code,
+          description: s.description,
+          quantity: s.quantity,
+          total: s.total,
+        })),
+      });
     }
 
     // Upload PDF to Supabase storage if generated

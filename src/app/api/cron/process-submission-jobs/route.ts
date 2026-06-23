@@ -84,7 +84,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, jobId: id, submissionId: result.data.submissionId });
     }
 
-    const errorMessage = result.data?.error || result.data?.details || result.error || "Unknown error";
+    const errorParts = [
+      result.data?.error,
+      result.data?.details,
+      result.data?.abortInfo,
+      result.data?.validationError,
+      result.error,
+    ].filter(Boolean);
+    const errorMessage = errorParts.length > 0 ? errorParts.join(" | ") : "Unknown error";
     const newRetryCount = (retry_count || 0) + 1;
     const newStatus = newRetryCount >= 3 ? "failed" : "pending";
 
