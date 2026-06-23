@@ -146,6 +146,7 @@ export default function InvoicesPage() {
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>("all");
   const [billingTypeFilter, setBillingTypeFilter] = useState<string>("all");
   const [insuranceFilter, setInsuranceFilter] = useState<string>("all");
+  const [jobIssueFilter, setJobIssueFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -154,7 +155,9 @@ export default function InvoicesPage() {
     created_at: string;
     has_response: boolean;
   };
+  type JobIssue = "pdf_failed" | "insurance_failed";
   const [latestInsByInvoice, setLatestInsByInvoice] = useState<Record<string, LatestInsurance>>({});
+  const [latestJobIssueByInvoice, setLatestJobIssueByInvoice] = useState<Record<string, JobIssue>>({});
 
   // Pagination
   const ROWS_PER_PAGE = 50;
@@ -257,6 +260,34 @@ export default function InvoicesPage() {
           if (isMounted) setLatestInsByInvoice(latestMap);
         }
 
+        // Fetch the latest failed async job per invoice (PDF or insurance submission)
+        {
+          const issueMap: Record<string, "pdf_failed" | "insurance_failed"> = {};
+          const { data: pdfJobs } = await supabaseClient
+            .from("pdf_generation_jobs")
+            .select("invoice_id, status, created_at")
+            .eq("status", "failed")
+            .order("created_at", { ascending: false });
+          if (pdfJobs) {
+            for (const j of pdfJobs as any[]) {
+              if (!j.invoice_id || issueMap[j.invoice_id]) continue;
+              issueMap[j.invoice_id] = "pdf_failed";
+            }
+          }
+          const { data: insJobs } = await supabaseClient
+            .from("medidata_submission_jobs")
+            .select("invoice_id, status, created_at")
+            .eq("status", "failed")
+            .order("created_at", { ascending: false });
+          if (insJobs) {
+            for (const j of insJobs as any[]) {
+              if (!j.invoice_id || issueMap[j.invoice_id]) continue;
+              issueMap[j.invoice_id] = "insurance_failed";
+            }
+          }
+          if (isMounted) setLatestJobIssueByInvoice(issueMap);
+        }
+
         setLoading(false);
       } catch {
         if (isMounted) { setError("Failed to load invoices."); setInvoices([]); setLoading(false); }
@@ -328,6 +359,20 @@ export default function InvoicesPage() {
             break;
         }
       }
+      if (jobIssueFilter !== "all") {
+        const issue = latestJobIssueByInvoice[r.id];
+        switch (jobIssueFilter) {
+          case "any_failed":
+            if (!issue) return false;
+            break;
+          case "pdf_failed":
+            if (issue !== "pdf_failed") return false;
+            break;
+          case "insurance_failed":
+            if (issue !== "insurance_failed") return false;
+            break;
+        }
+      }
       if (q) {
         const pName = patientName(r.patient_id).toLowerCase();
         const invNum = (r.invoice_number || "").toLowerCase();
@@ -336,7 +381,7 @@ export default function InvoicesPage() {
       }
       return true;
     });
-  }, [invoices, search, statusFilter, paymentMethodFilter, billingTypeFilter, insuranceFilter, latestInsByInvoice, dateFrom, dateTo, patientName]);
+  }, [invoices, search, statusFilter, paymentMethodFilter, billingTypeFilter, insuranceFilter, jobIssueFilter, latestInsByInvoice, latestJobIssueByInvoice, dateFrom, dateTo, patientName]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE));
   const paginated = useMemo(() => {
@@ -873,10 +918,16 @@ export default function InvoicesPage() {
           <option value="rejected_paid">✓ Rejected but Paid (bank)</option>
           <option value="accepted">✓ Accepted / Paid (Sumex)</option>
         </select>
+        <select value={jobIssueFilter} onChange={e => setJobIssueFilter(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500">
+          <option value="all">All jobs</option>
+          <option value="any_failed">❌ Any failed job</option>
+          <option value="pdf_failed">❌ PDF generation failed</option>
+          <option value="insurance_failed">❌ Insurance submission failed</option>
+        </select>
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
-        {(search || statusFilter !== "all" || paymentMethodFilter !== "all" || billingTypeFilter !== "all" || insuranceFilter !== "all" || dateFrom || dateTo) && (
-          <button type="button" onClick={() => { setSearch(""); setStatusFilter("all"); setPaymentMethodFilter("all"); setBillingTypeFilter("all"); setInsuranceFilter("all"); setDateFrom(""); setDateTo(""); }} className="text-[10px] text-sky-600 hover:text-sky-800 font-medium">
+        {(search || statusFilter !== "all" || paymentMethodFilter !== "all" || billingTypeFilter !== "all" || insuranceFilter !== "all" || jobIssueFilter !== "all" || dateFrom || dateTo) && (
+          <button type="button" onClick={() => { setSearch(""); setStatusFilter("all"); setPaymentMethodFilter("all"); setBillingTypeFilter("all"); setInsuranceFilter("all"); setJobIssueFilter("all"); setDateFrom(""); setDateTo(""); }} className="text-[10px] text-sky-600 hover:text-sky-800 font-medium">
             Clear filters
           </button>
         )}
@@ -1178,20 +1229,26 @@ export default function InvoicesPage() {
                 </div>
 
                 {bulkInsSending && (
-                  <div className="mt-4">
-                    <div className="mb-1 flex items-center justify-between text-xs text-slate-600">
-                      <span>Sending {bulkInsProgress} of {bulkInsValidation.filter(v => v.ready).length}...</span>
+                  <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 p-3">
+                    <div className="mb-1 flex items-center justify-between text-xs text-slate-700">
+                      <span className="font-medium">Queueing {bulkInsProgress} of {bulkInsValidation.filter(v => v.ready).length} insurance submissions...</span>
                       <span>{Math.round((bulkInsProgress / bulkInsValidation.filter(v => v.ready).length) * 100)}%</span>
                     </div>
                     <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
                       <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${(bulkInsProgress / bulkInsValidation.filter(v => v.ready).length) * 100}%` }} />
                     </div>
+                    <p className="mt-1.5 text-[10px] text-sky-700">
+                      Submissions run in the background. Track progress in the PDF & Insurance queue icon.
+                    </p>
                   </div>
                 )}
 
                 {bulkInsResults.length > 0 && (
                   <div className="mt-4 space-y-1.5">
-                    <h3 className="text-sm font-semibold text-slate-800">Results</h3>
+                    <h3 className="text-sm font-semibold text-slate-800">Queue Results</h3>
+                    <p className="text-[10px] text-slate-500">
+                      Failed queue attempts are shown below; successful ones are tracked in the PDF & Insurance queue icon.
+                    </p>
                     {bulkInsResults.map(r => (
                       <div key={r.invoiceId} className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${r.status === "success" ? "bg-emerald-50 border border-emerald-200" : "bg-red-50 border border-red-200"}`}>
                         {r.status === "success" ? (
@@ -1222,8 +1279,8 @@ export default function InvoicesPage() {
                         disabled={bulkInsValidation.filter(v => v.ready).length === 0}
                         className="inline-flex items-center gap-2 rounded-full bg-teal-600 px-5 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
                       >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                        Send {bulkInsValidation.filter(v => v.ready).length} invoice{bulkInsValidation.filter(v => v.ready).length !== 1 ? "s" : ""} to insurance
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Queue {bulkInsValidation.filter(v => v.ready).length} insurance submission{bulkInsValidation.filter(v => v.ready).length !== 1 ? "s" : ""}
                       </button>
                     </>
                   )}

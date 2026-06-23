@@ -15,6 +15,8 @@ export default function HeaderPdfJobsButton() {
   const [activeTab, setActiveTab] = useState<Tab>("pdfs");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [confirmSend, setConfirmSend] = useState<{ job: PdfJobNotification; email: string } | null>(null);
+  const [isSending, setIsSending] = useState(false);
 
   const pdfActive = pdfCtx.pendingCount;
   const pdfFailed = pdfCtx.jobs.some(j => j.status === "failed");
@@ -167,6 +169,60 @@ export default function HeaderPdfJobsButton() {
         </div>
       )}
 
+      {/* Send to patient confirmation modal */}
+      {confirmSend && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" onClick={() => setConfirmSend(null)}>
+          <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-100">
+                <svg className="h-4 w-4 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-slate-900">Send invoice by email</h3>
+                <p className="mt-1 text-xs text-slate-600">
+                  The PDF will be emailed to:
+                </p>
+                <p className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-xs font-medium text-slate-900">
+                  {confirmSend.email}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmSend(null)}
+                disabled={isSending}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSending}
+                onClick={async () => {
+                  setIsSending(true);
+                  const result = await pdfCtx.sendJobEmail(confirmSend.job);
+                  setIsSending(false);
+                  setConfirmSend(null);
+                  setToast({ message: result.message, type: result.ok ? "success" : "error" });
+                  setTimeout(() => setToast(null), 4000);
+                }}
+                className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-4 py-2 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {isSending && (
+                  <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707" />
+                  </svg>
+                )}
+                {isSending ? "Sending..." : "Send email"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast */}
       {toast && (
         <div className={`fixed bottom-4 right-4 z-[9999] flex items-start gap-3 rounded-xl border px-4 py-3 shadow-xl animate-[fade-in-up_0.3s_ease-out] ${toast.type === "success" ? "border-emerald-200 bg-white" : "border-rose-200 bg-white"}`}>
@@ -236,18 +292,19 @@ export default function HeaderPdfJobsButton() {
                     View file
                   </button>
                   {job.patients?.email && (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const result = await pdfCtx.sendJobEmail(job);
-                        setToast({ message: result.message, type: result.ok ? "success" : "error" });
-                        setTimeout(() => setToast(null), 4000);
-                      }}
-                      className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-1 text-[10px] font-medium text-sky-700 hover:bg-sky-100"
-                    >
-                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                      Send to patient
-                    </button>
+                    (() => {
+                      const email = job.patients.email!;
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmSend({ job, email })}
+                          className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-1 text-[10px] font-medium text-sky-700 hover:bg-sky-100"
+                        >
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                          Send to patient
+                        </button>
+                      );
+                    })()
                   )}
                 </>
               )}
