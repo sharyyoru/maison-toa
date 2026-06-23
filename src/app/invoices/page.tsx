@@ -773,6 +773,13 @@ export default function InvoicesPage() {
     const ready = bulkInsValidation.filter(v => v.ready);
     if (ready.length === 0) return;
 
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) {
+      alert("You must be signed in to queue insurance submissions.");
+      return;
+    }
+
     setBulkInsSending(true);
     setBulkInsProgress(0);
     setBulkInsResults([]);
@@ -786,7 +793,10 @@ export default function InvoicesPage() {
       try {
         const res = await fetch("/api/medidata/queue-submission", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
           body: JSON.stringify({
             invoiceId: v.invoiceId,
             patientId: v.patientId,

@@ -398,9 +398,18 @@ export default function InsuranceBillingModal({
     setError(null);
 
     try {
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        throw new Error("You must be signed in to queue an insurance submission.");
+      }
+
       const response = await fetch("/api/medidata/queue-submission", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           invoiceId: consultationId,
           consultationId,
