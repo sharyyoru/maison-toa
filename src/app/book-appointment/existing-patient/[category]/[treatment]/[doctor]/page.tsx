@@ -126,6 +126,15 @@ interface Treatment {
   linked_service_id?: string | null;
 }
 
+const DEFAULT_TREATMENT: Treatment = {
+  id: "none",
+  name: "General Consultation",
+  name_en: "General Consultation",
+  duration_minutes: 60,
+  prepayment_required: false,
+  linked_service_id: null,
+};
+
 function DoctorBookingContent() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -255,6 +264,11 @@ function DoctorBookingContent() {
   }, [doctor, doctorSlug]);
 
   useEffect(() => {
+    if (treatmentId === "none") {
+      setTreatment(DEFAULT_TREATMENT);
+      return;
+    }
+
     const fetchTreatment = async () => {
       try {
         const res = await fetch(`/api/settings/booking-treatments`);
