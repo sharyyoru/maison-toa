@@ -5,7 +5,6 @@ import { sendEmail, isEmailConfigured, sanitizeTelLinks, addTrackingPixel, type 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
-const replyDomain = process.env.EMAIL_REPLY_DOMAIN || "maisontoa.com";
 
 type EmailAttachmentRow = {
   id: string;
@@ -82,14 +81,6 @@ export async function POST(request: Request) {
     // Add tracking pixel if emailId is provided
     if (emailId) {
       processedHtml = addTrackingPixel(processedHtml, emailId, appUrl);
-    }
-
-    // Create reply-to address for tracking
-    let replyToAddress = `clinic@${replyDomain}`;
-    if (emailId && patientId) {
-      replyToAddress = `reply+${emailId}+${patientId}@${replyDomain}`;
-    } else if (emailId) {
-      replyToAddress = `reply+${emailId}@${replyDomain}`;
     }
 
     // Collect attachments
@@ -192,7 +183,6 @@ export async function POST(request: Request) {
       html: processedHtml,
       from: fromAddress,
       fromName,
-      replyTo: replyToAddress,
       attachments: attachments.length > 0 ? attachments : undefined,
       tags: [
         ...(emailId ? [{ name: "email_id", value: emailId }] : []),

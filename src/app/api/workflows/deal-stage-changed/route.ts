@@ -9,7 +9,6 @@ const SALES_TEAM_NAMES = ["Charline", "Elite", "Audrey", "Bubuque", "Victoria"];
 
 const emailFromAddress = process.env.EMAIL_FROM_ADDRESS || "info@mail.maisontoa.com";
 const emailFromName = process.env.EMAIL_FROM_NAME || "Maison Toa";
-const replyDomain = process.env.EMAIL_REPLY_DOMAIN || "maisontoa.com";
 
 type DealStageChangedPayload = {
   dealId: string;
@@ -851,7 +850,6 @@ export async function POST(request: Request) {
 
             try {
               const emailId = (inserted as any).id as string;
-              const replyAlias = emailId ? `reply+${emailId}@${replyDomain}` : undefined;
 
               const result = await sendEmailViaResend({
                 to: recipientEmail as string,
@@ -859,7 +857,6 @@ export async function POST(request: Request) {
                 html: bodyHtml,
                 from: emailFromAddress,
                 fromName: emailFromName,
-                replyTo: replyAlias,
                 scheduledAt: isFuture ? effectiveDate : undefined,
                 tags: emailId ? [{ name: "email_id", value: emailId }] : undefined,
               });
