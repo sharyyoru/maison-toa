@@ -12,11 +12,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing app URL" }, { status: 500 });
   }
 
-  const { data: jobs, error: fetchError } = await supabaseAdmin
+  const { searchParams } = new URL(request.url);
+  const limit = Math.max(1, Math.min(parseInt(searchParams.get("limit") || "1", 10), 3));
+  const invoiceNumber = searchParams.get("invoiceNumber");
+
+  let query = supabaseAdmin
     .from("medidata_submission_jobs")
     .select("id, invoice_id, invoice_number, payload, error_message")
     .eq("status", "failed")
     .order("created_at", { ascending: true });
+
+  if (invoiceNumber) {
+    query = query.eq("invoice_number", invoiceNumber);
+  } else {
+    query = query.limit(limit);
+  }
+
+  const { data: jobs, error: fetchError } = await query;
 
   if (fetchError) {
     return NextResponse.json({ error: "Failed to fetch jobs", details: fetchError }, { status: 500 });
