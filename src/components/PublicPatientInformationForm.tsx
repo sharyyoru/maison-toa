@@ -41,6 +41,19 @@ type AddressSuggestion = {
   countryCode: string;
 };
 
+type FormErrorCode =
+  | "SIGNATURE_REQUIRED"
+  | "GENERIC_ERROR"
+  | "EMAIL_DOB_MISMATCH"
+  | "MISSING_REQUIRED_FIELDS"
+  | "INVALID_EMAIL"
+  | "INVALID_GENDER"
+  | "INVALID_LANGUAGE"
+  | "MISSING_COMMUNICATION_PREFERENCES"
+  | "INVALID_SPECIALTY_INTEREST"
+  | "INVALID_REFERRAL_SOURCE"
+  | "MISSING_CONSENT_SIGNATURE";
+
 const emptyFormData: FormData = {
   first_name: "",
   last_name: "",
@@ -142,8 +155,22 @@ const copy = {
     successTitle: "Form submitted",
     successMessage: "Thank you. Your patient information has been saved.",
     secure: "The information you provide is confidential and secure.",
-    signatureRequired: "Please draw your signature before submitting.",
-    genericError: "Unable to submit the form. Please try again.",
+    errors: {
+      SIGNATURE_REQUIRED: "Please draw your signature before submitting.",
+      GENERIC_ERROR: "Unable to submit the form. Please try again.",
+      EMAIL_DOB_MISMATCH:
+        "This email address already exists, but the date of birth does not match. Please use a different email address so a new patient record can be created.",
+      MISSING_REQUIRED_FIELDS: "Please fill in all required fields.",
+      INVALID_EMAIL: "Please enter a valid email address.",
+      INVALID_GENDER: "Please select a valid gender.",
+      INVALID_LANGUAGE: "Please select a valid preferred language.",
+      MISSING_COMMUNICATION_PREFERENCES:
+        "Please complete the communication preferences.",
+      INVALID_SPECIALTY_INTEREST: "Please select a valid specialty interest.",
+      INVALID_REFERRAL_SOURCE: "Please select a valid referral source.",
+      MISSING_CONSENT_SIGNATURE:
+        "Please confirm the consent and provide your signature.",
+    },
   },
   fr: {
     title: "Informations personnelles",
@@ -224,10 +251,46 @@ const copy = {
     successTitle: "Formulaire soumis",
     successMessage: "Merci. Vos informations patient ont été enregistrées.",
     secure: "Les informations que vous fournissez sont confidentielles et sécurisées.",
-    signatureRequired: "Veuillez signer avant de soumettre le formulaire.",
-    genericError: "Impossible de soumettre le formulaire. Veuillez réessayer.",
+    errors: {
+      SIGNATURE_REQUIRED: "Veuillez signer avant de soumettre le formulaire.",
+      GENERIC_ERROR: "Impossible de soumettre le formulaire. Veuillez réessayer.",
+      EMAIL_DOB_MISMATCH:
+        "Cette adresse e-mail existe déjà, mais la date de naissance ne correspond pas. Veuillez utiliser une autre adresse e-mail afin de créer un nouveau dossier patient.",
+      MISSING_REQUIRED_FIELDS: "Veuillez remplir tous les champs obligatoires.",
+      INVALID_EMAIL: "Veuillez entrer une adresse e-mail valide.",
+      INVALID_GENDER: "Veuillez sélectionner un genre valide.",
+      INVALID_LANGUAGE: "Veuillez sélectionner une langue préférée valide.",
+      MISSING_COMMUNICATION_PREFERENCES:
+        "Veuillez compléter les préférences de communication.",
+      INVALID_SPECIALTY_INTEREST:
+        "Veuillez sélectionner une spécialité valide.",
+      INVALID_REFERRAL_SOURCE:
+        "Veuillez sélectionner une source de recommandation valide.",
+      MISSING_CONSENT_SIGNATURE:
+        "Veuillez confirmer le consentement et fournir votre signature.",
+    },
   },
 } satisfies Record<Language, Record<string, unknown>>;
+
+const formErrorCodes = new Set<FormErrorCode>([
+  "SIGNATURE_REQUIRED",
+  "GENERIC_ERROR",
+  "EMAIL_DOB_MISMATCH",
+  "MISSING_REQUIRED_FIELDS",
+  "INVALID_EMAIL",
+  "INVALID_GENDER",
+  "INVALID_LANGUAGE",
+  "MISSING_COMMUNICATION_PREFERENCES",
+  "INVALID_SPECIALTY_INTEREST",
+  "INVALID_REFERRAL_SOURCE",
+  "MISSING_CONSENT_SIGNATURE",
+]);
+
+function toFormErrorCode(code: unknown): FormErrorCode {
+  return typeof code === "string" && formErrorCodes.has(code as FormErrorCode)
+    ? (code as FormErrorCode)
+    : "GENERIC_ERROR";
+}
 
 function required(label: string) {
   return (
@@ -368,7 +431,7 @@ export default function PublicPatientInformationForm({
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<FormErrorCode | null>(null);
   const [postalLookupPending, setPostalLookupPending] = useState(false);
   const [addressLookupPending, setAddressLookupPending] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
@@ -382,6 +445,9 @@ export default function PublicPatientInformationForm({
   const [cityOptions, setCityOptions] = useState<string[]>([]);
 
   const t = copy[language];
+  const errorMessage = errorCode
+    ? (t.errors as Record<FormErrorCode, string>)[errorCode]
+    : null;
 
   const update = <K extends keyof FormData>(key: K, value: FormData[K]) => {
     setFormData((current) => ({ ...current, [key]: value }));
@@ -543,12 +609,12 @@ export default function PublicPatientInformationForm({
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!formData.signature) {
-      setError(t.signatureRequired as string);
+      setErrorCode("SIGNATURE_REQUIRED");
       return;
     }
 
     setSubmitting(true);
-    setError(null);
+    setErrorCode(null);
 
     try {
       const response = await fetch("/api/public/patient-information", {
@@ -559,14 +625,14 @@ export default function PublicPatientInformationForm({
       const payload = await response.json();
 
       if (!response.ok) {
-        setError(payload.error || (t.genericError as string));
+        setErrorCode(toFormErrorCode(payload.code));
         return;
       }
 
       setSubmitted(true);
     } catch (submitError) {
       console.error("Error submitting public patient information form:", submitError);
-      setError(t.genericError as string);
+      setErrorCode("GENERIC_ERROR");
     } finally {
       setSubmitting(false);
     }
@@ -625,9 +691,9 @@ export default function PublicPatientInformationForm({
           <p className="mt-2 text-sm text-slate-600">{t.subtitle as string}</p>
         </header>
 
-        {error && (
+        {errorMessage && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {error}
+            {errorMessage}
           </div>
         )}
 

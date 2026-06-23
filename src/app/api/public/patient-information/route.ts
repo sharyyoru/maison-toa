@@ -85,6 +85,10 @@ function dobMismatchResponse(language: "en" | "fr") {
   );
 }
 
+function errorResponse(code: string, message: string, status = 400) {
+  return NextResponse.json({ error: message, code }, { status });
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as PatientInformationPayload;
@@ -118,35 +122,41 @@ export async function POST(request: Request) {
       !body.specialty_interest ||
       !body.referral_source
     ) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      return errorResponse("MISSING_REQUIRED_FIELDS", "Missing required fields");
     }
 
     if (!EMAIL_PATTERN.test(email)) {
-      return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
+      return errorResponse("INVALID_EMAIL", "Invalid email address");
     }
 
     if (!VALID_GENDERS.has(body.gender)) {
-      return NextResponse.json({ error: "Invalid gender" }, { status: 400 });
+      return errorResponse("INVALID_GENDER", "Invalid gender");
     }
 
     if (!VALID_LANGUAGES.has(body.language_preference)) {
-      return NextResponse.json({ error: "Invalid preferred language" }, { status: 400 });
+      return errorResponse("INVALID_LANGUAGE", "Invalid preferred language");
     }
 
     if (!YES_NO.has(body.email_communications || "") || !YES_NO.has(body.photo_consent || "")) {
-      return NextResponse.json({ error: "Missing required communication preferences" }, { status: 400 });
+      return errorResponse(
+        "MISSING_COMMUNICATION_PREFERENCES",
+        "Missing required communication preferences",
+      );
     }
 
     if (!VALID_SPECIALTY_INTERESTS.has(body.specialty_interest)) {
-      return NextResponse.json({ error: "Invalid specialty interest" }, { status: 400 });
+      return errorResponse("INVALID_SPECIALTY_INTEREST", "Invalid specialty interest");
     }
 
     if (!VALID_REFERRAL_SOURCES.has(body.referral_source)) {
-      return NextResponse.json({ error: "Invalid referral source" }, { status: 400 });
+      return errorResponse("INVALID_REFERRAL_SOURCE", "Invalid referral source");
     }
 
     if (body.consent_understood !== true || !body.signature?.startsWith("data:image/png;base64,")) {
-      return NextResponse.json({ error: "Missing required consent and signature" }, { status: 400 });
+      return errorResponse(
+        "MISSING_CONSENT_SIGNATURE",
+        "Missing required consent and signature",
+      );
     }
 
     const streetAddress = [streetAddressLine, streetNumber]
@@ -248,6 +258,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, patient_id: patientId, action });
   } catch (error) {
     console.error("Error submitting public patient information:", error);
-    return NextResponse.json({ error: "Failed to submit patient information" }, { status: 500 });
+    return errorResponse(
+      "GENERIC_ERROR",
+      "Failed to submit patient information",
+      500,
+    );
   }
 }
