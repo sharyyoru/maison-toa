@@ -69,6 +69,24 @@ async function findPatientByEmail(email: string): Promise<ExistingPatient | unde
   return data?.[0] as ExistingPatient | undefined;
 }
 
+async function findPatientByIdentity(
+  firstName: string,
+  lastName: string,
+  dob: string,
+): Promise<ExistingPatient | undefined> {
+  const { data, error } = await supabaseAdmin
+    .from("patients")
+    .select("id, dob")
+    .ilike("first_name", firstName)
+    .ilike("last_name", lastName)
+    .eq("dob", dob)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (error) throw error;
+  return data?.[0] as ExistingPatient | undefined;
+}
+
 function dobMatches(existingDob: string | null, submittedDob: string) {
   if (!existingDob) return false;
   return existingDob.slice(0, 10) === submittedDob;
@@ -194,36 +212,49 @@ export async function POST(request: Request) {
 
       if (updateError) throw updateError;
     } else {
-      const { data: insertedPatient, error: insertError } = await supabaseAdmin
-        .from("patients")
-        .insert({
-          ...patientFields,
-          source: "manual",
-        })
-        .select("id")
-        .single();
+      const identityMatch = await findPatientByIdentity(firstName, lastName, dob);
 
-      if (insertError) {
-        const duplicateEmail = insertError.code === "23505";
-        if (!duplicateEmail) throw insertError;
+      if (identityMatch) {
+        patientId = identityMatch.id;
 
-        existingPatient = await findPatientByEmail(email);
-        patientId = existingPatient?.id;
-        if (!patientId) throw insertError;
-
-        if (!dobMatches(existingPatient?.dob ?? null, dob)) {
-          return dobMismatchResponse(formLanguage);
-        }
-
-        const { error: updateAfterConflictError } = await supabaseAdmin
+        const { error: identityUpdateError } = await supabaseAdmin
           .from("patients")
           .update(patientFields)
           .eq("id", patientId);
 
-        if (updateAfterConflictError) throw updateAfterConflictError;
+        if (identityUpdateError) throw identityUpdateError;
       } else {
-        patientId = insertedPatient.id;
-        action = "created";
+        const { data: insertedPatient, error: insertError } = await supabaseAdmin
+          .from("patients")
+          .insert({
+            ...patientFields,
+            source: "manual",
+          })
+          .select("id")
+          .single();
+
+        if (insertError) {
+          const duplicateEmail = insertError.code === "23505";
+          if (!duplicateEmail) throw insertError;
+
+          existingPatient = await findPatientByEmail(email);
+          patientId = existingPatient?.id;
+          if (!patientId) throw insertError;
+
+          if (!dobMatches(existingPatient?.dob ?? null, dob)) {
+            return dobMismatchResponse(formLanguage);
+          }
+
+          const { error: updateAfterConflictError } = await supabaseAdmin
+            .from("patients")
+            .update(patientFields)
+            .eq("id", patientId);
+
+          if (updateAfterConflictError) throw updateAfterConflictError;
+        } else {
+          patientId = insertedPatient.id;
+          action = "created";
+        }
       }
     }
 
