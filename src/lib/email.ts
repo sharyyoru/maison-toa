@@ -12,6 +12,7 @@
  * - RESEND_API_KEY: Your Resend API key
  * - EMAIL_FROM_ADDRESS: Default from address (must be verified domain)
  * - EMAIL_FROM_NAME: Default from name
+ * - EMAIL_REPLY_TO_ADDRESS: Default reply-to address
  */
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -20,6 +21,7 @@ const RESEND_API_URL = "https://api.resend.com/emails";
 // Default sender configuration
 const DEFAULT_FROM_EMAIL = process.env.EMAIL_FROM_ADDRESS || "info@mail.maisontoa.com";
 const DEFAULT_FROM_NAME = process.env.EMAIL_FROM_NAME || "Maison Toa";
+const DEFAULT_REPLY_TO_EMAIL = process.env.EMAIL_REPLY_TO_ADDRESS || "info@maisontoa.com";
 
 export type EmailAttachment = {
   filename: string;
@@ -77,7 +79,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
     html,
     from,
     fromName,
-    replyTo,
+    replyTo = DEFAULT_REPLY_TO_EMAIL,
     attachments,
     tags,
     scheduledAt,
