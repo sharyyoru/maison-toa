@@ -31,7 +31,6 @@ export default function InvoicePaymentPage() {
   const [error, setError] = useState<string | null>(null);
   const [invoice, setInvoice] = useState<InvoiceData | null>(null);
   const [patient, setPatient] = useState<PatientData | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<"bank" | null>(null);
   const [redirectingToStripe, setRedirectingToStripe] = useState(false);
 
   useEffect(() => {
@@ -133,36 +132,13 @@ export default function InvoicePaymentPage() {
             </button>
           )}
 
-          {!paymentMethod ? (
-            <div className="space-y-3">
-              <button
-                onClick={handleStripePayment}
-                disabled={redirectingToStripe}
-                className="w-full rounded-lg bg-gradient-to-r from-sky-600 to-sky-700 px-6 py-5 text-lg font-bold text-white shadow-lg hover:from-sky-700 hover:to-sky-800 transition-all disabled:opacity-60"
-              >
-                {redirectingToStripe ? "Redirecting..." : "Pay Online with Card"}
-              </button>
-              <button
-                onClick={() => setPaymentMethod("bank")}
-                className="w-full rounded-lg bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-4 font-semibold text-white shadow-lg hover:from-slate-800 hover:to-slate-900"
-              >
-                Pay by Bank Transfer
-              </button>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-6">
-              <h3 className="mb-4 text-lg font-semibold text-slate-900">Bank Transfer Details</h3>
-              <div className="space-y-3 text-sm">
-                <div><span className="block text-xs font-medium text-slate-600">Account Holder:</span><span className="block font-mono">Toa SA</span></div>
-                <div><span className="block text-xs font-medium text-slate-600">IBAN:</span><span className="block font-mono">CH09 3078 8000 0502 4928 9</span></div>
-                <div><span className="block text-xs font-medium text-slate-600">Bank:</span><span className="block font-mono">PostFinance</span></div>
-                <div><span className="block text-xs font-medium text-slate-600">Amount:</span><span className="block text-lg font-bold">{formattedAmount} CHF</span></div>
-              </div>
-              <button onClick={() => setPaymentMethod(null)} className="mt-4 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                Back to Payment Options
-              </button>
-            </div>
-          )}
+          <button
+            onClick={handleStripePayment}
+            disabled={redirectingToStripe}
+            className="w-full rounded-lg bg-gradient-to-r from-sky-600 to-sky-700 px-6 py-5 text-lg font-bold text-white shadow-lg hover:from-sky-700 hover:to-sky-800 transition-all disabled:opacity-60"
+          >
+            {redirectingToStripe ? "Redirecting..." : "Pay Online with Card"}
+          </button>
         </div>
       </div>
     </div>
