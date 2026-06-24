@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { formatSwissDateWithWeekday, formatSwissTimeAmPm } from "@/lib/swissTimezone";
 import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
 import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
+import { normalizePatientLanguage } from "@/lib/languagePreference";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -191,8 +192,9 @@ export async function POST(request: Request) {
       appointmentDate,
       service,
       location,
-      language = "en",
+      language: requestedLanguage = "en",
     } = body;
+    const language = normalizePatientLanguage(requestedLanguage, "en");
 
     if (!patientEmail || !appointmentDate) {
       return NextResponse.json(

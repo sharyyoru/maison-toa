@@ -8,6 +8,7 @@ import {
   generateDoctorNotificationEmail,
   generatePatientReminderEmail,
 } from "@/lib/appointmentEmails";
+import { normalizePatientLanguage } from "@/lib/languagePreference";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -170,9 +171,10 @@ export async function POST(request: Request) {
       doctorEmail,
       notes,
       location,
-      language = "en",
+      language: requestedLanguage = "en",
       treatmentId,
     } = body;
+    let language = normalizePatientLanguage(requestedLanguage, "en");
 
     // Validate required fields
     if (!firstName || !lastName || !email || !appointmentDate || !service || !doctorSlug || !doctorName) {
@@ -439,7 +441,7 @@ export async function POST(request: Request) {
     let patientGender: string | undefined;
     const { data: existingPatients } = await supabase
       .from("patients")
-      .select("id, gender")
+      .select("id, gender, language_preference")
       .ilike("email", email)
       .limit(1);
 
@@ -449,6 +451,7 @@ export async function POST(request: Request) {
     if (existingPatient) {
       patientId = existingPatient.id;
       patientGender = existingPatient.gender ?? undefined;
+      language = normalizePatientLanguage(existingPatient.language_preference, language);
       console.log(`[Booking] Found existing patient: ${patientId}`);
     } else {
       // Create new patient
@@ -459,6 +462,7 @@ export async function POST(request: Request) {
           last_name: stripHtml(lastName) ?? lastName,
           email: email.toLowerCase(),
           phone: phone || null,
+          language_preference: language,
           source: "online_booking",
         })
         .select("id")

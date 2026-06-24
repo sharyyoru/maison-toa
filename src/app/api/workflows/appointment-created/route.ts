@@ -8,6 +8,7 @@ import {
   generateDoctorNotificationEmail,
   generatePatientReminderEmail,
 } from "@/lib/appointmentEmails";
+import { normalizePatientLanguage } from "@/lib/languagePreference";
 
 export const runtime = "nodejs";
 
@@ -115,7 +116,7 @@ export async function POST(request: Request) {
     // Resolve patient + appointment context. Prefer the payload (so emails are
     // identical to the booking flow), falling back to the database when needed.
     let patientId = body.patientId?.trim() || null;
-    const language = body.language === "fr" ? "fr" : "en";
+    const language = normalizePatientLanguage(body.language, "en");
 
     let firstName = body.patient?.first_name || "";
     let lastName = body.patient?.last_name || "";

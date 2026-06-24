@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendEmail, isEmailConfigured } from "@/lib/email";
 import { sanitizePhone, sanitizeTown, sanitizeCountry } from "@/lib/patientSanitize";
 import { brandedEmail, LOGO_URL } from "@/utils/emailTemplate";
+import { normalizePatientLanguage } from "@/lib/languagePreference";
 
 // POST /api/forms/submit - Submit form data using token
 export async function POST(request: Request) {
@@ -93,7 +94,9 @@ export async function POST(request: Request) {
       if (submissionData.postal_code) patientUpdate.postal_code = submissionData.postal_code;
       if (submissionData.town) patientUpdate.town = sanitizeTown(submissionData.town);
       if (submissionData.country) patientUpdate.country = sanitizeCountry(submissionData.country);
-      if (submissionData.language_preference) patientUpdate.language_preference = submissionData.language_preference;
+      if (submissionData.language_preference) {
+        patientUpdate.language_preference = normalizePatientLanguage(submissionData.language_preference, "fr");
+      }
 
       // Only update if there are fields to update
       if (Object.keys(patientUpdate).length > 0) {
@@ -119,7 +122,7 @@ export async function POST(request: Request) {
           .single();
 
         if (patient?.email) {
-          const lang = patient.language_preference || "fr";
+          const lang = normalizePatientLanguage(patient.language_preference, "fr");
           const isFrench = lang === "fr";
           const firstName = patient.first_name || "";
 
