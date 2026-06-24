@@ -68,8 +68,8 @@ export function generatePatientConfirmationEmail(
       cancel: "Cancel my appointment",
       closing: "We look forward to welcoming you.",
       clinicAddress: "Voie du Chariot 6<br>1003 Lausanne",
-      prepareVisit: "To prepare your visit in the best conditions, please confirm your attendance and complete your patient information form prior to your appointment via the link below.",
-      confirmAndComplete: "Confirm my appointment & complete my file",
+      prepareVisit: "To prepare your visit in the best conditions, please complete your patient information form prior to your appointment via the link below.",
+      confirmAndComplete: "Complete my file",
     },
     fr: {
       subject: "Votre rendez-vous au sein de Maison Tóā",
@@ -84,8 +84,8 @@ export function generatePatientConfirmationEmail(
       cancel: "Annuler mon rendez-vous",
       closing: "Dans l'attente du plaisir de vous accueillir, nous vous prions d'agréer nos salutations distinguées.",
       clinicAddress: "Voie du Chariot 6<br>1003 Lausanne",
-      prepareVisit: "Afin de préparer votre venue dans les meilleures conditions, nous vous invitons à confirmer votre présence et à compléter votre fiche patient avant votre rendez-vous via le lien ci-dessous.",
-      confirmAndComplete: "Confirmer ma présence & compléter ma fiche patient",
+      prepareVisit: "Afin de préparer votre venue dans les meilleures conditions, nous vous invitons à compléter votre fiche patient avant votre rendez-vous via le lien ci-dessous.",
+      confirmAndComplete: "Compléter ma fiche patient",
     },
   };
 
