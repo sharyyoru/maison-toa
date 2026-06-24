@@ -63,6 +63,10 @@ export default function PatientPageClientWrapper({
 
   useEffect(() => {
     pendingRef.current = {};
+    const broadcastChannel =
+      typeof BroadcastChannel !== "undefined"
+        ? new BroadcastChannel(`patient-realtime-${patientId}`)
+        : null;
 
     function queueRefresh(keys: (keyof PatientRealtimeRevisions)[]) {
       for (const key of keys) pendingRef.current[key] = true;
@@ -87,6 +91,23 @@ export default function PatientPageClientWrapper({
           router.refresh();
         }
       }, 500);
+    }
+
+    if (broadcastChannel) {
+      broadcastChannel.onmessage = (event: MessageEvent) => {
+        const data = event.data as {
+          type?: string;
+          keys?: (keyof PatientRealtimeRevisions)[];
+        };
+        if (data?.type !== "patient-realtime-refresh" || !Array.isArray(data.keys)) {
+          return;
+        }
+
+        const validKeys = data.keys.filter((key): key is keyof PatientRealtimeRevisions =>
+          key in initialPatientRealtimeRevisions,
+        );
+        if (validKeys.length > 0) queueRefresh(validKeys);
+      };
     }
 
     async function queueIfInvoiceBelongsToPatient(
@@ -122,6 +143,9 @@ export default function PatientPageClientWrapper({
     }
 
     const channel = supabaseClient.channel(`patient-realtime-${patientId}`);
+    const broadcastRealtimeChannel = supabaseClient.channel(
+      `patient-realtime-broadcast-${patientId}`,
+    );
 
     channel
       .on(
@@ -180,6 +204,24 @@ export default function PatientPageClientWrapper({
         () => queueRefresh(["patientRevision"]),
       );
 
+    broadcastRealtimeChannel
+      .on(
+        "broadcast",
+        { event: "patient-realtime-refresh" },
+        (payload) => {
+          const data = payload.payload as {
+            keys?: (keyof PatientRealtimeRevisions)[];
+          };
+          if (!Array.isArray(data.keys)) return;
+
+          const validKeys = data.keys.filter((key): key is keyof PatientRealtimeRevisions =>
+            key in initialPatientRealtimeRevisions,
+          );
+          if (validKeys.length > 0) queueRefresh(validKeys);
+        },
+      )
+      .subscribe();
+
     const intakeTables = [
       "patient_intake_submissions",
       "patient_intake_preferences",
@@ -208,7 +250,9 @@ export default function PatientPageClientWrapper({
 
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      broadcastChannel?.close();
       supabaseClient.removeChannel(channel);
+      supabaseClient.removeChannel(broadcastRealtimeChannel);
     };
   }, [patientId, router]);
 

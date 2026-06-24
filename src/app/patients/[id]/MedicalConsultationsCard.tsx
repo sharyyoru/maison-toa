@@ -565,7 +565,38 @@ export default function MedicalConsultationsCard({
   const insuranceNotifications = useInsuranceSubmissionNotifications();
   const { consultationsRevision, billingRevision, medicationRevision } = usePatientRealtime();
   const pendingRealtimeReloadRef = useRef(false);
+  const consultationsRefreshSignatureRef = useRef<string | null>(null);
+  const consultationsRefreshCheckInFlightRef = useRef(false);
+  const silentConsultationsReloadRef = useRef(false);
   const [realtimeReloadToken, setRealtimeReloadToken] = useState(0);
+
+  function broadcastPatientRealtimeRefresh() {
+    if (typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel(`patient-realtime-${patientId}`);
+      channel.postMessage({
+        type: "patient-realtime-refresh",
+        keys: ["consultationsRevision", "billingRevision"],
+      });
+      channel.close();
+    }
+
+    const realtimeChannel = supabaseClient.channel(`patient-realtime-broadcast-${patientId}`);
+    realtimeChannel.subscribe((status) => {
+      if (status !== "SUBSCRIBED") return;
+
+      void realtimeChannel
+        .send({
+          type: "broadcast",
+          event: "patient-realtime-refresh",
+          payload: {
+            keys: ["consultationsRevision", "billingRevision"],
+          },
+        })
+        .finally(() => {
+          void supabaseClient.removeChannel(realtimeChannel);
+        });
+    });
+  }
 
   // Tab state for switching between Consultations and Medical Records
   const [activeMainTab, setActiveMainTab] = useState<"consultations" | "medical_records">("consultations");
@@ -671,6 +702,124 @@ export default function MedicalConsultationsCard({
   const [sendingConsultationsEmail, setSendingConsultationsEmail] = useState(false);
   const [sendConsultationsEmailError, setSendConsultationsEmailError] = useState<string | null>(null);
   const [sendConsultationsEmailSuccess, setSendConsultationsEmailSuccess] = useState(false);
+
+  function buildConsultationsRefreshSignature(rows: ConsultationRow[]) {
+    const consultationRows = rows.filter((row) => row.record_type !== "invoice");
+    const invoiceRows = rows.filter((row) => row.record_type === "invoice");
+    const consultationSignature = consultationRows
+      .map((row) =>
+        [
+          "consultation",
+          row.id,
+          row.scheduled_at,
+          row.title,
+          row.content ?? "",
+          row.doctor_user_id ?? "",
+          row.doctor_name ?? "",
+          row.diagnosis_code ?? "",
+          row.ref_icd10 ?? "",
+        ].join(":"),
+      )
+      .sort()
+      .join("|");
+    const invoiceSignature = invoiceRows
+      .map((row) =>
+        [
+          "invoice",
+          row.id,
+          row.scheduled_at,
+          row.title,
+          row.content ?? "",
+          row.invoice_status ?? "",
+          row.invoice_paid_amount ?? "",
+          row.invoice_total_amount ?? "",
+        ].join(":"),
+      )
+      .sort()
+      .join("|");
+
+    return [
+      `consultations:${consultationRows.length}:${consultationSignature}`,
+      `invoices:${invoiceRows.length}:${invoiceSignature}`,
+    ].join("::");
+  }
+
+  async function fetchConsultationsRefreshSignature() {
+    const [
+      { data: consultationRows, count: consultationCount },
+      { data: invoiceRows, count: invoiceCount },
+    ] = await Promise.all([
+      supabaseClient
+        .from("consultations")
+        .select("id, scheduled_at, title, content, record_type, doctor_user_id, doctor_name, diagnosis_code, ref_icd10, is_archived", { count: "exact" })
+        .eq("patient_id", patientId)
+        .eq("is_archived", showArchived)
+        .neq("record_type", "invoice")
+        .order("scheduled_at", { ascending: false })
+        .limit(20),
+      supabaseClient
+        .from("invoices")
+        .select("id, invoice_date, treatment_date, status, paid_amount, total_amount, is_archived, title, consultation_id", { count: "exact" })
+        .eq("patient_id", patientId)
+        .eq("is_archived", showArchived)
+        .order("invoice_date", { ascending: false })
+        .limit(20),
+    ]);
+
+    const linkedConsultationIds = (invoiceRows ?? [])
+      .map((row: any) => row.consultation_id)
+      .filter(Boolean) as string[];
+    const { data: linkedConsultationRows } =
+      linkedConsultationIds.length > 0
+        ? await supabaseClient
+            .from("consultations")
+            .select("id, title, content")
+            .in("id", linkedConsultationIds)
+        : { data: [] as any[] };
+    const linkedConsultationById = new Map(
+      (linkedConsultationRows ?? []).map((row: any) => [row.id, row]),
+    );
+
+    const consultationSignature = (consultationRows ?? [])
+      .map((row: any) =>
+        [
+          "consultation",
+          row.id,
+          row.scheduled_at,
+          row.title,
+          row.content ?? "",
+          row.doctor_user_id ?? "",
+          row.doctor_name ?? "",
+          row.diagnosis_code ?? "",
+          row.ref_icd10 ?? "",
+        ].join(":"),
+      )
+      .sort()
+      .join("|");
+    const invoiceSignature = (invoiceRows ?? [])
+      .map((row: any) => {
+        const linked = row.consultation_id
+          ? linkedConsultationById.get(row.consultation_id)
+          : null;
+        return [
+          "invoice",
+          row.id,
+          row.treatment_date ?? row.invoice_date ?? "",
+          row.title,
+          linked?.content ?? "",
+          row.status ?? "",
+          row.paid_amount ?? "",
+          row.total_amount ?? "",
+        ].join(":");
+      })
+      .sort()
+      .join("|");
+
+    return [
+      `consultations:${consultationCount ?? 0}:${consultationSignature}`,
+      `invoices:${invoiceCount ?? 0}:${invoiceSignature}`,
+    ].join("::");
+  }
 
   // ACF validation dialog state
   const [acfValidationDialog, setAcfValidationDialog] = useState<{
@@ -1181,8 +1330,11 @@ export default function MedicalConsultationsCard({
     let isMounted = true;
 
     async function loadConsultations() {
+      const isSilentReload = silentConsultationsReloadRef.current;
+      silentConsultationsReloadRef.current = false;
+
       try {
-        setConsultationsLoading(true);
+        if (!isSilentReload) setConsultationsLoading(true);
         setConsultationsError(null);
 
         // 1) Load non-invoice records from consultations table
@@ -1406,6 +1558,7 @@ export default function MedicalConsultationsCard({
         });
 
         if (!isMounted) return;
+        consultationsRefreshSignatureRef.current = buildConsultationsRefreshSignature(allRows);
         setConsultations(allRows);
         setConsultationsLoading(false);
 
@@ -1457,6 +1610,7 @@ export default function MedicalConsultationsCard({
       return;
     }
 
+    silentConsultationsReloadRef.current = true;
     setRealtimeReloadToken((value) => value + 1);
   }, [
     consultationsRevision,
@@ -1468,7 +1622,42 @@ export default function MedicalConsultationsCard({
   useEffect(() => {
     if (!pendingRealtimeReloadRef.current || realtimeReloadBlocked) return;
     pendingRealtimeReloadRef.current = false;
+    silentConsultationsReloadRef.current = true;
     setRealtimeReloadToken((value) => value + 1);
+  }, [realtimeReloadBlocked]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      if (document.hidden) return;
+      if (consultationsRefreshCheckInFlightRef.current) return;
+
+      if (realtimeReloadBlocked) {
+        pendingRealtimeReloadRef.current = true;
+        return;
+      }
+
+      consultationsRefreshCheckInFlightRef.current = true;
+      void fetchConsultationsRefreshSignature()
+        .then((nextSignature) => {
+          if (!consultationsRefreshSignatureRef.current) {
+            consultationsRefreshSignatureRef.current = nextSignature;
+            return;
+          }
+
+          if (nextSignature !== consultationsRefreshSignatureRef.current) {
+            consultationsRefreshSignatureRef.current = nextSignature;
+            silentConsultationsReloadRef.current = true;
+            setRealtimeReloadToken((value) => value + 1);
+          }
+        })
+        .finally(() => {
+          consultationsRefreshCheckInFlightRef.current = false;
+        });
+    }, 5000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, [realtimeReloadBlocked]);
 
   useEffect(() => {
@@ -5164,6 +5353,8 @@ export default function MedicalConsultationsCard({
                       } else {
                         setConsultations((prev) => [savedRow, ...prev]);
                       }
+
+                      broadcastPatientRealtimeRefresh();
                     }
 
                     setConsultationSaving(false);
