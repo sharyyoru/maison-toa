@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactElement } from "react";
 import { useRouter } from "next/navigation";
 import { usePDFJobNotifications, type PdfJobNotification } from "@/components/PDFJobNotificationsContext";
 import { useInsuranceSubmissionNotifications, type InsuranceSubmissionNotification } from "@/components/InsuranceSubmissionNotificationsContext";
@@ -83,6 +83,68 @@ export default function HeaderPdfJobsButton() {
     return `${type.toUpperCase()}${suffix}`;
   }
 
+  function getJobDateKey(job: { created_at: string; completed_at: string | null; status: string }): string {
+    const dateStr = job.status === "completed" && job.completed_at ? job.completed_at : job.created_at;
+    return new Date(dateStr).toISOString().split("T")[0];
+  }
+
+  function formatDateGroupLabel(dateKey: string): string {
+    const today = new Date().toISOString().split("T")[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    if (dateKey === today) return "Today";
+    if (dateKey === yesterday) return "Yesterday";
+    const date = new Date(dateKey);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000);
+    if (diffDays < 7 && diffDays > 0) {
+      return date.toLocaleDateString(undefined, { weekday: "long" });
+    }
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  function isTodayKey(dateKey: string): boolean {
+    return dateKey === new Date().toISOString().split("T")[0];
+  }
+
+  function groupJobsByDate<T extends { created_at: string; completed_at: string | null; status: string }>(
+    jobs: T[]
+  ): { dateKey: string; label: string; isToday: boolean; jobs: T[] }[] {
+    const groups: Record<string, T[]> = {};
+    for (const job of jobs) {
+      const key = getJobDateKey(job);
+      groups[key] = groups[key] || [];
+      groups[key].push(job);
+    }
+    return Object.entries(groups)
+      .map(([dateKey, jobs]) => ({
+        dateKey,
+        label: formatDateGroupLabel(dateKey),
+        isToday: isTodayKey(dateKey),
+        jobs,
+      }))
+      .sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+  }
+
+  function renderDateAccordion<T extends { created_at: string; completed_at: string | null; status: string }>(
+    group: { dateKey: string; label: string; isToday: boolean; jobs: T[] },
+    renderJob: (job: T) => ReactElement
+  ) {
+    return (
+      <details className="group border-b border-slate-100" key={group.dateKey}>
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50">
+          <span>{group.label}</span>
+          <span className="flex items-center gap-1 text-[10px] text-slate-400">
+            {group.jobs.length} {group.jobs.length === 1 ? "item" : "items"}
+            <svg className="h-3 w-3 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </span>
+        </summary>
+        <div>{group.jobs.map(renderJob)}</div>
+      </details>
+    );
+  }
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -142,7 +204,13 @@ export default function HeaderPdfJobsButton() {
                 ) : pdfCtx.jobs.length === 0 ? (
                   <p className="px-4 py-6 text-center text-xs text-slate-500">No PDF jobs yet</p>
                 ) : (
-                  pdfCtx.jobs.map((job) => renderPdfJob(job))
+                  groupJobsByDate(pdfCtx.jobs).map((group) =>
+                    group.isToday ? (
+                      <div key={group.dateKey}>{group.jobs.map((job) => renderPdfJob(job))}</div>
+                    ) : (
+                      renderDateAccordion(group, renderPdfJob)
+                    )
+                  )
                 )}
               </div>
             </>
@@ -161,7 +229,13 @@ export default function HeaderPdfJobsButton() {
                 ) : insCtx.jobs.length === 0 ? (
                   <p className="px-4 py-6 text-center text-xs text-slate-500">No insurance submissions yet</p>
                 ) : (
-                  insCtx.jobs.map((job) => renderInsuranceJob(job))
+                  groupJobsByDate(insCtx.jobs).map((group) =>
+                    group.isToday ? (
+                      <div key={group.dateKey}>{group.jobs.map((job) => renderInsuranceJob(job))}</div>
+                    ) : (
+                      renderDateAccordion(group, renderInsuranceJob)
+                    )
+                  )
                 )}
               </div>
             </>
