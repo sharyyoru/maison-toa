@@ -1381,7 +1381,9 @@ export async function buildInvoiceRequest(
                 // MK.25.* dermatology add-ons must reference the base excision MK.25.0020.
                 const existingRef = base.referenceCode || "";
                 let isValidRef = Boolean(existingRef && !existingRef.startsWith("AA.") && allNonSurchargeByCode[existingRef]);
-                if (!isValidRef && code.startsWith("MK.25.")) {
+                // MK.25.* dermatology add-ons (everything except the base excision
+                // MK.25.0020) must reference the base excision MK.25.0020.
+                if (!isValidRef && code.startsWith("MK.25.") && code !== "MK.25.0020") {
                   const baseExcision = allNonSurchargeByCode["MK.25.0020"] ||
                     tardocServices.find(s => s.code === "MK.25.0020");
                   if (baseExcision) {
