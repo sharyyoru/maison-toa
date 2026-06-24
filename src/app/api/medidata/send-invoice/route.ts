@@ -1,6 +1,9 @@
 // v2 — AR.* zero-TT fix, correct TARDOC dignity codes
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+
+export const maxDuration = 300;
+
 import {
   // NOTE: generateTardocServicesFromDuration is intentionally NOT imported.
   // Auto-generating synthetic line items from consultation duration was a
