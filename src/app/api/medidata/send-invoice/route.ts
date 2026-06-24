@@ -408,11 +408,12 @@ export async function POST(request: NextRequest) {
         const sessionNumber = isAcf ? 1 : rawSession;
 
         // For TARDOC, prefer stored tp_al/tp_tl; fall back to catalog tp_mt/tp_tt.
-        // AR.* room/change codes (serviceType=R) self-compute TT via changeMin — must send 0.
+        // AR.* room/change codes have tp_al=0 but may still have a real TT component
+        // (e.g. AR.00.0140 has tp_tt=24.10). Send the actual stored/catalog TT value.
         const catalog = item.tariff_code === 7 ? tardocCatalogMap[item.code] : undefined;
         const isArCode = (item.code || "").startsWith("AR.");
-        const resolvedTpAl = (item.tp_al > 0) ? item.tp_al : (catalog?.tp_mt ?? 0);
-        const resolvedTpTl = isArCode ? 0 : ((item.tp_tl > 0) ? item.tp_tl : (catalog?.tp_tt ?? 0));
+        const resolvedTpAl = isArCode ? 0 : ((item.tp_al > 0) ? item.tp_al : (catalog?.tp_mt ?? 0));
+        const resolvedTpTl = (item.tp_tl > 0) ? item.tp_tl : (catalog?.tp_tt ?? 0);
 
         return {
           code: item.code || "",
@@ -655,12 +656,21 @@ export async function POST(request: NextRequest) {
       transportTo: billingType === 'TG' ? TG_NO_TRANSMISSION_GLN : resolvedReceiverGln,
       // Per MediData feedback: TP invoices must include print_copy_to_guarantor for patient copy
       printCopyToGuarantor: billingType === 'TP' ? YesNo.Yes : (invoiceRecord?.copy_to_guarantor ? YesNo.Yes : YesNo.No),
-      qualDignities:
-        (staffEntity?.qual_dignities && staffEntity.qual_dignities.length > 0)
-          ? staffEntity.qual_dignities
-          : (billingEntity?.qual_dignities && billingEntity.qual_dignities.length > 0)
-            ? billingEntity.qual_dignities
-            : undefined,
+      qualDignities: (() => {
+        const baseDignities =
+          (staffEntity?.qual_dignities && staffEntity.qual_dignities.length > 0)
+            ? staffEntity.qual_dignities
+            : (billingEntity?.qual_dignities && billingEntity.qual_dignities.length > 0)
+              ? billingEntity.qual_dignities
+              : [];
+        // Dermatology TARDOC codes (MK.*) require dignity 0300 in addition to the
+        // general-practice dignities (1100, 1900, 2000).
+        const needsDermDignity = sumexServices.some(s => (s.code || '').startsWith('MK.'));
+        if (needsDermDignity && !baseDignities.includes('0300')) {
+          return [...baseDignities, '0300'];
+        }
+        return baseDignities.length > 0 ? baseDignities : undefined;
+      })(),
     };
 
     // Guard: qual_dignities are required for TARDOC/TARMED insurance billing

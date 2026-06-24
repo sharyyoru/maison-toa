@@ -1376,8 +1376,22 @@ export async function buildInvoiceRequest(
                   base.referenceCode = companion?.code || "";
                 }
               } else {
-                // Non-AR base services must have empty referenceCode
-                base.referenceCode = "";
+                // Non-AR base services: keep a referenceCode only if it points to a
+                // valid service in the invoice and is not an AA session anchor.
+                // MK.25.* dermatology add-ons must reference the base excision MK.25.0020.
+                const existingRef = base.referenceCode || "";
+                let isValidRef = Boolean(existingRef && !existingRef.startsWith("AA.") && allNonSurchargeByCode[existingRef]);
+                if (!isValidRef && code.startsWith("MK.25.")) {
+                  const baseExcision = allNonSurchargeByCode["MK.25.0020"] ||
+                    tardocServices.find(s => s.code === "MK.25.0020");
+                  if (baseExcision) {
+                    base.referenceCode = "MK.25.0020";
+                    isValidRef = true;
+                  }
+                }
+                if (!isValidRef) {
+                  base.referenceCode = "";
+                }
               }
             }
 
