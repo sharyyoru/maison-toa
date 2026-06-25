@@ -437,6 +437,58 @@ function restoreContentEditableCaretOffset(element: HTMLElement, offset: number 
   selection?.addRange(range);
 }
 
+function htmlToCaretText(html: string): string {
+  if (typeof document === "undefined") {
+    return stripContentEditableCaretMarkers(html).replace(/<[^>]+>/g, "");
+  }
+
+  const element = document.createElement("div");
+  element.innerHTML = stripContentEditableCaretMarkers(html);
+  return element.innerText || element.textContent || "";
+}
+
+function transformCaretOffsetForRemoteHtml(
+  baseHtml: string,
+  remoteHtml: string,
+  caretOffset: number | null,
+): number | null {
+  if (caretOffset === null) return null;
+
+  const baseText = htmlToCaretText(baseHtml);
+  const remoteText = htmlToCaretText(remoteHtml);
+  if (baseText === remoteText) return caretOffset;
+
+  let start = 0;
+  while (
+    start < baseText.length &&
+    start < remoteText.length &&
+    baseText[start] === remoteText[start]
+  ) {
+    start += 1;
+  }
+
+  let baseEnd = baseText.length;
+  let remoteEnd = remoteText.length;
+  while (
+    baseEnd > start &&
+    remoteEnd > start &&
+    baseText[baseEnd - 1] === remoteText[remoteEnd - 1]
+  ) {
+    baseEnd -= 1;
+    remoteEnd -= 1;
+  }
+
+  if (start > caretOffset) return caretOffset;
+
+  const removedLength = baseEnd - start;
+  const insertedLength = remoteEnd - start;
+  if (caretOffset <= baseEnd) {
+    return start + insertedLength;
+  }
+
+  return Math.max(0, caretOffset + insertedLength - removedLength);
+}
+
 function mergeConcurrentHtml(base: string, local: string, remote: string): string {
   if (local === remote || local === base) return remote;
   if (remote === base) return local;
@@ -1895,12 +1947,16 @@ export default function MedicalConsultationsCard({
         const hadFocus = document.activeElement === editor;
         const caretOffset = editor && hadFocus ? getContentEditableCaretOffset(editor) : null;
         const localSnapshot = editor
-          ? hadFocus
-            ? getContentEditableHtmlWithCaretMarker(editor)
-            : { html: editor.innerHTML, markerId: null }
+          ? { html: editor.innerHTML, markerId: null }
           : { html: consultationContentHtml, markerId: null };
+        const previousSyncedHtml = consultationDraftLastSyncedHtmlRef.current;
+        const transformedCaretOffset = transformCaretOffsetForRemoteHtml(
+          previousSyncedHtml,
+          payload.draft.contentHtml,
+          caretOffset,
+        );
         const mergedHtmlWithMarker = mergeConcurrentHtml(
-          consultationDraftLastSyncedHtmlRef.current,
+          previousSyncedHtml,
           localSnapshot.html,
           payload.draft.contentHtml,
         );
@@ -1914,7 +1970,7 @@ export default function MedicalConsultationsCard({
             currentEditor.innerHTML = mergedHtml;
             if (hadFocus) {
               currentEditor.focus();
-              restoreContentEditableCaretOffset(currentEditor, caretOffset);
+              restoreContentEditableCaretOffset(currentEditor, transformedCaretOffset);
             }
           }
         }, 0);
@@ -1974,12 +2030,16 @@ export default function MedicalConsultationsCard({
         const hadFocus = document.activeElement === editor;
         const caretOffset = editor && hadFocus ? getContentEditableCaretOffset(editor) : null;
         const localSnapshot = editor
-          ? hadFocus
-            ? getContentEditableHtmlWithCaretMarker(editor)
-            : { html: editor.innerHTML, markerId: null }
+          ? { html: editor.innerHTML, markerId: null }
           : { html: editConsultationContent, markerId: null };
+        const previousSyncedHtml = editConsultationLastSyncedHtmlRef.current;
+        const transformedCaretOffset = transformCaretOffsetForRemoteHtml(
+          previousSyncedHtml,
+          payload.contentHtml,
+          caretOffset,
+        );
         const mergedHtmlWithMarker = mergeConcurrentHtml(
-          editConsultationLastSyncedHtmlRef.current,
+          previousSyncedHtml,
           localSnapshot.html,
           payload.contentHtml,
         );
@@ -1991,7 +2051,7 @@ export default function MedicalConsultationsCard({
           editor.innerHTML = mergedHtml;
           if (hadFocus) {
             editor.focus();
-            restoreContentEditableCaretOffset(editor, caretOffset);
+            restoreContentEditableCaretOffset(editor, transformedCaretOffset);
           }
         }
 
