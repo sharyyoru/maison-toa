@@ -330,6 +330,73 @@ type ConsultationDraftSyncPayload = {
   };
 };
 
+type ConsultationEditSyncPayload = {
+  senderClientId?: string;
+  consultationId: string;
+  title: string;
+  contentHtml: string;
+  doctorId: string;
+  date: string;
+  hour: string;
+  minute: string;
+  diagnosisCode: string;
+  refIcd10: string;
+};
+
+function getContentEditableCaretOffset(element: HTMLElement): number | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0);
+  if (!element.contains(range.startContainer)) return null;
+
+  const preCaretRange = range.cloneRange();
+  preCaretRange.selectNodeContents(element);
+  preCaretRange.setEnd(range.startContainer, range.startOffset);
+  return preCaretRange.toString().length;
+}
+
+function setContentEditableCaretOffset(element: HTMLElement, offset: number | null) {
+  if (offset === null) return;
+
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let remaining = offset;
+  let node = walker.nextNode();
+
+  while (node) {
+    const textLength = node.textContent?.length ?? 0;
+    if (remaining <= textLength) {
+      const range = document.createRange();
+      const selection = window.getSelection();
+      range.setStart(node, remaining);
+      range.collapse(true);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      return;
+    }
+
+    remaining -= textLength;
+    node = walker.nextNode();
+  }
+
+  const range = document.createRange();
+  const selection = window.getSelection();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function mergeConcurrentHtml(base: string, local: string, remote: string): string {
+  if (local === remote || local === base) return remote;
+  if (remote === base) return local;
+  if (local.includes(remote)) return local;
+  if (remote.includes(local)) return remote;
+  if (local.startsWith(base) && remote.startsWith(base)) {
+    return `${base}${local.slice(base.length)}${remote.slice(base.length)}`;
+  }
+  return remote;
+}
+
 function createEmptyMedProduct(): MedProduct {
   return {
     id: crypto.randomUUID(),
@@ -937,6 +1004,10 @@ export default function MedicalConsultationsCard({
   const [editConsultationTitle, setEditConsultationTitle] = useState("");
   const [editConsultationContent, setEditConsultationContent] = useState("");
   const editConsultationContentRef = useRef<HTMLDivElement>(null);
+  const editConsultationSyncChannelRef = useRef<ReturnType<typeof supabaseClient.channel> | null>(null);
+  const editConsultationSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editConsultationLastSyncedHtmlRef = useRef("");
+  const editConsultationRemoteApplyRef = useRef(false);
   const [editConsultationDoctorId, setEditConsultationDoctorId] = useState("");
   const [editConsultationDate, setEditConsultationDate] = useState("");
   const [editConsultationHour, setEditConsultationHour] = useState("");
@@ -1789,6 +1860,81 @@ export default function MedicalConsultationsCard({
   }, [patientId]);
 
   useEffect(() => {
+    const channel = supabaseClient.channel(`patient-consultation-edit-${patientId}`);
+    editConsultationSyncChannelRef.current = channel;
+
+    channel
+      .on("broadcast", { event: "consultation-edit-sync" }, (event) => {
+        const payload = event.payload as ConsultationEditSyncPayload | null;
+        if (!payload || payload.senderClientId === consultationDraftClientIdRef.current) {
+          return;
+        }
+
+        setConsultations((prev) =>
+          prev.map((row) =>
+            row.id === payload.consultationId
+              ? {
+                  ...row,
+                  title: payload.title,
+                  content: payload.contentHtml,
+                  doctor_user_id: payload.doctorId || null,
+                  diagnosis_code: payload.diagnosisCode || null,
+                  ref_icd10: payload.refIcd10 || null,
+                }
+              : row,
+          ),
+        );
+
+        if (!editConsultationModalOpen || editConsultationTarget?.id !== payload.consultationId) {
+          return;
+        }
+
+        editConsultationRemoteApplyRef.current = true;
+        setEditConsultationTitle(payload.title);
+        setEditConsultationDoctorId(payload.doctorId);
+        setEditConsultationDate(payload.date);
+        setEditConsultationHour(payload.hour);
+        setEditConsultationMinute(payload.minute);
+        setEditConsultationDiagnosisCode(payload.diagnosisCode);
+        setEditConsultationRefIcd10(payload.refIcd10);
+
+        const editor = editConsultationContentRef.current;
+        const localHtml = editor?.innerHTML ?? editConsultationContent;
+        const mergedHtml = mergeConcurrentHtml(
+          editConsultationLastSyncedHtmlRef.current,
+          localHtml,
+          payload.contentHtml,
+        );
+        editConsultationLastSyncedHtmlRef.current = mergedHtml;
+        setEditConsultationContent(mergedHtml);
+
+        if (editor && editor.innerHTML !== mergedHtml) {
+          const hadFocus = document.activeElement === editor;
+          const caretOffset = hadFocus ? getContentEditableCaretOffset(editor) : null;
+          editor.innerHTML = mergedHtml;
+          if (hadFocus) {
+            editor.focus();
+            setContentEditableCaretOffset(editor, caretOffset);
+          }
+        }
+
+        if (mergedHtml !== payload.contentHtml) {
+          triggerEditConsultationAutosave();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      if (editConsultationSyncTimerRef.current) {
+        clearTimeout(editConsultationSyncTimerRef.current);
+        editConsultationSyncTimerRef.current = null;
+      }
+      editConsultationSyncChannelRef.current = null;
+      void supabaseClient.removeChannel(channel);
+    };
+  }, [editConsultationModalOpen, editConsultationTarget?.id, patientId]);
+
+  useEffect(() => {
     const channel = consultationDraftChannelRef.current;
     if (!channel) return;
 
@@ -2164,6 +2310,7 @@ export default function MedicalConsultationsCard({
     setEditConsultationTarget(row);
     setEditConsultationTitle(row.title || "");
     setEditConsultationContent(row.content || "");
+    editConsultationLastSyncedHtmlRef.current = row.content || "";
     setEditConsultationDoctorId(row.doctor_user_id || "");
     setEditConsultationDiagnosisCode(row.diagnosis_code || "");
     setEditConsultationRefIcd10(row.ref_icd10 || "");
@@ -2184,10 +2331,64 @@ export default function MedicalConsultationsCard({
 
   // Sync edit consultation content to contentEditable div
   useEffect(() => {
-    if (editConsultationModalOpen && editConsultationContentRef.current) {
+    if (
+      editConsultationModalOpen &&
+      editConsultationContentRef.current &&
+      document.activeElement !== editConsultationContentRef.current
+    ) {
       editConsultationContentRef.current.innerHTML = editConsultationContent;
     }
-  }, [editConsultationModalOpen, editConsultationContent]);
+  }, [editConsultationModalOpen, editConsultationTarget?.id]);
+
+  function broadcastEditConsultationSync() {
+    const channel = editConsultationSyncChannelRef.current;
+    if (!channel || !editConsultationTarget) return;
+    if (editConsultationRemoteApplyRef.current) {
+      editConsultationRemoteApplyRef.current = false;
+      return;
+    }
+
+    if (editConsultationSyncTimerRef.current) {
+      clearTimeout(editConsultationSyncTimerRef.current);
+    }
+
+    const payload: ConsultationEditSyncPayload = {
+      senderClientId: consultationDraftClientIdRef.current,
+      consultationId: editConsultationTarget.id,
+      title: editConsultationTitle,
+      contentHtml: editConsultationContentRef.current?.innerHTML ?? editConsultationContent,
+      doctorId: editConsultationDoctorId,
+      date: editConsultationDate,
+      hour: editConsultationHour,
+      minute: editConsultationMinute,
+      diagnosisCode: editConsultationDiagnosisCode,
+      refIcd10: editConsultationRefIcd10,
+    };
+
+    editConsultationSyncTimerRef.current = setTimeout(() => {
+      void channel.send({
+        type: "broadcast",
+        event: "consultation-edit-sync",
+        payload,
+      });
+    }, 80);
+  }
+
+  useEffect(() => {
+    if (!editConsultationModalOpen || !editConsultationTarget) return;
+    broadcastEditConsultationSync();
+  }, [
+    editConsultationContent,
+    editConsultationDate,
+    editConsultationDiagnosisCode,
+    editConsultationDoctorId,
+    editConsultationHour,
+    editConsultationMinute,
+    editConsultationModalOpen,
+    editConsultationRefIcd10,
+    editConsultationTarget,
+    editConsultationTitle,
+  ]);
 
   // Cleanup autosave timer when modal closes
   useEffect(() => {
@@ -2739,6 +2940,7 @@ export default function MedicalConsultationsCard({
             : row
         )
       );
+      editConsultationLastSyncedHtmlRef.current = htmlContent;
       broadcastPatientRealtimeRefresh({ force: true });
 
       setEditConsultationModalOpen(false);
@@ -2815,7 +3017,7 @@ export default function MedicalConsultationsCard({
             : row
         )
       );
-      broadcastPatientRealtimeRefresh({ force: true });
+      editConsultationLastSyncedHtmlRef.current = htmlContent;
 
       setEditConsultationAutosaveStatus("saved");
       // Reset to idle after 2 seconds
@@ -9511,7 +9713,10 @@ export default function MedicalConsultationsCard({
                     ref={editConsultationContentRef}
                     contentEditable
                     suppressContentEditableWarning
-                    onInput={() => triggerEditConsultationAutosave()}
+                    onInput={(event) => {
+                      setEditConsultationContent((event.currentTarget as HTMLDivElement).innerHTML);
+                      triggerEditConsultationAutosave();
+                    }}
                     className="min-h-[120px] max-h-64 overflow-y-auto px-3 py-2 text-xs text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
                   />
                   {/* Autosave Status Indicator - below content editor */}
