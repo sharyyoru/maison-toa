@@ -1950,17 +1950,17 @@ export default function MedicalConsultationsCard({
           ? { html: editor.innerHTML, markerId: null }
           : { html: consultationContentHtml, markerId: null };
         const previousSyncedHtml = consultationDraftLastSyncedHtmlRef.current;
-        const transformedCaretOffset = transformCaretOffsetForRemoteHtml(
-          previousSyncedHtml,
-          payload.draft.contentHtml,
-          caretOffset,
-        );
         const mergedHtmlWithMarker = mergeConcurrentHtml(
           previousSyncedHtml,
           localSnapshot.html,
           payload.draft.contentHtml,
         );
         const mergedHtml = stripContentEditableCaretMarkers(mergedHtmlWithMarker);
+        const transformedCaretOffset = transformCaretOffsetForRemoteHtml(
+          localSnapshot.html,
+          mergedHtml,
+          caretOffset,
+        );
         consultationDraftLastSyncedHtmlRef.current = mergedHtml;
         setConsultationContentHtml(mergedHtml);
 
@@ -2033,17 +2033,17 @@ export default function MedicalConsultationsCard({
           ? { html: editor.innerHTML, markerId: null }
           : { html: editConsultationContent, markerId: null };
         const previousSyncedHtml = editConsultationLastSyncedHtmlRef.current;
-        const transformedCaretOffset = transformCaretOffsetForRemoteHtml(
-          previousSyncedHtml,
-          payload.contentHtml,
-          caretOffset,
-        );
         const mergedHtmlWithMarker = mergeConcurrentHtml(
           previousSyncedHtml,
           localSnapshot.html,
           payload.contentHtml,
         );
         const mergedHtml = stripContentEditableCaretMarkers(mergedHtmlWithMarker);
+        const transformedCaretOffset = transformCaretOffsetForRemoteHtml(
+          localSnapshot.html,
+          mergedHtml,
+          caretOffset,
+        );
         editConsultationLastSyncedHtmlRef.current = mergedHtml;
         setEditConsultationContent(mergedHtml);
 
