@@ -2735,9 +2735,10 @@ export default function CalendarPage() {
 
   function formatTimeLabel(totalMinutes: number): string {
     const minutes = totalMinutes % 60;
-    if (minutes !== 0) return "";
+    if (minutes !== 0 && minutes !== 30) return "";
     const hour = Math.floor(totalMinutes / 60);
-    return `${hour}h00`;
+    const minutePadded = minutes.toString().padStart(2, "0");
+    return `${hour}h${minutePadded}`;
   }
 
   function formatTimeOptionLabel(totalMinutes: number): string {
