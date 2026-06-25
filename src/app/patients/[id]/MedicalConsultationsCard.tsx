@@ -394,6 +394,49 @@ function restoreContentEditableCaretMarker(element: HTMLElement, markerId: strin
   selection?.addRange(range);
 }
 
+function getContentEditableCaretOffset(element: HTMLElement): number | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+
+  const range = selection.getRangeAt(0);
+  if (!element.contains(range.startContainer)) return null;
+
+  const preCaretRange = range.cloneRange();
+  preCaretRange.selectNodeContents(element);
+  preCaretRange.setEnd(range.startContainer, range.startOffset);
+  return preCaretRange.toString().length;
+}
+
+function restoreContentEditableCaretOffset(element: HTMLElement, offset: number | null) {
+  if (offset === null) return;
+
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let remaining = Math.max(0, offset);
+  let node = walker.nextNode();
+
+  while (node) {
+    const textLength = node.textContent?.length ?? 0;
+    if (remaining <= textLength) {
+      const range = document.createRange();
+      const selection = window.getSelection();
+      range.setStart(node, remaining);
+      range.collapse(true);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      return;
+    }
+    remaining -= textLength;
+    node = walker.nextNode();
+  }
+
+  const range = document.createRange();
+  const selection = window.getSelection();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
 function mergeConcurrentHtml(base: string, local: string, remote: string): string {
   if (local === remote || local === base) return remote;
   if (remote === base) return local;
@@ -1850,6 +1893,7 @@ export default function MedicalConsultationsCard({
 
         const editor = newConsultationContentRef.current;
         const hadFocus = document.activeElement === editor;
+        const caretOffset = editor && hadFocus ? getContentEditableCaretOffset(editor) : null;
         const localSnapshot = editor
           ? hadFocus
             ? getContentEditableHtmlWithCaretMarker(editor)
@@ -1867,13 +1911,12 @@ export default function MedicalConsultationsCard({
         window.setTimeout(() => {
           const currentEditor = newConsultationContentRef.current;
           if (currentEditor && currentEditor.innerHTML !== mergedHtmlWithMarker) {
-            currentEditor.innerHTML = mergedHtmlWithMarker;
+            currentEditor.innerHTML = mergedHtml;
             if (hadFocus) {
               currentEditor.focus();
-              restoreContentEditableCaretMarker(currentEditor, localSnapshot.markerId);
+              restoreContentEditableCaretOffset(currentEditor, caretOffset);
             }
           }
-          creationFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         }, 0);
       })
       .subscribe();
@@ -1929,6 +1972,7 @@ export default function MedicalConsultationsCard({
 
         const editor = editConsultationContentRef.current;
         const hadFocus = document.activeElement === editor;
+        const caretOffset = editor && hadFocus ? getContentEditableCaretOffset(editor) : null;
         const localSnapshot = editor
           ? hadFocus
             ? getContentEditableHtmlWithCaretMarker(editor)
@@ -1944,10 +1988,10 @@ export default function MedicalConsultationsCard({
         setEditConsultationContent(mergedHtml);
 
         if (editor && editor.innerHTML !== mergedHtmlWithMarker) {
-          editor.innerHTML = mergedHtmlWithMarker;
+          editor.innerHTML = mergedHtml;
           if (hadFocus) {
             editor.focus();
-            restoreContentEditableCaretMarker(editor, localSnapshot.markerId);
+            restoreContentEditableCaretOffset(editor, caretOffset);
           }
         }
 
