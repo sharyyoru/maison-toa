@@ -10,6 +10,7 @@ export type PatientRealtimeRevisions = {
   crmRevision: number;
   intakeRevision: number;
   medicationRevision: number;
+  forcedConsultationsRevision: number;
 };
 
 export const initialPatientRealtimeRevisions: PatientRealtimeRevisions = {
@@ -20,6 +21,7 @@ export const initialPatientRealtimeRevisions: PatientRealtimeRevisions = {
   crmRevision: 0,
   intakeRevision: 0,
   medicationRevision: 0,
+  forcedConsultationsRevision: 0,
 };
 
 const PatientRealtimeContext = createContext<PatientRealtimeRevisions>(

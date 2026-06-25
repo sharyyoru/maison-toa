@@ -68,8 +68,11 @@ export default function PatientPageClientWrapper({
         ? new BroadcastChannel(`patient-realtime-${patientId}`)
         : null;
 
-    function queueRefresh(keys: (keyof PatientRealtimeRevisions)[]) {
+    function queueRefresh(keys: (keyof PatientRealtimeRevisions)[], force = false) {
       for (const key of keys) pendingRef.current[key] = true;
+      if (force && keys.includes("consultationsRevision")) {
+        pendingRef.current.forcedConsultationsRevision = true;
+      }
 
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
       debounceRef.current = window.setTimeout(() => {
@@ -98,6 +101,7 @@ export default function PatientPageClientWrapper({
         const data = event.data as {
           type?: string;
           keys?: (keyof PatientRealtimeRevisions)[];
+          force?: boolean;
         };
         if (data?.type !== "patient-realtime-refresh" || !Array.isArray(data.keys)) {
           return;
@@ -106,7 +110,7 @@ export default function PatientPageClientWrapper({
         const validKeys = data.keys.filter((key): key is keyof PatientRealtimeRevisions =>
           key in initialPatientRealtimeRevisions,
         );
-        if (validKeys.length > 0) queueRefresh(validKeys);
+        if (validKeys.length > 0) queueRefresh(validKeys, data.force === true);
       };
     }
 
@@ -211,13 +215,14 @@ export default function PatientPageClientWrapper({
         (payload) => {
           const data = payload.payload as {
             keys?: (keyof PatientRealtimeRevisions)[];
+            force?: boolean;
           };
           if (!Array.isArray(data.keys)) return;
 
           const validKeys = data.keys.filter((key): key is keyof PatientRealtimeRevisions =>
             key in initialPatientRealtimeRevisions,
           );
-          if (validKeys.length > 0) queueRefresh(validKeys);
+          if (validKeys.length > 0) queueRefresh(validKeys, data.force === true);
         },
       )
       .subscribe();

@@ -313,6 +313,23 @@ type MedProduct = {
   intakeFromDate: string;
 };
 
+type ConsultationDraftSyncPayload = {
+  senderClientId?: string;
+  senderUserId?: string | null;
+  open: boolean;
+  draft: {
+    date: string;
+    hour: string;
+    minute: string;
+    doctorId: string;
+    title: string;
+    recordType: ConsultationRecordType;
+    contentHtml: string;
+    diagnosisCode: string;
+    refIcd10: string;
+  };
+};
+
 function createEmptyMedProduct(): MedProduct {
   return {
     id: crypto.randomUUID(),
@@ -563,19 +580,30 @@ export default function MedicalConsultationsCard({
   const tf = useTranslations("patient.form");
   const pdfNotifications = usePDFJobNotifications();
   const insuranceNotifications = useInsuranceSubmissionNotifications();
-  const { consultationsRevision, billingRevision, medicationRevision } = usePatientRealtime();
+  const {
+    consultationsRevision,
+    billingRevision,
+    medicationRevision,
+    forcedConsultationsRevision,
+  } = usePatientRealtime();
   const pendingRealtimeReloadRef = useRef(false);
+  const lastForcedConsultationsRevisionRef = useRef(0);
   const consultationsRefreshSignatureRef = useRef<string | null>(null);
   const consultationsRefreshCheckInFlightRef = useRef(false);
   const silentConsultationsReloadRef = useRef(false);
   const [realtimeReloadToken, setRealtimeReloadToken] = useState(0);
 
-  function broadcastPatientRealtimeRefresh() {
+  function broadcastPatientRealtimeRefresh(options?: { force?: boolean }) {
+    const payload = {
+      keys: ["consultationsRevision", "billingRevision"],
+      force: options?.force ?? false,
+    };
+
     if (typeof BroadcastChannel !== "undefined") {
       const channel = new BroadcastChannel(`patient-realtime-${patientId}`);
       channel.postMessage({
         type: "patient-realtime-refresh",
-        keys: ["consultationsRevision", "billingRevision"],
+        ...payload,
       });
       channel.close();
     }
@@ -588,9 +616,7 @@ export default function MedicalConsultationsCard({
         .send({
           type: "broadcast",
           event: "patient-realtime-refresh",
-          payload: {
-            keys: ["consultationsRevision", "billingRevision"],
-          },
+          payload,
         })
         .finally(() => {
           void supabaseClient.removeChannel(realtimeChannel);
@@ -927,6 +953,14 @@ export default function MedicalConsultationsCard({
   const [newConsultationAutosaveStatus, setNewConsultationAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved">("idle");
   const newConsultationAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const newConsultationContentRef = useRef<HTMLDivElement>(null);
+  const consultationDraftClientIdRef = useRef(
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2),
+  );
+  const consultationDraftChannelRef = useRef<ReturnType<typeof supabaseClient.channel> | null>(null);
+  const consultationDraftRemoteApplyRef = useRef(false);
+  const consultationDraftBroadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [axenitaPdfDocs, setAxenitaPdfDocs] = useState<AxenitaPdfDocument[]>([]);
   const [axenitaPdfLoading, setAxenitaPdfLoading] = useState(false);
@@ -1601,6 +1635,17 @@ export default function MedicalConsultationsCard({
   }, [patientId, showArchived, realtimeReloadToken]);
 
   useEffect(() => {
+    if (
+      forcedConsultationsRevision > 0 &&
+      forcedConsultationsRevision !== lastForcedConsultationsRevisionRef.current
+    ) {
+      lastForcedConsultationsRevisionRef.current = forcedConsultationsRevision;
+      pendingRealtimeReloadRef.current = false;
+      silentConsultationsReloadRef.current = true;
+      setRealtimeReloadToken((value) => value + 1);
+      return;
+    }
+
     const hasRealtimeChange =
       consultationsRevision > 0 || billingRevision > 0 || medicationRevision > 0;
     if (!hasRealtimeChange) return;
@@ -1615,6 +1660,7 @@ export default function MedicalConsultationsCard({
   }, [
     consultationsRevision,
     billingRevision,
+    forcedConsultationsRevision,
     medicationRevision,
     realtimeReloadBlocked,
   ]);
@@ -1694,6 +1740,104 @@ export default function MedicalConsultationsCard({
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const channel = supabaseClient.channel(`patient-consultation-draft-${patientId}`);
+    consultationDraftChannelRef.current = channel;
+
+    channel
+      .on("broadcast", { event: "consultation-draft-sync" }, (event) => {
+        const payload = event.payload as ConsultationDraftSyncPayload | null;
+        if (!payload || payload.senderClientId === consultationDraftClientIdRef.current) {
+          return;
+        }
+
+        consultationDraftRemoteApplyRef.current = true;
+        setNewConsultationOpen(payload.open);
+
+        if (!payload.open) {
+          return;
+        }
+
+        setConsultationDate(payload.draft.date);
+        setConsultationHour(payload.draft.hour);
+        setConsultationMinute(payload.draft.minute);
+        setConsultationDoctorId(payload.draft.doctorId);
+        setConsultationTitle(payload.draft.title);
+        setConsultationRecordType(payload.draft.recordType);
+        setConsultationContentHtml(payload.draft.contentHtml);
+        setConsultationDiagnosisCode(payload.draft.diagnosisCode);
+        setConsultationRefIcd10(payload.draft.refIcd10);
+
+        window.setTimeout(() => {
+          if (newConsultationContentRef.current) {
+            newConsultationContentRef.current.innerHTML = payload.draft.contentHtml;
+          }
+          creationFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 0);
+      })
+      .subscribe();
+
+    return () => {
+      if (consultationDraftBroadcastTimerRef.current) {
+        clearTimeout(consultationDraftBroadcastTimerRef.current);
+        consultationDraftBroadcastTimerRef.current = null;
+      }
+      consultationDraftChannelRef.current = null;
+      void supabaseClient.removeChannel(channel);
+    };
+  }, [patientId]);
+
+  useEffect(() => {
+    const channel = consultationDraftChannelRef.current;
+    if (!channel) return;
+
+    if (consultationDraftRemoteApplyRef.current) {
+      consultationDraftRemoteApplyRef.current = false;
+      return;
+    }
+
+    if (consultationDraftBroadcastTimerRef.current) {
+      clearTimeout(consultationDraftBroadcastTimerRef.current);
+    }
+
+    const payload: ConsultationDraftSyncPayload = {
+      senderClientId: consultationDraftClientIdRef.current,
+      senderUserId: currentUserId,
+      open: newConsultationOpen,
+      draft: {
+        date: consultationDate,
+        hour: consultationHour,
+        minute: consultationMinute,
+        doctorId: consultationDoctorId,
+        title: consultationTitle,
+        recordType: consultationRecordType,
+        contentHtml: consultationContentHtml,
+        diagnosisCode: consultationDiagnosisCode,
+        refIcd10: consultationRefIcd10,
+      },
+    };
+
+    consultationDraftBroadcastTimerRef.current = setTimeout(() => {
+      void channel.send({
+        type: "broadcast",
+        event: "consultation-draft-sync",
+        payload,
+      });
+    }, newConsultationOpen ? 120 : 0);
+  }, [
+    consultationContentHtml,
+    consultationDate,
+    consultationDiagnosisCode,
+    consultationDoctorId,
+    consultationHour,
+    consultationMinute,
+    consultationRecordType,
+    consultationRefIcd10,
+    consultationTitle,
+    currentUserId,
+    newConsultationOpen,
+  ]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1972,6 +2116,7 @@ export default function MedicalConsultationsCard({
       setConsultations((prev) =>
         prev.filter((row) => row.id !== rowId),
       );
+      broadcastPatientRealtimeRefresh({ force: true });
     } catch {
       setConsultationsError("Failed to archive record.");
     }
@@ -2009,6 +2154,7 @@ export default function MedicalConsultationsCard({
       setConsultations((prev) =>
         prev.filter((row) => row.id !== rowId),
       );
+      broadcastPatientRealtimeRefresh({ force: true });
     } catch {
       setConsultationsError("Failed to delete consultation.");
     }
@@ -2074,6 +2220,7 @@ export default function MedicalConsultationsCard({
             : row
         )
       );
+      broadcastPatientRealtimeRefresh({ force: true });
 
       setEditInvoiceModalOpen(false);
       setEditInvoiceTarget(null);
@@ -2592,6 +2739,7 @@ export default function MedicalConsultationsCard({
             : row
         )
       );
+      broadcastPatientRealtimeRefresh({ force: true });
 
       setEditConsultationModalOpen(false);
       setEditConsultationTarget(null);
@@ -2667,6 +2815,7 @@ export default function MedicalConsultationsCard({
             : row
         )
       );
+      broadcastPatientRealtimeRefresh({ force: true });
 
       setEditConsultationAutosaveStatus("saved");
       // Reset to idle after 2 seconds
@@ -2758,6 +2907,7 @@ export default function MedicalConsultationsCard({
               : row
           )
         );
+        broadcastPatientRealtimeRefresh({ force: true });
       } else {
         // CREATE new draft consultation — need to generate consultation_id first
         const { data: generatedId, error: rpcError } = await supabaseClient
@@ -2809,6 +2959,7 @@ export default function MedicalConsultationsCard({
             invoice_pdf_path_receipt: null,
           };
           setConsultations((prev) => [newRow, ...prev]);
+          broadcastPatientRealtimeRefresh({ force: true });
           console.log("Draft consultation created:", data.id);
         }
       }
@@ -2884,6 +3035,7 @@ export default function MedicalConsultationsCard({
           row.id === invoiceId ? { ...row, invoice_is_paid: nextPaid, invoice_status: newStatus as InvoiceStatus } : row,
         ),
       );
+      broadcastPatientRealtimeRefresh({ force: true });
 
       router.refresh();
     } catch {
@@ -2958,6 +3110,7 @@ export default function MedicalConsultationsCard({
             : row,
         ),
       );
+      broadcastPatientRealtimeRefresh({ force: true });
 
       setCashReceiptUploading(false);
       setCashReceiptModalOpen(false);
