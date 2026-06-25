@@ -325,9 +325,17 @@ type ConsultationDraftSyncPayload = {
     title: string;
     recordType: ConsultationRecordType;
     contentHtml: string;
+    textOp?: CollaborativeTextOperation | null;
     diagnosisCode: string;
     refIcd10: string;
   };
+};
+
+type CollaborativeTextOperation = {
+  id: string;
+  start: number;
+  deleteCount: number;
+  insertText: string;
 };
 
 type ConsultationEditSyncPayload = {
@@ -335,6 +343,7 @@ type ConsultationEditSyncPayload = {
   consultationId: string;
   title: string;
   contentHtml: string;
+  textOp?: CollaborativeTextOperation | null;
   doctorId: string;
   date: string;
   hour: string;
@@ -445,6 +454,80 @@ function htmlToCaretText(html: string): string {
   const element = document.createElement("div");
   element.innerHTML = stripContentEditableCaretMarkers(html);
   return element.innerText || element.textContent || "";
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function textToNotesHtml(value: string): string {
+  return escapeHtml(value).replace(/\n/g, "<br>");
+}
+
+function getEditorPlainText(element: HTMLElement): string {
+  return (element.innerText || element.textContent || "").replace(/\uFEFF/g, "");
+}
+
+function setEditorPlainText(element: HTMLElement, value: string) {
+  element.textContent = value;
+}
+
+function buildTextOperation(before: string, after: string): CollaborativeTextOperation | null {
+  if (before === after) return null;
+
+  let start = 0;
+  while (start < before.length && start < after.length && before[start] === after[start]) {
+    start += 1;
+  }
+
+  let beforeEnd = before.length;
+  let afterEnd = after.length;
+  while (
+    beforeEnd > start &&
+    afterEnd > start &&
+    before[beforeEnd - 1] === after[afterEnd - 1]
+  ) {
+    beforeEnd -= 1;
+    afterEnd -= 1;
+  }
+
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    start,
+    deleteCount: beforeEnd - start,
+    insertText: after.slice(start, afterEnd),
+  };
+}
+
+function applyTextOperation(value: string, operation: CollaborativeTextOperation): string {
+  return (
+    value.slice(0, operation.start) +
+    operation.insertText +
+    value.slice(operation.start + operation.deleteCount)
+  );
+}
+
+function transformCaretOffsetForTextOperation(
+  caretOffset: number | null,
+  operation: CollaborativeTextOperation,
+): number | null {
+  if (caretOffset === null) return null;
+  if (operation.start >= caretOffset) return caretOffset;
+
+  const operationEnd = operation.start + operation.deleteCount;
+  if (caretOffset <= operationEnd) {
+    return operation.start + operation.insertText.length;
+  }
+
+  return Math.max(
+    0,
+    caretOffset + operation.insertText.length - operation.deleteCount,
+  );
 }
 
 function transformCaretOffsetForRemoteHtml(
@@ -1110,6 +1193,9 @@ export default function MedicalConsultationsCard({
   const editConsultationSyncChannelRef = useRef<ReturnType<typeof supabaseClient.channel> | null>(null);
   const editConsultationSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editConsultationLastSyncedHtmlRef = useRef("");
+  const editConsultationLocalTextRef = useRef("");
+  const editConsultationLastBroadcastTextRef = useRef("");
+  const editConsultationPendingTextOpRef = useRef<CollaborativeTextOperation | null>(null);
   const editConsultationRemoteApplyRef = useRef(false);
   const [editConsultationDoctorId, setEditConsultationDoctorId] = useState("");
   const [editConsultationDate, setEditConsultationDate] = useState("");
@@ -1136,6 +1222,9 @@ export default function MedicalConsultationsCard({
   const consultationDraftRemoteApplyRef = useRef(false);
   const consultationDraftBroadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const consultationDraftLastSyncedHtmlRef = useRef("");
+  const consultationDraftLocalTextRef = useRef("");
+  const consultationDraftLastBroadcastTextRef = useRef("");
+  const consultationDraftPendingTextOpRef = useRef<CollaborativeTextOperation | null>(null);
 
   const [axenitaPdfDocs, setAxenitaPdfDocs] = useState<AxenitaPdfDocument[]>([]);
   const [axenitaPdfLoading, setAxenitaPdfLoading] = useState(false);
@@ -1946,32 +2035,47 @@ export default function MedicalConsultationsCard({
         const editor = newConsultationContentRef.current;
         const hadFocus = document.activeElement === editor;
         const caretOffset = editor && hadFocus ? getContentEditableCaretOffset(editor) : null;
-        const localSnapshot = editor
-          ? { html: editor.innerHTML, markerId: null }
-          : { html: consultationContentHtml, markerId: null };
-        const previousSyncedHtml = consultationDraftLastSyncedHtmlRef.current;
-        const mergedHtmlWithMarker = mergeConcurrentHtml(
-          previousSyncedHtml,
-          localSnapshot.html,
-          payload.draft.contentHtml,
-        );
-        const mergedHtml = stripContentEditableCaretMarkers(mergedHtmlWithMarker);
-        const transformedCaretOffset = transformCaretOffsetForRemoteHtml(
-          localSnapshot.html,
-          mergedHtml,
-          caretOffset,
-        );
+
+        if (payload.draft.textOp) {
+          const currentText = editor
+            ? getEditorPlainText(editor)
+            : consultationDraftLocalTextRef.current || htmlToCaretText(consultationContentHtml);
+          const nextText = applyTextOperation(currentText, payload.draft.textOp);
+          const nextHtml = textToNotesHtml(nextText);
+          const transformedCaretOffset = transformCaretOffsetForTextOperation(
+            caretOffset,
+            payload.draft.textOp,
+          );
+
+          consultationDraftLocalTextRef.current = nextText;
+          consultationDraftLastBroadcastTextRef.current = nextText;
+          consultationDraftLastSyncedHtmlRef.current = nextHtml;
+          setConsultationContentHtml(nextHtml);
+
+          if (editor) {
+            setEditorPlainText(editor, nextText);
+            if (hadFocus) {
+              editor.focus();
+              restoreContentEditableCaretOffset(editor, transformedCaretOffset);
+            }
+          }
+          return;
+        }
+
+        const mergedHtml = stripContentEditableCaretMarkers(payload.draft.contentHtml);
         consultationDraftLastSyncedHtmlRef.current = mergedHtml;
+        consultationDraftLocalTextRef.current = htmlToCaretText(mergedHtml);
+        consultationDraftLastBroadcastTextRef.current = consultationDraftLocalTextRef.current;
         setConsultationContentHtml(mergedHtml);
 
         window.setTimeout(() => {
           const currentEditor = newConsultationContentRef.current;
-          if (currentEditor && currentEditor.innerHTML !== mergedHtmlWithMarker) {
+          if (
+            currentEditor &&
+            document.activeElement !== currentEditor &&
+            currentEditor.innerHTML !== mergedHtml
+          ) {
             currentEditor.innerHTML = mergedHtml;
-            if (hadFocus) {
-              currentEditor.focus();
-              restoreContentEditableCaretOffset(currentEditor, transformedCaretOffset);
-            }
           }
         }, 0);
       })
@@ -2029,30 +2133,45 @@ export default function MedicalConsultationsCard({
         const editor = editConsultationContentRef.current;
         const hadFocus = document.activeElement === editor;
         const caretOffset = editor && hadFocus ? getContentEditableCaretOffset(editor) : null;
-        const localSnapshot = editor
-          ? { html: editor.innerHTML, markerId: null }
-          : { html: editConsultationContent, markerId: null };
-        const previousSyncedHtml = editConsultationLastSyncedHtmlRef.current;
-        const mergedHtmlWithMarker = mergeConcurrentHtml(
-          previousSyncedHtml,
-          localSnapshot.html,
-          payload.contentHtml,
-        );
-        const mergedHtml = stripContentEditableCaretMarkers(mergedHtmlWithMarker);
-        const transformedCaretOffset = transformCaretOffsetForRemoteHtml(
-          localSnapshot.html,
-          mergedHtml,
-          caretOffset,
-        );
+
+        if (payload.textOp) {
+          const currentText = editor
+            ? getEditorPlainText(editor)
+            : editConsultationLocalTextRef.current || htmlToCaretText(editConsultationContent);
+          const nextText = applyTextOperation(currentText, payload.textOp);
+          const nextHtml = textToNotesHtml(nextText);
+          const transformedCaretOffset = transformCaretOffsetForTextOperation(
+            caretOffset,
+            payload.textOp,
+          );
+
+          editConsultationLocalTextRef.current = nextText;
+          editConsultationLastBroadcastTextRef.current = nextText;
+          editConsultationLastSyncedHtmlRef.current = nextHtml;
+          setEditConsultationContent(nextHtml);
+
+          if (editor) {
+            setEditorPlainText(editor, nextText);
+            if (hadFocus) {
+              editor.focus();
+              restoreContentEditableCaretOffset(editor, transformedCaretOffset);
+            }
+          }
+
+          if (nextHtml !== payload.contentHtml) {
+            triggerEditConsultationAutosave();
+          }
+          return;
+        }
+
+        const mergedHtml = stripContentEditableCaretMarkers(payload.contentHtml);
         editConsultationLastSyncedHtmlRef.current = mergedHtml;
+        editConsultationLocalTextRef.current = htmlToCaretText(mergedHtml);
+        editConsultationLastBroadcastTextRef.current = editConsultationLocalTextRef.current;
         setEditConsultationContent(mergedHtml);
 
-        if (editor && editor.innerHTML !== mergedHtmlWithMarker) {
+        if (editor && document.activeElement !== editor && editor.innerHTML !== mergedHtml) {
           editor.innerHTML = mergedHtml;
-          if (hadFocus) {
-            editor.focus();
-            restoreContentEditableCaretOffset(editor, transformedCaretOffset);
-          }
         }
 
         if (mergedHtml !== payload.contentHtml) {
@@ -2084,6 +2203,13 @@ export default function MedicalConsultationsCard({
       clearTimeout(consultationDraftBroadcastTimerRef.current);
     }
 
+    const currentDraftText = consultationDraftLocalTextRef.current;
+    const currentDraftHtml = textToNotesHtml(currentDraftText);
+    const draftTextOp = buildTextOperation(
+      consultationDraftLastBroadcastTextRef.current,
+      currentDraftText,
+    );
+
     const payload: ConsultationDraftSyncPayload = {
       senderClientId: consultationDraftClientIdRef.current,
       senderUserId: currentUserId,
@@ -2095,7 +2221,8 @@ export default function MedicalConsultationsCard({
         doctorId: consultationDoctorId,
         title: consultationTitle,
         recordType: consultationRecordType,
-        contentHtml: consultationContentHtml,
+        contentHtml: currentDraftHtml || consultationContentHtml,
+        textOp: draftTextOp,
         diagnosisCode: consultationDiagnosisCode,
         refIcd10: consultationRefIcd10,
       },
@@ -2103,11 +2230,13 @@ export default function MedicalConsultationsCard({
 
     consultationDraftBroadcastTimerRef.current = setTimeout(() => {
       consultationDraftLastSyncedHtmlRef.current = payload.draft.contentHtml;
+      consultationDraftLastBroadcastTextRef.current = currentDraftText;
       void channel.send({
         type: "broadcast",
         event: "consultation-draft-sync",
         payload,
       });
+      consultationDraftPendingTextOpRef.current = null;
     }, newConsultationOpen ? 120 : 0);
   }, [
     consultationContentHtml,
@@ -2449,6 +2578,9 @@ export default function MedicalConsultationsCard({
     setEditConsultationTitle(row.title || "");
     setEditConsultationContent(row.content || "");
     editConsultationLastSyncedHtmlRef.current = row.content || "";
+    editConsultationLocalTextRef.current = htmlToCaretText(row.content || "");
+    editConsultationLastBroadcastTextRef.current = editConsultationLocalTextRef.current;
+    editConsultationPendingTextOpRef.current = null;
     setEditConsultationDoctorId(row.doctor_user_id || "");
     setEditConsultationDiagnosisCode(row.diagnosis_code || "");
     setEditConsultationRefIcd10(row.ref_icd10 || "");
@@ -2490,11 +2622,21 @@ export default function MedicalConsultationsCard({
       clearTimeout(editConsultationSyncTimerRef.current);
     }
 
+    const currentEditText = editConsultationContentRef.current
+      ? getEditorPlainText(editConsultationContentRef.current)
+      : editConsultationLocalTextRef.current;
+    const currentEditHtml = textToNotesHtml(currentEditText);
+    const editTextOp = buildTextOperation(
+      editConsultationLastBroadcastTextRef.current,
+      currentEditText,
+    );
+
     const payload: ConsultationEditSyncPayload = {
       senderClientId: consultationDraftClientIdRef.current,
       consultationId: editConsultationTarget.id,
       title: editConsultationTitle,
-      contentHtml: editConsultationContentRef.current?.innerHTML ?? editConsultationContent,
+      contentHtml: currentEditHtml || editConsultationContent,
+      textOp: editTextOp,
       doctorId: editConsultationDoctorId,
       date: editConsultationDate,
       hour: editConsultationHour,
@@ -2505,11 +2647,13 @@ export default function MedicalConsultationsCard({
 
     editConsultationSyncTimerRef.current = setTimeout(() => {
       editConsultationLastSyncedHtmlRef.current = payload.contentHtml;
+      editConsultationLastBroadcastTextRef.current = currentEditText;
       void channel.send({
         type: "broadcast",
         event: "consultation-edit-sync",
         payload,
       });
+      editConsultationPendingTextOpRef.current = null;
     }, 80);
   }
 
@@ -3043,7 +3187,9 @@ export default function MedicalConsultationsCard({
       }
 
       // Get HTML content from contentEditable div
-      const htmlContent = editConsultationContentRef.current?.innerHTML || editConsultationContent;
+      const htmlContent = editConsultationContentRef.current
+        ? textToNotesHtml(getEditorPlainText(editConsultationContentRef.current))
+        : editConsultationContent;
 
       const { error } = await supabaseClient
         .from("consultations")
@@ -3118,7 +3264,9 @@ export default function MedicalConsultationsCard({
       }
 
       // Get HTML content from contentEditable div
-      const htmlContent = editConsultationContentRef.current?.innerHTML || editConsultationContent;
+      const htmlContent = editConsultationContentRef.current
+        ? textToNotesHtml(getEditorPlainText(editConsultationContentRef.current))
+        : editConsultationContent;
 
       const { error } = await supabaseClient
         .from("consultations")
@@ -3191,7 +3339,9 @@ export default function MedicalConsultationsCard({
     // Only autosave for "notes" type (not invoices/prescriptions which have complex data)
     if (consultationRecordType !== "notes") return;
     
-    const htmlContent = newConsultationContentRef.current?.innerHTML || consultationContentHtml;
+    const htmlContent = newConsultationContentRef.current
+      ? textToNotesHtml(getEditorPlainText(newConsultationContentRef.current))
+      : consultationContentHtml;
     
     // Need at least title or content to save
     if (!consultationTitle.trim() && !htmlContent.replace(/<[^>]+>/g, "").trim()) return;
@@ -3340,6 +3490,10 @@ export default function MedicalConsultationsCard({
       setNewConsultationAutosaveStatus("idle");
       // Reset draft ID when form closes (draft becomes a real record or was discarded)
       setNewConsultationDraftId(null);
+      consultationDraftLocalTextRef.current = "";
+      consultationDraftLastBroadcastTextRef.current = "";
+      consultationDraftLastSyncedHtmlRef.current = "";
+      consultationDraftPendingTextOpRef.current = null;
     }
   }, [newConsultationOpen]);
 
@@ -6092,17 +6246,23 @@ export default function MedicalConsultationsCard({
                     <div className="relative">
                       <div
                         ref={newConsultationContentRef}
-                        className="min-h-[80px] max-h-64 overflow-y-auto px-2 py-1.5 text-[11px] text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                        className="min-h-[80px] max-h-64 overflow-y-auto whitespace-pre-wrap px-2 py-1.5 text-[11px] text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
                         contentEditable
                         onInput={(event) => {
-                          const html = (event.currentTarget as HTMLDivElement).innerHTML;
+                          const editor = event.currentTarget as HTMLDivElement;
+                          const text = getEditorPlainText(editor);
+                          consultationDraftLocalTextRef.current = text;
+                          consultationDraftPendingTextOpRef.current = buildTextOperation(
+                            consultationDraftLastBroadcastTextRef.current,
+                            text,
+                          );
+                          const html = textToNotesHtml(text);
                           setConsultationContentHtml(html);
                           
                           // Trigger autosave
                           triggerNewConsultationAutosave();
 
                           // Detect @ mentions
-                          const text = (event.currentTarget as HTMLDivElement).textContent || "";
                           const match = text.match(/@([^\s@]{0,50})$/);
                           if (match) {
                             setConsultationMentionActive(true);
@@ -9853,10 +10013,17 @@ export default function MedicalConsultationsCard({
                     contentEditable
                     suppressContentEditableWarning
                     onInput={(event) => {
-                      setEditConsultationContent((event.currentTarget as HTMLDivElement).innerHTML);
+                      const editor = event.currentTarget as HTMLDivElement;
+                      const text = getEditorPlainText(editor);
+                      editConsultationLocalTextRef.current = text;
+                      editConsultationPendingTextOpRef.current = buildTextOperation(
+                        editConsultationLastBroadcastTextRef.current,
+                        text,
+                      );
+                      setEditConsultationContent(textToNotesHtml(text));
                       triggerEditConsultationAutosave();
                     }}
-                    className="min-h-[120px] max-h-64 overflow-y-auto px-3 py-2 text-xs text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                    className="min-h-[120px] max-h-64 overflow-y-auto whitespace-pre-wrap px-3 py-2 text-xs text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
                   />
                   {/* Autosave Status Indicator - below content editor */}
                   <div className="flex items-center justify-end px-3 py-1.5 border-t border-slate-100 text-[10px]">
