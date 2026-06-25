@@ -343,45 +343,53 @@ type ConsultationEditSyncPayload = {
   refIcd10: string;
 };
 
-function getContentEditableCaretOffset(element: HTMLElement): number | null {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) return null;
-  const range = selection.getRangeAt(0);
-  if (!element.contains(range.startContainer)) return null;
-
-  const preCaretRange = range.cloneRange();
-  preCaretRange.selectNodeContents(element);
-  preCaretRange.setEnd(range.startContainer, range.startOffset);
-  return preCaretRange.toString().length;
+function stripContentEditableCaretMarkers(html: string): string {
+  return html.replace(/<span[^>]*data-caret-marker="[^"]+"[^>]*>\uFEFF<\/span>/g, "");
 }
 
-function setContentEditableCaretOffset(element: HTMLElement, offset: number | null) {
-  if (offset === null) return;
-
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-  let remaining = offset;
-  let node = walker.nextNode();
-
-  while (node) {
-    const textLength = node.textContent?.length ?? 0;
-    if (remaining <= textLength) {
-      const range = document.createRange();
-      const selection = window.getSelection();
-      range.setStart(node, remaining);
-      range.collapse(true);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-      return;
-    }
-
-    remaining -= textLength;
-    node = walker.nextNode();
+function getContentEditableHtmlWithCaretMarker(element: HTMLElement): { html: string; markerId: string | null } {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return { html: element.innerHTML, markerId: null };
   }
+
+  const range = selection.getRangeAt(0);
+  if (!element.contains(range.startContainer)) {
+    return { html: element.innerHTML, markerId: null };
+  }
+
+  const markerId = `caret-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const marker = document.createElement("span");
+  marker.setAttribute("data-caret-marker", markerId);
+  marker.style.display = "inline-block";
+  marker.style.width = "0";
+  marker.style.overflow = "hidden";
+  marker.textContent = "\uFEFF";
+
+  const originalRange = range.cloneRange();
+  const markerRange = range.cloneRange();
+  markerRange.collapse(true);
+  markerRange.insertNode(marker);
+  const html = element.innerHTML;
+
+  marker.remove();
+  selection.removeAllRanges();
+  selection.addRange(originalRange);
+
+  return { html, markerId };
+}
+
+function restoreContentEditableCaretMarker(element: HTMLElement, markerId: string | null) {
+  if (!markerId) return;
+
+  const marker = element.querySelector(`[data-caret-marker="${markerId}"]`);
+  if (!marker) return;
 
   const range = document.createRange();
   const selection = window.getSelection();
-  range.selectNodeContents(element);
-  range.collapse(false);
+  range.setStartBefore(marker);
+  range.collapse(true);
+  marker.remove();
   selection?.removeAllRanges();
   selection?.addRange(range);
 }
@@ -1032,6 +1040,7 @@ export default function MedicalConsultationsCard({
   const consultationDraftChannelRef = useRef<ReturnType<typeof supabaseClient.channel> | null>(null);
   const consultationDraftRemoteApplyRef = useRef(false);
   const consultationDraftBroadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const consultationDraftLastSyncedHtmlRef = useRef("");
 
   const [axenitaPdfDocs, setAxenitaPdfDocs] = useState<AxenitaPdfDocument[]>([]);
   const [axenitaPdfLoading, setAxenitaPdfLoading] = useState(false);
@@ -1836,13 +1845,33 @@ export default function MedicalConsultationsCard({
         setConsultationDoctorId(payload.draft.doctorId);
         setConsultationTitle(payload.draft.title);
         setConsultationRecordType(payload.draft.recordType);
-        setConsultationContentHtml(payload.draft.contentHtml);
         setConsultationDiagnosisCode(payload.draft.diagnosisCode);
         setConsultationRefIcd10(payload.draft.refIcd10);
 
+        const editor = newConsultationContentRef.current;
+        const hadFocus = document.activeElement === editor;
+        const localSnapshot = editor
+          ? hadFocus
+            ? getContentEditableHtmlWithCaretMarker(editor)
+            : { html: editor.innerHTML, markerId: null }
+          : { html: consultationContentHtml, markerId: null };
+        const mergedHtmlWithMarker = mergeConcurrentHtml(
+          consultationDraftLastSyncedHtmlRef.current,
+          localSnapshot.html,
+          payload.draft.contentHtml,
+        );
+        const mergedHtml = stripContentEditableCaretMarkers(mergedHtmlWithMarker);
+        consultationDraftLastSyncedHtmlRef.current = mergedHtml;
+        setConsultationContentHtml(mergedHtml);
+
         window.setTimeout(() => {
-          if (newConsultationContentRef.current) {
-            newConsultationContentRef.current.innerHTML = payload.draft.contentHtml;
+          const currentEditor = newConsultationContentRef.current;
+          if (currentEditor && currentEditor.innerHTML !== mergedHtmlWithMarker) {
+            currentEditor.innerHTML = mergedHtmlWithMarker;
+            if (hadFocus) {
+              currentEditor.focus();
+              restoreContentEditableCaretMarker(currentEditor, localSnapshot.markerId);
+            }
           }
           creationFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         }, 0);
@@ -1899,22 +1928,26 @@ export default function MedicalConsultationsCard({
         setEditConsultationRefIcd10(payload.refIcd10);
 
         const editor = editConsultationContentRef.current;
-        const localHtml = editor?.innerHTML ?? editConsultationContent;
-        const mergedHtml = mergeConcurrentHtml(
+        const hadFocus = document.activeElement === editor;
+        const localSnapshot = editor
+          ? hadFocus
+            ? getContentEditableHtmlWithCaretMarker(editor)
+            : { html: editor.innerHTML, markerId: null }
+          : { html: editConsultationContent, markerId: null };
+        const mergedHtmlWithMarker = mergeConcurrentHtml(
           editConsultationLastSyncedHtmlRef.current,
-          localHtml,
+          localSnapshot.html,
           payload.contentHtml,
         );
+        const mergedHtml = stripContentEditableCaretMarkers(mergedHtmlWithMarker);
         editConsultationLastSyncedHtmlRef.current = mergedHtml;
         setEditConsultationContent(mergedHtml);
 
-        if (editor && editor.innerHTML !== mergedHtml) {
-          const hadFocus = document.activeElement === editor;
-          const caretOffset = hadFocus ? getContentEditableCaretOffset(editor) : null;
-          editor.innerHTML = mergedHtml;
+        if (editor && editor.innerHTML !== mergedHtmlWithMarker) {
+          editor.innerHTML = mergedHtmlWithMarker;
           if (hadFocus) {
             editor.focus();
-            setContentEditableCaretOffset(editor, caretOffset);
+            restoreContentEditableCaretMarker(editor, localSnapshot.markerId);
           }
         }
 
@@ -1965,6 +1998,7 @@ export default function MedicalConsultationsCard({
     };
 
     consultationDraftBroadcastTimerRef.current = setTimeout(() => {
+      consultationDraftLastSyncedHtmlRef.current = payload.draft.contentHtml;
       void channel.send({
         type: "broadcast",
         event: "consultation-draft-sync",
@@ -2366,6 +2400,7 @@ export default function MedicalConsultationsCard({
     };
 
     editConsultationSyncTimerRef.current = setTimeout(() => {
+      editConsultationLastSyncedHtmlRef.current = payload.contentHtml;
       void channel.send({
         type: "broadcast",
         event: "consultation-edit-sync",
