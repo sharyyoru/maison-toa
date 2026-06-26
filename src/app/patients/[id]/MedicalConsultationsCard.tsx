@@ -1999,8 +1999,6 @@ export default function MedicalConsultationsCard({
   }, []);
 
   useEffect(() => {
-    if (!newConsultationOpen || consultationRecordType !== "notes") return;
-
     const { room, leave } = liveblocksClient.enterRoom(consultationCollabRoomId, {
       initialPresence: {
         name: currentUserName || currentUserEmail || "User",
@@ -2021,6 +2019,7 @@ export default function MedicalConsultationsCard({
       email: currentUserEmail,
     });
 
+    if (!yfields.get("open")) yfields.set("open", "false");
     if (!yfields.get("date")) yfields.set("date", consultationDate);
     if (!yfields.get("hour")) yfields.set("hour", consultationHour);
     if (!yfields.get("minute")) yfields.set("minute", consultationMinute);
@@ -2047,11 +2046,15 @@ export default function MedicalConsultationsCard({
         setEditorPlainText(editor, text);
       }
       consultationYApplyingRemoteRef.current = false;
-      triggerNewConsultationAutosave();
+      if (yfields.get("open") === "true") {
+        triggerNewConsultationAutosave();
+      }
     };
 
     const applyYFields = () => {
+      const shouldOpen = yfields.get("open") === "true";
       consultationYApplyingRemoteRef.current = true;
+      setNewConsultationOpen(shouldOpen);
       setConsultationDate(yfields.get("date") ?? "");
       setConsultationHour(yfields.get("hour") ?? "");
       setConsultationMinute(yfields.get("minute") ?? "");
@@ -2062,7 +2065,12 @@ export default function MedicalConsultationsCard({
       setConsultationRefIcd10(yfields.get("refIcd10") ?? "");
       setNewConsultationDraftId(yfields.get("draftId") ?? null);
       consultationYApplyingRemoteRef.current = false;
-      triggerNewConsultationAutosave();
+      if (shouldOpen) {
+        window.setTimeout(() => {
+          creationFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 100);
+        triggerNewConsultationAutosave();
+      }
     };
 
     applyYText();
@@ -2097,8 +2105,6 @@ export default function MedicalConsultationsCard({
     consultationCollabRoomId,
     currentUserEmail,
     currentUserName,
-    newConsultationOpen,
-    consultationRecordType,
   ]);
 
   useEffect(() => {
@@ -4497,6 +4503,21 @@ export default function MedicalConsultationsCard({
                     if (currentUserId && recordTypeFilter !== "invoice") {
                       setConsultationDoctorId(currentUserId);
                     }
+                    const ytext = consultationYTextRef.current;
+                    const yfields = consultationYFieldsRef.current;
+                    ytext?.doc?.transact(() => {
+                      ytext.delete(0, ytext.length);
+                      yfields?.set("open", "true");
+                      yfields?.set("date", datePart);
+                      yfields?.set("hour", hourPart);
+                      yfields?.set("minute", minutePart);
+                      yfields?.set("doctorId", currentUserId && recordTypeFilter !== "invoice" ? currentUserId : "");
+                      yfields?.set("title", "");
+                      yfields?.set("recordType", recordTypeFilter || "notes");
+                      yfields?.set("diagnosisCode", "");
+                      yfields?.set("refIcd10", "");
+                      yfields?.delete("draftId");
+                    });
                     setNewConsultationOpen(true);
                     setTimeout(() => {
                       creationFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -5970,6 +5991,7 @@ export default function MedicalConsultationsCard({
                     }
 
                     setConsultationSaving(false);
+                    consultationYFieldsRef.current?.set("open", "false");
                     setNewConsultationOpen(false);
                     setEditingInvoiceId(null);
                     setEditingInvoiceNumber(null);
@@ -8258,6 +8280,7 @@ export default function MedicalConsultationsCard({
                   type="button"
                   onClick={() => {
                     if (consultationSaving) return;
+                    consultationYFieldsRef.current?.set("open", "false");
                     setNewConsultationOpen(false);
                     setConsultationError(null);
                     setEditingInvoiceId(null);
