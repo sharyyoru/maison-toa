@@ -2043,14 +2043,19 @@ export default function MedicalConsultationsCard({
 
       const editor = newConsultationContentRef.current;
       if (editor && getEditorPlainText(editor) !== text) {
+        const previousText = getEditorPlainText(editor);
+        const remoteOperation = buildTextOperation(previousText, text);
         const hadFocus = document.activeElement === editor;
         const caretOffset = hadFocus ? getContentEditableCaretOffset(editor) : null;
+        const nextCaretOffset = remoteOperation
+          ? transformCaretOffsetForTextOperation(caretOffset, remoteOperation)
+          : caretOffset;
         setEditorPlainText(editor, text);
         if (hadFocus) {
           editor.focus();
           restoreContentEditableCaretOffset(
             editor,
-            Math.min(caretOffset ?? text.length, text.length),
+            Math.min(nextCaretOffset ?? text.length, text.length),
           );
         }
       }
