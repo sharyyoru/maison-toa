@@ -5,6 +5,9 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { liveblocksClient } from "@/lib/liveblocksClient";
+import { getYjsProviderForRoom } from "@liveblocks/yjs";
+import * as Y from "yjs";
 import {
   TARDOC_MEDICINES,
   TARDOC_TARIFF_ITEMS,
@@ -311,24 +314,6 @@ type MedProduct = {
   quantity: number | "";
   intakeNote: string;
   intakeFromDate: string;
-};
-
-type ConsultationDraftSyncPayload = {
-  senderClientId?: string;
-  senderUserId?: string | null;
-  open: boolean;
-  draft: {
-    date: string;
-    hour: string;
-    minute: string;
-    doctorId: string;
-    title: string;
-    recordType: ConsultationRecordType;
-    contentHtml: string;
-    textOp?: CollaborativeTextOperation | null;
-    diagnosisCode: string;
-    refIcd10: string;
-  };
 };
 
 type CollaborativeTextOperation = {
@@ -1213,14 +1198,22 @@ export default function MedicalConsultationsCard({
   const [newConsultationAutosaveStatus, setNewConsultationAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved">("idle");
   const newConsultationAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const newConsultationContentRef = useRef<HTMLDivElement>(null);
+  const consultationCollabRoomId = useMemo(
+    () => `patient:${patientId}:consultation-create`,
+    [patientId],
+  );
+  const consultationYDocRef = useRef<Y.Doc | null>(null);
+  const consultationYTextRef = useRef<Y.Text | null>(null);
+  const consultationYFieldsRef = useRef<Y.Map<string> | null>(null);
+  const consultationYApplyingRemoteRef = useRef(false);
+  const [consultationRemoteUsers, setConsultationRemoteUsers] = useState<
+    { id: string; name: string; email: string | null }[]
+  >([]);
   const consultationDraftClientIdRef = useRef(
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : Math.random().toString(36).slice(2),
   );
-  const consultationDraftChannelRef = useRef<ReturnType<typeof supabaseClient.channel> | null>(null);
-  const consultationDraftRemoteApplyRef = useRef(false);
-  const consultationDraftBroadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const consultationDraftLastSyncedHtmlRef = useRef("");
   const consultationDraftLocalTextRef = useRef("");
   const consultationDraftLastBroadcastTextRef = useRef("");
@@ -2006,90 +1999,107 @@ export default function MedicalConsultationsCard({
   }, []);
 
   useEffect(() => {
-    const channel = supabaseClient.channel(`patient-consultation-draft-${patientId}`);
-    consultationDraftChannelRef.current = channel;
+    if (!newConsultationOpen || consultationRecordType !== "notes") return;
 
-    channel
-      .on("broadcast", { event: "consultation-draft-sync" }, (event) => {
-        const payload = event.payload as ConsultationDraftSyncPayload | null;
-        if (!payload || payload.senderClientId === consultationDraftClientIdRef.current) {
-          return;
-        }
+    const { room, leave } = liveblocksClient.enterRoom(consultationCollabRoomId, {
+      initialPresence: {
+        name: currentUserName || currentUserEmail || "User",
+        email: currentUserEmail,
+      },
+    });
+    const provider = getYjsProviderForRoom(room);
+    const ydoc = provider.getYDoc();
+    const ytext = ydoc.getText("notes");
+    const yfields = ydoc.getMap<string>("fields");
 
-        consultationDraftRemoteApplyRef.current = true;
-        setNewConsultationOpen(payload.open);
+    consultationYDocRef.current = ydoc;
+    consultationYTextRef.current = ytext;
+    consultationYFieldsRef.current = yfields;
 
-        if (!payload.open) {
-          return;
-        }
+    room.updatePresence({
+      name: currentUserName || currentUserEmail || "User",
+      email: currentUserEmail,
+    });
 
-        setConsultationDate(payload.draft.date);
-        setConsultationHour(payload.draft.hour);
-        setConsultationMinute(payload.draft.minute);
-        setConsultationDoctorId(payload.draft.doctorId);
-        setConsultationTitle(payload.draft.title);
-        setConsultationRecordType(payload.draft.recordType);
-        setConsultationDiagnosisCode(payload.draft.diagnosisCode);
-        setConsultationRefIcd10(payload.draft.refIcd10);
+    if (!yfields.get("date")) yfields.set("date", consultationDate);
+    if (!yfields.get("hour")) yfields.set("hour", consultationHour);
+    if (!yfields.get("minute")) yfields.set("minute", consultationMinute);
+    if (!yfields.get("doctorId")) yfields.set("doctorId", consultationDoctorId);
+    if (!yfields.get("title")) yfields.set("title", consultationTitle);
+    if (!yfields.get("recordType")) yfields.set("recordType", consultationRecordType);
+    if (!yfields.get("diagnosisCode")) yfields.set("diagnosisCode", consultationDiagnosisCode);
+    if (!yfields.get("refIcd10")) yfields.set("refIcd10", consultationRefIcd10);
+    if (!ytext.length && consultationContentHtml) {
+      ytext.insert(0, htmlToCaretText(consultationContentHtml));
+    }
 
-        const editor = newConsultationContentRef.current;
-        const hadFocus = document.activeElement === editor;
-        const caretOffset = editor && hadFocus ? getContentEditableCaretOffset(editor) : null;
+    const applyYText = () => {
+      const text = ytext.toString();
+      const html = textToNotesHtml(text);
+      consultationDraftLocalTextRef.current = text;
+      consultationDraftLastBroadcastTextRef.current = text;
+      consultationDraftLastSyncedHtmlRef.current = html;
+      consultationYApplyingRemoteRef.current = true;
+      setConsultationContentHtml(html);
 
-        if (payload.draft.textOp) {
-          const currentText = editor
-            ? getEditorPlainText(editor)
-            : consultationDraftLocalTextRef.current || htmlToCaretText(consultationContentHtml);
-          const nextText = applyTextOperation(currentText, payload.draft.textOp);
-          const nextHtml = textToNotesHtml(nextText);
-          const transformedCaretOffset = transformCaretOffsetForTextOperation(
-            caretOffset,
-            payload.draft.textOp,
-          );
+      const editor = newConsultationContentRef.current;
+      if (editor && document.activeElement !== editor) {
+        setEditorPlainText(editor, text);
+      }
+      consultationYApplyingRemoteRef.current = false;
+      triggerNewConsultationAutosave();
+    };
 
-          consultationDraftLocalTextRef.current = nextText;
-          consultationDraftLastBroadcastTextRef.current = nextText;
-          consultationDraftLastSyncedHtmlRef.current = nextHtml;
-          setConsultationContentHtml(nextHtml);
+    const applyYFields = () => {
+      consultationYApplyingRemoteRef.current = true;
+      setConsultationDate(yfields.get("date") ?? "");
+      setConsultationHour(yfields.get("hour") ?? "");
+      setConsultationMinute(yfields.get("minute") ?? "");
+      setConsultationDoctorId(yfields.get("doctorId") ?? "");
+      setConsultationTitle(yfields.get("title") ?? "");
+      setConsultationRecordType((yfields.get("recordType") as ConsultationRecordType) || "notes");
+      setConsultationDiagnosisCode(yfields.get("diagnosisCode") ?? "");
+      setConsultationRefIcd10(yfields.get("refIcd10") ?? "");
+      setNewConsultationDraftId(yfields.get("draftId") ?? null);
+      consultationYApplyingRemoteRef.current = false;
+      triggerNewConsultationAutosave();
+    };
 
-          if (editor) {
-            setEditorPlainText(editor, nextText);
-            if (hadFocus) {
-              editor.focus();
-              restoreContentEditableCaretOffset(editor, transformedCaretOffset);
-            }
-          }
-          return;
-        }
+    applyYText();
+    applyYFields();
 
-        const mergedHtml = stripContentEditableCaretMarkers(payload.draft.contentHtml);
-        consultationDraftLastSyncedHtmlRef.current = mergedHtml;
-        consultationDraftLocalTextRef.current = htmlToCaretText(mergedHtml);
-        consultationDraftLastBroadcastTextRef.current = consultationDraftLocalTextRef.current;
-        setConsultationContentHtml(mergedHtml);
-
-        window.setTimeout(() => {
-          const currentEditor = newConsultationContentRef.current;
-          if (
-            currentEditor &&
-            document.activeElement !== currentEditor &&
-            currentEditor.innerHTML !== mergedHtml
-          ) {
-            currentEditor.innerHTML = mergedHtml;
-          }
-        }, 0);
-      })
-      .subscribe();
+    ytext.observe(applyYText);
+    yfields.observe(applyYFields);
+    const unsubscribeOthers = room.subscribe("others", (others) => {
+      setConsultationRemoteUsers(
+        Array.from((others as any).values ? (others as any).values() : others as any[])
+          .map((other: any) => ({
+            id: String(other.connectionId ?? other.id ?? ""),
+            name: other.presence?.name || other.info?.name || "User",
+            email: other.presence?.email || other.info?.email || null,
+          }))
+          .filter((user) => user.id),
+      );
+    });
 
     return () => {
-      if (consultationDraftBroadcastTimerRef.current) {
-        clearTimeout(consultationDraftBroadcastTimerRef.current);
-        consultationDraftBroadcastTimerRef.current = null;
-      }
-      consultationDraftChannelRef.current = null;
-      void supabaseClient.removeChannel(channel);
+      ytext.unobserve(applyYText);
+      yfields.unobserve(applyYFields);
+      unsubscribeOthers();
+      provider.destroy();
+      leave();
+      consultationYDocRef.current = null;
+      consultationYTextRef.current = null;
+      consultationYFieldsRef.current = null;
+      setConsultationRemoteUsers([]);
     };
-  }, [patientId]);
+  }, [
+    consultationCollabRoomId,
+    currentUserEmail,
+    currentUserName,
+    newConsultationOpen,
+    consultationRecordType,
+  ]);
 
   useEffect(() => {
     const channel = supabaseClient.channel(`patient-consultation-edit-${patientId}`);
@@ -2191,55 +2201,24 @@ export default function MedicalConsultationsCard({
   }, [editConsultationModalOpen, editConsultationTarget?.id, patientId]);
 
   useEffect(() => {
-    const channel = consultationDraftChannelRef.current;
-    if (!channel) return;
+    if (!newConsultationOpen || consultationRecordType !== "notes") return;
+    if (consultationYApplyingRemoteRef.current) return;
 
-    if (consultationDraftRemoteApplyRef.current) {
-      consultationDraftRemoteApplyRef.current = false;
-      return;
-    }
+    const fields = consultationYFieldsRef.current;
+    if (!fields) return;
 
-    if (consultationDraftBroadcastTimerRef.current) {
-      clearTimeout(consultationDraftBroadcastTimerRef.current);
-    }
-
-    const currentDraftText = consultationDraftLocalTextRef.current;
-    const currentDraftHtml = textToNotesHtml(currentDraftText);
-    const draftTextOp = buildTextOperation(
-      consultationDraftLastBroadcastTextRef.current,
-      currentDraftText,
-    );
-
-    const payload: ConsultationDraftSyncPayload = {
-      senderClientId: consultationDraftClientIdRef.current,
-      senderUserId: currentUserId,
-      open: newConsultationOpen,
-      draft: {
-        date: consultationDate,
-        hour: consultationHour,
-        minute: consultationMinute,
-        doctorId: consultationDoctorId,
-        title: consultationTitle,
-        recordType: consultationRecordType,
-        contentHtml: currentDraftHtml || consultationContentHtml,
-        textOp: draftTextOp,
-        diagnosisCode: consultationDiagnosisCode,
-        refIcd10: consultationRefIcd10,
-      },
-    };
-
-    consultationDraftBroadcastTimerRef.current = setTimeout(() => {
-      consultationDraftLastSyncedHtmlRef.current = payload.draft.contentHtml;
-      consultationDraftLastBroadcastTextRef.current = currentDraftText;
-      void channel.send({
-        type: "broadcast",
-        event: "consultation-draft-sync",
-        payload,
-      });
-      consultationDraftPendingTextOpRef.current = null;
-    }, newConsultationOpen ? 120 : 0);
+    fields.doc?.transact(() => {
+      fields.set("date", consultationDate);
+      fields.set("hour", consultationHour);
+      fields.set("minute", consultationMinute);
+      fields.set("doctorId", consultationDoctorId);
+      fields.set("title", consultationTitle);
+      fields.set("recordType", consultationRecordType);
+      fields.set("diagnosisCode", consultationDiagnosisCode);
+      fields.set("refIcd10", consultationRefIcd10);
+      if (newConsultationDraftId) fields.set("draftId", newConsultationDraftId);
+    });
   }, [
-    consultationContentHtml,
     consultationDate,
     consultationDiagnosisCode,
     consultationDoctorId,
@@ -2248,7 +2227,7 @@ export default function MedicalConsultationsCard({
     consultationRecordType,
     consultationRefIcd10,
     consultationTitle,
-    currentUserId,
+    newConsultationDraftId,
     newConsultationOpen,
   ]);
 
@@ -3336,125 +3315,83 @@ export default function MedicalConsultationsCard({
   // Creates a draft consultation on first input, then auto-saves after 1 second of inactivity
   
   async function handleNewConsultationAutosave() {
-    // Only autosave for "notes" type (not invoices/prescriptions which have complex data)
     if (consultationRecordType !== "notes") return;
-    
+
     const htmlContent = newConsultationContentRef.current
       ? textToNotesHtml(getEditorPlainText(newConsultationContentRef.current))
       : consultationContentHtml;
-    
-    // Need at least title or content to save
+
     if (!consultationTitle.trim() && !htmlContent.replace(/<[^>]+>/g, "").trim()) return;
-    
+
     setNewConsultationAutosaveStatus("saving");
-    
+
     try {
-      // Build scheduled_at - default to today if no date selected
-      const dateToUse = consultationDate || new Date().toISOString().split('T')[0];
+      const dateToUse = consultationDate || new Date().toISOString().split("T")[0];
       const h = consultationHour || "00";
       const m = consultationMinute || "00";
       const scheduledAt = new Date(`${dateToUse}T${h}:${m}:00`).toISOString();
-      
-      // Find doctor name (optional for drafts)
-      const doctor = consultationDoctorId ? medicalStaffOptions.find((u) => u.id === consultationDoctorId) : null;
+      const doctor = consultationDoctorId
+        ? medicalStaffOptions.find((u) => u.id === consultationDoctorId)
+        : null;
       const doctorName = doctor?.name || null;
-      
-      if (newConsultationDraftId) {
-        // UPDATE existing draft
-        const { error } = await supabaseClient
-          .from("consultations")
-          .update({
-            title: consultationTitle || "Draft",
-            content: htmlContent,
-            record_type: "notes",
-            doctor_user_id: consultationDoctorId || null,
-            doctor_name: doctorName,
-            scheduled_at: scheduledAt,
-            diagnosis_code: consultationDiagnosisCode.trim() || null,
-            ref_icd10: consultationRefIcd10.trim() || null,
-          })
-          .eq("id", newConsultationDraftId);
-          
-        if (error) {
-          console.error("Autosave update failed:", error.message);
-          setNewConsultationAutosaveStatus("idle");
-          return;
-        }
-        
-        // Update local state
-        setConsultations((prev) =>
-          prev.map((row) =>
-            row.id === newConsultationDraftId
-              ? {
-                  ...row,
-                  title: consultationTitle || "Draft",
-                  content: htmlContent,
-                  doctor_user_id: consultationDoctorId,
-                  doctor_name: doctorName,
-                  scheduled_at: scheduledAt,
-                  diagnosis_code: consultationDiagnosisCode.trim() || null,
-                  ref_icd10: consultationRefIcd10.trim() || null,
-                }
-              : row
-          )
-        );
-        broadcastPatientRealtimeRefresh({ force: true });
-      } else {
-        // CREATE new draft consultation — need to generate consultation_id first
-        const { data: generatedId, error: rpcError } = await supabaseClient
-          .rpc('generate_invoice_number');
-        
-        if (rpcError || !generatedId) {
-          console.error("Autosave: failed to generate consultation_id:", rpcError?.message);
-          setNewConsultationAutosaveStatus("idle");
-          return;
-        }
 
-        const { data, error } = await supabaseClient
-          .from("consultations")
-          .insert({
-            patient_id: patientId,
-            consultation_id: generatedId as string,
-            title: consultationTitle || "Draft",
-            content: htmlContent,
-            record_type: "notes",
-            doctor_user_id: consultationDoctorId || null,
-            doctor_name: doctorName,
-            scheduled_at: scheduledAt,
-            diagnosis_code: consultationDiagnosisCode.trim() || null,
-            ref_icd10: consultationRefIcd10.trim() || null,
-          })
-          .select("id, patient_id, consultation_id, title, content, record_type, doctor_user_id, doctor_name, scheduled_at, payment_method, duration_seconds, invoice_total_amount, invoice_is_complimentary, invoice_is_paid, invoice_status, invoice_paid_amount, cash_receipt_path, invoice_pdf_path, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, archived_at, diagnosis_code, ref_icd10")
-          .single();
-          
-        if (error) {
-          console.error("Autosave create failed:", error.message);
-          setNewConsultationAutosaveStatus("idle");
-          return;
-        }
-        
-        if (data) {
-          setNewConsultationDraftId(data.id);
-          // Add draft to local state so it appears in the list
-          const newRow: ConsultationRow = {
-            ...data,
-            invoice_id: null,
-            reference_number: null,
-            linked_invoice_id: null,
-            linked_invoice_status: null,
-            linked_invoice_number: null,
-            medidata_status: null,
-            invoice_pdf_path_tg: null,
-            invoice_pdf_path_tp: null,
-            invoice_pdf_path_reminder: null,
-            invoice_pdf_path_receipt: null,
-          };
-          setConsultations((prev) => [newRow, ...prev]);
-          broadcastPatientRealtimeRefresh({ force: true });
-          console.log("Draft consultation created:", data.id);
-        }
+      const {
+        data: { session },
+      } = await supabaseClient.auth.getSession();
+
+      const response = await fetch("/api/consultation-drafts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {}),
+        },
+        body: JSON.stringify({
+          patientId,
+          roomId: consultationCollabRoomId,
+          title: consultationTitle || "Draft",
+          contentHtml: htmlContent,
+          recordType: "notes",
+          doctorId: consultationDoctorId,
+          doctorName,
+          scheduledAt,
+          diagnosisCode: consultationDiagnosisCode,
+          refIcd10: consultationRefIcd10,
+        }),
+      });
+
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.draft) {
+        console.error("Autosave failed:", result?.error ?? response.statusText);
+        setNewConsultationAutosaveStatus("idle");
+        return;
       }
-      
+
+      const data = result.draft;
+      setNewConsultationDraftId(data.id);
+      consultationYFieldsRef.current?.set("draftId", data.id);
+      const newRow: ConsultationRow = {
+        ...data,
+        invoice_id: null,
+        reference_number: null,
+        linked_invoice_id: null,
+        linked_invoice_status: null,
+        linked_invoice_number: null,
+        medidata_status: null,
+        invoice_pdf_path_tg: null,
+        invoice_pdf_path_tp: null,
+        invoice_pdf_path_reminder: null,
+        invoice_pdf_path_receipt: null,
+      };
+      setConsultations((prev) => {
+        const exists = prev.some((row) => row.id === data.id);
+        return exists
+          ? prev.map((row) => (row.id === data.id ? newRow : row))
+          : [newRow, ...prev];
+      });
+      broadcastPatientRealtimeRefresh({ force: true });
+
       setNewConsultationAutosaveStatus("saved");
       setTimeout(() => setNewConsultationAutosaveStatus("idle"), 2000);
     } catch (err) {
@@ -3462,7 +3399,7 @@ export default function MedicalConsultationsCard({
       setNewConsultationAutosaveStatus("idle");
     }
   }
-  
+
   function triggerNewConsultationAutosave() {
     // Only for notes type
     if (consultationRecordType !== "notes") return;
@@ -5948,16 +5885,42 @@ export default function MedicalConsultationsCard({
 
                       // If we have a draft from autosave, update it instead of creating new
                       if (newConsultationDraftId) {
-                        const result = await supabaseClient
-                          .from("consultations")
-                          .update(consultationPayload)
-                          .eq("id", newConsultationDraftId)
-                          .select(
-                            "id, patient_id, consultation_id, title, content, record_type, doctor_user_id, doctor_name, scheduled_at, payment_method, duration_seconds, invoice_total_amount, invoice_is_complimentary, invoice_is_paid, invoice_status, invoice_paid_amount, cash_receipt_path, invoice_pdf_path, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, archived_at, diagnosis_code, ref_icd10",
-                          )
-                          .single();
-                        data = result.data;
-                        error = result.error;
+                        const {
+                          data: { session },
+                        } = await supabaseClient.auth.getSession();
+                        const finalizeResponse = await fetch("/api/consultation-drafts/finalize", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                            ...(session?.access_token
+                              ? { Authorization: `Bearer ${session.access_token}` }
+                              : {}),
+                          },
+                          body: JSON.stringify({
+                            draftId: newConsultationDraftId,
+                            patientId,
+                            title: effectiveTitle,
+                            contentHtml,
+                            recordType: consultationRecordType,
+                            doctorId: consultationDoctorId,
+                            doctorName,
+                            scheduledAt: scheduledAtIso,
+                            paymentMethod,
+                            durationSeconds: durationSeconds || 0,
+                            diagnosisCode: consultationDiagnosisCode,
+                            refIcd10: consultationRefIcd10,
+                          }),
+                        });
+                        const finalizeResult = await finalizeResponse.json().catch(() => null);
+                        if (!finalizeResponse.ok || !finalizeResult?.consultation) {
+                          error = {
+                            message:
+                              finalizeResult?.error ??
+                              "Failed to finalize consultation draft.",
+                          };
+                        } else {
+                          data = finalizeResult.consultation;
+                        }
                       } else {
                         const result = await supabaseClient
                           .from("consultations")
@@ -5998,6 +5961,7 @@ export default function MedicalConsultationsCard({
                           )
                         );
                         setNewConsultationDraftId(null);
+                        consultationYFieldsRef.current?.delete("draftId");
                       } else {
                         setConsultations((prev) => [savedRow, ...prev]);
                       }
@@ -6252,10 +6216,13 @@ export default function MedicalConsultationsCard({
                           const editor = event.currentTarget as HTMLDivElement;
                           const text = getEditorPlainText(editor);
                           consultationDraftLocalTextRef.current = text;
-                          consultationDraftPendingTextOpRef.current = buildTextOperation(
-                            consultationDraftLastBroadcastTextRef.current,
-                            text,
-                          );
+                          const ytext = consultationYTextRef.current;
+                          if (ytext && !consultationYApplyingRemoteRef.current) {
+                            ytext.doc?.transact(() => {
+                              ytext.delete(0, ytext.length);
+                              ytext.insert(0, text);
+                            });
+                          }
                           const html = textToNotesHtml(text);
                           setConsultationContentHtml(html);
                           
@@ -6323,7 +6290,20 @@ export default function MedicalConsultationsCard({
                     </div>
                     {/* Autosave Status Indicator - below content editor */}
                     {consultationRecordType === "notes" && (
-                      <div className="flex items-center justify-end px-2 py-1 border-t border-slate-100 text-[10px]">
+                      <div className="flex items-center justify-between gap-2 px-2 py-1 border-t border-slate-100 text-[10px]">
+                        <div className="flex min-w-0 items-center gap-1 text-slate-500">
+                          {consultationRemoteUsers.length > 0 ? (
+                            <>
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              <span className="truncate">
+                                Editing with {consultationRemoteUsers.map((user) => user.name).join(", ")}
+                              </span>
+                            </>
+                          ) : (
+                            <span />
+                          )}
+                        </div>
+                        <div className="shrink-0">
                         {newConsultationAutosaveStatus === "pending" && (
                           <span className="text-amber-600 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
@@ -6347,6 +6327,7 @@ export default function MedicalConsultationsCard({
                             Auto-saved
                           </span>
                         )}
+                        </div>
                       </div>
                     )}
                   </div>
