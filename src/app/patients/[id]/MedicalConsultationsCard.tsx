@@ -2042,8 +2042,17 @@ export default function MedicalConsultationsCard({
       setConsultationContentHtml(html);
 
       const editor = newConsultationContentRef.current;
-      if (editor && document.activeElement !== editor) {
+      if (editor && getEditorPlainText(editor) !== text) {
+        const hadFocus = document.activeElement === editor;
+        const caretOffset = hadFocus ? getContentEditableCaretOffset(editor) : null;
         setEditorPlainText(editor, text);
+        if (hadFocus) {
+          editor.focus();
+          restoreContentEditableCaretOffset(
+            editor,
+            Math.min(caretOffset ?? text.length, text.length),
+          );
+        }
       }
       consultationYApplyingRemoteRef.current = false;
       if (yfields.get("open") === "true") {
@@ -6240,9 +6249,15 @@ export default function MedicalConsultationsCard({
                           consultationDraftLocalTextRef.current = text;
                           const ytext = consultationYTextRef.current;
                           if (ytext && !consultationYApplyingRemoteRef.current) {
+                            const operation = buildTextOperation(ytext.toString(), text);
                             ytext.doc?.transact(() => {
-                              ytext.delete(0, ytext.length);
-                              ytext.insert(0, text);
+                              if (!operation) return;
+                              if (operation.deleteCount > 0) {
+                                ytext.delete(operation.start, operation.deleteCount);
+                              }
+                              if (operation.insertText) {
+                                ytext.insert(operation.start, operation.insertText);
+                              }
                             });
                           }
                           const html = textToNotesHtml(text);
