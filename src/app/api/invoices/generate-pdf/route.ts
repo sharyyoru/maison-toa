@@ -53,6 +53,12 @@ type ProviderData = {
   qual_dignities?: string[] | null;
 };
 
+/** "Madame" / "Monsieur" salutation derived from the stored gender value. */
+function patientSalutation(gender: string | null): string {
+  if (!gender) return "";
+  return gender.toLowerCase() === "female" ? "Madame" : "Monsieur";
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { invoiceId, invoiceType = "tp", reminderLevel = 1 } = await request.json();
@@ -508,6 +514,7 @@ export async function POST(request: NextRequest) {
         patientAddress: {
           familyName: patientData.last_name,
           givenName: patientData.first_name,
+          salutation: patientSalutation(patientData.gender),
           street: patientData.street_address || "",
           zip: patientData.postal_code || "",
           city: patientData.town || "",
@@ -518,6 +525,7 @@ export async function POST(request: NextRequest) {
         guarantorAddress: {
           familyName: patientData.last_name,
           givenName: patientData.first_name,
+          salutation: patientSalutation(patientData.gender),
           street: patientData.street_address || "",
           zip: patientData.postal_code || "",
           city: patientData.town || "",
@@ -791,6 +799,7 @@ export async function POST(request: NextRequest) {
         patientAddress: {
           familyName: patientData.last_name || "Patient",
           givenName: patientData.first_name || "Unknown",
+          salutation: patientSalutation(patientData.gender),
           street: patientData.street_address || provStreetFull || "N/A",
           zip: patientData.postal_code || provZip || "0000",
           city: patientData.town || provCity || "N/A",
@@ -801,6 +810,7 @@ export async function POST(request: NextRequest) {
         guarantorAddress: {
           familyName: patientData.last_name || "Patient",
           givenName: patientData.first_name || "Unknown",
+          salutation: patientSalutation(patientData.gender),
           street: patientData.street_address || provStreetFull || "N/A",
           zip: patientData.postal_code || provZip || "0000",
           city: patientData.town || provCity || "N/A",
