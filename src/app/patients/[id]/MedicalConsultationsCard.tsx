@@ -1156,6 +1156,7 @@ export default function MedicalConsultationsCard({
   const [paymentStatusModalOpen, setPaymentStatusModalOpen] = useState(false);
   const [paymentStatusTarget, setPaymentStatusTarget] = useState<ConsultationRow | null>(null);
   const [markingPaid, setMarkingPaid] = useState(false);
+  const [paymentDate, setPaymentDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
 
   const [insuranceBillingModalOpen, setInsuranceBillingModalOpen] = useState(false);
   const [insuranceBillingTarget, setInsuranceBillingTarget] = useState<ConsultationRow | null>(null);
@@ -3929,21 +3930,29 @@ export default function MedicalConsultationsCard({
 
   function handleManagePaymentStatus(invoice: ConsultationRow) {
     setPaymentStatusTarget(invoice);
+    // Pre-fill the date picker with today (reset every time modal opens)
+    setPaymentDate(new Date().toISOString().split("T")[0]);
     setPaymentStatusModalOpen(true);
   }
 
-  async function handleMarkInvoicePaid(invoiceId: string, status: InvoiceStatus = "PAID", paidAmount?: number) {
+  async function handleMarkInvoicePaid(invoiceId: string, status: InvoiceStatus = "PAID", paidAmount?: number, customPaidDate?: string) {
     try {
       setMarkingPaid(true);
 
       // Get current user for audit trail
       const { data: authData } = await supabaseClient.auth.getUser();
       const userId = authData?.user?.id || null;
-      const paidAt = new Date().toISOString();
+
+      // Use custom date if provided (from the date picker); fall back to now.
+      // customPaidDate is a YYYY-MM-DD string — store as end-of-day in UTC so the
+      // date is unambiguous across timezones.
+      const paidAt = customPaidDate
+        ? new Date(`${customPaidDate}T23:59:59`).toISOString()
+        : new Date().toISOString();
 
       const invoiceUpdateData: Record<string, unknown> = {
         status,
-        paid_at: paidAt,
+        paid_at: (status === "OPEN" || status === "CANCELLED") ? null : paidAt,
         paid_by_user_id: userId,
       };
 
@@ -9551,6 +9560,24 @@ export default function MedicalConsultationsCard({
                 </div>
               </div>
 
+              {/* Payment Date picker — shown for all statuses that record a payment date */}
+              <div className="space-y-1">
+                <label htmlFor="payment-date-input" className="block text-xs font-medium text-slate-700">
+                  Payment Date
+                </label>
+                <input
+                  id="payment-date-input"
+                  type="date"
+                  value={paymentDate}
+                  max={new Date().toISOString().split("T")[0]}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
+                />
+                <p className="text-[10px] text-slate-500">
+                  Defaults to today. Change this if the payment was received on a different date (e.g. June payment for a May invoice).
+                </p>
+              </div>
+
               <div className="space-y-3">
                 <label className="block text-xs font-medium text-slate-700">Update Status</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -9568,13 +9595,13 @@ export default function MedicalConsultationsCard({
                             if (amount !== null) {
                               const paidAmount = parseFloat(amount);
                               if (!isNaN(paidAmount) && paidAmount >= 0) {
-                                handleMarkInvoicePaid(paymentStatusTarget.id, status, paidAmount);
+                                handleMarkInvoicePaid(paymentStatusTarget.id, status, paidAmount, paymentDate);
                               } else {
                                 alert("Please enter a valid amount.");
                               }
                             }
                           } else {
-                            handleMarkInvoicePaid(paymentStatusTarget.id, status, status === "PAID" ? paymentStatusTarget.invoice_total_amount ?? undefined : undefined);
+                            handleMarkInvoicePaid(paymentStatusTarget.id, status, status === "PAID" ? paymentStatusTarget.invoice_total_amount ?? undefined : undefined, paymentDate);
                           }
                         }}
                         className={`inline-flex items-center justify-center gap-1 rounded-lg border px-3 py-2 text-[11px] font-medium transition-all ${isCurrentStatus

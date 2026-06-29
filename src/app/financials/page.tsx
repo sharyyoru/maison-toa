@@ -126,6 +126,7 @@ export default function FinancialsPage() {
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [dateFromFilter, setDateFromFilter] = useState<string>("");
   const [dateToFilter, setDateToFilter] = useState<string>("");
+  const [dateField, setDateField] = useState<"invoice_date" | "paid_at">("invoice_date");
   const [invoiceTypeFilter, setInvoiceTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showOnlyUnpaid, setShowOnlyUnpaid] = useState(false);
@@ -212,11 +213,11 @@ export default function FinancialsPage() {
           .eq("is_archived", false);
 
         if (dateFromFilter) {
-          query = query.gte("invoice_date", dateFromFilter);
+          query = query.gte(dateField, dateFromFilter);
         }
 
         if (dateToFilter) {
-          query = query.lte("invoice_date", dateToFilter);
+          query = query.lte(dateField, dateToFilter);
         }
 
         if (patientFilter !== "all") {
@@ -301,6 +302,7 @@ export default function FinancialsPage() {
   }, [
     dateFromFilter,
     dateToFilter,
+    dateField,
     patientFilter,
     ownerFilter,
     invoiceTypeFilter,
@@ -434,6 +436,7 @@ export default function FinancialsPage() {
   }, [
     dateFromFilter,
     dateToFilter,
+    dateField,
     patientFilter,
     ownerFilter,
     invoiceTypeFilter,
@@ -809,6 +812,26 @@ export default function FinancialsPage() {
 
       {activeTab === "overview" && <>
       <div className="grid gap-3 financials-hide-on-print sm:grid-cols-2 lg:grid-cols-6">
+        <div className="space-y-1 text-[11px] font-medium text-slate-500 lg:col-span-1">
+          <span>Date Filter By</span>
+          <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm text-xs font-normal text-slate-900">
+            <button
+              type="button"
+              onClick={() => { setDateField("invoice_date"); setInvoicePage(0); }}
+              className={`flex-1 px-2 py-1.5 transition-colors ${dateField === "invoice_date" ? "bg-sky-500 text-white font-medium" : "hover:bg-slate-50 text-slate-700"}`}
+            >
+              Invoice Date
+            </button>
+            <button
+              type="button"
+              onClick={() => { setDateField("paid_at"); setInvoicePage(0); }}
+              className={`flex-1 px-2 py-1.5 transition-colors ${dateField === "paid_at" ? "bg-sky-500 text-white font-medium" : "hover:bg-slate-50 text-slate-700"}`}
+            >
+              Payment Date
+            </button>
+          </div>
+        </div>
+
         <label className="space-y-1 text-[11px] font-medium text-slate-500">
           <span>{t("dateFromFilter")}</span>
           <input
