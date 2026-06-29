@@ -1243,7 +1243,7 @@ export default function MedicalConsultationsCard({
   const consultationNotesEditor = useEditor(
     {
       extensions: [
-        StarterKit.configure({ undoRedo: false }),
+        StarterKit.configure({ link: false, undoRedo: false }),
         Link.configure({
           openOnClick: false,
           autolink: true,
