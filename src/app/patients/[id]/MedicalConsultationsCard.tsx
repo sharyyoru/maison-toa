@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
+import { FormEvent, type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -1276,7 +1276,7 @@ export default function MedicalConsultationsCard({
       editorProps: {
         attributes: {
           class:
-            "min-h-[170px] px-3 py-2 text-xs leading-5 text-slate-900 focus:outline-none [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:py-0.5 [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1.5 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-semibold [&_p]:my-1 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5",
+            "min-h-[220px] cursor-text px-3 py-2 text-xs leading-5 text-slate-900 focus:outline-none [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:py-0.5 [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1.5 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-semibold [&_p]:my-1 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5",
         },
       },
       immediatelyRender: false,
@@ -2180,6 +2180,37 @@ export default function MedicalConsultationsCard({
       .extendMarkRange("link")
       .setLink({ href: trimmed })
       .run();
+  }
+
+  function handleConsultationNotesCanvasMouseDown(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!consultationNotesEditor) return;
+
+    const editorElement = event.currentTarget.querySelector(".ProseMirror") as HTMLElement | null;
+    if (!editorElement) return;
+
+    const targetNode = event.target as Node | null;
+    const targetElement =
+      targetNode instanceof HTMLElement ? targetNode : targetNode?.parentElement ?? null;
+    const clickedDocumentNode = targetElement?.closest(".ProseMirror > *") as HTMLElement | null;
+
+    if (clickedDocumentNode && targetElement !== editorElement) {
+      return;
+    }
+
+    const contentNodes = Array.from(editorElement.children).filter(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement && !child.classList.contains("collaboration-cursor__caret"),
+    );
+    const lastContentNode = contentNodes[contentNodes.length - 1] ?? null;
+    const editorTop = editorElement.getBoundingClientRect().top;
+    const lastContentBottom = lastContentNode?.getBoundingClientRect().bottom ?? editorTop;
+    const clickedBelowContent = event.clientY >= lastContentBottom - 2;
+    const clickedEditorCanvas = targetElement === editorElement || event.target === event.currentTarget;
+
+    if (consultationNotesEditor.isEmpty || clickedEditorCanvas || clickedBelowContent) {
+      event.preventDefault();
+      consultationNotesEditor.chain().focus("end").run();
+    }
   }
 
   useEffect(() => {
@@ -6416,16 +6447,12 @@ export default function MedicalConsultationsCard({
                       </button>
                     </div>
                     <div
-                      className="relative max-h-80 min-h-[190px] cursor-text overflow-y-auto bg-white"
-                      onMouseDown={(event) => {
-                        if (event.target !== event.currentTarget) return;
-                        event.preventDefault();
-                        consultationNotesEditor?.chain().focus("end").run();
-                      }}
+                      className="relative max-h-80 min-h-[220px] cursor-text overflow-y-auto bg-white"
+                      onMouseDown={handleConsultationNotesCanvasMouseDown}
                     >
                       <EditorContent
                         editor={consultationNotesEditor}
-                        className="min-h-[190px]"
+                        className="min-h-[220px] [&_.ProseMirror]:min-h-[220px] [&_.ProseMirror]:cursor-text"
                       />
                       {consultationMentionActive && (() => {
                         const mentionQuery = consultationMentionQuery.trim();
