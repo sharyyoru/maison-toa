@@ -136,6 +136,12 @@ export default function FinancialsPage() {
   const [patientPage, setPatientPage] = useState(0);
   const ROWS_PER_PAGE = 50;
 
+  // Realtime auto-refresh — bumping this causes the loadInvoices effect to re-run.
+  const [reloadVersion, setReloadVersion] = useState(0);
+  const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track whether any filter is actively being typed (to avoid mid-edit reloads).
+  const isFilteringRef = useRef(false);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -193,6 +199,37 @@ export default function FinancialsPage() {
       isMounted = false;
     };
   }, []);
+
+  // Supabase realtime: re-run the current query ~3 s after any invoice change.
+  // Only triggers an immediate reload when on page 0 so we don't disrupt pagination.
+  // The debounce collapses rapid bursts (e.g. bulk status updates) into one query.
+  useEffect(() => {
+    function scheduleReload() {
+      if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+      realtimeDebounceRef.current = setTimeout(() => {
+        if (isFilteringRef.current) return; // don't reload while user is mid-filter-edit
+        setInvoicePage((prev) => {
+          if (prev === 0) {
+            // On page 0 → bump reloadVersion to re-run the query in-place
+            setReloadVersion((v) => v + 1);
+            return 0;
+          }
+          // On other pages → jump back to page 0 (the page-change itself triggers reload)
+          return 0;
+        });
+      }, 3000);
+    }
+
+    const channel = supabaseClient
+      .channel("financials-invoices-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, scheduleReload)
+      .subscribe();
+
+    return () => {
+      if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+      void supabaseClient.removeChannel(channel);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let isMounted = true;
@@ -309,6 +346,7 @@ export default function FinancialsPage() {
     statusFilter,
     showOnlyUnpaid,
     invoicePage,
+    reloadVersion,
   ]);
 
   const normalizedInvoices = useMemo<NormalizedInvoice[]>(() => {
@@ -837,6 +875,8 @@ export default function FinancialsPage() {
           <input
             type="date"
             value={dateFromFilter}
+            onFocus={() => { isFilteringRef.current = true; }}
+            onBlur={() => { isFilteringRef.current = false; }}
             onChange={(event) => setDateFromFilter(event.target.value)}
             className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-normal text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
           />
@@ -847,6 +887,8 @@ export default function FinancialsPage() {
           <input
             type="date"
             value={dateToFilter}
+            onFocus={() => { isFilteringRef.current = true; }}
+            onBlur={() => { isFilteringRef.current = false; }}
             onChange={(event) => setDateToFilter(event.target.value)}
             className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-normal text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
           />
