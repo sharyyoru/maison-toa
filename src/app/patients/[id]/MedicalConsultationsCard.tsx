@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
@@ -11,6 +11,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
+import Link from "@tiptap/extension-link";
 import * as Y from "yjs";
 import {
   TARDOC_MEDICINES,
@@ -676,7 +677,7 @@ function ServiceSearchPicker({
               <span className="flex-1 truncate font-medium text-slate-800">{activeCat.name}</span>
             </>
           ) : (
-            <span className="flex-1 text-slate-400">Toutes les catégories</span>
+            <span className="flex-1 text-slate-400">Toutes les catÃ©gories</span>
           )}
           <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -686,13 +687,13 @@ function ServiceSearchPicker({
           <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
             <div className="p-2 border-b border-slate-100">
               <input autoFocus type="text" value={catQuery} onChange={e => setCatQuery(e.target.value)}
-                placeholder="Rechercher catégorie..." className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-sky-400" />
+                placeholder="Rechercher catÃ©gorie..." className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-sky-400" />
             </div>
             <div className="max-h-48 overflow-y-auto">
               <button type="button" onClick={() => { onCategoryChange(""); onServiceChange(""); setCatOpen(false); setCatQuery(""); }}
                 className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-slate-50 ${!selectedCategoryId ? "bg-sky-50 font-medium text-sky-700" : "text-slate-600"}`}>
                 <span className="w-2.5 h-2.5 rounded-full bg-slate-200 shrink-0" />
-                Toutes les catégories
+                Toutes les catÃ©gories
               </button>
               {filteredCats.map(c => (
                 <button key={c.id} type="button"
@@ -733,7 +734,7 @@ function ServiceSearchPicker({
               </div>
             </div>
           ) : (
-            <span className="text-slate-400 flex-1">— sélectionner un service —</span>
+            <span className="text-slate-400 flex-1">â€” sÃ©lectionner un service â€”</span>
           )}
           <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -759,11 +760,11 @@ function ServiceSearchPicker({
                   onClick={() => { onServiceChange(""); setOpen(false); setQuery(""); }}
                   className="w-full px-3 py-1.5 text-left text-[10px] text-red-500 hover:bg-red-50 border-b border-slate-100"
                 >
-                  ✕ Effacer la sélection
+                  âœ• Effacer la sÃ©lection
                 </button>
               )}
               {filtered.length === 0 ? (
-                <div className="px-3 py-4 text-xs text-slate-400 text-center">Aucun service trouvé</div>
+                <div className="px-3 py-4 text-xs text-slate-400 text-center">Aucun service trouvÃ©</div>
               ) : (
                 filtered.map((s) => {
                   const cat = categories.find((c) => c.id === s.category_id);
@@ -925,7 +926,7 @@ export default function MedicalConsultationsCard({
   // Tracks whether the user has manually picked a billing entity for this form session.
   // Reset when the doctor changes so auto-prefill kicks in again.
   const [billingEntityOverride, setBillingEntityOverride] = useState(false);
-  // Appointment linking for deposit invoices — hidden unless staff explicitly enables it
+  // Appointment linking for deposit invoices â€” hidden unless staff explicitly enables it
   const [invoiceApptLinkEnabled, setInvoiceApptLinkEnabled] = useState(false);
   const [invoiceAppointmentId, setInvoiceAppointmentId] = useState<string>("");
   const [invoicePatientAppointments, setInvoicePatientAppointments] = useState<{ id: string; start_time: string; reason: string | null; title: string | null }[]>([]);
@@ -1243,6 +1244,14 @@ export default function MedicalConsultationsCard({
     {
       extensions: [
         StarterKit.configure({ undoRedo: false }),
+        Link.configure({
+          openOnClick: false,
+          autolink: true,
+          linkOnPaste: true,
+          HTMLAttributes: {
+            class: "text-sky-700 underline underline-offset-2",
+          },
+        }),
         ...(consultationYDoc
           ? [
               Collaboration.configure({
@@ -1267,7 +1276,7 @@ export default function MedicalConsultationsCard({
       editorProps: {
         attributes: {
           class:
-            "min-h-[80px] max-h-64 overflow-y-auto px-2 py-1.5 text-[11px] text-slate-900 focus:outline-none [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5",
+            "min-h-[112px] max-h-72 overflow-y-auto px-3 py-2 text-xs leading-5 text-slate-900 focus:outline-none [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:py-0.5 [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1.5 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-semibold [&_p]:my-1 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5",
         },
       },
       immediatelyRender: false,
@@ -1628,7 +1637,7 @@ export default function MedicalConsultationsCard({
     if (!consultationDoctorId) return;
     if (billingEntityOptions.length === 0) return;
 
-    // Skip auto-assignment for these doctors — entity must be chosen manually
+    // Skip auto-assignment for these doctors â€” entity must be chosen manually
     const selectedDoctor = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
     const noAutoAssignDoctors = ["miles", "nordback", "koltunova", "plakalo"];
     if (selectedDoctor) {
@@ -1799,7 +1808,7 @@ export default function MedicalConsultationsCard({
           };
         });
 
-        // 4a) Link consultations to their invoices (invoices.consultation_id → consultations.id)
+        // 4a) Link consultations to their invoices (invoices.consultation_id â†’ consultations.id)
         const consultationIdsForLinking = nonInvoiceRows.map((r) => r.id);
         if (consultationIdsForLinking.length > 0 && invoiceData && invoiceData.length > 0) {
           const invoiceByConsultId = new Map<string, { id: string; status: string; invoice_number: string }>();
@@ -2146,6 +2155,32 @@ export default function MedicalConsultationsCard({
       consultationRecordType === "notes" && newConsultationOpen,
     );
   }, [consultationNotesEditor, consultationRecordType, newConsultationOpen]);
+
+  const notesToolbarButtonClass = (active = false) =>
+    "inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-2 text-[11px] font-medium transition-colors " +
+    (active
+      ? "border-sky-200 bg-sky-100 text-sky-800"
+      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100");
+
+  function setConsultationNotesLink() {
+    if (!consultationNotesEditor) return;
+    const previousUrl = consultationNotesEditor.getAttributes("link").href as string | undefined;
+    const url = window.prompt("Link URL", previousUrl ?? "https://");
+    if (url === null) return;
+
+    const trimmed = url.trim();
+    if (!trimmed) {
+      consultationNotesEditor.chain().focus().unsetLink().run();
+      return;
+    }
+
+    consultationNotesEditor
+      .chain()
+      .focus()
+      .extendMarkRange("link")
+      .setLink({ href: trimmed })
+      .run();
+  }
 
   useEffect(() => {
     const channel = supabaseClient.channel(`patient-consultation-edit-${patientId}`);
@@ -3642,7 +3677,7 @@ export default function MedicalConsultationsCard({
         setPdfSuccessToast({
           invoiceNumber: null,
           type: invoiceType,
-          message: "Already queued — watch the notification bell for updates",
+          message: "Already queued â€” watch the notification bell for updates",
         });
         return;
       }
@@ -3691,8 +3726,8 @@ export default function MedicalConsultationsCard({
         invoiceNumber,
         type: invoiceType,
         message: data.message === "A job for this invoice/type is already queued"
-          ? "Already queued — watch the notification bell for updates"
-          : "Queued for PDF generation — check the notification bell",
+          ? "Already queued â€” watch the notification bell for updates"
+          : "Queued for PDF generation â€” check the notification bell",
       });
       setTimeout(() => setPdfSuccessToast(null), 4000);
 
@@ -3817,7 +3852,7 @@ export default function MedicalConsultationsCard({
     const isOpen = !invoice.invoice_status || invoice.invoice_status === "OPEN";
 
     if (isOpen && invoice.invoice_id) {
-      // ── OPEN invoice: reuse the full creation form in edit mode ──
+      // â”€â”€ OPEN invoice: reuse the full creation form in edit mode â”€â”€
       try {
         // 1) Fetch the full invoice record
         const { data: inv, error: invErr } = await supabaseClient
@@ -3844,7 +3879,7 @@ export default function MedicalConsultationsCard({
         setConsultationTitle(inv.title || "");
         setConsultationDoctorId(inv.doctor_user_id || "");
         setInvoiceProviderId(inv.provider_id || "");
-        // Preserve loaded billing entity — don't let auto-prefill override it.
+        // Preserve loaded billing entity â€” don't let auto-prefill override it.
         setBillingEntityOverride(true);
         setInvoicePaymentMethod(inv.payment_method || "");
         setInvoiceExtraOption(inv.is_complimentary ? "complimentary" : null);
@@ -3941,7 +3976,7 @@ export default function MedicalConsultationsCard({
         alert("Failed to load invoice data for editing.");
       }
     } else {
-      // ── Non-OPEN invoice: simple title-only edit modal ──
+      // â”€â”€ Non-OPEN invoice: simple title-only edit modal â”€â”€
       setEditInvoiceTarget(invoice);
       setEditInvoiceTitle(invoice.title || "");
       setEditInvoiceRefNumber(invoice.reference_number || "");
@@ -3965,7 +4000,7 @@ export default function MedicalConsultationsCard({
       const userId = authData?.user?.id || null;
 
       // Use custom date if provided (from the date picker); fall back to now.
-      // customPaidDate is a YYYY-MM-DD string — store as end-of-day in UTC so the
+      // customPaidDate is a YYYY-MM-DD string â€” store as end-of-day in UTC so the
       // date is unambiguous across timezones.
       const paidAt = customPaidDate
         ? new Date(`${customPaidDate}T23:59:59`).toISOString()
@@ -4936,7 +4971,7 @@ export default function MedicalConsultationsCard({
                           );
                           if (!dosage) return "";
                           const code = (index + 1).toString().padStart(4, "0");
-                          const description = `${med.name} — ${dosage.label}`;
+                          const description = `${med.name} â€” ${dosage.label}`;
                           return `<tr><td class="px-2 py-1 border-t border-slate-100 align-top text-slate-500">${code}</td><td class="px-2 py-1 border-t border-slate-100 align-top">${description}</td><td class="px-2 py-1 border-t border-slate-100 text-right align-top">1</td><td class="px-2 py-1 border-t border-slate-100 text-left align-top">Stk</td><td class="px-2 py-1 border-t border-slate-100 text-right align-top">CHF ${dosage.price.toFixed(
                             2,
                           )}</td></tr>`;
@@ -5036,7 +5071,7 @@ export default function MedicalConsultationsCard({
                               Math.min(100, installment.percent),
                             );
                             const amount = (totalAmount * safePercent) / 100;
-                            let dueLabel = "—";
+                            let dueLabel = "â€”";
                             if (installment.dueDate) {
                               const dueDateObj = new Date(installment.dueDate);
                               if (!Number.isNaN(dueDateObj.getTime())) {
@@ -5192,14 +5227,14 @@ export default function MedicalConsultationsCard({
                     }
 
                     if (consultationRecordType === "invoice") {
-                      // ── Invoice: insert ONLY into invoices + invoice_line_items ──
+                      // â”€â”€ Invoice: insert ONLY into invoices + invoice_line_items â”€â”€
                       try {
                         const hasAcfLines = invoiceServiceLines.some((l) => l.serviceId.startsWith("flatrate-") || l.serviceId.startsWith("tma-"));
                         const hasTardocLines = invoiceServiceLines.some((l) => l.serviceId.startsWith("tardoc-"));
                         const isTardocInvoice = hasTardocLines;
                         const taxPointValue = CANTON_TAX_POINT_VALUES[invoiceCanton] ?? 0.96;
 
-                        // ── ACF Validation: validate flat rate services before saving ──
+                        // â”€â”€ ACF Validation: validate flat rate services before saving â”€â”€
                         let workingServiceLines = [...invoiceServiceLines];
                         if (hasAcfLines) {
                           const acfLines = workingServiceLines.filter(
@@ -5304,11 +5339,11 @@ export default function MedicalConsultationsCard({
                                 }
                               } else {
                                 console.warn("ACF validation failed:", validateJson.error);
-                                // Continue without validation — user can still save
+                                // Continue without validation â€” user can still save
                               }
                             } catch (valErr) {
                               console.warn("ACF validation request failed:", valErr);
-                              // Continue without validation — don't block saving
+                              // Continue without validation â€” don't block saving
                             }
                           }
                         }
@@ -5343,7 +5378,7 @@ export default function MedicalConsultationsCard({
                             // Derive tariff type string from tariff code (zero-padded to 3 digits)
                             const tariffType = tariffCode != null ? String(tariffCode).padStart(3, "0") : null;
 
-                            // ── VAT computation (Rule 4: TARDOC/insurer invoices are always VAT-exempt) ──
+                            // â”€â”€ VAT computation (Rule 4: TARDOC/insurer invoices are always VAT-exempt) â”€â”€
                             // Otherwise use the service's vat_status/vat_rate_pct.
                             // Prices stored on services are GROSS (VAT-inclusive), so we extract VAT.
                             const lineTotal = resolvedUnitPrice * quantity;
@@ -5471,7 +5506,7 @@ export default function MedicalConsultationsCard({
                             } catch (valErr) {
                               console.warn("TARDOC validation request failed:", valErr);
                               setConsultationError(
-                                "TARDOC validation failed — could not reach Sumex server. Please try again.",
+                                "TARDOC validation failed â€” could not reach Sumex server. Please try again.",
                               );
                               setConsultationSaving(false);
                               return;
@@ -5629,7 +5664,7 @@ export default function MedicalConsultationsCard({
                         let invoiceRowId: string;
 
                         if (editingInvoiceId) {
-                          // ── EDIT MODE: Update existing invoice ──
+                          // â”€â”€ EDIT MODE: Update existing invoice â”€â”€
                           const { error: invoiceUpdateError } = await supabaseClient
                             .from("invoices")
                             .update(invoicePayload)
@@ -5702,7 +5737,7 @@ export default function MedicalConsultationsCard({
                           return; // Skip the rest of the creation flow
                         }
 
-                        // ── CREATE MODE: Insert new invoice ──
+                        // â”€â”€ CREATE MODE: Insert new invoice â”€â”€
                         const isCashOrCard = ["cash", "card"].includes((paymentMethod || "").toLowerCase());
                         const nowIso = new Date().toISOString();
                         const invoiceInsertPayload: Record<string, unknown> = {
@@ -5748,7 +5783,7 @@ export default function MedicalConsultationsCard({
                           }
                         }
 
-                        // ── Auto-queue patient (TG) PDF generation in background ──
+                        // â”€â”€ Auto-queue patient (TG) PDF generation in background â”€â”€
                         // The Railway worker will pick this up and generate the PDF async.
                         fetch("/api/invoices/queue-pdf", {
                           method: "POST",
@@ -5923,7 +5958,7 @@ export default function MedicalConsultationsCard({
                         return;
                       }
                     } else {
-                      // ── Non-invoice: insert or update consultations table ──
+                      // â”€â”€ Non-invoice: insert or update consultations table â”€â”€
                       const consultationPayload: Record<string, unknown> = {
                         patient_id: patientId,
                         consultation_id: consultationId,
@@ -6067,7 +6102,7 @@ export default function MedicalConsultationsCard({
                 <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 flex items-center gap-2">
                   <svg className="h-4 w-4 text-sky-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                   <p className="text-[11px] text-sky-800">
-                    <strong>{tf("editingInvoice", { number: editingInvoiceNumber ?? "" })}</strong> — {tf("editingInvoiceDesc")}
+                    <strong>{tf("editingInvoice", { number: editingInvoiceNumber ?? "" })}</strong> â€” {tf("editingInvoiceDesc")}
                   </p>
                 </div>
               )}
@@ -6197,7 +6232,7 @@ export default function MedicalConsultationsCard({
                 </div>
               </div>
 
-              {/* Diagnosis fields — shown for notes and prescription record types */}
+              {/* Diagnosis fields â€” shown for notes and prescription record types */}
               {(consultationRecordType === "notes" || consultationRecordType === "prescription") && (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
@@ -6232,15 +6267,61 @@ export default function MedicalConsultationsCard({
                   <label className="block text-[11px] font-medium text-slate-700">
                     {tf("notesLabel")}
                   </label>
-                  <div className="rounded-lg border border-slate-200 bg-white">
-                    <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500">
+                  <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500">
+                      <button
+                        type="button"
+                        onClick={() => consultationNotesEditor?.chain().focus().undo().run()}
+                        disabled={!consultationNotesEditor?.can().undo()}
+                        className={notesToolbarButtonClass()}
+                        title="Undo"
+                      >
+                        ?
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => consultationNotesEditor?.chain().focus().redo().run()}
+                        disabled={!consultationNotesEditor?.can().redo()}
+                        className={notesToolbarButtonClass()}
+                        title="Redo"
+                      >
+                        ?
+                      </button>
+                      <span className="mx-1 h-5 w-px bg-slate-200" />
+                      <select
+                        value={
+                          consultationNotesEditor?.isActive("heading", { level: 2 })
+                            ? "h2"
+                            : consultationNotesEditor?.isActive("heading", { level: 3 })
+                              ? "h3"
+                              : "paragraph"
+                        }
+                        onChange={(event) => {
+                          const chain = consultationNotesEditor?.chain().focus();
+                          if (!chain) return;
+                          if (event.target.value === "h2") {
+                            chain.toggleHeading({ level: 2 }).run();
+                          } else if (event.target.value === "h3") {
+                            chain.toggleHeading({ level: 3 }).run();
+                          } else {
+                            chain.setParagraph().run();
+                          }
+                        }}
+                        className="h-7 rounded-md border border-slate-200 bg-white px-2 text-[11px] font-medium text-slate-700 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      >
+                        <option value="paragraph">Text</option>
+                        <option value="h2">Heading</option>
+                        <option value="h3">Subheading</option>
+                      </select>
+                      <span className="mx-1 h-5 w-px bg-slate-200" />
                       <button
                         type="button"
                         onClick={(event) => {
                           event.preventDefault();
                           consultationNotesEditor?.chain().focus().toggleBold().run();
                         }}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
+                        className={notesToolbarButtonClass(!!consultationNotesEditor?.isActive("bold"))}
+                        title="Bold"
                       >
                         B
                       </button>
@@ -6250,7 +6331,8 @@ export default function MedicalConsultationsCard({
                           event.preventDefault();
                           consultationNotesEditor?.chain().focus().toggleItalic().run();
                         }}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-[11px] font-medium italic text-slate-700 hover:bg-slate-100"
+                        className={notesToolbarButtonClass(!!consultationNotesEditor?.isActive("italic"))}
+                        title="Italic"
                       >
                         I
                       </button>
@@ -6258,14 +6340,81 @@ export default function MedicalConsultationsCard({
                         type="button"
                         onClick={(event) => {
                           event.preventDefault();
+                          consultationNotesEditor?.chain().focus().toggleStrike().run();
+                        }}
+                        className={notesToolbarButtonClass(!!consultationNotesEditor?.isActive("strike"))}
+                        title="Strikethrough"
+                      >
+                        S
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          consultationNotesEditor?.chain().focus().toggleCode().run();
+                        }}
+                        className={notesToolbarButtonClass(!!consultationNotesEditor?.isActive("code"))}
+                        title="Code"
+                      >
+                        {"</>"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setConsultationNotesLink();
+                        }}
+                        className={notesToolbarButtonClass(!!consultationNotesEditor?.isActive("link"))}
+                        title="Link"
+                      >
+                        Link
+                      </button>
+                      <span className="mx-1 h-5 w-px bg-slate-200" />
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
                           consultationNotesEditor?.chain().focus().toggleBulletList().run();
                         }}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-[13px] text-slate-700 hover:bg-slate-100"
+                        className={notesToolbarButtonClass(!!consultationNotesEditor?.isActive("bulletList"))}
+                        title="Bullet list"
                       >
                         •
                       </button>
-                    </div>
-                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          consultationNotesEditor?.chain().focus().toggleOrderedList().run();
+                        }}
+                        className={notesToolbarButtonClass(!!consultationNotesEditor?.isActive("orderedList"))}
+                        title="Numbered list"
+                      >
+                        1.
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          consultationNotesEditor?.chain().focus().toggleBlockquote().run();
+                        }}
+                        className={notesToolbarButtonClass(!!consultationNotesEditor?.isActive("blockquote"))}
+                        title="Quote"
+                      >
+                        ?
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          consultationNotesEditor?.chain().focus().setHorizontalRule().run();
+                        }}
+                        className={notesToolbarButtonClass()}
+                        title="Divider"
+                      >
+                        —
+                      </button>
+                    </div>                    <div className="relative">
                       <EditorContent editor={consultationNotesEditor} />
                       {consultationMentionActive && (() => {
                         const mentionQuery = consultationMentionQuery.trim();
@@ -6581,7 +6730,7 @@ export default function MedicalConsultationsCard({
                               <option value="">{tf("selectBillingEntity")}</option>
                               {billingEntityOptions.map((entity) => (
                                 <option key={entity.id} value={entity.id}>
-                                  {entity.name}{entity.billing_type === "aesthetic" ? " ✦" : ""}
+                                  {entity.name}{entity.billing_type === "aesthetic" ? " âœ¦" : ""}
                                 </option>
                               ))}
                             </select>
@@ -6600,21 +6749,21 @@ export default function MedicalConsultationsCard({
                       </div>
                     </div>
 
-                    {/* ── Invoice notes (printed on generated invoice) ── */}
+                    {/* â”€â”€ Invoice notes (printed on generated invoice) â”€â”€ */}
                     <div className="space-y-1">
                       <label className="block text-[11px] font-medium text-slate-700">
-                        Commentaire / Remarque (affiché sur la facture)
+                        Commentaire / Remarque (affichÃ© sur la facture)
                       </label>
                       <textarea
                         value={invoiceNotes}
                         onChange={(e) => setInvoiceNotes(e.target.value)}
-                        placeholder="ex. facture fournie 2 semaines avant l’opération"
+                        placeholder="ex. facture fournie 2 semaines avant lâ€™opÃ©ration"
                         rows={2}
                         className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                       />
                     </div>
 
-                    {/* ── Appointment link (optional, for deposit invoices) ── */}
+                    {/* â”€â”€ Appointment link (optional, for deposit invoices) â”€â”€ */}
                     <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
                       <label className="flex cursor-pointer items-center gap-2.5">
                         <input
@@ -6627,23 +6776,23 @@ export default function MedicalConsultationsCard({
                           className="h-3.5 w-3.5 rounded border-slate-300 text-amber-500 focus:ring-amber-400"
                         />
                         <span className="text-[11px] font-medium text-slate-700">
-                          Lier à un rendez-vous
+                          Lier Ã  un rendez-vous
                         </span>
                         <span className="ml-auto text-[10px] text-slate-400">
-                          Optionnel — active l'annulation auto à 48h si acompte 50% impayé
+                          Optionnel â€” active l'annulation auto Ã  48h si acompte 50% impayÃ©
                         </span>
                       </label>
 
                       {invoiceApptLinkEnabled && (
                         <div className="mt-2.5 space-y-1.5">
                           <p className="text-[10px] text-slate-500 leading-relaxed">
-                            Sélectionnez le rendez-vous associé à cette facture. Le chrono de 48h démarrera
-                            lorsque le lien de paiement sera copié ou envoyé au patient. Sans paiement,
-                            le rendez-vous et la facture seront annulés automatiquement.
+                            SÃ©lectionnez le rendez-vous associÃ© Ã  cette facture. Le chrono de 48h dÃ©marrera
+                            lorsque le lien de paiement sera copiÃ© ou envoyÃ© au patient. Sans paiement,
+                            le rendez-vous et la facture seront annulÃ©s automatiquement.
                           </p>
                           {invoicePatientAppointments.length === 0 ? (
                             <p className="text-[11px] text-slate-400 italic">
-                              Aucun rendez-vous à venir pour ce patient.
+                              Aucun rendez-vous Ã  venir pour ce patient.
                             </p>
                           ) : (
                             <select
@@ -6651,7 +6800,7 @@ export default function MedicalConsultationsCard({
                               onChange={e => setInvoiceAppointmentId(e.target.value)}
                               className="block w-full rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-400"
                             >
-                              <option value="">— sélectionner un rendez-vous —</option>
+                              <option value="">â€” sÃ©lectionner un rendez-vous â€”</option>
                               {invoicePatientAppointments.map(a => (
                                 <option key={a.id} value={a.id}>
                                   {new Date(a.start_time).toLocaleString("fr-CH", {
@@ -6659,7 +6808,7 @@ export default function MedicalConsultationsCard({
                                     hour: "2-digit", minute: "2-digit",
                                     timeZone: "Europe/Zurich",
                                   })}
-                                  {(a.title || a.reason) ? ` — ${(a.title || a.reason)!.substring(0, 50)}` : ""}
+                                  {(a.title || a.reason) ? ` â€” ${(a.title || a.reason)!.substring(0, 50)}` : ""}
                                 </option>
                               ))}
                             </select>
@@ -6669,7 +6818,7 @@ export default function MedicalConsultationsCard({
                               <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              Rendez-vous lié — chrono 48h démarrera à l'envoi du lien de paiement
+                              Rendez-vous liÃ© â€” chrono 48h dÃ©marrera Ã  l'envoi du lien de paiement
                             </p>
                           )}
                         </div>
@@ -6974,7 +7123,7 @@ export default function MedicalConsultationsCard({
                                                   const cleanCode = (isAcf || isTma || isMaterial) ? rawCode.slice(4) : rawCode;
                                                   const displayName = `${cleanCode} - ${(item.description || "").substring(0, 80)}`;
 
-                                                  // Material item — uses service UUID as serviceId so it resolves via existing service lookup
+                                                  // Material item â€” uses service UUID as serviceId so it resolves via existing service lookup
                                                   if (isMaterial) {
                                                     const matServiceId = item.service_id || rawCode;
                                                     return {
@@ -7064,7 +7213,7 @@ export default function MedicalConsultationsCard({
                                                   </span>
                                                 );
                                               })()}
-                                              {g.validation_status === "valid" ? <span className="ml-1 text-emerald-600">✓</span> : g.validation_status === "invalid" ? <span className="ml-1 text-red-500">✗</span> : null}
+                                              {g.validation_status === "valid" ? <span className="ml-1 text-emerald-600">âœ“</span> : g.validation_status === "invalid" ? <span className="ml-1 text-red-500">âœ—</span> : null}
                                             </button>
                                           ));
                                         })()}
@@ -7084,7 +7233,7 @@ export default function MedicalConsultationsCard({
                                     <svg className="h-3.5 w-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                                     </svg>
-                                    <span className="text-[11px] font-semibold text-amber-700">UVG — Accident Date Required</span>
+                                    <span className="text-[11px] font-semibold text-amber-700">UVG â€” Accident Date Required</span>
                                   </div>
                                   <div className="space-y-1">
                                     <label className="block text-[10px] font-medium text-amber-700">
@@ -7452,7 +7601,7 @@ export default function MedicalConsultationsCard({
                                             className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-red-200 bg-red-50 text-[11px] text-red-600 hover:bg-red-100"
                                             aria-label="Remove installment"
                                           >
-                                            ×
+                                            Ã—
                                           </button>
                                         </div>
                                       );
@@ -7535,7 +7684,7 @@ export default function MedicalConsultationsCard({
                           </div>
                         ) : null}
 
-                        {/* Skip Sumex Validation — visible for all invoice modes */}
+                        {/* Skip Sumex Validation â€” visible for all invoice modes */}
                         <label className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 cursor-pointer">
                           <input
                             type="checkbox"
@@ -7737,7 +7886,7 @@ export default function MedicalConsultationsCard({
                                     />
                                     {metaBits.length > 0 ? (
                                       <div className="text-[10px] text-slate-500">
-                                        {metaBits.join(" • ")}
+                                        {metaBits.join(" â€¢ ")}
                                       </div>
                                     ) : null}
                                   </div>
@@ -8336,7 +8485,7 @@ export default function MedicalConsultationsCard({
               onClick={() => setInvoiceFromConsultationSuccess(null)}
               className="ml-2 text-emerald-500 hover:text-emerald-700"
             >
-              ✕
+              âœ•
             </button>
           </div>
         )}
@@ -8543,16 +8692,16 @@ export default function MedicalConsultationsCard({
                         {row.medidata_status && (() => {
                           const mdStatus = row.medidata_status;
                           const mdConfig: Record<string, { bg: string; text: string; border: string; icon: string }> = {
-                            draft: { bg: "bg-slate-100", text: "text-slate-700", border: "border-slate-300", icon: "📝" },
-                            pending: { bg: "bg-yellow-100", text: "text-yellow-800", border: "border-yellow-300", icon: "⏳" },
-                            transmitted: { bg: "bg-blue-100", text: "text-blue-800", border: "border-blue-300", icon: "📤" },
-                            delivered: { bg: "bg-sky-100", text: "text-sky-800", border: "border-sky-300", icon: "✉️" },
-                            accepted: { bg: "bg-emerald-100", text: "text-emerald-800", border: "border-emerald-300", icon: "✅" },
-                            paid: { bg: "bg-green-100", text: "text-green-800", border: "border-green-300", icon: "💰" },
-                            partially_paid: { bg: "bg-cyan-100", text: "text-cyan-800", border: "border-cyan-300", icon: "💵" },
-                            rejected: { bg: "bg-red-100", text: "text-red-800", border: "border-red-300", icon: "❌" },
-                            disputed: { bg: "bg-orange-100", text: "text-orange-800", border: "border-orange-300", icon: "⚠️" },
-                            cancelled: { bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-300", icon: "🚫" },
+                            draft: { bg: "bg-slate-100", text: "text-slate-700", border: "border-slate-300", icon: "ðŸ“" },
+                            pending: { bg: "bg-yellow-100", text: "text-yellow-800", border: "border-yellow-300", icon: "â³" },
+                            transmitted: { bg: "bg-blue-100", text: "text-blue-800", border: "border-blue-300", icon: "ðŸ“¤" },
+                            delivered: { bg: "bg-sky-100", text: "text-sky-800", border: "border-sky-300", icon: "âœ‰ï¸" },
+                            accepted: { bg: "bg-emerald-100", text: "text-emerald-800", border: "border-emerald-300", icon: "âœ…" },
+                            paid: { bg: "bg-green-100", text: "text-green-800", border: "border-green-300", icon: "ðŸ’°" },
+                            partially_paid: { bg: "bg-cyan-100", text: "text-cyan-800", border: "border-cyan-300", icon: "ðŸ’µ" },
+                            rejected: { bg: "bg-red-100", text: "text-red-800", border: "border-red-300", icon: "âŒ" },
+                            disputed: { bg: "bg-orange-100", text: "text-orange-800", border: "border-orange-300", icon: "âš ï¸" },
+                            cancelled: { bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-300", icon: "ðŸš«" },
                           };
                           const config = mdConfig[mdStatus] || mdConfig.draft;
                           const label = mdStatus.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -8776,7 +8925,7 @@ export default function MedicalConsultationsCard({
                             <div className="flex items-center gap-2">
                               <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                               <span className="text-[11px] font-semibold text-emerald-800">Linked Invoice #{linkedInvoice.consultation_id}</span>
-                              {linkedInvoice.title && <span className="text-[10px] text-slate-600">— {linkedInvoice.title}</span>}
+                              {linkedInvoice.title && <span className="text-[10px] text-slate-600">â€” {linkedInvoice.title}</span>}
                             </div>
                             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${linkedStatusDisplay.bgColor} ${linkedStatusDisplay.color} ${linkedStatusDisplay.borderColor}`}>
                               {linkedStatusDisplay.label}
@@ -8837,7 +8986,7 @@ export default function MedicalConsultationsCard({
                                   className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50"
                                 >
                                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                  {generatingPdf === linkedInvoice.id ? "Queueing..." : linkedQueued ? `⏳ ${linkedQueued.status === "processing" ? "Processing" : "Queued"} — Cancel` : linkedInvoice.invoice_pdf_path ? "Regenerate PDF" : "Generate PDF"}
+                                  {generatingPdf === linkedInvoice.id ? "Queueing..." : linkedQueued ? `â³ ${linkedQueued.status === "processing" ? "Processing" : "Queued"} â€” Cancel` : linkedInvoice.invoice_pdf_path ? "Regenerate PDF" : "Generate PDF"}
                                 </button>
                               );
                             })()}
@@ -8870,7 +9019,7 @@ export default function MedicalConsultationsCard({
                                   className={`inline-flex items-center gap-1 rounded-md border border-teal-200 px-2 py-1 text-[10px] font-medium transition-colors ${insurancePending ? "bg-teal-100 text-teal-800 cursor-not-allowed" : "bg-teal-50 text-teal-700 hover:bg-teal-100"}`}
                                 >
                                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                                  {insurancePending ? "⏳ Insurance" : "Insurance"}
+                                  {insurancePending ? "â³ Insurance" : "Insurance"}
                                 </button>
                               );
                             })()}
@@ -8998,7 +9147,7 @@ export default function MedicalConsultationsCard({
                                     className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-70"
                                   >
                                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                    {generatingPdf === row.id ? "Queueing..." : queued ? `⏳ ${queued.status === "processing" ? "Processing" : "Queued"} (${queued.type.toUpperCase()})` : "Generate PDF"}
+                                    {generatingPdf === row.id ? "Queueing..." : queued ? `â³ ${queued.status === "processing" ? "Processing" : "Queued"} (${queued.type.toUpperCase()})` : "Generate PDF"}
                                     <svg className="h-3 w-3 ml-0.5" fill="none" viewBox="0 0 20 20" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8l4 4 4-4" /></svg>
                                   </button>
                                 );
@@ -9030,7 +9179,7 @@ export default function MedicalConsultationsCard({
                                         }}
                                       >
                                         <span>{label}</span>
-                                        {isQueued && <span className="text-[10px] font-medium">{status === "processing" ? "🔄 Cancel" : "⏳ Cancel"}</span>}
+                                        {isQueued && <span className="text-[10px] font-medium">{status === "processing" ? "ðŸ”„ Cancel" : "â³ Cancel"}</span>}
                                       </button>
                                     );
                                   })}
@@ -9038,7 +9187,7 @@ export default function MedicalConsultationsCard({
                               )}
                             </div>
 
-                            {/* Email to patient — dropdown of already-generated doc types */}
+                            {/* Email to patient â€” dropdown of already-generated doc types */}
                             <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setEmailDropdownOpen(null); }}>
                               <button
                                 type="button"
@@ -9231,7 +9380,7 @@ export default function MedicalConsultationsCard({
                                   className={`inline-flex items-center gap-1 rounded-md border border-teal-200 px-2 py-1 text-[10px] font-medium transition-colors ${insurancePending ? "bg-teal-100 text-teal-800 cursor-not-allowed" : "bg-teal-50 text-teal-700 hover:bg-teal-100"}`}
                                 >
                                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                                  {insurancePending ? "⏳ Insurance" : "Insurance"}
+                                  {insurancePending ? "â³ Insurance" : "Insurance"}
                                 </button>
                               );
                             })()}
@@ -9532,7 +9681,7 @@ export default function MedicalConsultationsCard({
                 </div>
               </div>
 
-              {/* Payment Date picker — shown for all statuses that record a payment date */}
+              {/* Payment Date picker â€” shown for all statuses that record a payment date */}
               <div className="space-y-1">
                 <label htmlFor="payment-date-input" className="block text-xs font-medium text-slate-700">
                   Payment Date
@@ -9591,12 +9740,12 @@ export default function MedicalConsultationsCard({
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                 <p className="text-[10px] text-blue-800">
                   <strong>Status Guide:</strong><br />
-                  • <strong>Paid</strong> - Full payment received<br />
-                  • <strong>Open</strong> - Awaiting payment<br />
-                  • <strong>Partial Paid</strong> - Some payment received, balance pending<br />
-                  • <strong>Overpaid</strong> - More than invoice amount received<br />
-                  • <strong>Partial Loss</strong> - Partial payment accepted as full settlement<br />
-                  • <strong>Cancelled</strong> - Invoice voided/cancelled
+                  â€¢ <strong>Paid</strong> - Full payment received<br />
+                  â€¢ <strong>Open</strong> - Awaiting payment<br />
+                  â€¢ <strong>Partial Paid</strong> - Some payment received, balance pending<br />
+                  â€¢ <strong>Overpaid</strong> - More than invoice amount received<br />
+                  â€¢ <strong>Partial Loss</strong> - Partial payment accepted as full settlement<br />
+                  â€¢ <strong>Cancelled</strong> - Invoice voided/cancelled
                 </p>
               </div>
             </div>
@@ -9622,7 +9771,7 @@ export default function MedicalConsultationsCard({
                 <div className="border-b border-slate-200 px-6 py-4">
                   <h3 className="text-sm font-semibold text-slate-900">Manage Installments</h3>
                   <p className="mt-1 text-xs text-slate-600">
-                    Invoice #{installmentsTarget.consultation_id} — Total: CHF {(installmentsTarget.invoice_total_amount ?? 0).toFixed(2)}
+                    Invoice #{installmentsTarget.consultation_id} â€” Total: CHF {(installmentsTarget.invoice_total_amount ?? 0).toFixed(2)}
                   </p>
                 </div>
                 <div className="space-y-4 px-6 py-6">
@@ -9898,7 +10047,7 @@ export default function MedicalConsultationsCard({
                 <h3 className="text-sm font-semibold text-slate-900">Edit Consultation</h3>
               </div>
               <p className="mt-1 text-xs text-slate-600">
-                {editConsultationTarget.record_type.toUpperCase()} • {editConsultationTarget.consultation_id}
+                {editConsultationTarget.record_type.toUpperCase()} â€¢ {editConsultationTarget.consultation_id}
               </p>
             </div>
             <div className="space-y-4 px-6 py-6">
@@ -10028,7 +10177,7 @@ export default function MedicalConsultationsCard({
                       }}
                       className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-[13px] text-slate-700 hover:bg-slate-100"
                     >
-                      •
+                      â€¢
                     </button>
                   </div>
                   <div
