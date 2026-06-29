@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 import InsuranceBillingModal from "@/components/InsuranceBillingModal";
@@ -297,6 +297,45 @@ export default function InvoicesPage() {
     void load();
     return () => { isMounted = false; };
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Realtime: patch rows in-place instead of re-querying the whole table.
+  // UPDATE → merge changed fields into the matching row.
+  // INSERT → prepend new row (only top-level invoices, no sub-invoices).
+  // DELETE → remove the row.
+  // ---------------------------------------------------------------------------
+  const loadedRef = useRef(false);
+  useEffect(() => { loadedRef.current = !loading; }, [loading]);
+
+  useEffect(() => {
+    const channel = supabaseClient
+      .channel("invoices-page-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "invoices" },
+        (payload) => {
+          if (!loadedRef.current) return; // ignore events that arrive before initial load
+
+          if (payload.eventType === "UPDATE") {
+            const updated = payload.new as InvoiceRow;
+            // Skip sub-invoices (they have a parent_invoice_id which we filter out in the query)
+            setInvoices((prev) =>
+              prev.map((row) => (row.id === updated.id ? { ...row, ...updated } : row))
+            );
+          } else if (payload.eventType === "INSERT") {
+            const inserted = payload.new as InvoiceRow & { parent_invoice_id?: string | null };
+            if (inserted.is_archived || inserted.parent_invoice_id) return;
+            setInvoices((prev) => [inserted, ...prev]);
+          } else if (payload.eventType === "DELETE") {
+            const deleted = payload.old as { id: string };
+            setInvoices((prev) => prev.filter((row) => row.id !== deleted.id));
+          }
+        },
+      )
+      .subscribe();
+
+    return () => { void supabaseClient.removeChannel(channel); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------------------
   // Derived / filtered data
