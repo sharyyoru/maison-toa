@@ -7,6 +7,10 @@ import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { liveblocksClient } from "@/lib/liveblocksClient";
 import { getYjsProviderForRoom } from "@liveblocks/yjs";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import * as Y from "yjs";
 import {
   TARDOC_MEDICINES,
@@ -452,6 +456,16 @@ function escapeHtml(value: string): string {
 
 function textToNotesHtml(value: string): string {
   return escapeHtml(value).replace(/\n/g, "<br>");
+}
+
+function isBlankNotesHtml(value: string | null | undefined): boolean {
+  if (!value) return true;
+  return value
+    .replace(/<br\s*\/?>/gi, "")
+    .replace(/<\/p>\s*<p>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .trim() === "";
 }
 
 function getEditorPlainText(element: HTMLElement): string {
@@ -1198,13 +1212,12 @@ export default function MedicalConsultationsCard({
   const [newConsultationDraftId, setNewConsultationDraftId] = useState<string | null>(null);
   const [newConsultationAutosaveStatus, setNewConsultationAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved">("idle");
   const newConsultationAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const newConsultationContentRef = useRef<HTMLDivElement>(null);
   const consultationCollabRoomId = useMemo(
     () => `patient:${patientId}:consultation-create`,
     [patientId],
   );
-  const consultationYDocRef = useRef<Y.Doc | null>(null);
-  const consultationYTextRef = useRef<Y.Text | null>(null);
+  const [consultationYDoc, setConsultationYDoc] = useState<Y.Doc | null>(null);
+  const [consultationYProvider, setConsultationYProvider] = useState<any | null>(null);
   const consultationYFieldsRef = useRef<Y.Map<string> | null>(null);
   const consultationYApplyingRemoteRef = useRef(false);
   const [consultationRemoteUsers, setConsultationRemoteUsers] = useState<
@@ -1215,10 +1228,6 @@ export default function MedicalConsultationsCard({
       ? crypto.randomUUID()
       : Math.random().toString(36).slice(2),
   );
-  const consultationDraftLastSyncedHtmlRef = useRef("");
-  const consultationDraftLocalTextRef = useRef("");
-  const consultationDraftLastBroadcastTextRef = useRef("");
-  const consultationDraftPendingTextOpRef = useRef<CollaborativeTextOperation | null>(null);
 
   const [axenitaPdfDocs, setAxenitaPdfDocs] = useState<AxenitaPdfDocument[]>([]);
   const [axenitaPdfLoading, setAxenitaPdfLoading] = useState(false);
@@ -1229,6 +1238,56 @@ export default function MedicalConsultationsCard({
   const [externalLabs, setExternalLabs] = useState<{ id: string; name: string; url: string; username: string; password: string; type: string }[]>([]);
   const [labDropdownOpen, setLabDropdownOpen] = useState(false);
   const [patientDetails, setPatientDetails] = useState<{ dob: string | null; gender: string | null; street_address: string | null; postal_code: string | null; town: string | null; nationality: string | null } | null>(null);
+
+  const consultationNotesEditor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({ undoRedo: false }),
+        ...(consultationYDoc
+          ? [
+              Collaboration.configure({
+                document: consultationYDoc,
+                field: "notes_tiptap",
+              }),
+            ]
+          : []),
+        ...(consultationYProvider
+          ? [
+              CollaborationCaret.configure({
+                provider: consultationYProvider,
+                user: {
+                  name: currentUserName || currentUserEmail || "User",
+                  color: "#0284c7",
+                },
+              }),
+            ]
+          : []),
+      ],
+      editable: consultationRecordType === "notes" && newConsultationOpen,
+      editorProps: {
+        attributes: {
+          class:
+            "min-h-[80px] max-h-64 overflow-y-auto px-2 py-1.5 text-[11px] text-slate-900 focus:outline-none [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5",
+        },
+      },
+      immediatelyRender: false,
+      onUpdate: ({ editor }) => {
+        const html = editor.getHTML();
+        setConsultationContentHtml(isBlankNotesHtml(html) ? "" : html);
+        const text = editor.getText();
+        const match = text.match(/@([^\s@]{0,50})$/);
+        if (match) {
+          setConsultationMentionActive(true);
+          setConsultationMentionQuery(match[1].toLowerCase());
+        } else {
+          setConsultationMentionActive(false);
+          setConsultationMentionQuery("");
+        }
+        triggerNewConsultationAutosave();
+      },
+    },
+    [consultationYDoc, consultationYProvider, currentUserEmail, currentUserName],
+  );
 
   // Medication form state - supports multiple products
   const [medProducts, setMedProducts] = useState<MedProduct[]>([createEmptyMedProduct()]);
@@ -2008,11 +2067,10 @@ export default function MedicalConsultationsCard({
     });
     const provider = getYjsProviderForRoom(room);
     const ydoc = provider.getYDoc();
-    const ytext = ydoc.getText("notes");
     const yfields = ydoc.getMap<string>("fields");
 
-    consultationYDocRef.current = ydoc;
-    consultationYTextRef.current = ytext;
+    setConsultationYDoc(ydoc);
+    setConsultationYProvider(provider);
     consultationYFieldsRef.current = yfields;
 
     room.updatePresence({
@@ -2029,42 +2087,6 @@ export default function MedicalConsultationsCard({
     if (!yfields.get("recordType")) yfields.set("recordType", consultationRecordType);
     if (!yfields.get("diagnosisCode")) yfields.set("diagnosisCode", consultationDiagnosisCode);
     if (!yfields.get("refIcd10")) yfields.set("refIcd10", consultationRefIcd10);
-    if (!ytext.length && consultationContentHtml) {
-      ytext.insert(0, htmlToCaretText(consultationContentHtml));
-    }
-
-    const applyYText = () => {
-      const text = ytext.toString();
-      const html = textToNotesHtml(text);
-      consultationDraftLocalTextRef.current = text;
-      consultationDraftLastBroadcastTextRef.current = text;
-      consultationDraftLastSyncedHtmlRef.current = html;
-      consultationYApplyingRemoteRef.current = true;
-      setConsultationContentHtml(html);
-
-      const editor = newConsultationContentRef.current;
-      if (editor && getEditorPlainText(editor) !== text) {
-        const previousText = getEditorPlainText(editor);
-        const remoteOperation = buildTextOperation(previousText, text);
-        const hadFocus = document.activeElement === editor;
-        const caretOffset = hadFocus ? getContentEditableCaretOffset(editor) : null;
-        const nextCaretOffset = remoteOperation
-          ? transformCaretOffsetForTextOperation(caretOffset, remoteOperation)
-          : caretOffset;
-        setEditorPlainText(editor, text);
-        if (hadFocus) {
-          editor.focus();
-          restoreContentEditableCaretOffset(
-            editor,
-            Math.min(nextCaretOffset ?? text.length, text.length),
-          );
-        }
-      }
-      consultationYApplyingRemoteRef.current = false;
-      if (yfields.get("open") === "true") {
-        triggerNewConsultationAutosave();
-      }
-    };
 
     const applyYFields = () => {
       const shouldOpen = yfields.get("open") === "true";
@@ -2088,10 +2110,8 @@ export default function MedicalConsultationsCard({
       }
     };
 
-    applyYText();
     applyYFields();
 
-    ytext.observe(applyYText);
     yfields.observe(applyYFields);
     const unsubscribeOthers = room.subscribe("others", (others) => {
       setConsultationRemoteUsers(
@@ -2106,13 +2126,12 @@ export default function MedicalConsultationsCard({
     });
 
     return () => {
-      ytext.unobserve(applyYText);
       yfields.unobserve(applyYFields);
       unsubscribeOthers();
       provider.destroy();
       leave();
-      consultationYDocRef.current = null;
-      consultationYTextRef.current = null;
+      setConsultationYDoc(null);
+      setConsultationYProvider(null);
       consultationYFieldsRef.current = null;
       setConsultationRemoteUsers([]);
     };
@@ -2121,6 +2140,12 @@ export default function MedicalConsultationsCard({
     currentUserEmail,
     currentUserName,
   ]);
+
+  useEffect(() => {
+    consultationNotesEditor?.setEditable(
+      consultationRecordType === "notes" && newConsultationOpen,
+    );
+  }, [consultationNotesEditor, consultationRecordType, newConsultationOpen]);
 
   useEffect(() => {
     const channel = supabaseClient.channel(`patient-consultation-edit-${patientId}`);
@@ -3338,11 +3363,11 @@ export default function MedicalConsultationsCard({
   async function handleNewConsultationAutosave() {
     if (consultationRecordType !== "notes") return;
 
-    const htmlContent = newConsultationContentRef.current
-      ? textToNotesHtml(getEditorPlainText(newConsultationContentRef.current))
+    const htmlContent = consultationNotesEditor
+      ? consultationNotesEditor.getHTML()
       : consultationContentHtml;
 
-    if (!consultationTitle.trim() && !htmlContent.replace(/<[^>]+>/g, "").trim()) return;
+    if (!consultationTitle.trim() && isBlankNotesHtml(htmlContent)) return;
 
     setNewConsultationAutosaveStatus("saving");
 
@@ -3448,10 +3473,6 @@ export default function MedicalConsultationsCard({
       setNewConsultationAutosaveStatus("idle");
       // Reset draft ID when form closes (draft becomes a real record or was discarded)
       setNewConsultationDraftId(null);
-      consultationDraftLocalTextRef.current = "";
-      consultationDraftLastBroadcastTextRef.current = "";
-      consultationDraftLastSyncedHtmlRef.current = "";
-      consultationDraftPendingTextOpRef.current = null;
     }
   }, [newConsultationOpen]);
 
@@ -4526,10 +4547,9 @@ export default function MedicalConsultationsCard({
                     if (currentUserId && recordTypeFilter !== "invoice") {
                       setConsultationDoctorId(currentUserId);
                     }
-                    const ytext = consultationYTextRef.current;
                     const yfields = consultationYFieldsRef.current;
-                    ytext?.doc?.transact(() => {
-                      ytext.delete(0, ytext.length);
+                    consultationYDoc?.transact(() => {
+                      consultationNotesEditor?.commands.clearContent(false);
                       yfields?.set("open", "true");
                       yfields?.set("date", datePart);
                       yfields?.set("hour", hourPart);
@@ -4709,8 +4729,7 @@ export default function MedicalConsultationsCard({
 
                 if (
                   consultationRecordType === "notes" &&
-                  (!consultationContentHtml ||
-                    consultationContentHtml.replace(/<[^>]+>/g, "").trim() === "")
+                  isBlankNotesHtml(consultationNotesEditor?.getHTML() ?? consultationContentHtml)
                 ) {
                   setConsultationError(
                     tf("errNoteContent"),
@@ -4891,7 +4910,7 @@ export default function MedicalConsultationsCard({
                     let invoiceIsComplimentaryForInsert = false;
                     let invoiceIsPaidForInsert = false;
                     if (consultationRecordType === "notes") {
-                      contentHtml = consultationContentHtml;
+                      contentHtml = consultationNotesEditor?.getHTML() ?? consultationContentHtml;
                     } else if (consultationRecordType === "prescription") {
                       const lines = prescriptionLines.filter(
                         (line) => line.medicineId && line.dosageId,
@@ -6219,9 +6238,7 @@ export default function MedicalConsultationsCard({
                         type="button"
                         onClick={(event) => {
                           event.preventDefault();
-                          if (typeof document !== "undefined") {
-                            document.execCommand("bold");
-                          }
+                          consultationNotesEditor?.chain().focus().toggleBold().run();
                         }}
                         className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
                       >
@@ -6231,9 +6248,7 @@ export default function MedicalConsultationsCard({
                         type="button"
                         onClick={(event) => {
                           event.preventDefault();
-                          if (typeof document !== "undefined") {
-                            document.execCommand("italic");
-                          }
+                          consultationNotesEditor?.chain().focus().toggleItalic().run();
                         }}
                         className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-[11px] font-medium italic text-slate-700 hover:bg-slate-100"
                       >
@@ -6243,9 +6258,7 @@ export default function MedicalConsultationsCard({
                         type="button"
                         onClick={(event) => {
                           event.preventDefault();
-                          if (typeof document !== "undefined") {
-                            document.execCommand("insertUnorderedList");
-                          }
+                          consultationNotesEditor?.chain().focus().toggleBulletList().run();
                         }}
                         className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-[13px] text-slate-700 hover:bg-slate-100"
                       >
@@ -6253,44 +6266,7 @@ export default function MedicalConsultationsCard({
                       </button>
                     </div>
                     <div className="relative">
-                      <div
-                        ref={newConsultationContentRef}
-                        className="min-h-[80px] max-h-64 overflow-y-auto whitespace-pre-wrap px-2 py-1.5 text-[11px] text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
-                        contentEditable
-                        onInput={(event) => {
-                          const editor = event.currentTarget as HTMLDivElement;
-                          const text = getEditorPlainText(editor);
-                          consultationDraftLocalTextRef.current = text;
-                          const ytext = consultationYTextRef.current;
-                          if (ytext && !consultationYApplyingRemoteRef.current) {
-                            const operation = buildTextOperation(ytext.toString(), text);
-                            ytext.doc?.transact(() => {
-                              if (!operation) return;
-                              if (operation.deleteCount > 0) {
-                                ytext.delete(operation.start, operation.deleteCount);
-                              }
-                              if (operation.insertText) {
-                                ytext.insert(operation.start, operation.insertText);
-                              }
-                            });
-                          }
-                          const html = textToNotesHtml(text);
-                          setConsultationContentHtml(html);
-                          
-                          // Trigger autosave
-                          triggerNewConsultationAutosave();
-
-                          // Detect @ mentions
-                          const match = text.match(/@([^\s@]{0,50})$/);
-                          if (match) {
-                            setConsultationMentionActive(true);
-                            setConsultationMentionQuery(match[1].toLowerCase());
-                          } else if (consultationMentionActive) {
-                            setConsultationMentionActive(false);
-                            setConsultationMentionQuery("");
-                          }
-                        }}
-                      />
+                      <EditorContent editor={consultationNotesEditor} />
                       {consultationMentionActive && (() => {
                         const mentionQuery = consultationMentionQuery.trim();
                         const mentionOptions = (Array.isArray(userOptions) ? userOptions : [])
@@ -6312,9 +6288,11 @@ export default function MedicalConsultationsCard({
                                   type="button"
                                   onClick={() => {
                                     const display = user.full_name || user.email || "User";
-                                    const currentHtml = consultationContentHtml;
-                                    const newHtml = currentHtml.replace(/@([^\s@]{0,50})$/, `@${display} `);
-                                    setConsultationContentHtml(newHtml);
+                                    consultationNotesEditor
+                                      ?.chain()
+                                      .focus()
+                                      .insertContent(`@${display} `)
+                                      .run();
 
                                     if (!consultationMentionUserIds.includes(user.id)) {
                                       setConsultationMentionUserIds((prev) => [...prev, user.id]);
@@ -6322,12 +6300,6 @@ export default function MedicalConsultationsCard({
 
                                     setConsultationMentionActive(false);
                                     setConsultationMentionQuery("");
-
-                                    // Update the contentEditable div
-                                    const editableDiv = document.querySelector('[contenteditable="true"]');
-                                    if (editableDiv) {
-                                      (editableDiv as HTMLDivElement).innerHTML = newHtml;
-                                    }
                                   }}
                                   className="block w-full cursor-pointer px-2 py-1 text-left text-slate-700 hover:bg-slate-50"
                                 >
