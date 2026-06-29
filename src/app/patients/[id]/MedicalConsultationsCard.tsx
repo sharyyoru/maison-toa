@@ -2191,15 +2191,17 @@ export default function MedicalConsultationsCard({
     const targetNode = event.target as Node | null;
     const targetElement =
       targetNode instanceof HTMLElement ? targetNode : targetNode?.parentElement ?? null;
-    const clickedDocumentNode = targetElement?.closest(".ProseMirror > *") as HTMLElement | null;
+    const clickedEditorContent = !!targetElement && editorElement.contains(targetElement);
 
-    if (clickedDocumentNode && targetElement !== editorElement) {
+    if (clickedEditorContent && targetElement !== editorElement) {
       return;
     }
 
     const contentNodes = Array.from(editorElement.children).filter(
       (child): child is HTMLElement =>
-        child instanceof HTMLElement && !child.classList.contains("collaboration-cursor__caret"),
+        child instanceof HTMLElement &&
+        !child.classList.contains("collaboration-cursor__caret") &&
+        !child.classList.contains("collaboration-cursor__label"),
     );
     const lastContentNode = contentNodes[contentNodes.length - 1] ?? null;
     const editorTop = editorElement.getBoundingClientRect().top;

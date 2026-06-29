@@ -31,6 +31,34 @@ textarea::placeholder {
   opacity: 1;
 }
 
+.ProseMirror .collaboration-cursor__caret {
+  border-left: 2px solid currentColor;
+  border-right: 1px solid currentColor;
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: none;
+  position: relative;
+  word-break: normal;
+}
+
+.ProseMirror .collaboration-cursor__label {
+  border-radius: 3px 3px 3px 0;
+  color: #ffffff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 600;
+  left: -2px;
+  line-height: 1;
+  padding: 2px 4px;
+  pointer-events: none;
+  position: absolute;
+  top: -1.35em;
+  user-select: none;
+  white-space: nowrap;
+  width: max-content;
+  z-index: 1;
+}
+
 .crm-glow {
   border-radius: 9999px;
   background: radial-gradient(circle at center, rgba(16, 185, 129, 0.4), transparent 65%);
