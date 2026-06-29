@@ -459,6 +459,17 @@ function textToNotesHtml(value: string): string {
   return escapeHtml(value).replace(/\n/g, "<br>");
 }
 
+const CONSULTATION_NOTES_STARTING_LINES = 10;
+
+function buildBlankConsultationNotesDoc() {
+  return {
+    type: "doc",
+    content: Array.from({ length: CONSULTATION_NOTES_STARTING_LINES }, () => ({
+      type: "paragraph",
+    })),
+  };
+}
+
 function isBlankNotesHtml(value: string | null | undefined): boolean {
   if (!value) return true;
   return value
@@ -4577,6 +4588,7 @@ export default function MedicalConsultationsCard({
                       .getMinutes()
                       .toString()
                       .padStart(2, "0");
+                    const nextRecordType = recordTypeFilter || "notes";
                     setConsultationDate(datePart);
                     setConsultationHour(hourPart);
                     setConsultationMinute(minutePart);
@@ -4586,7 +4598,7 @@ export default function MedicalConsultationsCard({
                     setConsultationDiagnosisCode("");
                     setConsultationRefIcd10("");
                     setInvoiceFromConsultationId(null);
-                    setConsultationRecordType(recordTypeFilter || "notes");
+                    setConsultationRecordType(nextRecordType);
                     setConsultationContentHtml("");
                     setConsultationDurationSeconds(0);
                     setConsultationStopwatchStartedAt(null);
@@ -4612,25 +4624,32 @@ export default function MedicalConsultationsCard({
                     setMedSelectedTemplateId("");
                     setMedTemplateServiceFilter("");
                     setMedTemplateFilter("all");
-                    if (currentUserId && recordTypeFilter !== "invoice") {
+                    if (currentUserId && nextRecordType !== "invoice") {
                       setConsultationDoctorId(currentUserId);
                     }
                     const yfields = consultationYFieldsRef.current;
                     consultationYDoc?.transact(() => {
-                      consultationNotesEditor?.commands.clearContent(false);
+                      if (nextRecordType === "notes") {
+                        consultationNotesEditor?.commands.setContent(buildBlankConsultationNotesDoc(), { emitUpdate: false });
+                      } else {
+                        consultationNotesEditor?.commands.clearContent(false);
+                      }
                       yfields?.set("open", "true");
                       yfields?.set("date", datePart);
                       yfields?.set("hour", hourPart);
                       yfields?.set("minute", minutePart);
-                      yfields?.set("doctorId", currentUserId && recordTypeFilter !== "invoice" ? currentUserId : "");
+                      yfields?.set("doctorId", currentUserId && nextRecordType !== "invoice" ? currentUserId : "");
                       yfields?.set("title", "");
-                      yfields?.set("recordType", recordTypeFilter || "notes");
+                      yfields?.set("recordType", nextRecordType);
                       yfields?.set("diagnosisCode", "");
                       yfields?.set("refIcd10", "");
                       yfields?.delete("draftId");
                     });
                     setNewConsultationOpen(true);
                     setTimeout(() => {
+                      if (nextRecordType === "notes") {
+                        consultationNotesEditor?.chain().focus().setTextSelection(1).run();
+                      }
                       creationFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                     }, 100);
                   }}
