@@ -1737,14 +1737,9 @@ export async function buildInvoiceRequest(
         const pdfOutputDirective = options.pdfPath
           ? `(PDF_NOPRINT=${options.pdfPath};)`
           : "";
-        // Suppress the "Note d'honoraires" / "Facture d'honoraires" title that Sumex
-        // prints large at the top of each page — it bleeds into the envelope window.
-        // Per CHM printing_switches.html: objectName=text; inside () substitutes any
-        // print object. An empty value removes it from the rendered output.
-        const titleSuppression = "(DOCUMENT_TITLE_SUMMARY=;DOCUMENT_TITLE_DETAIL=;)";
         const pdfTemplate = templateName
-          ? `${templateName}${titleSuppression}${pdfOutputDirective}`
-          : `${titleSuppression}${pdfOutputDirective}`;
+          ? (pdfOutputDirective ? `${templateName}${pdfOutputDirective}` : templateName)
+          : pdfOutputDirective;
         console.log(`${LOG_PREFIX} Print call: bstrPrintTemplate="${pdfTemplate}", templateName="${templateName}", pdfOutputDirective="${pdfOutputDirective}"`);
         const printRes = await reqPost<{
           plTimestamp: number;
