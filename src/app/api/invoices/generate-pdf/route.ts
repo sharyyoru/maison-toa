@@ -581,7 +581,9 @@ export async function POST(request: NextRequest) {
       // This lets the accountant/patient see all service lines.
       // printPatientInvoiceOnly=Yes (set above) ensures only the patient-facing forms are
       // included, suppressing the TP-specific insurer form (detail4hc).
-      const printTemplate = "feeDetail4debitor";
+      // feeDetail4guarantor: CHM says 4Recipient changes the title and other print objects.
+      // Guarantor = payer (same person as patient for private invoices), different title from 4debitor.
+      const printTemplate = "feeDetail4guarantor";
       const sumexResult = await buildInvoiceRequest(sumexInput, { generatePdf: true, printTemplate, generationAttributes: pdfGenAttrs });
 
       if (!sumexResult.success) {
@@ -850,7 +852,7 @@ export async function POST(request: NextRequest) {
         // This matches the reference sample (invoice_65251).
         // Note: feeSummary would give grouped totals only; feeDetail gives the full line-by-line form.
         // printPatientInvoiceOnly=No is required — setting Yes would suppress feeDetail in favour of feeSummary.
-        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: "feeDetail4debitor", generationAttributes: pdfGenAttrs2 });
+        const sumexResult2 = await buildInvoiceRequest(sumexInput2, { generatePdf: true, printTemplate: "feeDetail4guarantor", generationAttributes: pdfGenAttrs2 });
 
         if (sumexResult2.success && sumexResult2.pdfContent) {
           console.log(`[GeneratePDF] Sumex1 unified PDF generated: ${sumexResult2.pdfContent.length} bytes, paymentMethod=${invoiceData.payment_method}`);
