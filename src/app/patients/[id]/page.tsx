@@ -22,7 +22,6 @@ import CrmTabDropdown from "./CrmTabDropdown";
 import MedicationCard from "./MedicationCard";
 import AgeBadge from "./AgeBadge";
 import PatientCockpitDetails from "./PatientCockpitDetails";
-import DepositStatusWidget from "./DepositStatusWidget";
 import PatientMedicalNotes from "./PatientMedicalNotes";
 import PatientPageClientWrapper from "./PatientPageClientWrapper";
 import PatientFormsTab from "./PatientFormsTab";
@@ -288,10 +287,21 @@ export default async function PatientPage({
       ? rawPaymentMethodFilter
       : null;
 
-  const [invoiceSummary, hasSocialConsent] = await Promise.all([
+  const [invoiceSummary, hasSocialConsent, latestDepositResult] = await Promise.all([
     getInvoiceSummary(id, paymentMethodFilter),
     hasSocialPhotoConsent(id),
+    supabaseAdmin
+      .from("invoices")
+      .select("id, invoice_number, total_amount, paid_at, deposit_status, status")
+      .eq("patient_id", id)
+      .eq("is_demo", false)
+      .eq("is_archived", false)
+      .not("deposit_status", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
+  const latestDeposit = latestDepositResult.data ?? null;
 
   const crPlayerIdRaw = (() => {
     const value = resolvedSearchParams?.cr_player_id;
@@ -577,6 +587,27 @@ export default async function PatientPage({
                   </p>
                 </div>
               </div>
+
+              {/* Deposit status badge — only shown if this patient has an active deposit */}
+              {latestDeposit && (() => {
+                const ds = latestDeposit.deposit_status as string;
+                const label = ds === "requested" ? "Acompte demandé" : ds === "paid" ? "Acompte reçu" : ds === "applied" ? "Acompte imputé" : ds === "refunded" ? "Acompte remboursé" : ds;
+                const colorCls = ds === "requested" ? "border-amber-200 bg-amber-50 text-amber-700" : ds === "paid" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : ds === "applied" ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-slate-50 text-slate-500";
+                const dot = ds === "requested" ? "bg-amber-400" : ds === "paid" ? "bg-emerald-500" : ds === "applied" ? "bg-sky-500" : "bg-slate-400";
+                return (
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold ${colorCls}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+                      {label}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      CHF {Number(latestDeposit.total_amount).toFixed(2)}
+                      {latestDeposit.paid_at ? ` · ${new Date(latestDeposit.paid_at).toLocaleDateString("fr-CH", { day: "numeric", month: "short", year: "numeric" })}` : ""}
+                      {" · "}<Link href={`/deposits`} className="text-sky-600 hover:underline">#{latestDeposit.invoice_number}</Link>
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
 
             <PatientCockpitDetails
@@ -595,8 +626,6 @@ export default async function PatientPage({
                 emergency_contact_relation: (patient as any).emergency_contact_relation ?? null,
               }}
             />
-
-            <DepositStatusWidget patientId={patient.id} />
 
             <PatientMedicalNotes patientId={patient.id} />
 

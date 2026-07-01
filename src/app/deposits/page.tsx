@@ -4,13 +4,17 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import RequireAuth from "@/components/RequireAuth";
 
+type DepositStatus = "requested" | "paid" | "applied" | "refunded";
+
 interface DepositInvoice {
   id: string;
   invoice_number: string;
   title: string | null;
   status: string;
+  deposit_status: DepositStatus | null;
   total_amount: number;
   paid_amount: number;
+  paid_at: string | null;
   deposit_deadline_at: string | null;
   created_at: string;
   appointment_id: string | null;
@@ -52,7 +56,24 @@ function formatDate(iso: string) {
   });
 }
 
-function StatusBadge({ status, deadlineAt }: { status: string; deadlineAt: string | null }) {
+function StatusBadge({ status, deadlineAt, depositStatus }: { status: string; deadlineAt: string | null; depositStatus: DepositStatus | null }) {
+  // Applied / Refunded — manual lifecycle tags take visual priority when deposit is paid
+  if (depositStatus === "applied") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sky-100 text-sky-700">
+        <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+        Imputé
+      </span>
+    );
+  }
+  if (depositStatus === "refunded") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500">
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+        Remboursé
+      </span>
+    );
+  }
   if (status === "PARTIAL_PAID" || status === "PAID") {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-700">
@@ -107,6 +128,7 @@ export default function DepositsPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("pending");
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
@@ -139,6 +161,25 @@ export default function DepositsPage() {
       console.error("Failed to cancel:", err);
     } finally {
       setCancelling(null);
+    }
+  }
+
+  async function handleDepositStatusChange(invoiceId: string, newStatus: DepositStatus) {
+    setUpdatingStatus(invoiceId);
+    try {
+      await fetch("/api/patients/deposit-status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId, deposit_status: newStatus }),
+      });
+      // Optimistic update in local state
+      setInvoices(prev =>
+        prev.map(inv => inv.id === invoiceId ? { ...inv, deposit_status: newStatus } : inv)
+      );
+    } catch (err) {
+      console.error("Failed to update deposit status:", err);
+    } finally {
+      setUpdatingStatus(null);
     }
   }
 
@@ -323,7 +364,22 @@ export default function DepositsPage() {
 
                         {/* Status */}
                         <td className="px-4 py-3">
-                          <StatusBadge status={inv.status} deadlineAt={inv.deposit_deadline_at} />
+                          <div className="flex flex-col gap-1.5">
+                            <StatusBadge status={inv.status} deadlineAt={inv.deposit_deadline_at} depositStatus={inv.deposit_status} />
+                            {/* Manual tagging dropdown — visible once deposit is paid */}
+                            {isPaid && (
+                              <select
+                                value={inv.deposit_status ?? "paid"}
+                                onChange={(e) => void handleDepositStatusChange(inv.id, e.target.value as DepositStatus)}
+                                disabled={updatingStatus === inv.id}
+                                className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 shadow-sm focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 disabled:opacity-50"
+                              >
+                                <option value="paid">🟢 Payé</option>
+                                <option value="applied">✅ Imputé au traitement</option>
+                                <option value="refunded">↩️ Remboursé</option>
+                              </select>
+                            )}
+                          </div>
                         </td>
 
                         {/* Actions */}
