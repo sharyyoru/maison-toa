@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-
-const mailgunApiKey = process.env.MAILGUN_API_KEY;
-const mailgunDomain = process.env.MAILGUN_DOMAIN;
-const mailgunFromEmail = process.env.MAILGUN_FROM_EMAIL;
-const mailgunFromName = process.env.MAILGUN_FROM_NAME || "Maison TOA";
-const mailgunApiBaseUrl =
-  process.env.MAILGUN_API_BASE_URL || "https://api.mailgun.net";
+import { sendEmail } from "@/lib/email";
 
 // Map documentType to the corresponding pdf_path column
 const DOC_TYPE_COLUMN: Record<string, string> = {
@@ -29,13 +23,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Missing invoiceId or recipientEmail" },
         { status: 400 },
-      );
-    }
-
-    if (!mailgunApiKey || !mailgunDomain) {
-      return NextResponse.json(
-        { error: "Email service not configured" },
-        { status: 500 },
       );
     }
 
@@ -87,8 +74,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build email
-    const providerName = invoice.provider_name || mailgunFromName;
+    // Build email content
+    const providerName = invoice.provider_name || "Maison TOA";
     const isPaid = invoice.status === "PAID" || invoice.status === "OVERPAID";
     const isPartial = invoice.status === "PARTIAL_PAID" || invoice.status === "PARTIAL_LOSS";
     const totalAmt = Number(invoice.total_amount) || 0;
@@ -121,49 +108,36 @@ export async function POST(request: NextRequest) {
       </div>
     `;
 
-    // Send via Mailgun with PDF attachment
-    const fromAddress = mailgunFromEmail || `clinic@${mailgunDomain}`;
-    const formData = new FormData();
-    formData.append("from", `${providerName} <${fromAddress}>`);
-    formData.append("to", recipientEmail.trim());
-    formData.append("subject", subject);
-    formData.append("html", bodyHtml);
-
+    // Convert PDF blob to base64 for Resend attachment
     const pdfFilePrefix = isReceipt ? "receipt" : isReminder ? "reminder" : documentType === "tp" ? "invoice-tp" : "invoice";
     const pdfFileName = `${pdfFilePrefix}-${invoice.invoice_number}.pdf`;
-    const pdfFile = new File([pdfBlob], pdfFileName, { type: "application/pdf" });
-    formData.append("attachment", pdfFile, pdfFileName);
+    const pdfArrayBuffer = await pdfBlob.arrayBuffer();
+    const pdfBase64 = Buffer.from(pdfArrayBuffer).toString("base64");
 
-    const mgResponse = await fetch(
-      `${mailgunApiBaseUrl}/v3/${mailgunDomain}/messages`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${Buffer.from(`api:${mailgunApiKey}`).toString("base64")}`,
+    // Send via Resend (the official Maison TOA sender)
+    const result = await sendEmail({
+      to: recipientEmail.trim(),
+      subject,
+      html: bodyHtml,
+      attachments: [
+        {
+          filename: pdfFileName,
+          content: pdfBase64,
+          contentType: "application/pdf",
         },
-        body: formData,
-      },
-    );
+      ],
+    });
 
-    if (!mgResponse.ok) {
-      const mgErr = await mgResponse.text().catch(() => "");
-      console.error("[InvoiceSendEmail] Mailgun error:", mgResponse.status, mgErr);
+    if (!result.success) {
+      console.error("[InvoiceSendEmail] Resend error:", result.error);
       return NextResponse.json(
-        { error: "Failed to send email", details: mgErr },
+        { error: "Failed to send email", details: result.error },
         { status: 500 },
       );
     }
 
     const nowIso = new Date().toISOString();
-
-    // Get the Message-ID from Mailgun response for tracking
-    let messageId: string | null = null;
-    try {
-      const mailgunResponseData = await mgResponse.json();
-      messageId = mailgunResponseData.id || null;
-    } catch {
-      // Continue anyway — email was sent successfully
-    }
+    const fromAddress = process.env.EMAIL_FROM_ADDRESS || "info@mail.maisontoa.com";
 
     // Log email to emails table for patient email history
     let emailId: string | null = null;
@@ -179,7 +153,7 @@ export async function POST(request: NextRequest) {
           direction: "outbound",
           status: "sent",
           sent_at: nowIso,
-          message_id: messageId,
+          message_id: result.messageId ?? null,
         })
         .select("id")
         .single();
@@ -194,7 +168,6 @@ export async function POST(request: NextRequest) {
             .insert({
               email_id: emailId,
               file_name: pdfFileName,
-              // Prefix with bucket name so the frontend knows which bucket to use
               storage_path: `invoice-pdfs/${pdfPathToUse}`,
               mime_type: "application/pdf",
               file_size: pdfBlob.size,
@@ -223,7 +196,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       sentTo: recipientEmail.trim(),
-      messageId,
+      messageId: result.messageId,
     });
   } catch (err) {
     console.error("[InvoiceSendEmail] Error:", err);
