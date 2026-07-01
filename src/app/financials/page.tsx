@@ -108,6 +108,50 @@ function formatShortDate(iso: string | null | undefined): string {
   });
 }
 
+// Reconciliation map: canonical display name → all provider UUIDs that represent the same entity.
+// These duplicates exist from the initial data import where names were entered inconsistently.
+// We keep the DB untouched and merge them at the display/query layer only.
+const PROVIDER_GROUPS: Record<string, string[]> = {
+  "Dr Miles Alexandra": [
+    "44444444-4444-4444-4444-000000000010", // Dr Miles Alexandra (canonical, 352 invoices)
+    "845145d4-ad1e-4858-bde1-7c59504db825", // Dr Alexandra Miles (0 invoices)
+  ],
+  "Dr Nordback Sophie": [
+    "44444444-4444-4444-4444-000000000011", // Dr Nordback Sophie (canonical, 192 invoices)
+    "6142b370-28e9-4a42-92d3-338ae0192278", // Dr Sophie Nordback (0 invoices)
+  ],
+  "Dr Koltunova Natalia": [
+    "44444444-4444-4444-4444-000000000003", // Dr Koltunova Natalia (canonical, 78 invoices)
+    "9df74c6e-c9bb-4dbc-8282-9c4db2010eb3", // Dr Natalia Koltunova (0 invoices)
+  ],
+  "Dr Benani Reda": [
+    "90b4a2ed-7180-4744-8c80-b293fdf8e6db", // Dr Benani Reda (canonical, 23 invoices)
+    "8cc306c2-042c-447c-808c-13a158bdf6c8", // Dr Reda Benani (0 invoices)
+  ],
+  "Dr Plakalo": [
+    "44444444-4444-4444-4444-000000000001", // Dr Plakalo (canonical, 33 invoices)
+    "c095f12d-d0b8-48be-8872-6cbb3aafbf78", // Dr. Adnan Plakalo (0 invoices)
+  ],
+  "Dr Guarino": [
+    "64008634-4b1a-427f-b16f-d52d7ae87e9c", // Dr Guarino (canonical, 50 invoices)
+    "ae0c923a-c93f-41f2-9d8d-1a0e340123ef", // Dr Laetitia Guarino (0 invoices)
+  ],
+  "Soins Assistantes": [
+    "02e74695-6944-4b0d-a8fc-561d63cdaf9c", // (102 invoices)
+    "44444444-4444-4444-4444-000000000005", // (93 invoices)
+    "7a199b37-c3fa-455b-9cb0-9dbf036bf46d", // (51 invoices)
+    "7af8e49a-b197-43c1-bcbc-ac887c287b0b", // (39 invoices)
+  ],
+};
+
+// Reverse lookup: provider UUID → canonical group key
+const PROVIDER_ID_TO_GROUP: Record<string, string> = {};
+for (const [groupName, ids] of Object.entries(PROVIDER_GROUPS)) {
+  for (const id of ids) {
+    PROVIDER_ID_TO_GROUP[id] = groupName;
+  }
+}
+
 function toExcelDate(iso: string | null | undefined): Date | null {
   if (!iso) return null;
   const date = new Date(iso);
@@ -262,9 +306,13 @@ export default function FinancialsPage() {
         }
 
         if (ownerFilter !== "all") {
-          query = query.or(
-            `provider_id.eq.${ownerFilter},doctor_user_id.eq.${ownerFilter},created_by_user_id.eq.${ownerFilter}`,
-          );
+          const ownerIds = ownerFilter.split("|");
+          const orClauses = ownerIds.flatMap((id) => [
+            `provider_id.eq.${id}`,
+            `doctor_user_id.eq.${id}`,
+            `created_by_user_id.eq.${id}`,
+          ]);
+          query = query.or(orClauses.join(","));
         }
 
         if (invoiceTypeFilter !== "all") {
@@ -433,13 +481,27 @@ export default function FinancialsPage() {
   }, [patientsById]);
 
   const ownerOptions = useMemo(() => {
+    // map: dropdownValue → displayLabel
+    // For grouped providers the dropdownValue is pipe-joined IDs e.g. "id1|id2|id3"
     const map = new Map<string, string>();
-    const seenLabels = new Set<string>();
+    const seenProviderIds = new Set<string>();
+
+    // First pass: add reconciled groups as single entries
+    for (const [groupName, ids] of Object.entries(PROVIDER_GROUPS)) {
+      const key = ids.join("|");
+      map.set(key, groupName);
+      for (const id of ids) seenProviderIds.add(id);
+    }
+
+    // Second pass: add remaining providers that are not part of any group
     for (const provider of Object.values(providersById)) {
+      if (seenProviderIds.has(provider.id)) continue;
       const label = provider.name || provider.id;
       map.set(provider.id, label);
-      seenLabels.add(label.toLowerCase().trim());
     }
+
+    // Third pass: add any doctor/user keys from invoices not covered above
+    const seenLabels = new Set(Array.from(map.values()).map((l) => l.toLowerCase().trim()));
     for (const row of normalizedInvoices) {
       const key = row.ownerKey || "unknown";
       const label = row.ownerLabel || "Unassigned";
@@ -448,6 +510,7 @@ export default function FinancialsPage() {
         seenLabels.add(label.toLowerCase().trim());
       }
     }
+
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [normalizedInvoices, providersById]);
 
@@ -639,9 +702,13 @@ export default function FinancialsPage() {
       if (dateToFilter) query = query.lte(dateField, dateToFilter);
       if (patientFilter !== "all") query = query.eq("patient_id", patientFilter);
       if (ownerFilter !== "all") {
-        query = query.or(
-          `provider_id.eq.${ownerFilter},doctor_user_id.eq.${ownerFilter},created_by_user_id.eq.${ownerFilter}`,
-        );
+        const ownerIds = ownerFilter.split("|");
+        const orClauses = ownerIds.flatMap((id) => [
+          `provider_id.eq.${id}`,
+          `doctor_user_id.eq.${id}`,
+          `created_by_user_id.eq.${id}`,
+        ]);
+        query = query.or(orClauses.join(","));
       }
       if (invoiceTypeFilter !== "all") {
         if (invoiceTypeFilter === "esthetic") {
