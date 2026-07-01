@@ -434,13 +434,18 @@ export default function FinancialsPage() {
 
   const ownerOptions = useMemo(() => {
     const map = new Map<string, string>();
+    const seenLabels = new Set<string>();
     for (const provider of Object.values(providersById)) {
-      map.set(provider.id, provider.name || provider.id);
+      const label = provider.name || provider.id;
+      map.set(provider.id, label);
+      seenLabels.add(label.toLowerCase().trim());
     }
     for (const row of normalizedInvoices) {
       const key = row.ownerKey || "unknown";
-      if (!map.has(key)) {
-        map.set(key, row.ownerLabel || "Unassigned");
+      const label = row.ownerLabel || "Unassigned";
+      if (!map.has(key) && !seenLabels.has(label.toLowerCase().trim())) {
+        map.set(key, label);
+        seenLabels.add(label.toLowerCase().trim());
       }
     }
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
@@ -618,8 +623,93 @@ export default function FinancialsPage() {
     if (typeof window === "undefined") return;
 
     const XLSX = await import("xlsx");
+
+    // Fetch ALL invoices matching the current filters (not just the current page)
+    const allInvoices: InvoiceRow[] = [];
+    const FETCH_BATCH = 1000;
+    for (let from = 0; ; from += FETCH_BATCH) {
+      let query = supabaseClient
+        .from("invoices")
+        .select(
+          "id, patient_id, invoice_number, invoice_date, treatment_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, paid_at, health_insurance_law, billing_type, insurance_name, total_amount, paid_amount, vat_amount, status, is_complimentary, created_by_user_id, created_by_name, is_archived",
+        )
+        .eq("is_archived", false);
+
+      if (dateFromFilter) query = query.gte(dateField, dateFromFilter);
+      if (dateToFilter) query = query.lte(dateField, dateToFilter);
+      if (patientFilter !== "all") query = query.eq("patient_id", patientFilter);
+      if (ownerFilter !== "all") {
+        query = query.or(
+          `provider_id.eq.${ownerFilter},doctor_user_id.eq.${ownerFilter},created_by_user_id.eq.${ownerFilter}`,
+        );
+      }
+      if (invoiceTypeFilter !== "all") {
+        if (invoiceTypeFilter === "esthetic") {
+          query = query.is("health_insurance_law", null).is("billing_type", null);
+        } else {
+          query = query.or(
+            `health_insurance_law.eq.${invoiceTypeFilter},billing_type.eq.${invoiceTypeFilter}`,
+          );
+        }
+      }
+      if (statusFilter === "complimentary") {
+        query = query.eq("is_complimentary", true);
+      } else if (statusFilter === "paid") {
+        query = query.in("status", ["PAID", "OVERPAID"]);
+      } else if (statusFilter === "partial") {
+        query = query.eq("status", "PARTIAL_PAID");
+      } else if (statusFilter === "cancelled") {
+        query = query.eq("status", "CANCELLED");
+      } else if (statusFilter === "unpaid") {
+        query = query
+          .eq("is_complimentary", false)
+          .not("status", "in", "(PAID,OVERPAID,PARTIAL_PAID,CANCELLED)");
+      }
+      if (showOnlyUnpaid) {
+        query = query
+          .eq("is_complimentary", false)
+          .not("status", "in", "(PAID,OVERPAID)");
+      }
+
+      const { data, error: fetchError } = await query
+        .order("invoice_date", { ascending: false, nullsFirst: false })
+        .range(from, from + FETCH_BATCH - 1);
+
+      if (fetchError) { setError(fetchError.message); return; }
+      if (!data || data.length === 0) break;
+
+      allInvoices.push(...(data as InvoiceRow[]));
+      if (data.length < FETCH_BATCH) break;
+    }
+
+    // Normalise the full set using the same logic as normalizedInvoices
+    const allNormalized: NormalizedInvoice[] = allInvoices.map((row) => {
+      const patient = row.patient_id ? patientsById[row.patient_id] : undefined;
+      const nameParts = [
+        patient?.first_name ? patient.first_name.trim() : "",
+        patient?.last_name ? patient.last_name.trim() : "",
+      ].filter(Boolean);
+      const patientName = nameParts.join(" ") || row.patient_id || t("unknownPatient");
+      const amount = Number(row.total_amount) || 0;
+      const isPaid = row.status === "PAID" || row.status === "OVERPAID";
+      const provider = row.provider_id ? providersById[row.provider_id] : undefined;
+      const ownerKey = row.provider_id || row.doctor_user_id || row.created_by_user_id || "unknown";
+      const ownerLabel =
+        provider?.name || row.provider_name || row.doctor_name || row.created_by_name ||
+        (ownerKey === "unknown" ? t("unassigned") : ownerKey);
+      const invoiceType = row.health_insurance_law?.trim() || row.billing_type?.trim() || "esthetic";
+      const invoiceTypeLabel = row.health_insurance_law?.trim() || row.billing_type?.trim() || t("invoiceTypeEsthetic");
+      const filterStatus = row.is_complimentary ? "complimentary" : isPaid ? "paid" :
+        row.status === "PARTIAL_PAID" ? "partial" : row.status === "CANCELLED" ? "cancelled" : "unpaid";
+      const statusLabel = filterStatus === "complimentary" ? t("statusComplimentary") :
+        filterStatus === "paid" ? t("statusPaid") : filterStatus === "partial" ? t("statusPartial") :
+        filterStatus === "cancelled" ? t("statusCancelled") : t("statusUnpaid");
+      return { ...row, amount, isPaid, patientName, ownerKey, ownerLabel, invoiceType, invoiceTypeLabel, filterStatus, statusLabel };
+    });
+
+    // Fetch line items for all invoices in batches
     const lineItemsByInvoice = new Map<string, InvoiceLineItemRow[]>();
-    const invoiceIds = filteredInvoices.map((invoice) => invoice.id);
+    const invoiceIds = allNormalized.map((invoice) => invoice.id);
     const BATCH_SIZE = 100;
 
     for (let index = 0; index < invoiceIds.length; index += BATCH_SIZE) {
@@ -665,7 +755,7 @@ export default function FinancialsPage() {
       "TVA complète",
       "% TVA complète",
     ];
-    const rows = filteredInvoices.map((invoice) => {
+    const rows = allNormalized.map((invoice) => {
       const lineItems = lineItemsByInvoice.get(invoice.id) || [];
       const services = lineItems.map((item) => item.name).filter(Boolean).join("; ");
       const vat = lineItems.reduce(
