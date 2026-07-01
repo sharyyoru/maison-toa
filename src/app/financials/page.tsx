@@ -298,7 +298,9 @@ export default function FinancialsPage() {
         }
 
         if (dateToFilter) {
-          query = query.lte(dateField, dateToFilter);
+          // Append end-of-day so the lte includes all records on that date
+          // (paid_at and invoice_date are timestamp columns, not date columns)
+          query = query.lte(dateField, `${dateToFilter}T23:59:59.999Z`);
         }
 
         if (patientFilter !== "all") {
@@ -699,7 +701,7 @@ export default function FinancialsPage() {
         .eq("is_archived", false);
 
       if (dateFromFilter) query = query.gte(dateField, dateFromFilter);
-      if (dateToFilter) query = query.lte(dateField, dateToFilter);
+      if (dateToFilter) query = query.lte(dateField, `${dateToFilter}T23:59:59.999Z`);
       if (patientFilter !== "all") query = query.eq("patient_id", patientFilter);
       if (ownerFilter !== "all") {
         const ownerIds = ownerFilter.split("|");
