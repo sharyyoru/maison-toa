@@ -477,7 +477,7 @@ export async function POST(request: NextRequest) {
         lawType: mapSumexLaw(invoiceData.health_insurance_law || "KVG"),
         insuredId: invoiceData.patient_ssn || "",
         esrType: EsrType.QR,
-        iban: provIban,
+        iban: provIban ?? "",
         paymentPeriod: 30,
         billerGln: provGln,
         billerZsr: provZsr || undefined,
@@ -769,7 +769,7 @@ export async function POST(request: NextRequest) {
         // data that doesn't exist, causing it to silently return 204 at GetXML.
         lawType: mapSumexLaw("ORG"),
         esrType: EsrType.QR,
-        iban: provIbanSumex,
+        iban: provIbanSumex ?? "",
         paymentPeriod: 30,
         billerGln: provGln,
         billerZsr: provZsr || undefined,

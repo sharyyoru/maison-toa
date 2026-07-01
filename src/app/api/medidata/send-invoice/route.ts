@@ -588,7 +588,7 @@ export async function POST(request: NextRequest) {
       lawType: mapSumexLaw(lawType),
       insuredId: insuranceData?.card_number || "",
       esrType: EsrType.QR,
-      iban: provIban,
+      iban: provIban ?? "",
       paymentPeriod: 30,
       billerGln: provGln,
       billerZsr: provZsr || undefined,

@@ -295,7 +295,7 @@ export async function POST(request: NextRequest) {
       lawType: mapSumexLaw(invoice.health_insurance_law || "KVG"),
       insuredId: invoice.patient_card_number || invoice.patient_ssn || "",
       esrType: EsrType.QR,
-      iban: provIban,
+      iban: provIban ?? "",
       paymentPeriod: 30,
       billerGln: provGln,
       billerZsr: provZsr || undefined,

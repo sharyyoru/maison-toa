@@ -246,7 +246,7 @@ export async function POST(request: NextRequest) {
           lawType,
           insuredId: inv.patient_card_number || "80756012345678901",
           esrType: EsrType.QR,
-          iban: providerIban,
+          iban: providerIban ?? "",
           paymentPeriod: 30,
           billerGln: providerGln,
           billerZsr: providerZsr || undefined,
