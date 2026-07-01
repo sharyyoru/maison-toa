@@ -156,6 +156,11 @@ function generatePatientConfirmationEmail(
   };
 
   const texts = isFrench ? t.fr : t.en;
+  const rescheduleLabel = isCancellation
+    ? isFrench
+      ? "Reprendre rendez-vous"
+      : "Reschedule"
+    : texts.reschedule;
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
   const manageUrl = appointmentId
@@ -189,14 +194,16 @@ function generatePatientConfirmationEmail(
     <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin: 24px 0;">
       <tr>
         <td style="padding: 0 8px 8px 0;">
-          <a href="${manageUrl}&action=reschedule" style="display: block; background-color: #1a1a18; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500;">${texts.reschedule}</a>
+          <a href="${manageUrl}&action=reschedule" style="display: block; background-color: #1a1a18; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500;">${rescheduleLabel}</a>
         </td>
       </tr>
+      ${isCancellation ? "" : `
       <tr>
         <td style="padding: 0 8px 0 0;">
           <a href="${manageUrl}&action=cancel" style="display: block; background-color: #f5f3ef; color: #1a1a18; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500; border: 1px solid #e8e3db;">${texts.cancel}</a>
         </td>
       </tr>
+      `}
     </table>
     <p style="margin: 24px 0 0 0; color: #4a4742;">${texts.closing}</p>
     <p style="margin: 8px 0 0 0; color: #1a1a18; font-weight: 500;">Maison Tóā</p>
