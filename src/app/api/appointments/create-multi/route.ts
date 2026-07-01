@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { generatePatientReminderEmail } from '@/lib/appointmentEmails';
+import { normalizePatientLanguage } from '@/lib/languagePreference';
 
 export async function POST(request: Request) {
   try {
@@ -19,6 +21,7 @@ export async function POST(request: Request) {
       notes,
       allowOverlap = false,
       machineIds = null,
+      sendEmailNotification = false,
     } = await request.json();
     
     // Input validation
@@ -123,6 +126,14 @@ export async function POST(request: Request) {
       .select('id, name')
       .in('id', providerIds);
 
+    const { data: patient } = patientId
+      ? await supabase
+          .from('patients')
+          .select('id, first_name, last_name, email, gender, language_preference')
+          .eq('id', patientId)
+          .maybeSingle()
+      : { data: null };
+
     // Check for overlapping appointments for each provider (future bookings only)
     // Skip this check for internal calendar bookings (allowOverlap = true)
     if (!allowOverlap) {
@@ -213,11 +224,58 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    let remindersScheduled = 0;
+    if (sendEmailNotification && patient?.email && createdAppointments?.length) {
+      const language = normalizePatientLanguage(patient.language_preference, 'fr');
+      const patientLastName = patient.last_name || patient.first_name || 'Patient';
+      const reminderRows = createdAppointments
+        .map((appointment) => {
+          const appointmentDate = new Date(appointment.start_time);
+          if (Number.isNaN(appointmentDate.getTime())) return null;
+
+          const reminderDate = new Date(appointmentDate);
+          reminderDate.setDate(reminderDate.getDate() - 1);
+          if (reminderDate.getTime() <= Date.now()) return null;
+
+          return {
+            patient_id: patient.id,
+            appointment_id: appointment.id,
+            recipient_type: 'patient',
+            recipient_email: patient.email,
+            subject: language === 'fr' ? 'Rappel de votre rendez-vous' : 'Appointment reminder',
+            body: generatePatientReminderEmail(
+              patientLastName,
+              patient.gender || undefined,
+              appointmentDate,
+              serviceText || 'Consultation',
+              language,
+              appointment.id
+            ),
+            scheduled_for: reminderDate.toISOString(),
+            status: 'pending',
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null);
+
+      if (reminderRows.length > 0) {
+        const { error: reminderError } = await supabase
+          .from('scheduled_emails')
+          .insert(reminderRows);
+
+        if (reminderError) {
+          console.error('Error scheduling appointment reminder emails:', reminderError);
+        } else {
+          remindersScheduled = reminderRows.length;
+        }
+      }
+    }
     
     return NextResponse.json({
       success: true,
       appointments: createdAppointments,
-      appointmentGroupId: providerIds.length > 1 ? appointmentGroupId : null
+      appointmentGroupId: providerIds.length > 1 ? appointmentGroupId : null,
+      remindersScheduled,
     });
   } catch (error) {
     console.error('Error in create-multi endpoint:', error);

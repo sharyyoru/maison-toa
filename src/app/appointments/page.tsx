@@ -715,6 +715,8 @@ function calculateOverlapPositions(
 
 async function sendAppointmentConfirmationEmail(
   appointment: CalendarAppointment,
+  personalizedMessage?: string,
+  emailType: "confirmation" | "modification" | "cancellation" = "confirmation",
 ): Promise<void> {
   const patientEmail = appointment.patient?.email ?? null;
   if (!patientEmail) return;
@@ -753,6 +755,8 @@ async function sendAppointmentConfirmationEmail(
           service: serviceLabel || "Consultation",
           location,
           language: appointment.patient?.language_preference || "fr",
+          personalizedMessage: personalizedMessage?.trim() || undefined,
+          emailType,
         }),
       });
     } catch (error) {
@@ -762,9 +766,9 @@ async function sendAppointmentConfirmationEmail(
       );
     }
 
-    // Send WhatsApp notification if patient has phone
+    // Send WhatsApp notification only for the original confirmation flow.
     const patientPhone = appointment.patient?.phone ?? null;
-    if (patientPhone && patientPhone.trim().length > 0) {
+    if (emailType === "confirmation" && patientPhone && patientPhone.trim().length > 0) {
       const whatsappText = `Appointment confirmation on ${dateTimeLabel} for ${serviceLabel} with ${doctorName} at ${location}`;
 
       try {
@@ -786,6 +790,37 @@ async function sendAppointmentConfirmationEmail(
   } catch (error) {
     console.error("Failed to prepare appointment confirmation email", error);
   }
+}
+
+async function syncPendingAppointmentReminder(appointment: CalendarAppointment): Promise<void> {
+  const reminderDate = new Date(new Date(appointment.start_time).getTime() - 24 * 60 * 60 * 1000);
+
+  const { data: existingReminder } = await supabaseClient
+    .from("scheduled_emails")
+    .select("id")
+    .eq("appointment_id", appointment.id)
+    .eq("recipient_type", "patient")
+    .eq("status", "pending")
+    .limit(1)
+    .maybeSingle();
+
+  if (!existingReminder?.id) return;
+
+  if (reminderDate.getTime() <= Date.now()) {
+    await supabaseClient
+      .from("scheduled_emails")
+      .delete()
+      .eq("id", existingReminder.id);
+    return;
+  }
+
+  await supabaseClient
+    .from("scheduled_emails")
+    .update({
+      scheduled_for: reminderDate.toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", existingReminder.id);
 }
 
 export default function CalendarPage() {
@@ -908,6 +943,18 @@ export default function CalendarPage() {
   const [draftLocation, setDraftLocation] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [repeatAppointment, setRepeatAppointment] = useState(false);
+  const [sendEmailNotification, setSendEmailNotification] = useState(false);
+  const [emailNotificationMessage, setEmailNotificationMessage] = useState("");
+  const [modificationEmailPromptAppointment, setModificationEmailPromptAppointment] =
+    useState<CalendarAppointment | null>(null);
+  const [sendModificationEmailNotification, setSendModificationEmailNotification] =
+    useState(false);
+  const [modificationEmailMessage, setModificationEmailMessage] = useState("");
+  const [cancellationEmailPromptAppointment, setCancellationEmailPromptAppointment] =
+    useState<CalendarAppointment | null>(null);
+  const [sendCancellationEmailNotification, setSendCancellationEmailNotification] =
+    useState(false);
+  const [cancellationEmailMessage, setCancellationEmailMessage] = useState("");
   const [recurrenceFrequency, setRecurrenceFrequency] =
     useState<RecurrenceFrequency>("weekly");
   const [recurrenceEndMode, setRecurrenceEndMode] =
@@ -2645,6 +2692,8 @@ export default function CalendarPage() {
     setDurationSearch(durationOption ? durationOption.label : `${durationMinutes} minutes`);
     
     setDraftDescription("");
+    setSendEmailNotification(false);
+    setEmailNotificationMessage("");
     resetCreateRecurrence();
     // Use the doctor from the dragged column if available, otherwise default
     if (dragDoctorCalendarId) {
@@ -2975,6 +3024,7 @@ export default function CalendarPage() {
             notes: draftDescription.trim() || null,
             allowOverlap: true,
             machineIds: selectedMachineIds.length > 0 ? selectedMachineIds : null,
+            sendEmailNotification,
           })
         });
         
@@ -3013,8 +3063,11 @@ export default function CalendarPage() {
             .eq('id', firstAppt.id)
             .single();
           
-          if (fullApptData) {
-            void sendAppointmentConfirmationEmail(fullApptData as unknown as CalendarAppointment);
+          if (sendEmailNotification && fullApptData) {
+            void sendAppointmentConfirmationEmail(
+              fullApptData as unknown as CalendarAppointment,
+              emailNotificationMessage,
+            );
           }
         }
         
@@ -3100,7 +3153,9 @@ export default function CalendarPage() {
           );
         }
 
-        void sendAppointmentConfirmationEmail(inserted);
+        if (sendEmailNotification) {
+          void sendAppointmentConfirmationEmail(inserted, emailNotificationMessage);
+        }
 
         setAppointments((prev) => {
           const next = [...prev, inserted];
@@ -3122,6 +3177,8 @@ export default function CalendarPage() {
       setTimeSearch("");
       setDraftLocation("");
       setDraftDescription("");
+      setSendEmailNotification(false);
+      setEmailNotificationMessage("");
       setCreatePatientSearch("");
       setCreatePatientId(null);
       setCreatePatientName("");
@@ -3442,6 +3499,8 @@ export default function CalendarPage() {
       console.log('[Paste] Skipping doctor selection (caller will set target doctor)');
     }
     setDoctorConflicts({});
+    setSendEmailNotification(false);
+    setEmailNotificationMessage("");
     resetCreateRecurrence();
   }
 
@@ -3616,6 +3675,18 @@ export default function CalendarPage() {
         ));
         return;
       }
+
+      const movedAppointment: CalendarAppointment = {
+        ...appt,
+        provider_id: effectiveProviderId,
+        start_time: newStartTime,
+        end_time: newEndTime,
+        provider: targetCalendar?.providerId === effectiveProviderId
+          ? { id: effectiveProviderId, name: targetCalendar.name }
+          : appt.provider,
+      };
+      await syncPendingAppointmentReminder(movedAppointment);
+      openModificationEmailPrompt(movedAppointment);
 
       // Cancel any in-flight calendar load started during the move and reload
       // from the persisted row. This prevents date navigation from restoring a
@@ -3808,7 +3879,15 @@ export default function CalendarPage() {
             a.id === appt.id ? { ...a, end_time: originalEnd } : a
           ));
           setAppointmentHistory(prev => prev.slice(0, -1));
+          return;
         }
+
+        const resizedAppointment: CalendarAppointment = {
+          ...appt,
+          end_time: newEnd,
+        };
+        await syncPendingAppointmentReminder(resizedAppointment);
+        openModificationEmailPrompt(resizedAppointment);
       } catch (err) {
         console.error("Error saving resize:", err);
         // Revert on error
@@ -3877,6 +3956,8 @@ export default function CalendarPage() {
         if (copiedAppointment && !createModalOpen && !editModalOpen) {
           e.preventDefault();
           handlePasteAppointment();
+          setSendEmailNotification(false);
+          setEmailNotificationMessage("");
           setCreateModalOpen(true);
         }
       }
@@ -3892,6 +3973,59 @@ export default function CalendarPage() {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [copiedAppointment, createModalOpen, editModalOpen, pasteContextMenu]);
+
+  function openModificationEmailPrompt(appointment: CalendarAppointment) {
+    if (!appointment.patient?.email) return;
+    setModificationEmailPromptAppointment(appointment);
+    setSendModificationEmailNotification(false);
+    setModificationEmailMessage("");
+  }
+
+  function closeModificationEmailPrompt() {
+    setModificationEmailPromptAppointment(null);
+    setSendModificationEmailNotification(false);
+    setModificationEmailMessage("");
+  }
+
+  async function handleModificationEmailPromptConfirm() {
+    const appointment = modificationEmailPromptAppointment;
+    const shouldSend = sendModificationEmailNotification;
+    const message = modificationEmailMessage;
+    closeModificationEmailPrompt();
+
+    if (appointment && shouldSend) {
+      await sendAppointmentConfirmationEmail(appointment, message, "modification");
+    }
+  }
+
+  function openCancellationEmailPrompt(appointment: CalendarAppointment) {
+    setCancellationEmailPromptAppointment(appointment);
+    setSendCancellationEmailNotification(false);
+    setCancellationEmailMessage("");
+  }
+
+  function closeCancellationEmailPrompt() {
+    setCancellationEmailPromptAppointment(null);
+    setSendCancellationEmailNotification(false);
+    setCancellationEmailMessage("");
+  }
+
+  async function handleCancellationEmailPromptConfirm() {
+    const appointment = cancellationEmailPromptAppointment;
+    const shouldSend = sendCancellationEmailNotification;
+    const message = cancellationEmailMessage;
+
+    if (!appointment) {
+      closeCancellationEmailPrompt();
+      return;
+    }
+
+    await handleDeleteAppointment({
+      appointment,
+      sendCancellationEmail: shouldSend,
+      personalizedMessage: message,
+    });
+  }
 
   async function handleSaveEditAppointment() {
     if (!editingAppointment || savingEdit) return;
@@ -3985,6 +4119,17 @@ export default function CalendarPage() {
       }
 
       const updated = data as unknown as CalendarAppointment;
+      const previousEndTime = editingAppointment.end_time
+        ? new Date(editingAppointment.end_time).getTime()
+        : null;
+      const updatedEndTime = updated.end_time ? new Date(updated.end_time).getTime() : null;
+      const dateTimeChanged =
+        new Date(editingAppointment.start_time).getTime() !== new Date(updated.start_time).getTime() ||
+        previousEndTime !== updatedEndTime;
+
+      if (dateTimeChanged) {
+        await syncPendingAppointmentReminder(updated);
+      }
 
       setAppointments((prev) => {
         if (updated.status === "cancelled") {
@@ -4005,23 +4150,39 @@ export default function CalendarPage() {
       setSavingEdit(false);
       setEditModalOpen(false);
       setEditingAppointment(null);
+      if (dateTimeChanged) {
+        openModificationEmailPrompt(updated);
+      }
     } catch {
       setEditError("Failed to update appointment.");
       setSavingEdit(false);
     }
   }
 
-  async function handleDeleteAppointment() {
-    if (!editingAppointment || deletingAppointment) return;
+  async function handleDeleteAppointment(options?: {
+    appointment?: CalendarAppointment;
+    sendCancellationEmail?: boolean;
+    personalizedMessage?: string;
+  }) {
+    const appointmentToDelete = options?.appointment ?? editingAppointment;
+    if (!appointmentToDelete || deletingAppointment) return;
 
     try {
       setDeletingAppointment(true);
       setEditError(null);
 
+      if (options?.sendCancellationEmail) {
+        await sendAppointmentConfirmationEmail(
+          appointmentToDelete,
+          options.personalizedMessage,
+          "cancellation",
+        );
+      }
+
       const { error: reminderDeleteError } = await supabaseClient
         .from("scheduled_emails")
         .delete()
-        .eq("appointment_id", editingAppointment.id);
+        .eq("appointment_id", appointmentToDelete.id);
 
       if (reminderDeleteError) {
         setEditError(reminderDeleteError.message ?? "Failed to delete appointment reminders.");
@@ -4032,7 +4193,7 @@ export default function CalendarPage() {
       const { error } = await supabaseClient
         .from("appointments")
         .delete()
-        .eq("id", editingAppointment.id);
+        .eq("id", appointmentToDelete.id);
 
       if (error) {
         setEditError(error.message ?? "Failed to delete appointment.");
@@ -4041,10 +4202,11 @@ export default function CalendarPage() {
       }
 
       // Remove from local state
-      setAppointments((prev) => prev.filter((a) => a.id !== editingAppointment.id));
+      setAppointments((prev) => prev.filter((a) => a.id !== appointmentToDelete.id));
 
       setDeletingAppointment(false);
       setShowDeleteConfirm(false);
+      closeCancellationEmailPrompt();
       setEditModalOpen(false);
       setEditingAppointment(null);
     } catch {
@@ -4126,6 +4288,8 @@ export default function CalendarPage() {
               setDraftLocation(CLINIC_LOCATION_OPTIONS[0] ?? "");
               setLocationSearch(CLINIC_LOCATION_OPTIONS[0] ?? "");
               setDraftDescription("");
+              setSendEmailNotification(false);
+              setEmailNotificationMessage("");
               resetCreateRecurrence();
               const defaultCalendar =
                 doctorCalendars.find((calendar) => calendar.selected) ||
@@ -5185,6 +5349,8 @@ export default function CalendarPage() {
               type="button"
               onClick={() => {
                 handlePasteAppointment();
+                setSendEmailNotification(false);
+                setEmailNotificationMessage("");
                 setCreateModalOpen(true);
                 setPasteContextMenu(null);
               }}
@@ -5646,7 +5812,9 @@ export default function CalendarPage() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => void handleDeleteAppointment()}
+                      onClick={() => {
+                        if (editingAppointment) openCancellationEmailPrompt(editingAppointment);
+                      }}
                       disabled={deletingAppointment}
                       className="inline-flex items-center rounded-full border border-red-500/80 bg-red-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -5711,6 +5879,150 @@ export default function CalendarPage() {
                     {tCommon("saveChanges")}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {modificationEmailPromptAppointment ? (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50">
+            <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.65)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">Appointment modified</h2>
+                  <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                    Send an appointment modification email to the patient?
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeModificationEmailPrompt}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm hover:bg-slate-50"
+                >
+                  <span className="sr-only">{tCommon("close")}</span>
+                  <svg className="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 5l10 10" />
+                    <path d="M15 5L5 15" />
+                  </svg>
+                </button>
+              </div>
+
+              <label className="mt-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={sendModificationEmailNotification}
+                  onChange={(event) => {
+                    setSendModificationEmailNotification(event.target.checked);
+                    if (!event.target.checked) setModificationEmailMessage("");
+                  }}
+                  className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+                <span className="text-[11px] font-medium text-slate-700">Send email notification</span>
+              </label>
+
+              {sendModificationEmailNotification ? (
+                <div className="mt-3 space-y-1">
+                  <span className="text-[10px] text-slate-500">Personalized message</span>
+                  <textarea
+                    value={modificationEmailMessage}
+                    onChange={(event) => setModificationEmailMessage(event.target.value)}
+                    rows={4}
+                    placeholder="Add a message for the modification email"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  />
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeModificationEmailPrompt}
+                  className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Skip
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleModificationEmailPromptConfirm()}
+                  className="inline-flex items-center rounded-full border border-sky-500 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {cancellationEmailPromptAppointment ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50">
+            <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.65)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">Appointment cancelled</h2>
+                  <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                    Delete this appointment and choose whether to email the patient.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeCancellationEmailPrompt}
+                  disabled={deletingAppointment}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <span className="sr-only">{tCommon("close")}</span>
+                  <svg className="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 5l10 10" />
+                    <path d="M15 5L5 15" />
+                  </svg>
+                </button>
+              </div>
+
+              <label className="mt-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={sendCancellationEmailNotification}
+                  onChange={(event) => {
+                    setSendCancellationEmailNotification(event.target.checked);
+                    if (!event.target.checked) setCancellationEmailMessage("");
+                  }}
+                  disabled={deletingAppointment}
+                  className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed"
+                />
+                <span className="text-[11px] font-medium text-slate-700">Send appointment cancelled email</span>
+              </label>
+
+              {sendCancellationEmailNotification ? (
+                <div className="mt-3 space-y-1">
+                  <span className="text-[10px] text-slate-500">Personalized message</span>
+                  <textarea
+                    value={cancellationEmailMessage}
+                    onChange={(event) => setCancellationEmailMessage(event.target.value)}
+                    rows={4}
+                    placeholder="Add a message for the cancellation email"
+                    disabled={deletingAppointment}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteAppointment({
+                    appointment: cancellationEmailPromptAppointment,
+                    sendCancellationEmail: false,
+                  })}
+                  disabled={deletingAppointment}
+                  className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Do not send email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleCancellationEmailPromptConfirm()}
+                  disabled={deletingAppointment || !sendCancellationEmailNotification}
+                  className="inline-flex items-center rounded-full border border-red-500 bg-red-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {deletingAppointment ? t("modal.deleting") : "Send and delete"}
+                </button>
               </div>
             </div>
           </div>
@@ -6066,6 +6378,31 @@ export default function CalendarPage() {
                       className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                     />
                   </label>
+                  <label className="flex items-center justify-between gap-3 border-t border-slate-200 pt-2">
+                    <span className="text-[11px] font-medium text-slate-700">Send email notification</span>
+                    <input
+                      type="checkbox"
+                      checked={sendEmailNotification}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setSendEmailNotification(checked);
+                        if (!checked) setEmailNotificationMessage("");
+                      }}
+                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    />
+                  </label>
+                  {sendEmailNotification ? (
+                    <label className="block space-y-1">
+                      <span className="text-[10px] text-slate-500">Personalized message</span>
+                      <textarea
+                        value={emailNotificationMessage}
+                        onChange={(event) => setEmailNotificationMessage(event.target.value)}
+                        rows={3}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        placeholder="Add a message for the confirmation email"
+                      />
+                    </label>
+                  ) : null}
                   {repeatAppointment ? (
                     <div className="space-y-2">
                       <div className="grid grid-cols-2 gap-2">

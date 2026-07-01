@@ -21,6 +21,8 @@ type SendConfirmationPayload = {
   service: string;
   location?: string;
   language?: string;
+  personalizedMessage?: string;
+  emailType?: "confirmation" | "modification" | "cancellation";
 };
 
 async function sendEmail(to: string, subject: string, html: string) {
@@ -81,6 +83,23 @@ function getSalutation(
   return isFrench ? "Madame, Monsieur," : "Dear Sir or Madam,";
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderPersonalizedMessage(message?: string): string {
+  const normalized = message?.trim();
+  if (!normalized) return "";
+
+  const html = escapeHtml(normalized).replace(/\r?\n/g, "<br>");
+  return `<p style="margin: 0 0 20px 0; color: #4a4742;">${html}</p>`;
+}
+
 function generatePatientConfirmationEmail(
   lastName: string,
   gender: string | undefined,
@@ -90,15 +109,21 @@ function generatePatientConfirmationEmail(
   location: string | null,
   language: string,
   appointmentId?: string,
-  formUrl?: string
+  formUrl?: string,
+  personalizedMessage?: string,
+  emailType: "confirmation" | "modification" | "cancellation" = "confirmation"
 ): string {
   const isFrench = language === "fr";
   const salutation = getSalutation(lastName, gender, language);
+  const isModification = emailType === "modification";
+  const isCancellation = emailType === "cancellation";
 
   const t = {
     en: {
       subject: "Your appointment at Maison Tóā",
       confirmed: "We are pleased to confirm your appointment at Maison Tóā.",
+      modified: "Your appointment at Maison Tóā has been modified. Please find the updated details below.",
+      cancelled: "Your appointment at Maison Tóā has been cancelled. The cancelled appointment details are below.",
       yourAppointment: "Your appointment",
       date: "Date",
       time: "Time",
@@ -114,6 +139,8 @@ function generatePatientConfirmationEmail(
     fr: {
       subject: "Votre rendez-vous au sein de Maison Tóā",
       confirmed: "Nous avons le plaisir de vous confirmer votre rendez-vous au sein de Maison Tóā.",
+      modified: "Votre rendez-vous au sein de Maison Tóā a été modifié. Veuillez trouver les nouveaux détails ci-dessous.",
+      cancelled: "Votre rendez-vous au sein de Maison Tóā a été annulé. Vous trouverez ci-dessous les détails du rendez-vous annulé.",
       yourAppointment: "Votre rendez-vous",
       date: "Date",
       time: "Heure",
@@ -144,7 +171,8 @@ function generatePatientConfirmationEmail(
 
   const body = `
     <p style="margin: 0 0 20px 0; font-size: 15px; color: #1a1a18;">${salutation}</p>
-    <p style="margin: 0 0 20px 0; color: #4a4742;">${texts.confirmed}</p>
+    <p style="margin: 0 0 20px 0; color: #4a4742;">${isCancellation ? texts.cancelled : isModification ? texts.modified : texts.confirmed}</p>
+    ${renderPersonalizedMessage(personalizedMessage)}
     <p style="margin: 0 0 8px 0; color: #8a8578; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;">${texts.yourAppointment}</p>
     ${infoTable(rows)}
     ${formUrl ? `
@@ -193,6 +221,8 @@ export async function POST(request: Request) {
       service,
       location,
       language: requestedLanguage = "en",
+      personalizedMessage,
+      emailType = "confirmation",
     } = body;
     const language = normalizePatientLanguage(requestedLanguage, "en");
 
@@ -206,9 +236,18 @@ export async function POST(request: Request) {
     const appointmentDateObj = new Date(appointmentDate);
     const isFrench = language === "fr";
 
-    const emailSubject = isFrench
-      ? `Votre rendez-vous au sein de Maison Tóā`
-      : `Your appointment at Maison Tóā`;
+    const emailSubject =
+      emailType === "cancellation"
+        ? isFrench
+          ? `Votre rendez-vous a été annulé`
+          : `Your appointment has been cancelled`
+        : emailType === "modification"
+        ? isFrench
+          ? `Votre rendez-vous a été modifié`
+          : `Your appointment has been modified`
+        : isFrench
+          ? `Votre rendez-vous au sein de Maison Tóā`
+          : `Your appointment at Maison Tóā`;
 
     // Initialize Supabase client
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -229,7 +268,7 @@ export async function POST(request: Request) {
 
     // Auto-create patient information form and get the URL
     let formUrl: string | undefined;
-    if (patientId) {
+    if (patientId && emailType === "confirmation") {
       try {
         const formId = isFrench ? "patient-information-fr" : "patient-information-en";
         const formName = isFrench ? "Informations patient" : "Patient Information Form";
@@ -282,11 +321,13 @@ export async function POST(request: Request) {
       location || null,
       language,
       appointmentId,
-      formUrl
+      formUrl,
+      personalizedMessage,
+      emailType
     );
 
     await sendEmail(patientEmail, emailSubject, patientEmailHtml);
-    console.log("✓ Branded confirmation email sent to:", patientEmail);
+    console.log(`✓ Branded appointment ${emailType} email sent to:`, patientEmail);
 
     // Store email record in database
     await supabase.from("emails").insert({
@@ -302,7 +343,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: "Confirmation email sent successfully",
+      message: "Appointment email sent successfully",
     });
   } catch (error) {
     console.error("Error sending confirmation email:", error);
