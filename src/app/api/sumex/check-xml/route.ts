@@ -17,8 +17,8 @@ import {
   type InvoiceDiagnosis as SumexDiagnosis,
 } from "@/lib/sumexInvoice";
 
-// Default QR-IBAN fallback (IID 30000-31999 required for QR type)
-const FALLBACK_QR_IBAN = "CH0930788000050249289";
+// No IBAN fallback — provider must have a valid QR-IBAN configured
+const FALLBACK_QR_IBAN = null;
 
 // MediData intermediate (clearing house) GLN — required in XML transport <via>
 const MEDIDATA_INTERMEDIATE_GLN = "7601001304307";

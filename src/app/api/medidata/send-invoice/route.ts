@@ -332,7 +332,7 @@ export async function POST(request: NextRequest) {
       }
       return stripped;
     };
-    const provIban = sanitizeQrIban(billingEntity?.iban) || sanitizeQrIban(invoiceRecord?.provider_iban) || "CH0930788000050249289";
+    const provIban = sanitizeQrIban(billingEntity?.iban) || sanitizeQrIban(invoiceRecord?.provider_iban) || null;
 
     // Derive invoice metadata
     const invoiceNumber = invoiceRecord?.invoice_number || `INV-${Date.now().toString(36).toUpperCase()}`;

@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
         const providerCity = provider?.city || "";
         const providerCanton = provider?.canton || inv.treatment_canton || config.clinic_canton || "VD";
         const providerName = provider?.name || inv.provider_name || config.clinic_name;
-        const providerIban = provider?.iban || inv.provider_iban || "CH0930788000050249289";
+        const providerIban = provider?.iban || inv.provider_iban || null;
         const providerGln = provider?.gln || inv.provider_gln || inv.doctor_gln || config.clinic_gln;
         const providerZsr = provider?.zsr || inv.provider_zsr || inv.doctor_zsr || config.clinic_zsr || undefined;
         const qualDignities = provider?.qual_dignities || [provider?.specialty].filter(Boolean);

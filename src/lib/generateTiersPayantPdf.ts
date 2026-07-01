@@ -517,7 +517,7 @@ export async function generateTiersPayantPdf(
   y += 10;
 
   // Generate 3 QR codes (standard for Tiers Payant)
-  const provIban = provider.iban || "CH0930788000050249289";
+  const provIban = provider.iban || null;
   const swissRef = generateSwissReference(invoice.invoice_number);
 
   // QR Code 1: Payment (Swiss QR Bill data)
