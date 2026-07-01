@@ -173,8 +173,8 @@ export async function POST(req: NextRequest) {
 
         // 4. Create PARTIAL_PAID invoice with proper fields
         if (patientId && fullPrice > 0) {
-          // Use the shared DB sequence (same as manual invoices) to avoid text-sort collision
-          const { data: seqRow } = await supabase.rpc("nextval_invoice_number");
+          // Use the same DB function as manual invoices to avoid text-sort collision
+          const { data: seqRow } = await supabase.rpc("generate_invoice_number");
           const nextNumber = String(seqRow ?? Date.now());
 
           const nowIso = new Date().toISOString();
