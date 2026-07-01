@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
   const payload = {
     patient_id: patientId,
     collab_room_id: roomId,
-    is_draft: true,
+    is_draft: body?.locked === true ? false : true,
     consultation_id: consultationId,
     title: text(body?.title).trim() || "Draft",
     content: text(body?.contentHtml),

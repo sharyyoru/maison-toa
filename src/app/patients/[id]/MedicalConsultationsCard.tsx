@@ -110,6 +110,8 @@ type ConsultationRow = {
   linked_invoice_number: string | null;
   // Insurance/MediData status (for invoice records OR consultations with linked invoices)
   medidata_status: string | null;
+  collab_room_id?: string | null;
+  is_draft?: boolean | null;
 };
 
 type PlatformUser = {
@@ -1222,11 +1224,22 @@ export default function MedicalConsultationsCard({
 
   // NEW CONSULTATION AUTOSAVE - Draft system like Notion/Google Docs
   const [newConsultationDraftId, setNewConsultationDraftId] = useState<string | null>(null);
+  const [consultationLocked, setConsultationLocked] = useState(false);
   const [newConsultationAutosaveStatus, setNewConsultationAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved">("idle");
   const newConsultationAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const consultationCollabRoomId = useMemo(
     () => `patient:${patientId}:consultation-create`,
     [patientId],
+  );
+  const activeCollaborativeConsultation = useMemo(
+    () =>
+      consultations.find(
+        (row) =>
+          row.record_type === "notes" &&
+          row.collab_room_id === consultationCollabRoomId &&
+          !row.is_archived,
+      ) ?? null,
+    [consultationCollabRoomId, consultations],
   );
   const [consultationYDoc, setConsultationYDoc] = useState<Y.Doc | null>(null);
   const [consultationYProvider, setConsultationYProvider] = useState<any | null>(null);
@@ -1283,7 +1296,7 @@ export default function MedicalConsultationsCard({
             ]
           : []),
       ],
-      editable: consultationRecordType === "notes" && newConsultationOpen,
+      editable: consultationRecordType === "notes" && newConsultationOpen && !consultationLocked,
       editorProps: {
         attributes: {
           class:
@@ -1712,7 +1725,7 @@ export default function MedicalConsultationsCard({
         const { data: consultData, error: consultError } = await supabaseClient
           .from("consultations")
           .select(
-            "id, patient_id, consultation_id, title, content, record_type, doctor_user_id, doctor_name, scheduled_at, payment_method, duration_seconds, invoice_total_amount, invoice_is_complimentary, invoice_is_paid, invoice_status, invoice_paid_amount, cash_receipt_path, invoice_pdf_path, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, archived_at, diagnosis_code, ref_icd10",
+            "id, patient_id, consultation_id, title, content, record_type, doctor_user_id, doctor_name, scheduled_at, payment_method, duration_seconds, invoice_total_amount, invoice_is_complimentary, invoice_is_paid, invoice_status, invoice_paid_amount, cash_receipt_path, invoice_pdf_path, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, archived_at, diagnosis_code, ref_icd10, collab_room_id, is_draft",
           )
           .eq("patient_id", patientId)
           .eq("is_archived", showArchived ? true : false)
@@ -1738,6 +1751,8 @@ export default function MedicalConsultationsCard({
           linked_invoice_status: null,
           linked_invoice_number: null,
           medidata_status: null,
+          collab_room_id: r.collab_room_id ?? null,
+          is_draft: r.is_draft ?? null,
         }));
 
         // 2) Load invoice records directly from invoices table
@@ -2110,8 +2125,10 @@ export default function MedicalConsultationsCard({
 
     const applyYFields = () => {
       const shouldOpen = yfields.get("open") === "true";
+      const locked = yfields.get("locked") === "true";
       consultationYApplyingRemoteRef.current = true;
       setNewConsultationOpen(shouldOpen);
+      setConsultationLocked(locked);
       setConsultationDate(yfields.get("date") ?? "");
       setConsultationHour(yfields.get("hour") ?? "");
       setConsultationMinute(yfields.get("minute") ?? "");
@@ -2163,9 +2180,68 @@ export default function MedicalConsultationsCard({
 
   useEffect(() => {
     consultationNotesEditor?.setEditable(
-      consultationRecordType === "notes" && newConsultationOpen,
+      consultationRecordType === "notes" && newConsultationOpen && !consultationLocked,
     );
-  }, [consultationNotesEditor, consultationRecordType, newConsultationOpen]);
+  }, [consultationLocked, consultationNotesEditor, consultationRecordType, newConsultationOpen]);
+
+  useEffect(() => {
+    if (!activeCollaborativeConsultation || !consultationYDoc) return;
+    const fields = consultationYFieldsRef.current;
+    if (!fields) return;
+    if (fields.get("open") === "true") return;
+
+    const scheduled = activeCollaborativeConsultation.scheduled_at
+      ? new Date(activeCollaborativeConsultation.scheduled_at)
+      : null;
+    const locked = activeCollaborativeConsultation.is_draft === false;
+
+    fields.doc?.transact(() => {
+      fields.set("open", "true");
+      fields.set("locked", locked ? "true" : "false");
+      fields.set("draftId", activeCollaborativeConsultation.id);
+      fields.set(
+        "date",
+        scheduled && !Number.isNaN(scheduled.getTime())
+          ? scheduled.toISOString().split("T")[0]
+          : consultationDate,
+      );
+      fields.set(
+        "hour",
+        scheduled && !Number.isNaN(scheduled.getTime())
+          ? scheduled.getHours().toString().padStart(2, "0")
+          : consultationHour,
+      );
+      fields.set(
+        "minute",
+        scheduled && !Number.isNaN(scheduled.getTime())
+          ? scheduled.getMinutes().toString().padStart(2, "0")
+          : consultationMinute,
+      );
+      fields.set("doctorId", activeCollaborativeConsultation.doctor_user_id ?? "");
+      fields.set("title", activeCollaborativeConsultation.title === "Draft" ? "" : activeCollaborativeConsultation.title);
+      fields.set("recordType", "notes");
+      fields.set("diagnosisCode", activeCollaborativeConsultation.diagnosis_code ?? "");
+      fields.set("refIcd10", activeCollaborativeConsultation.ref_icd10 ?? "");
+    });
+
+    if (
+      consultationNotesEditor &&
+      consultationNotesEditor.isEmpty &&
+      activeCollaborativeConsultation.content &&
+      !isBlankNotesHtml(activeCollaborativeConsultation.content)
+    ) {
+      consultationNotesEditor.commands.setContent(activeCollaborativeConsultation.content, {
+        emitUpdate: false,
+      });
+    }
+  }, [
+    activeCollaborativeConsultation,
+    consultationDate,
+    consultationHour,
+    consultationMinute,
+    consultationNotesEditor,
+    consultationYDoc,
+  ]);
 
   const notesToolbarButtonClass = (active = false) =>
     "inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-2 text-[11px] font-medium transition-colors " +
@@ -2193,8 +2269,17 @@ export default function MedicalConsultationsCard({
       .run();
   }
 
+  function toggleConsultationLock() {
+    if (consultationRecordType !== "notes") return;
+    const nextLocked = !consultationLocked;
+    setConsultationLocked(nextLocked);
+    consultationYFieldsRef.current?.set("locked", nextLocked ? "true" : "false");
+    triggerNewConsultationAutosave({ immediate: true, force: true, locked: nextLocked });
+  }
+
   function handleConsultationNotesCanvasMouseDown(event: ReactMouseEvent<HTMLDivElement>) {
     if (!consultationNotesEditor) return;
+    if (consultationLocked) return;
 
     const editorElement = event.currentTarget.querySelector(".ProseMirror") as HTMLElement | null;
     if (!editorElement) return;
@@ -2341,6 +2426,7 @@ export default function MedicalConsultationsCard({
       fields.set("recordType", consultationRecordType);
       fields.set("diagnosisCode", consultationDiagnosisCode);
       fields.set("refIcd10", consultationRefIcd10);
+      fields.set("locked", consultationLocked ? "true" : "false");
       if (newConsultationDraftId) fields.set("draftId", newConsultationDraftId);
     });
   }, [
@@ -2348,6 +2434,7 @@ export default function MedicalConsultationsCard({
     consultationDiagnosisCode,
     consultationDoctorId,
     consultationHour,
+    consultationLocked,
     consultationMinute,
     consultationRecordType,
     consultationRefIcd10,
@@ -3439,14 +3526,14 @@ export default function MedicalConsultationsCard({
   // ========== NEW CONSULTATION AUTOSAVE ==========
   // Creates a draft consultation on first input, then auto-saves after 1 second of inactivity
   
-  async function handleNewConsultationAutosave() {
+  async function handleNewConsultationAutosave(options: { force?: boolean; locked?: boolean } = {}) {
     if (consultationRecordType !== "notes") return;
 
     const htmlContent = consultationNotesEditor
       ? consultationNotesEditor.getHTML()
       : consultationContentHtml;
 
-    if (!consultationTitle.trim() && isBlankNotesHtml(htmlContent)) return;
+    if (!options.force && !consultationTitle.trim() && isBlankNotesHtml(htmlContent)) return;
 
     setNewConsultationAutosaveStatus("saving");
 
@@ -3483,6 +3570,7 @@ export default function MedicalConsultationsCard({
           scheduledAt,
           diagnosisCode: consultationDiagnosisCode,
           refIcd10: consultationRefIcd10,
+          locked: options.locked ?? consultationLocked,
         }),
       });
 
@@ -3525,7 +3613,9 @@ export default function MedicalConsultationsCard({
     }
   }
 
-  function triggerNewConsultationAutosave() {
+  function triggerNewConsultationAutosave(
+    options: { immediate?: boolean; force?: boolean; locked?: boolean } = {},
+  ) {
     // Only for notes type
     if (consultationRecordType !== "notes") return;
     
@@ -3535,10 +3625,15 @@ export default function MedicalConsultationsCard({
     }
     
     setNewConsultationAutosaveStatus("pending");
+
+    if (options.immediate) {
+      void handleNewConsultationAutosave({ force: options.force, locked: options.locked });
+      return;
+    }
     
     // Set new timer for 1 second
     newConsultationAutosaveTimerRef.current = setTimeout(() => {
-      void handleNewConsultationAutosave();
+      void handleNewConsultationAutosave({ force: options.force, locked: options.locked });
     }, 1000);
   }
   
@@ -4589,21 +4684,44 @@ export default function MedicalConsultationsCard({
                       .toString()
                       .padStart(2, "0");
                     const nextRecordType = recordTypeFilter || "notes";
-                    setConsultationDate(datePart);
-                    setConsultationHour(hourPart);
-                    setConsultationMinute(minutePart);
+                    const existingCollaborative =
+                      nextRecordType === "notes" ? activeCollaborativeConsultation : null;
+                    const existingScheduled = existingCollaborative?.scheduled_at
+                      ? new Date(existingCollaborative.scheduled_at)
+                      : null;
+                    const existingDate =
+                      existingScheduled && !Number.isNaN(existingScheduled.getTime())
+                        ? existingScheduled.toISOString().split("T")[0]
+                        : datePart;
+                    const existingHour =
+                      existingScheduled && !Number.isNaN(existingScheduled.getTime())
+                        ? existingScheduled.getHours().toString().padStart(2, "0")
+                        : hourPart;
+                    const existingMinute =
+                      existingScheduled && !Number.isNaN(existingScheduled.getTime())
+                        ? existingScheduled.getMinutes().toString().padStart(2, "0")
+                        : minutePart;
+                    const existingLocked = existingCollaborative?.is_draft === false;
+                    setConsultationDate(existingDate);
+                    setConsultationHour(existingHour);
+                    setConsultationMinute(existingMinute);
                     setConsultationDoctorId("");
                     setConsultationError(null);
-                    setConsultationTitle("");
-                    setConsultationDiagnosisCode("");
-                    setConsultationRefIcd10("");
+                    setConsultationTitle(
+                      existingCollaborative?.title && existingCollaborative.title !== "Draft"
+                        ? existingCollaborative.title
+                        : "",
+                    );
+                    setConsultationDiagnosisCode(existingCollaborative?.diagnosis_code ?? "");
+                    setConsultationRefIcd10(existingCollaborative?.ref_icd10 ?? "");
                     setInvoiceFromConsultationId(null);
                     setConsultationRecordType(nextRecordType);
-                    setConsultationContentHtml("");
+                    setConsultationContentHtml(existingCollaborative?.content ?? "");
                     setConsultationDurationSeconds(0);
                     setConsultationStopwatchStartedAt(null);
                     setConsultationStopwatchNow(Date.now());
-                    setNewConsultationDraftId(null); // Reset draft ID when starting fresh
+                    setNewConsultationDraftId(existingCollaborative?.id ?? null);
+                    setConsultationLocked(existingLocked);
                     setNewConsultationAutosaveStatus("idle");
                     setPrescriptionLines([]);
                     setInvoicePaymentMethod("");
@@ -4624,28 +4742,48 @@ export default function MedicalConsultationsCard({
                     setMedSelectedTemplateId("");
                     setMedTemplateServiceFilter("");
                     setMedTemplateFilter("all");
-                    if (currentUserId && nextRecordType !== "invoice") {
+                    if (existingCollaborative?.doctor_user_id) {
+                      setConsultationDoctorId(existingCollaborative.doctor_user_id);
+                    } else if (currentUserId && nextRecordType !== "invoice") {
                       setConsultationDoctorId(currentUserId);
                     }
                     const yfields = consultationYFieldsRef.current;
                     consultationYDoc?.transact(() => {
                       if (nextRecordType === "notes") {
-                        consultationNotesEditor?.commands.setContent(buildBlankConsultationNotesDoc(), { emitUpdate: false });
+                        if (
+                          existingCollaborative?.content &&
+                          !isBlankNotesHtml(existingCollaborative.content) &&
+                          consultationNotesEditor?.isEmpty
+                        ) {
+                          consultationNotesEditor.commands.setContent(existingCollaborative.content, { emitUpdate: false });
+                        } else if (!existingCollaborative) {
+                          consultationNotesEditor?.commands.setContent(buildBlankConsultationNotesDoc(), { emitUpdate: false });
+                        }
                       } else {
                         consultationNotesEditor?.commands.clearContent(false);
                       }
                       yfields?.set("open", "true");
-                      yfields?.set("date", datePart);
-                      yfields?.set("hour", hourPart);
-                      yfields?.set("minute", minutePart);
-                      yfields?.set("doctorId", currentUserId && nextRecordType !== "invoice" ? currentUserId : "");
-                      yfields?.set("title", "");
+                      yfields?.set("locked", existingLocked ? "true" : "false");
+                      yfields?.set("date", existingDate);
+                      yfields?.set("hour", existingHour);
+                      yfields?.set("minute", existingMinute);
+                      yfields?.set("doctorId", existingCollaborative?.doctor_user_id ?? (currentUserId && nextRecordType !== "invoice" ? currentUserId : ""));
+                      yfields?.set("title", existingCollaborative?.title && existingCollaborative.title !== "Draft" ? existingCollaborative.title : "");
                       yfields?.set("recordType", nextRecordType);
-                      yfields?.set("diagnosisCode", "");
-                      yfields?.set("refIcd10", "");
-                      yfields?.delete("draftId");
+                      yfields?.set("diagnosisCode", existingCollaborative?.diagnosis_code ?? "");
+                      yfields?.set("refIcd10", existingCollaborative?.ref_icd10 ?? "");
+                      if (existingCollaborative?.id) {
+                        yfields?.set("draftId", existingCollaborative.id);
+                      } else {
+                        yfields?.delete("draftId");
+                      }
                     });
                     setNewConsultationOpen(true);
+                    if (nextRecordType === "notes" && !existingCollaborative) {
+                      window.setTimeout(() => {
+                        triggerNewConsultationAutosave({ immediate: true, force: true, locked: false });
+                      }, 0);
+                    }
                     setTimeout(() => {
                       if (nextRecordType === "notes") {
                         consultationNotesEditor?.chain().focus().setTextSelection(1).run();
@@ -6167,8 +6305,9 @@ export default function MedicalConsultationsCard({
                   <input
                     type="date"
                     value={consultationDate}
+                    disabled={consultationRecordType === "notes" && consultationLocked}
                     onChange={(event) => setConsultationDate(event.target.value)}
-                    className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                   />
                 </div>
                 <div className="space-y-1">
@@ -6181,11 +6320,12 @@ export default function MedicalConsultationsCard({
                       inputMode="numeric"
                       maxLength={2}
                       value={consultationHour}
+                      disabled={consultationRecordType === "notes" && consultationLocked}
                       onChange={(event) =>
                         setConsultationHour(event.target.value.replace(/[^0-9]/g, ""))
                       }
                       placeholder="21"
-                      className="w-10 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      className="w-10 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                     />
                     <span className="text-xs text-slate-500">:</span>
                     <input
@@ -6193,13 +6333,14 @@ export default function MedicalConsultationsCard({
                       inputMode="numeric"
                       maxLength={2}
                       value={consultationMinute}
+                      disabled={consultationRecordType === "notes" && consultationLocked}
                       onChange={(event) =>
                         setConsultationMinute(
                           event.target.value.replace(/[^0-9]/g, ""),
                         )
                       }
                       placeholder="52"
-                      className="w-10 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      className="w-10 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                     />
                   </div>
                 </div>
@@ -6209,12 +6350,13 @@ export default function MedicalConsultationsCard({
                   </label>
                   <select
                     value={consultationDoctorId}
+                    disabled={consultationRecordType === "notes" && consultationLocked}
                     onChange={(event) => {
                       setConsultationDoctorId(event.target.value);
                       // User changed doctor in the UI -> clear override so auto-prefill kicks in.
                       setBillingEntityOverride(false);
                     }}
-                    className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                   >
                     <option value="">{consultationRecordType === "invoice" ? tf("selectStaff") : tf("selectDoctor")}</option>
                     {consultationRecordType === "invoice" 
@@ -6244,9 +6386,10 @@ export default function MedicalConsultationsCard({
                   <input
                     type="text"
                     value={consultationTitle}
+                    disabled={consultationRecordType === "notes" && consultationLocked}
                     onChange={(event) => { setConsultationTitle(event.target.value); triggerNewConsultationAutosave(); }}
                     placeholder="Consultation ID:"
-                    className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                   />
                 </div>
                 <div className="space-y-1">
@@ -6255,7 +6398,7 @@ export default function MedicalConsultationsCard({
                   </label>
                   <select
                     value={consultationRecordType}
-                    disabled={!!editingInvoiceId}
+                    disabled={!!editingInvoiceId || (consultationRecordType === "notes" && consultationLocked)}
                     onChange={(event) => {
                       const nextType =
                         event.target.value as ConsultationRecordType;
@@ -6273,7 +6416,7 @@ export default function MedicalConsultationsCard({
                       }
                     }
                     }
-                    className={`block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 ${editingInvoiceId ? "opacity-60 cursor-not-allowed" : ""}`}
+                    className={`block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 ${editingInvoiceId ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
                     {consultationRecordTypeOptions.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -6294,9 +6437,10 @@ export default function MedicalConsultationsCard({
                     <input
                       type="text"
                       value={consultationDiagnosisCode}
+                      disabled={consultationRecordType === "notes" && consultationLocked}
                       onChange={(e) => { setConsultationDiagnosisCode(e.target.value); triggerNewConsultationAutosave(); }}
                       placeholder="e.g. L91.0"
-                      className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                     />
                   </div>
                   <div className="space-y-1">
@@ -6306,9 +6450,10 @@ export default function MedicalConsultationsCard({
                     <input
                       type="text"
                       value={consultationRefIcd10}
+                      disabled={consultationRecordType === "notes" && consultationLocked}
                       onChange={(e) => { setConsultationRefIcd10(e.target.value); triggerNewConsultationAutosave(); }}
                       placeholder="e.g. Z42.1"
-                      className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                     />
                   </div>
                 </div>
@@ -6316,11 +6461,37 @@ export default function MedicalConsultationsCard({
 
               {consultationRecordType === "notes" ? (
                 <div className="space-y-1">
-                  <label className="block text-[11px] font-medium text-slate-700">
-                    {tf("notesLabel")}
-                  </label>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="block text-[11px] font-medium text-slate-700">
+                      {tf("notesLabel")}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={toggleConsultationLock}
+                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[11px] shadow-sm transition-colors ${
+                        consultationLocked
+                          ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      }`}
+                      title={consultationLocked ? "Unlock consultation note" : "Lock consultation note"}
+                    >
+                      {consultationLocked ? (
+                        <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="5" y="8" width="10" height="8" rx="1.5" />
+                          <path d="M7.5 8V5.8a2.5 2.5 0 0 1 5 0V8" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="5" y="8" width="10" height="8" rx="1.5" />
+                          <path d="M12.5 8V5.8a2.5 2.5 0 0 0-4.65-1.28" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                   <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                    <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500">
+                    <div className={`flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500 ${
+                      consultationLocked ? "pointer-events-none opacity-55" : ""
+                    }`}>
                       <button
                         type="button"
                         onClick={() => consultationNotesEditor?.chain().focus().undo().run()}
@@ -6468,12 +6639,16 @@ export default function MedicalConsultationsCard({
                       </button>
                     </div>
                     <div
-                      className="relative max-h-80 min-h-[220px] cursor-text overflow-y-auto bg-white"
+                      className={`relative max-h-80 min-h-[220px] overflow-y-auto bg-white ${
+                        consultationLocked ? "cursor-default" : "cursor-text"
+                      }`}
                       onMouseDown={handleConsultationNotesCanvasMouseDown}
                     >
                       <EditorContent
                         editor={consultationNotesEditor}
-                        className="min-h-[220px] [&_.ProseMirror]:min-h-[220px] [&_.ProseMirror]:cursor-text"
+                        className={`min-h-[220px] [&_.ProseMirror]:min-h-[220px] ${
+                          consultationLocked ? "[&_.ProseMirror]:cursor-default" : "[&_.ProseMirror]:cursor-text"
+                        }`}
                       />
                       {consultationMentionActive && (() => {
                         const mentionQuery = consultationMentionQuery.trim();
@@ -6523,7 +6698,12 @@ export default function MedicalConsultationsCard({
                     {consultationRecordType === "notes" && (
                       <div className="flex items-center justify-between gap-2 px-2 py-1 border-t border-slate-100 text-[10px]">
                         <div className="flex min-w-0 items-center gap-1 text-slate-500">
-                          {consultationRemoteUsers.length > 0 ? (
+                          {consultationLocked ? (
+                            <>
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                              <span className="truncate">Locked for everyone</span>
+                            </>
+                          ) : consultationRemoteUsers.length > 0 ? (
                             <>
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                               <span className="truncate">
@@ -8484,53 +8664,55 @@ export default function MedicalConsultationsCard({
                 </div>
               </div>
 
-              <div className="mt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (consultationSaving) return;
-                    consultationYFieldsRef.current?.set("open", "false");
-                    setNewConsultationOpen(false);
-                    setConsultationError(null);
-                    setEditingInvoiceId(null);
-                    setEditingInvoiceNumber(null);
-                    setConsultationDurationSeconds(0);
-                    setConsultationStopwatchStartedAt(null);
-                    setConsultationStopwatchNow(Date.now());
-                    setInvoicePaymentMethod("");
-                    setInvoiceMode("individual");
-                    setInvoiceGroupId("");
-                    setInvoicePaymentTerm("full");
-                    setInvoiceExtraOption(null);
-                    setInvoiceInstallments([]);
-                    setInvoiceServiceLines([]);
-                    setInvoiceSelectedCategoryId("");
-                    setInvoiceSelectedServiceId("");
-                    setConsultationDiagnosisCode("");
-                    setConsultationRefIcd10("");
-                    setInvoiceFromConsultationId(null);
-                    setMedProducts([createEmptyMedProduct()]);
-                    setMedIntakeNote("");
-                    setMedIntakeFromDate(formatLocalDateInputValue(new Date()));
-                    setMedDecisionSummary("");
-                    setMedShowInMediplan(true);
-                    setMedIsPrescription(true);
-                    setMedSelectedTemplateId("");
-                    setMedTemplateServiceFilter("");
-                    setMedTemplateFilter("all");
-                  }}
-                  className="inline-flex items-center rounded-full border border-slate-200/80 bg-slate-100 px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-200"
-                >
-                  {tf("cancel")}
-                </button>
-                <button
-                  type="submit"
-                  disabled={consultationSaving}
-                  className="inline-flex items-center rounded-full border border-sky-500/80 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {consultationSaving ? tf("saving") : editingInvoiceId ? tf("updateInvoice") : tf("create")}
-                </button>
-              </div>
+              {consultationRecordType !== "notes" ? (
+                <div className="mt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (consultationSaving) return;
+                      consultationYFieldsRef.current?.set("open", "false");
+                      setNewConsultationOpen(false);
+                      setConsultationError(null);
+                      setEditingInvoiceId(null);
+                      setEditingInvoiceNumber(null);
+                      setConsultationDurationSeconds(0);
+                      setConsultationStopwatchStartedAt(null);
+                      setConsultationStopwatchNow(Date.now());
+                      setInvoicePaymentMethod("");
+                      setInvoiceMode("individual");
+                      setInvoiceGroupId("");
+                      setInvoicePaymentTerm("full");
+                      setInvoiceExtraOption(null);
+                      setInvoiceInstallments([]);
+                      setInvoiceServiceLines([]);
+                      setInvoiceSelectedCategoryId("");
+                      setInvoiceSelectedServiceId("");
+                      setConsultationDiagnosisCode("");
+                      setConsultationRefIcd10("");
+                      setInvoiceFromConsultationId(null);
+                      setMedProducts([createEmptyMedProduct()]);
+                      setMedIntakeNote("");
+                      setMedIntakeFromDate(formatLocalDateInputValue(new Date()));
+                      setMedDecisionSummary("");
+                      setMedShowInMediplan(true);
+                      setMedIsPrescription(true);
+                      setMedSelectedTemplateId("");
+                      setMedTemplateServiceFilter("");
+                      setMedTemplateFilter("all");
+                    }}
+                    className="inline-flex items-center rounded-full border border-slate-200/80 bg-slate-100 px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-200"
+                  >
+                    {tf("cancel")}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={consultationSaving}
+                    className="inline-flex items-center rounded-full border border-sky-500/80 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {consultationSaving ? tf("saving") : editingInvoiceId ? tf("updateInvoice") : tf("create")}
+                  </button>
+                </div>
+              ) : null}
             </form>
           </div>
         ) : null}
@@ -8847,7 +9029,7 @@ export default function MedicalConsultationsCard({
                                 Create Invoice
                               </button>
                             )}
-                            {row.record_type !== "invoice" && (
+                            {row.record_type !== "invoice" && row.record_type !== "notes" && (
                               <button
                                 type="button"
                                 onClick={() => handleOpenEditConsultation(row)}
