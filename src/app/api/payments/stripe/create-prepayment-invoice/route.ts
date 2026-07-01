@@ -59,14 +59,9 @@ export async function POST(req: NextRequest) {
       billingEntity = fallback;
     }
 
-    // Generate invoice number
-    const { data: maxRow } = await supabaseAdmin
-      .from("invoices")
-      .select("invoice_number")
-      .order("invoice_number", { ascending: false })
-      .limit(1)
-      .single();
-    const invoiceNumber = String((parseInt(maxRow?.invoice_number || "1000000") + 1));
+    // Generate invoice number using the shared DB sequence (same as manual invoices)
+    const { data: seqRow } = await supabaseAdmin.rpc("nextval_invoice_number");
+    const invoiceNumber = String(seqRow ?? Date.now());
     const paymentLinkToken = randomBytes(24).toString("hex");
 
     const nowIso = new Date().toISOString();
