@@ -181,30 +181,41 @@ export default function DepositStatusWidget({ patientId }: { patientId: string }
             </div>
           </div>
 
-          {/* Right: pill buttons (only when editable) */}
+          {/* Right: segmented status selector (only when editable) */}
           {canEdit && (
-            <div className="flex shrink-0 items-center gap-1.5">
-              {MANUAL_OPTIONS.map(opt => {
-                const isActive = currentStatus === opt.value;
-                const optMeta = STATUS_META[opt.value];
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void handleChange(opt.value)}
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all disabled:opacity-40
-                      ${isActive
-                        ? `${optMeta.iconBg} ${optMeta.iconColor} ring-1 ring-inset ring-current`
-                        : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
-                      }`}
-                  >
-                    {opt.value === "paid"     && "Paid"}
-                    {opt.value === "applied"  && "Applied"}
-                    {opt.value === "refunded" && "Refunded"}
-                  </button>
-                );
-              })}
+            <div className="shrink-0">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                Update status
+              </p>
+              <div className="flex items-stretch divide-x divide-slate-200 overflow-hidden rounded-lg border border-slate-200 shadow-sm">
+                {MANUAL_OPTIONS.map(opt => {
+                  const isActive = currentStatus === opt.value;
+                  const optMeta  = STATUS_META[opt.value];
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      disabled={saving || isActive}
+                      onClick={() => void handleChange(opt.value)}
+                      title={optMeta.label}
+                      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors disabled:cursor-default
+                        ${isActive
+                          ? `${optMeta.iconBg} ${optMeta.iconColor} font-semibold`
+                          : "bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
+                        }`}
+                    >
+                      {isActive && (
+                        <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3 shrink-0" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M1.5 6l3 3 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                      {opt.value === "paid"     && "Paid"}
+                      {opt.value === "applied"  && "Applied"}
+                      {opt.value === "refunded" && "Refunded"}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
