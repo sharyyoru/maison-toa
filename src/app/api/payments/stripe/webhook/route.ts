@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
 
         await supabase.from("invoices").update({
           status: "PARTIAL_PAID",
+          deposit_status: "paid",
           paid_amount: paidAmount,
           paid_at: new Date().toISOString(),
           stripe_payment_intent_id: paymentIntentId,

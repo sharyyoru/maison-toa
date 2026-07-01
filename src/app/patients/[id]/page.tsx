@@ -22,6 +22,7 @@ import CrmTabDropdown from "./CrmTabDropdown";
 import MedicationCard from "./MedicationCard";
 import AgeBadge from "./AgeBadge";
 import PatientCockpitDetails from "./PatientCockpitDetails";
+import DepositStatusWidget from "./DepositStatusWidget";
 import PatientMedicalNotes from "./PatientMedicalNotes";
 import PatientPageClientWrapper from "./PatientPageClientWrapper";
 import PatientFormsTab from "./PatientFormsTab";
@@ -594,6 +595,8 @@ export default async function PatientPage({
                 emergency_contact_relation: (patient as any).emergency_contact_relation ?? null,
               }}
             />
+
+            <DepositStatusWidget patientId={patient.id} />
 
             <PatientMedicalNotes patientId={patient.id} />
 

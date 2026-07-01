@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   if (!result.success) return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
 
-  // Set deposit_deadline_at = now() + 48h if conditions are met (only for linked-appointment deposits)
+  // Set deposit_deadline_at + deposit_status = 'requested'
   if (invoiceId) {
     const { data: inv } = await supabaseAdmin
       .from("invoices")
@@ -43,14 +43,16 @@ export async function POST(req: NextRequest) {
       .eq("id", invoiceId)
       .single();
 
+    const updates: Record<string, string> = { deposit_status: "requested" };
+
     if (inv?.status === "OPEN" && inv?.appointment_id && !inv?.deposit_deadline_at) {
-      const deadline = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
-      await supabaseAdmin
-        .from("invoices")
-        .update({ deposit_deadline_at: deadline })
-        .eq("id", invoiceId)
-        .is("deposit_deadline_at", null);
+      updates.deposit_deadline_at = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
     }
+
+    await supabaseAdmin
+      .from("invoices")
+      .update(updates)
+      .eq("id", invoiceId);
   }
 
   return NextResponse.json({ sent: true });
