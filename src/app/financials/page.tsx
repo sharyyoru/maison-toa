@@ -109,8 +109,8 @@ function formatShortDate(iso: string | null | undefined): string {
 }
 
 // Reconciliation map: canonical display name → all provider UUIDs that represent the same entity.
-// These duplicates exist from the initial data import where names were entered inconsistently.
-// We keep the DB untouched and merge them at the display/query layer only.
+// Only merge providers that are strictly the same person with different name formats (word order).
+// NEVER merge Dr X with Soins X — they are different billing entities (doctor vs nursing services).
 const PROVIDER_GROUPS: Record<string, string[]> = {
   "Dr Miles Alexandra": [
     "44444444-4444-4444-4444-000000000010", // Dr Miles Alexandra (canonical, 352 invoices)
@@ -134,13 +134,14 @@ const PROVIDER_GROUPS: Record<string, string[]> = {
   ],
   "Dr Guarino": [
     "64008634-4b1a-427f-b16f-d52d7ae87e9c", // Dr Guarino (canonical, 50 invoices)
-    "ae0c923a-c93f-41f2-9d8d-1a0e340123ef", // Dr Laetitia Guarino (0 invoices)
+    "ae0c923a-c93f-41f2-9d8d-1a0e340123ef", // Dr Laetitia Guarino (0 invoices, same person)
   ],
+  // Soins Assistantes: 4 duplicate records for the same nursing entity
   "Soins Assistantes": [
-    "02e74695-6944-4b0d-a8fc-561d63cdaf9c", // (102 invoices)
-    "44444444-4444-4444-4444-000000000005", // (93 invoices)
-    "7a199b37-c3fa-455b-9cb0-9dbf036bf46d", // (51 invoices)
-    "7af8e49a-b197-43c1-bcbc-ac887c287b0b", // (39 invoices)
+    "02e74695-6944-4b0d-a8fc-561d63cdaf9c",
+    "44444444-4444-4444-4444-000000000005",
+    "7a199b37-c3fa-455b-9cb0-9dbf036bf46d",
+    "7af8e49a-b197-43c1-bcbc-ac887c287b0b",
   ],
 };
 
@@ -308,12 +309,12 @@ export default function FinancialsPage() {
         }
 
         if (ownerFilter !== "all") {
+          // Filter by provider_id only — using doctor_user_id or created_by_user_id
+          // causes cross-contamination because the same doctor UUID appears on invoices
+          // from different provider entities (e.g. Dr Guarino and Soins Guarino share
+          // the same doctor_user_id, so they must be separated by provider_id only).
           const ownerIds = ownerFilter.split("|");
-          const orClauses = ownerIds.flatMap((id) => [
-            `provider_id.eq.${id}`,
-            `doctor_user_id.eq.${id}`,
-            `created_by_user_id.eq.${id}`,
-          ]);
+          const orClauses = ownerIds.map((id) => `provider_id.eq.${id}`);
           query = query.or(orClauses.join(","));
         }
 
@@ -705,11 +706,7 @@ export default function FinancialsPage() {
       if (patientFilter !== "all") query = query.eq("patient_id", patientFilter);
       if (ownerFilter !== "all") {
         const ownerIds = ownerFilter.split("|");
-        const orClauses = ownerIds.flatMap((id) => [
-          `provider_id.eq.${id}`,
-          `doctor_user_id.eq.${id}`,
-          `created_by_user_id.eq.${id}`,
-        ]);
+        const orClauses = ownerIds.map((id) => `provider_id.eq.${id}`);
         query = query.or(orClauses.join(","));
       }
       if (invoiceTypeFilter !== "all") {
