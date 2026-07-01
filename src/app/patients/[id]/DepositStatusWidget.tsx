@@ -14,42 +14,67 @@ type DepositInvoice = {
   status: string;
 };
 
-const STEPS: { key: DepositStatus; emoji: string; label: string }[] = [
-  { key: "requested", emoji: "⏳", label: "Deposit Requested" },
-  { key: "paid",      emoji: "🟢", label: "Deposit Paid" },
-  { key: "applied",   emoji: "✅", label: "Deposit Applied" },
-];
-
-const STATUS_STYLE: Record<DepositStatus, { bg: string; border: string; badge: string; dot: string }> = {
+const STATUS_META: Record<DepositStatus, { label: string; accent: string; iconBg: string; iconColor: string; icon: React.ReactNode }> = {
   requested: {
-    bg:     "bg-amber-50",
-    border: "border-amber-200",
-    badge:  "bg-amber-100 text-amber-800",
-    dot:    "bg-amber-400",
+    label:     "Deposit Requested",
+    accent:    "bg-amber-400",
+    iconBg:    "bg-amber-50",
+    iconColor: "text-amber-600",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.6">
+        <circle cx="10" cy="10" r="8" />
+        <path d="M10 6v4l2.5 2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
   },
   paid: {
-    bg:     "bg-emerald-50",
-    border: "border-emerald-200",
-    badge:  "bg-emerald-100 text-emerald-800",
-    dot:    "bg-emerald-500",
+    label:     "Deposit Paid",
+    accent:    "bg-emerald-500",
+    iconBg:    "bg-emerald-50",
+    iconColor: "text-emerald-600",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.6">
+        <circle cx="10" cy="10" r="8" />
+        <path d="M6.5 10.5l2.5 2.5 4-5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
   },
   applied: {
-    bg:     "bg-sky-50",
-    border: "border-sky-200",
-    badge:  "bg-sky-100 text-sky-800",
-    dot:    "bg-sky-500",
+    label:     "Deposit Applied",
+    accent:    "bg-sky-500",
+    iconBg:    "bg-sky-50",
+    iconColor: "text-sky-600",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.6">
+        <path d="M4 10h12M10 4l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
   },
   refunded: {
-    bg:     "bg-slate-50",
-    border: "border-slate-200",
-    badge:  "bg-slate-100 text-slate-600",
-    dot:    "bg-slate-400",
+    label:     "Deposit Refunded",
+    accent:    "bg-slate-400",
+    iconBg:    "bg-slate-100",
+    iconColor: "text-slate-500",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.6">
+        <path d="M16 10H7M7 10l4-4M7 10l4 4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
   },
 };
 
+// The 3-step linear flow shown in the progress bar
+const FLOW: DepositStatus[] = ["requested", "paid", "applied"];
+
+const MANUAL_OPTIONS: { value: DepositStatus; label: string }[] = [
+  { value: "paid",     label: "Deposit Paid" },
+  { value: "applied",  label: "Deposit Applied" },
+  { value: "refunded", label: "Deposit Refunded" },
+];
+
 export default function DepositStatusWidget({ patientId }: { patientId: string }) {
-  const [deposit, setDeposit]   = useState<DepositInvoice | null | undefined>(undefined); // undefined = loading
-  const [saving, setSaving]     = useState(false);
+  const [deposit, setDeposit] = useState<DepositInvoice | null | undefined>(undefined);
+  const [saving, setSaving]   = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -66,7 +91,6 @@ export default function DepositStatusWidget({ patientId }: { patientId: string }
   async function handleChange(newStatus: DepositStatus) {
     if (!deposit) return;
     setSaving(true);
-    // Optimistic
     setDeposit(prev => prev ? { ...prev, deposit_status: newStatus } : prev);
     try {
       await fetch("/api/patients/deposit-status", {
@@ -75,162 +99,171 @@ export default function DepositStatusWidget({ patientId }: { patientId: string }
         body:    JSON.stringify({ invoiceId: deposit.id, deposit_status: newStatus }),
       });
     } catch {
-      // revert on error
       void load();
     } finally {
       setSaving(false);
     }
   }
 
-  // Loading skeleton
   if (deposit === undefined) {
     return (
       <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
-        <div className="mb-3 h-3 w-28 animate-pulse rounded bg-slate-100" />
-        <div className="h-8 w-48 animate-pulse rounded-lg bg-slate-100" />
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 animate-pulse rounded-lg bg-slate-100" />
+          <div className="space-y-1.5">
+            <div className="h-2.5 w-24 animate-pulse rounded bg-slate-100" />
+            <div className="h-2 w-16 animate-pulse rounded bg-slate-100" />
+          </div>
+        </div>
       </div>
     );
   }
 
-  // No deposit for this patient — hide widget entirely
   if (!deposit) return null;
 
   const currentStatus: DepositStatus = deposit.deposit_status ?? "requested";
-  const style = STATUS_STYLE[currentStatus];
-  const canManuallyChange = currentStatus === "paid" || currentStatus === "applied" || currentStatus === "refunded";
+  const meta = STATUS_META[currentStatus];
+  const canEdit = currentStatus !== "requested";
 
-  // Which step index is active (for the timeline)
-  const activeStepIndex = currentStatus === "refunded"
-    ? 1 // refunded branches off "paid"
-    : STEPS.findIndex(s => s.key === currentStatus);
+  // Progress bar: which flow step are we on (refunded counts as step 1 = paid)
+  const flowIndex = currentStatus === "refunded" ? 1 : FLOW.indexOf(currentStatus);
 
   return (
-    <div className={`rounded-xl border ${style.border} ${style.bg} p-4 shadow-[0_16px_40px_rgba(15,23,42,0.06)]`}>
-      {/* Header row */}
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Deposit Status
-        </h3>
-        <Link
-          href="/deposits"
-          className="text-[11px] font-medium text-sky-600 hover:underline"
-        >
-          View all deposits →
-        </Link>
-      </div>
+    <div className="rounded-xl border border-slate-200/80 bg-white/90 shadow-[0_16px_40px_rgba(15,23,42,0.08)] overflow-hidden">
+      {/* Coloured top accent bar */}
+      <div className={`h-0.5 w-full ${meta.accent}`} />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {/* Left: current status badge + meta */}
-        <div className="space-y-1.5">
-          {/* Big status badge */}
-          <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold ${style.badge}`}>
-            <span className={`h-2 w-2 rounded-full ${style.dot}`} />
-            <span>
-              {currentStatus === "requested" && "⏳ Deposit Requested"}
-              {currentStatus === "paid"      && "🟢 Deposit Paid"}
-              {currentStatus === "applied"   && "✅ Deposit Applied"}
-              {currentStatus === "refunded"  && "↩️ Deposit Refunded"}
-            </span>
-          </div>
-
-          {/* Meta: amount · date · invoice link */}
-          <div className="flex flex-wrap items-center gap-2 pl-1 text-[11px] text-slate-500">
-            <span className="font-semibold text-slate-700">
-              CHF {Number(deposit.total_amount).toFixed(2)}
-            </span>
-            {deposit.paid_at && (
-              <>
-                <span className="text-slate-300">·</span>
-                <span>
-                  Paid{" "}
-                  {new Date(deposit.paid_at).toLocaleDateString("fr-CH", {
-                    day: "numeric", month: "short", year: "numeric",
-                  })}
-                </span>
-              </>
-            )}
-            <span className="text-slate-300">·</span>
-            <Link
-              href="/deposits"
-              className="font-medium text-sky-600 hover:underline"
-            >
-              Invoice #{deposit.invoice_number}
-            </Link>
-          </div>
+      <div className="p-4">
+        {/* Header */}
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            Deposit Status
+          </span>
+          <Link
+            href="/deposits"
+            className="text-[11px] font-medium text-slate-400 hover:text-sky-600 transition-colors"
+          >
+            View all →
+          </Link>
         </div>
 
-        {/* Right: manual status selector (only after deposit is paid) */}
-        {canManuallyChange && (
-          <div className="shrink-0">
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              Update status
-            </label>
-            <select
-              value={currentStatus}
-              onChange={e => void handleChange(e.target.value as DepositStatus)}
-              disabled={saving}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 disabled:opacity-50"
-            >
-              <option value="paid">🟢 Deposit Paid</option>
-              <option value="applied">✅ Deposit Applied</option>
-              <option value="refunded">↩️ Deposit Refunded</option>
-            </select>
-          </div>
-        )}
-      </div>
-
-      {/* Timeline steps */}
-      <div className="mt-4 flex items-center gap-0">
-        {STEPS.map((step, i) => {
-          const isActive  = step.key === currentStatus || (currentStatus === "refunded" && step.key === "paid");
-          const isPast    = i < activeStepIndex && currentStatus !== "refunded";
-          const isRefundedEnd = currentStatus === "refunded" && step.key === "paid";
-
-          return (
-            <div key={step.key} className="flex items-center">
-              {/* Connector line */}
-              {i > 0 && (
-                <div className={`h-px w-6 sm:w-10 ${isPast || isActive ? "bg-slate-400" : "bg-slate-200"}`} />
-              )}
-              {/* Step dot + label */}
-              <div className="flex flex-col items-center gap-0.5">
-                <div className={`flex h-6 w-6 items-center justify-center rounded-full border-2 text-[10px]
-                  ${isActive || isPast
-                    ? `${style.border} ${style.bg} border-current`
-                    : "border-slate-200 bg-white"
-                  }`}
-                >
-                  {(isActive || isPast) ? (
-                    <span className="text-[10px] leading-none">{step.emoji}</span>
-                  ) : (
-                    <span className="text-[9px] text-slate-300">{i + 1}</span>
-                  )}
-                </div>
-                <span className={`text-[9px] font-medium ${isActive ? "text-slate-700" : isPast ? "text-slate-400" : "text-slate-300"}`}>
-                  {step.label.split(" ")[1]}
-                </span>
-              </div>
-              {/* Refunded branch after "paid" step */}
-              {isRefundedEnd && (
-                <div className="ml-2 flex items-center gap-1">
-                  <div className="h-px w-4 bg-slate-400" />
-                  <div className="flex flex-col items-center gap-0.5">
-                    <div className={`flex h-6 w-6 items-center justify-center rounded-full border-2 ${STATUS_STYLE.refunded.border} ${STATUS_STYLE.refunded.bg}`}>
-                      <span className="text-[10px] leading-none">↩️</span>
-                    </div>
-                    <span className="text-[9px] font-medium text-slate-700">Refunded</span>
-                  </div>
-                </div>
-              )}
+        {/* Main row: icon + status + meta + action */}
+        <div className="flex items-start justify-between gap-4">
+          {/* Left: icon + label + meta */}
+          <div className="flex items-start gap-3">
+            {/* Icon */}
+            <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${meta.iconBg} ${meta.iconColor}`}>
+              {meta.icon}
             </div>
-          );
-        })}
-        {/* Applied end node */}
-        {currentStatus !== "refunded" && (
-          <div className="flex items-center">
-            <div className={`h-px w-6 sm:w-10 ${activeStepIndex >= 2 ? "bg-slate-400" : "bg-slate-200"}`} />
+
+            {/* Text */}
+            <div>
+              <p className="text-sm font-semibold text-slate-900 leading-tight">
+                {meta.label}
+              </p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+                <span className="font-medium text-slate-600">CHF {Number(deposit.total_amount).toFixed(2)}</span>
+                {deposit.paid_at && (
+                  <>
+                    <span>·</span>
+                    <span>
+                      {new Date(deposit.paid_at).toLocaleDateString("fr-CH", {
+                        day: "numeric", month: "short", year: "numeric",
+                      })}
+                    </span>
+                  </>
+                )}
+                <span>·</span>
+                <Link href="/deposits" className="text-sky-500 hover:text-sky-700 transition-colors">
+                  #{deposit.invoice_number}
+                </Link>
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* Right: pill buttons (only when editable) */}
+          {canEdit && (
+            <div className="flex shrink-0 items-center gap-1.5">
+              {MANUAL_OPTIONS.map(opt => {
+                const isActive = currentStatus === opt.value;
+                const optMeta = STATUS_META[opt.value];
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void handleChange(opt.value)}
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all disabled:opacity-40
+                      ${isActive
+                        ? `${optMeta.iconBg} ${optMeta.iconColor} ring-1 ring-inset ring-current`
+                        : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                      }`}
+                  >
+                    {opt.value === "paid"     && "Paid"}
+                    {opt.value === "applied"  && "Applied"}
+                    {opt.value === "refunded" && "Refunded"}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Progress steps */}
+        <div className="mt-4 flex items-center gap-0">
+          {FLOW.map((step, i) => {
+            const isDone   = i < flowIndex;
+            const isActive = i === flowIndex && currentStatus !== "refunded";
+            const stepMeta = STATUS_META[step];
+
+            return (
+              <div key={step} className="flex flex-1 items-center">
+                {/* Node */}
+                <div className="flex flex-col items-center gap-1">
+                  <div className={`flex h-5 w-5 items-center justify-center rounded-full border transition-all
+                    ${isActive
+                      ? `border-current ${stepMeta.iconBg} ${stepMeta.iconColor} shadow-sm`
+                      : isDone
+                        ? "border-transparent bg-slate-300 text-white"
+                        : "border-slate-200 bg-white text-slate-300"
+                    }`}
+                  >
+                    {isDone ? (
+                      <svg viewBox="0 0 12 12" fill="none" className="h-2.5 w-2.5" stroke="currentColor" strokeWidth="2">
+                        <path d="M2 6l2.5 2.5 5.5-5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : (
+                      <div className={`h-1.5 w-1.5 rounded-full ${isActive ? "bg-current" : "bg-slate-200"}`} />
+                    )}
+                  </div>
+                  <span className={`text-[9px] font-medium whitespace-nowrap
+                    ${isActive ? stepMeta.iconColor : isDone ? "text-slate-400" : "text-slate-300"}`}
+                  >
+                    {step === "requested" ? "Requested" : step === "paid" ? "Paid" : "Applied"}
+                  </span>
+                </div>
+
+                {/* Connector (not after last) */}
+                {i < FLOW.length - 1 && (
+                  <div className={`mx-1 h-px flex-1 transition-colors ${isDone || isActive ? "bg-slate-300" : "bg-slate-150 bg-slate-200"}`} />
+                )}
+              </div>
+            );
+          })}
+
+          {/* Refunded branch — shown when refunded */}
+          {currentStatus === "refunded" && (
+            <div className="ml-3 flex items-center gap-1.5">
+              <div className="h-px w-4 bg-slate-300" />
+              <div className="flex flex-col items-center gap-1">
+                <div className={`flex h-5 w-5 items-center justify-center rounded-full border border-current ${STATUS_META.refunded.iconBg} ${STATUS_META.refunded.iconColor} shadow-sm`}>
+                  <div className="h-1.5 w-1.5 rounded-full bg-current" />
+                </div>
+                <span className={`text-[9px] font-medium ${STATUS_META.refunded.iconColor}`}>Refunded</span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
