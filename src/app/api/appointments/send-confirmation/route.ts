@@ -166,6 +166,9 @@ function generatePatientConfirmationEmail(
   const manageUrl = appointmentId
     ? `${appUrl}/appointments/manage?id=${appointmentId}`
     : `${appUrl}/book-appointment`;
+  const rescheduleUrl = isCancellation
+    ? `${appUrl}/book-appointment`
+    : `${manageUrl}&action=reschedule`;
 
   const rows =
     infoRow(texts.practitioner, doctorName) +
@@ -194,7 +197,7 @@ function generatePatientConfirmationEmail(
     <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin: 24px 0;">
       <tr>
         <td style="padding: 0 8px 8px 0;">
-          <a href="${manageUrl}&action=reschedule" style="display: block; background-color: #1a1a18; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500;">${rescheduleLabel}</a>
+          <a href="${rescheduleUrl}" style="display: block; background-color: #1a1a18; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: 500;">${rescheduleLabel}</a>
         </td>
       </tr>
       ${isCancellation ? "" : `

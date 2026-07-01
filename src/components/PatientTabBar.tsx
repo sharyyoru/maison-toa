@@ -5,7 +5,16 @@ import { useRouter, usePathname } from "next/navigation";
 import { usePatientTabs } from "./PatientTabsContext";
 
 // Routes where the tab bar should be hidden
-const HIDDEN_ROUTES = ["/form", "/login", "/book-appointment", "/intake", "/onboarding", "/invoice", "/register"];
+const HIDDEN_ROUTES = [
+  "/form",
+  "/login",
+  "/book-appointment",
+  "/intake",
+  "/onboarding",
+  "/invoice",
+  "/appointments/manage",
+  "/register",
+];
 
 function formatPatientFileName(firstName?: string | null, lastName?: string | null) {
   const first = (firstName ?? "").trim();
