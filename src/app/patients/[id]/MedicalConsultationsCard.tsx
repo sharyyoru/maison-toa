@@ -1225,6 +1225,7 @@ export default function MedicalConsultationsCard({
   // NEW CONSULTATION AUTOSAVE - Draft system like Notion/Google Docs
   const [newConsultationDraftId, setNewConsultationDraftId] = useState<string | null>(null);
   const [consultationLocked, setConsultationLocked] = useState(false);
+  const [consultationNoteMenuOpen, setConsultationNoteMenuOpen] = useState(false);
   const [newConsultationAutosaveStatus, setNewConsultationAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved">("idle");
   const newConsultationAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const consultationCollabRoomId = useMemo(
@@ -6461,54 +6462,137 @@ export default function MedicalConsultationsCard({
 
               {consultationRecordType === "notes" ? (
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <label className="block text-[11px] font-medium text-slate-700">
-                      {tf("notesLabel")}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={toggleConsultationLock}
-                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[11px] shadow-sm transition-colors ${
-                        consultationLocked
-                          ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                          : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                      }`}
-                      title={consultationLocked ? "Unlock consultation note" : "Lock consultation note"}
-                    >
-                      {consultationLocked ? (
-                        <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="5" y="8" width="10" height="8" rx="1.5" />
-                          <path d="M7.5 8V5.8a2.5 2.5 0 0 1 5 0V8" />
-                        </svg>
-                      ) : (
-                        <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="5" y="8" width="10" height="8" rx="1.5" />
-                          <path d="M12.5 8V5.8a2.5 2.5 0 0 0-4.65-1.28" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                  <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                    <div className={`flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500 ${
+                  <label className="block text-[11px] font-medium text-slate-700">
+                    {tf("notesLabel")}
+                  </label>
+                  <div className="overflow-visible rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-3 py-2.5">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v5h5" />
+                          </svg>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-[12px] font-semibold text-slate-900">
+                            {consultationTitle.trim() || `Consultation Note${newConsultationDraftId ? ` #${newConsultationDraftId.slice(0, 6)}` : ""}`}
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            Created: {consultationDate || "Today"} {consultationHour || "--"}:{consultationMinute || "--"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="hidden items-center gap-1.5 md:flex">
+                          {[
+                            { id: currentUserId ?? "current", name: currentUserName || currentUserEmail || "You" },
+                            ...consultationRemoteUsers,
+                          ].slice(0, 3).map((user, index) => (
+                            <span
+                              key={`${user.id}-${index}`}
+                              className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-semibold text-white shadow-sm ${
+                                index === 0 ? "bg-violet-500" : index === 1 ? "bg-emerald-500" : "bg-sky-500"
+                              }`}
+                              title={user.name}
+                            >
+                              {user.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "U"}
+                            </span>
+                          ))}
+                          {consultationRemoteUsers.length > 2 ? (
+                            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-sky-600 px-1.5 text-[9px] font-semibold text-white">
+                              +{consultationRemoteUsers.length - 2}
+                            </span>
+                          ) : null}
+                          <span className="ml-1 text-[10px] font-medium text-slate-600">
+                            {consultationRemoteUsers.length + 1} {consultationRemoteUsers.length === 0 ? "user" : "users"} editing
+                          </span>
+                        </div>
+                        <div className="hidden h-7 w-px bg-slate-200 md:block" />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={toggleConsultationLock}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
+                            title={consultationLocked ? "Reopen note for everyone" : "Close note as read-only for everyone"}
+                          >
+                            {consultationLocked ? (
+                              <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="5" y="8" width="10" height="8" rx="1.5" />
+                                <path d="M12.5 8V5.8a2.5 2.5 0 0 0-4.65-1.28" />
+                              </svg>
+                            ) : (
+                              <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="5" y="8" width="10" height="8" rx="1.5" />
+                                <path d="M7.5 8V5.8a2.5 2.5 0 0 1 5 0V8" />
+                              </svg>
+                            )}
+                          </button>
+                          <div className="leading-tight">
+                            <div className={`text-[11px] font-semibold ${consultationLocked ? "text-amber-700" : "text-emerald-700"}`}>
+                              {consultationLocked ? "Closed" : "Open"}
+                            </div>
+                            <div className="text-[9px] text-slate-500">
+                              {consultationLocked ? "Read-only for all" : "Editable for all"}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setConsultationNoteMenuOpen((open) => !open)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50"
+                            title="Note actions"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5.5h.01M12 12h.01M12 18.5h.01" />
+                            </svg>
+                          </button>
+                          {consultationNoteMenuOpen ? (
+                            <div className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-[11px] shadow-lg">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConsultationNoteMenuOpen(false);
+                                  toggleConsultationLock();
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+                              >
+                                <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="5" y="8" width="10" height="8" rx="1.5" />
+                                  <path d={consultationLocked ? "M12.5 8V5.8a2.5 2.5 0 0 0-4.65-1.28" : "M7.5 8V5.8a2.5 2.5 0 0 1 5 0V8"} />
+                                </svg>
+                                {consultationLocked ? "Reopen note (editable for all)" : "Close note (read-only for all)"}
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    <div className={`flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500 ${
                       consultationLocked ? "pointer-events-none opacity-55" : ""
                     }`}>
                       <button
                         type="button"
                         onClick={() => consultationNotesEditor?.chain().focus().undo().run()}
                         disabled={!consultationNotesEditor?.can().undo()}
-                        className={notesToolbarButtonClass()}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-white text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                         title="Undo"
                       >
-                        ?
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-1" />
+                        </svg>
                       </button>
                       <button
                         type="button"
                         onClick={() => consultationNotesEditor?.chain().focus().redo().run()}
                         disabled={!consultationNotesEditor?.can().redo()}
-                        className={notesToolbarButtonClass()}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-white text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                         title="Redo"
                       >
-                        ?
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h1" />
+                        </svg>
                       </button>
                       <span className="mx-1 h-5 w-px bg-slate-200" />
                       <select
@@ -6530,9 +6614,9 @@ export default function MedicalConsultationsCard({
                             chain.setParagraph().run();
                           }
                         }}
-                        className="h-7 rounded-md border border-slate-200 bg-white px-2 text-[11px] font-medium text-slate-700 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        className="h-7 rounded-md border border-transparent bg-white px-2 text-[11px] font-medium text-slate-700 hover:bg-slate-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                       >
-                        <option value="paragraph">Text</option>
+                        <option value="paragraph">Normal</option>
                         <option value="h2">Heading</option>
                         <option value="h3">Subheading</option>
                       </select>
@@ -6592,6 +6676,28 @@ export default function MedicalConsultationsCard({
                       >
                         Link
                       </button>
+                      <button
+                        type="button"
+                        disabled
+                        className="inline-flex h-7 w-7 cursor-not-allowed items-center justify-center rounded-md border border-transparent bg-white text-slate-300"
+                        title="Image support is not enabled yet"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16v14H4z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m4 16 5-5 4 4 2-2 5 5" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 8h.01" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        disabled
+                        className="inline-flex h-7 w-7 cursor-not-allowed items-center justify-center rounded-md border border-transparent bg-white text-slate-300"
+                        title="Table support is not enabled yet"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16v14H4zM4 11h16M10 5v14" />
+                        </svg>
+                      </button>
                       <span className="mx-1 h-5 w-px bg-slate-200" />
                       <button
                         type="button"
@@ -6639,14 +6745,14 @@ export default function MedicalConsultationsCard({
                       </button>
                     </div>
                     <div
-                      className={`relative max-h-80 min-h-[220px] overflow-y-auto bg-white ${
+                      className={`relative max-h-[420px] min-h-[250px] overflow-y-auto bg-white px-4 py-4 ${
                         consultationLocked ? "cursor-default" : "cursor-text"
                       }`}
                       onMouseDown={handleConsultationNotesCanvasMouseDown}
                     >
                       <EditorContent
                         editor={consultationNotesEditor}
-                        className={`min-h-[220px] [&_.ProseMirror]:min-h-[220px] ${
+                        className={`min-h-[250px] [&_.ProseMirror]:min-h-[250px] [&_.ProseMirror]:outline-none [&_.ProseMirror]:text-[13px] [&_.ProseMirror]:leading-6 [&_.ProseMirror]:text-slate-900 [&_.ProseMirror_p]:my-2 [&_.ProseMirror_ul]:my-2 [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:my-2 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 ${
                           consultationLocked ? "[&_.ProseMirror]:cursor-default" : "[&_.ProseMirror]:cursor-text"
                         }`}
                       />
@@ -6696,25 +6802,28 @@ export default function MedicalConsultationsCard({
                     </div>
                     {/* Autosave Status Indicator - below content editor */}
                     {consultationRecordType === "notes" && (
-                      <div className="flex items-center justify-between gap-2 px-2 py-1 border-t border-slate-100 text-[10px]">
+                      <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-3 py-2 text-[10px]">
                         <div className="flex min-w-0 items-center gap-1 text-slate-500">
                           {consultationLocked ? (
                             <>
                               <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                              <span className="truncate">Locked for everyone</span>
+                              <span className="truncate">Read-only for everyone</span>
                             </>
                           ) : consultationRemoteUsers.length > 0 ? (
                             <>
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                               <span className="truncate">
-                                Editing with {consultationRemoteUsers.map((user) => user.name).join(", ")}
+                                Live with {consultationRemoteUsers.map((user) => user.name).join(", ")}
                               </span>
                             </>
                           ) : (
-                            <span />
+                            <>
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              <span>Live</span>
+                            </>
                           )}
                         </div>
-                        <div className="shrink-0">
+                        <div className="shrink-0 text-slate-500">
                         {newConsultationAutosaveStatus === "pending" && (
                           <span className="text-amber-600 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
@@ -6731,12 +6840,7 @@ export default function MedicalConsultationsCard({
                           </span>
                         )}
                         {newConsultationAutosaveStatus === "saved" && (
-                          <span className="text-emerald-600 flex items-center gap-1">
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                            Auto-saved
-                          </span>
+                          <span>All changes are saved automatically</span>
                         )}
                         </div>
                       </div>
