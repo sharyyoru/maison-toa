@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     collab_room_id: roomId,
     is_draft: body?.locked === true ? false : true,
     consultation_id: consultationId,
-    title: text(body?.title).trim() || "Draft",
+    title: text(body?.title).trim() || "Consultation Note",
     content: text(body?.contentHtml),
     record_type: text(body?.recordType) || "notes",
     doctor_user_id: nullableText(body?.doctorId),

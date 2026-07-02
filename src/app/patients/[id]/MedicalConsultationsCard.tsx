@@ -1780,34 +1780,14 @@ export default function MedicalConsultationsCard({
           console.error("Failed to load invoices:", invoiceError);
         }
 
-        // 3) For legacy invoices with consultation_id, fetch title/content from consultations
-        const linkedConsultationIds = (invoiceData ?? [])
-          .map((inv: any) => inv.consultation_id)
-          .filter(Boolean) as string[];
-
-        let consultContentMap = new Map<string, { title: string | null; content: string | null }>();
-        if (linkedConsultationIds.length > 0) {
-          const { data: linkedConsults } = await supabaseClient
-            .from("consultations")
-            .select("id, title, content")
-            .in("id", linkedConsultationIds);
-
-          if (linkedConsults) {
-            for (const c of linkedConsults) {
-              consultContentMap.set(c.id, { title: c.title, content: c.content });
-            }
-          }
-        }
-
-        // 4) Convert invoice rows to ConsultationRow shape
+        // 3) Convert invoice rows to ConsultationRow shape
         const invoiceRows: ConsultationRow[] = (invoiceData ?? []).map((inv: any) => {
-          const linked = inv.consultation_id ? consultContentMap.get(inv.consultation_id) : null;
           return {
             id: inv.id,
             patient_id: inv.patient_id ?? patientId,
             consultation_id: inv.invoice_number ?? inv.id,
             title: inv.title,
-            content: linked?.content ?? null,
+            content: null,
             record_type: "invoice" as ConsultationRecordType,
             doctor_user_id: inv.doctor_user_id ?? null,
             doctor_name: inv.provider_name || inv.doctor_name || null,
@@ -2154,12 +2134,6 @@ export default function MedicalConsultationsCard({
       setConsultationRefIcd10(yfields.get("refIcd10") ?? "");
       setNewConsultationDraftId(yfields.get("draftId") ?? null);
       consultationYApplyingRemoteRef.current = false;
-      if (shouldOpen) {
-        window.setTimeout(() => {
-          creationFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 100);
-        triggerNewConsultationAutosave();
-      }
     };
 
     applyYFields();
@@ -2706,13 +2680,13 @@ export default function MedicalConsultationsCard({
   }
 
   async function handleArchiveConsultation(rowId: string) {
-    if (!rowId) return;
+    if (!rowId) return false;
 
     if (typeof window !== "undefined") {
       const confirmed = window.confirm(
         "Archive this record? It will be moved to the archive and can be permanently deleted from there.",
       );
-      if (!confirmed) return;
+      if (!confirmed) return false;
     }
 
     try {
@@ -2734,15 +2708,17 @@ export default function MedicalConsultationsCard({
         setConsultationsError(
           error.message ?? "Failed to archive record.",
         );
-        return;
+        return false;
       }
 
       setConsultations((prev) =>
         prev.filter((row) => row.id !== rowId),
       );
       broadcastPatientRealtimeRefresh({ force: true });
+      return true;
     } catch {
       setConsultationsError("Failed to archive record.");
+      return false;
     }
   }
 
@@ -3582,7 +3558,7 @@ export default function MedicalConsultationsCard({
         body: JSON.stringify({
           patientId,
           roomId: consultationCollabRoomId,
-          title: consultationTitle || "Draft",
+          title: consultationTitle.trim() || "Consultation Note",
           contentHtml: htmlContent,
           recordType: "notes",
           doctorId: consultationDoctorId,
@@ -4804,11 +4780,6 @@ export default function MedicalConsultationsCard({
                       }
                     });
                     setNewConsultationOpen(true);
-                    if (nextRecordType === "notes" && !existingCollaborative) {
-                      window.setTimeout(() => {
-                        triggerNewConsultationAutosave({ immediate: true, force: true, locked: false });
-                      }, 0);
-                    }
                     setTimeout(() => {
                       if (nextRecordType === "notes") {
                         consultationNotesEditor?.chain().focus().setTextSelection(1).run();
@@ -6588,6 +6559,25 @@ export default function MedicalConsultationsCard({
                                 </svg>
                                 {consultationLocked ? "Reopen note (editable for all)" : "Close note (read-only for all)"}
                               </button>
+                              {activeCollaborativeConsultation?.id ? (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    setConsultationNoteMenuOpen(false);
+                                    const archived = await handleArchiveConsultation(activeCollaborativeConsultation.id);
+                                    if (!archived) return;
+                                    consultationYFieldsRef.current?.set("open", "false");
+                                    setNewConsultationOpen(false);
+                                    setNewConsultationDraftId(null);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+                                >
+                                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M7 7v12h10V7M9 7V5h6v2" />
+                                  </svg>
+                                  Archive note
+                                </button>
+                              ) : null}
                             </div>
                           ) : null}
                         </div>
