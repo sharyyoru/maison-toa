@@ -6487,7 +6487,13 @@ export default function MedicalConsultationsCard({
                   <label className="block text-[11px] font-medium text-slate-700">
                     {tf("notesLabel")}
                   </label>
-                  <div className="overflow-visible rounded-lg border border-slate-200 bg-white shadow-sm">
+                  <div
+                    className={`overflow-visible rounded-lg border shadow-sm transition-colors ${
+                      consultationLocked
+                        ? "border-slate-300 bg-slate-100"
+                        : "border-slate-200 bg-white"
+                    }`}
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-3 py-2.5">
                       <div className="flex min-w-0 items-center gap-2">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600">
@@ -8904,6 +8910,7 @@ export default function MedicalConsultationsCard({
                 const isPrescription = row.record_type === "prescription";
                 const isInvoice = row.record_type === "invoice";
                 const is3d = row.record_type === "3d";
+                const isLockedNote = isNotes && row.is_draft === false;
 
                 const baseRecordTypeLabel =
                   consultationRecordTypeOptions.find(
@@ -8940,8 +8947,9 @@ export default function MedicalConsultationsCard({
                   typeof row.payment_method === "string" &&
                   row.payment_method === "Cash";
 
-                const cardClassName =
-                  "group rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all duration-200 hover:border-slate-300 hover:shadow-[0_14px_30px_rgba(15,23,42,0.09)]";
+                const cardClassName = isLockedNote
+                  ? "group rounded-2xl border border-slate-300 bg-slate-100/80 px-5 py-4 text-sm text-slate-600 shadow-[0_6px_18px_rgba(15,23,42,0.04)] transition-all duration-200 hover:border-slate-400"
+                  : "group rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all duration-200 hover:border-slate-300 hover:shadow-[0_14px_30px_rgba(15,23,42,0.09)]";
 
                 const totalSeconds = row.duration_seconds ?? 0;
                 const displayDuration = formatDuration(totalSeconds);
@@ -8975,11 +8983,22 @@ export default function MedicalConsultationsCard({
                         <div className="mb-2 flex flex-wrap items-center gap-2">
                           <span
                             className={
-                              "inline-flex items-center rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700"
+                              isLockedNote
+                                ? "inline-flex items-center rounded-full border border-slate-300 bg-slate-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600"
+                                : "inline-flex items-center rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700"
                             }
                           >
                             {recordTypeLabel}
                           </span>
+                          {isLockedNote ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.7}>
+                                <rect x="5" y="8" width="10" height="8" rx="1.5" />
+                                <path d="M7.5 8V5.8a2.5 2.5 0 0 1 5 0V8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                              Closed
+                            </span>
+                          ) : null}
                           {displayDuration && (
                             <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-medium text-slate-600">
                               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -8991,12 +9010,12 @@ export default function MedicalConsultationsCard({
                         </div>
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           {row.doctor_name && (
-                            <div className="text-[15px] font-semibold text-slate-900">
+                            <div className={`text-[15px] font-semibold ${isLockedNote ? "text-slate-600" : "text-slate-900"}`}>
                               {row.doctor_name}
                             </div>
                           )}
                           {scheduledLabel && (
-                            <div className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500">
+                            <div className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${isLockedNote ? "bg-slate-200 text-slate-500" : "bg-slate-50 text-slate-500"}`}>
                               {scheduledLabel}
                             </div>
                           )}
@@ -9284,7 +9303,11 @@ export default function MedicalConsultationsCard({
                       {/* Content/Notes */}
                       {isNotes && row.content ? (
                         <div
-                          className="rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-3 text-[12px] leading-relaxed text-slate-700 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                          className={`rounded-xl border px-3.5 py-3 text-[12px] leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 ${
+                            isLockedNote
+                              ? "border-slate-300 bg-slate-200/70 text-slate-600"
+                              : "border-slate-200 bg-slate-50/60 text-slate-700"
+                          }`}
                           style={{ whiteSpace: "pre-wrap" }}
                           dangerouslySetInnerHTML={{ __html: row.content }}
                         />
