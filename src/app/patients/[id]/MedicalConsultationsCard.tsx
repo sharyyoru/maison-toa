@@ -482,6 +482,13 @@ function isBlankNotesHtml(value: string | null | undefined): boolean {
     .trim() === "";
 }
 
+function isConsultationYjsFragmentEmpty(ydoc: Y.Doc | null): boolean {
+  if (!ydoc) return true;
+  const fragment = ydoc.getXmlFragment("default");
+  const textContent = fragment.toString().replace(/<[^>]*>/g, "").trim();
+  return fragment.length === 0 || textContent.length === 0;
+}
+
 function getEditorPlainText(element: HTMLElement): string {
   return (element.innerText || element.textContent || "").replace(/\uFEFF/g, "");
 }
@@ -1244,6 +1251,7 @@ export default function MedicalConsultationsCard({
   );
   const [consultationYDoc, setConsultationYDoc] = useState<Y.Doc | null>(null);
   const [consultationYProvider, setConsultationYProvider] = useState<any | null>(null);
+  const [consultationYProviderSynced, setConsultationYProviderSynced] = useState(false);
   const consultationYFieldsRef = useRef<Y.Map<string> | null>(null);
   const consultationYApplyingRemoteRef = useRef(false);
   const [consultationRemoteUsers, setConsultationRemoteUsers] = useState<
@@ -2107,7 +2115,13 @@ export default function MedicalConsultationsCard({
 
     setConsultationYDoc(ydoc);
     setConsultationYProvider(provider);
+    setConsultationYProviderSynced(Boolean(provider.synced));
     consultationYFieldsRef.current = yfields;
+
+    const handleProviderSync = (synced: boolean) => {
+      setConsultationYProviderSynced(synced);
+    };
+    provider.on("sync", handleProviderSync);
 
     room.updatePresence({
       name: currentUserName || currentUserEmail || "User",
@@ -2164,12 +2178,14 @@ export default function MedicalConsultationsCard({
     });
 
     return () => {
+      provider.off("sync", handleProviderSync);
       yfields.unobserve(applyYFields);
       unsubscribeOthers();
       provider.destroy();
       leave();
       setConsultationYDoc(null);
       setConsultationYProvider(null);
+      setConsultationYProviderSynced(false);
       consultationYFieldsRef.current = null;
       setConsultationRemoteUsers([]);
     };
@@ -2226,6 +2242,8 @@ export default function MedicalConsultationsCard({
     });
 
     if (
+      consultationYProviderSynced &&
+      isConsultationYjsFragmentEmpty(consultationYDoc) &&
       consultationNotesEditor &&
       consultationNotesEditor.isEmpty &&
       activeCollaborativeConsultation.content &&
@@ -2242,6 +2260,7 @@ export default function MedicalConsultationsCard({
     consultationMinute,
     consultationNotesEditor,
     consultationYDoc,
+    consultationYProviderSynced,
   ]);
 
   const notesToolbarButtonClass = (active = false) =>
@@ -4752,12 +4771,17 @@ export default function MedicalConsultationsCard({
                     consultationYDoc?.transact(() => {
                       if (nextRecordType === "notes") {
                         if (
+                          consultationYProviderSynced &&
+                          isConsultationYjsFragmentEmpty(consultationYDoc) &&
                           existingCollaborative?.content &&
                           !isBlankNotesHtml(existingCollaborative.content) &&
                           consultationNotesEditor?.isEmpty
                         ) {
                           consultationNotesEditor.commands.setContent(existingCollaborative.content, { emitUpdate: false });
-                        } else if (!existingCollaborative) {
+                        } else if (
+                          !existingCollaborative &&
+                          isConsultationYjsFragmentEmpty(consultationYDoc)
+                        ) {
                           consultationNotesEditor?.commands.setContent(buildBlankConsultationNotesDoc(), { emitUpdate: false });
                         }
                       } else {
