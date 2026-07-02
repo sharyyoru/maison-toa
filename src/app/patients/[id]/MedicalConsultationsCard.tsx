@@ -1676,7 +1676,7 @@ export default function MedicalConsultationsCard({
 
     // Skip auto-assignment for these doctors â€” entity must be chosen manually
     const selectedDoctor = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
-    const noAutoAssignDoctors = ["miles", "nordback", "koltunova", "plakalo"];
+    const noAutoAssignDoctors = ["miles", "nordback", "koltunova", "plakalo", "guarino", "benani"];
     if (selectedDoctor) {
       const nameLC = (selectedDoctor.name || "").toLowerCase();
       if (noAutoAssignDoctors.some((n) => nameLC.includes(n))) {
@@ -5005,11 +5005,11 @@ export default function MedicalConsultationsCard({
                     return;
                   }
 
-                  // Billing entity is mandatory for Dr Miles, Dr Nordback, Dr Koltunova, Dr Plakalo
+                  // Billing entity is mandatory for Dr Miles, Dr Nordback, Dr Koltunova, Dr Plakalo, Dr Guarino, Dr Benani
                   if (!invoiceProviderId) {
                     const doc = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
                     const nameLC = (doc?.name || "").toLowerCase();
-                    if (["miles", "nordback", "koltunova", "plakalo"].some((n) => nameLC.includes(n))) {
+                    if (["miles", "nordback", "koltunova", "plakalo", "guarino", "benani"].some((n) => nameLC.includes(n))) {
                       setConsultationError("Billing entity is required for this doctor. Please select one.");
                       return;
                     }
@@ -5758,7 +5758,7 @@ export default function MedicalConsultationsCard({
                         }
 
                         // Auto-select first billing entity if none selected (required for Sumex1 PDF generation)
-                        // Skip for doctors who must choose manually (Miles, Nordback, Koltunova, Plakalo)
+                        // Skip for doctors who must choose manually (Miles, Nordback, Koltunova, Plakalo, Guarino, Benani)
                         let finalProviderId = selectedProviderId;
                         let finalProviderName = selectedProviderName;
                         let finalProviderGln = selectedProviderGln;
@@ -5768,7 +5768,7 @@ export default function MedicalConsultationsCard({
                         if (!finalProviderId && billingEntityOptions.length > 0) {
                           const docForFallback = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
                           const docNameLC = (docForFallback?.name || "").toLowerCase();
-                          const skipFallback = ["miles", "nordback", "koltunova", "plakalo"].some((n) => docNameLC.includes(n));
+                          const skipFallback = ["miles", "nordback", "koltunova", "plakalo", "guarino", "benani"].some((n) => docNameLC.includes(n));
                           if (!skipFallback) {
                             const defaultEntity = billingEntityOptions[0];
                             finalProviderId = defaultEntity.id;
