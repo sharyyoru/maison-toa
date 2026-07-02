@@ -1346,9 +1346,7 @@ export default function MedicalConsultationsCard({
   );
   const [invoicePaymentMethod, setInvoicePaymentMethod] = useState("");
   const [invoiceProviderId, setInvoiceProviderId] = useState<string>("");
-  // Tracks whether the user has manually picked a billing entity for this form session.
-  // Reset when the doctor changes so auto-prefill kicks in again.
-  const [billingEntityOverride, setBillingEntityOverride] = useState(false);
+
   // Appointment linking for deposit invoices â€” hidden unless staff explicitly enables it
   const [invoiceApptLinkEnabled, setInvoiceApptLinkEnabled] = useState(false);
   const [invoiceAppointmentId, setInvoiceAppointmentId] = useState<string>("");
@@ -2078,24 +2076,16 @@ export default function MedicalConsultationsCard({
     };
   }, []);
 
-  // Reset override flag when opening a fresh "new" form (not editing an existing invoice).
-  // This ensures auto-prefill works again after a previous edit session locked the flag.
-  useEffect(() => {
-    if (newConsultationOpen && !editingInvoiceId) {
-      setBillingEntityOverride(false);
-    }
-  }, [newConsultationOpen, editingInvoiceId]);
 
   // Auto-prefill billing entity based on selected doctor + payment method + invoice mode.
   // Rule:
-  //   - For Dr Miles, Dr Nordback, Dr Koltunova, Dr Plakalo: NO auto-assignment (entity is mandatory, user must choose)
+  //   - For Dr Miles, Dr Nordback, Dr Koltunova, Dr Plakalo, Dr Guarino, Dr Benani: NO auto-assignment (entity is mandatory, user must choose)
   //   - For others: Payment Method = "Insurance" OR Invoice Mode = "tardoc" -> medical entity (e.g. "Dr X")
   //     Anything else (Cash/Card/Online/Bank, Individual/Group/Flatrate) -> aesthetic entity (e.g. "Soins X")
   // If the doctor has only one billing entity, use it regardless.
-  // User can manually override via the dropdown; override flag is reset when doctor changes.
+  // The dropdown is always enabled — user can always change the selection manually.
   useEffect(() => {
     if (consultationRecordType !== "invoice") return;
-    if (billingEntityOverride) return;
     if (!consultationDoctorId) return;
     if (billingEntityOptions.length === 0) return;
 
@@ -4588,8 +4578,6 @@ export default function MedicalConsultationsCard({
         setConsultationTitle(inv.title || "");
         setConsultationDoctorId(inv.doctor_user_id || "");
         setInvoiceProviderId(inv.provider_id || "");
-        // Preserve loaded billing entity â€” don't let auto-prefill override it.
-        setBillingEntityOverride(true);
         setInvoicePaymentMethod(inv.payment_method || "");
         setInvoiceExtraOption(inv.is_complimentary ? "complimentary" : null);
         // Restore appointment link if one was previously saved
@@ -6923,8 +6911,6 @@ export default function MedicalConsultationsCard({
                     disabled={consultationRecordType === "notes" && consultationLocked}
                     onChange={(event) => {
                       setConsultationDoctorId(event.target.value);
-                      // User changed doctor in the UI -> clear override so auto-prefill kicks in.
-                      setBillingEntityOverride(false);
                     }}
                     className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                   >
@@ -7626,50 +7612,28 @@ export default function MedicalConsultationsCard({
                               return null;
                             })()}
                           </label>
-                          {(() => {
-                            const doc = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
-                            const nameLC = (doc?.name || "").toLowerCase();
-                            const isNoAutoDoctor = ["miles", "nordback", "koltunova", "plakalo", "guarino", "benani"].some((n) => nameLC.includes(n));
-                            if (isNoAutoDoctor) return null;
-                            return (
-                              <label className="flex items-center gap-1 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={billingEntityOverride}
-                                  onChange={(e) => {
-                                    setBillingEntityOverride(e.target.checked);
-                                  }}
-                                  className="h-3 w-3 rounded border-slate-300 text-sky-600"
-                                />
-                                <span className="text-[10px] text-slate-500">Override</span>
-                              </label>
-                            );
-                          })()}
+
                         </div>
                         {(() => {
                           const doc = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
                           const nameLC = (doc?.name || "").toLowerCase();
                           const isNoAutoDoctor = ["miles", "nordback", "koltunova", "plakalo", "guarino", "benani"].some((n) => nameLC.includes(n));
-                          const isEnabled = isNoAutoDoctor || billingEntityOverride;
                           return (
                             <select
                               value={invoiceProviderId}
-                              disabled={!isEnabled}
                               onChange={(event) => {
                                 setInvoiceProviderId(event.target.value);
                               }}
                               className={`block w-full rounded-lg border px-2 py-1.5 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-sky-500 ${
-                                isEnabled
-                                  ? isNoAutoDoctor && !invoiceProviderId
-                                    ? "border-red-400 bg-white text-slate-900 focus:border-red-500 focus:ring-red-500"
-                                    : "border-sky-400 bg-white text-slate-900 focus:border-sky-500"
-                                  : "border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed"
+                                isNoAutoDoctor && !invoiceProviderId
+                                  ? "border-red-400 bg-white text-slate-900 focus:border-red-500 focus:ring-red-500"
+                                  : "border-sky-400 bg-white text-slate-900 focus:border-sky-500"
                               }`}
                             >
                               <option value="">{tf("selectBillingEntity")}</option>
                               {billingEntityOptions.map((entity) => (
                                 <option key={entity.id} value={entity.id}>
-                                  {entity.name}{entity.billing_type === "aesthetic" ? " âœ¦" : ""}
+                                  {entity.name}{entity.billing_type === "aesthetic" ? " ✦" : ""}
                                 </option>
                               ))}
                             </select>
