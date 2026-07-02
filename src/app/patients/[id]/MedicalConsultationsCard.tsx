@@ -1239,15 +1239,19 @@ export default function MedicalConsultationsCard({
     () => `patient:${patientId}:consultation-create`,
     [patientId],
   );
+  const collaborativeConsultationNotesEnabled =
+    !recordTypeFilter || recordTypeFilter === "notes";
   const activeCollaborativeConsultation = useMemo(
     () =>
-      consultations.find(
-        (row) =>
-          row.record_type === "notes" &&
-          row.collab_room_id === consultationCollabRoomId &&
-          !row.is_archived,
-      ) ?? null,
-    [consultationCollabRoomId, consultations],
+      collaborativeConsultationNotesEnabled
+        ? consultations.find(
+            (row) =>
+              row.record_type === "notes" &&
+              row.collab_room_id === consultationCollabRoomId &&
+              !row.is_archived,
+          ) ?? null
+        : null,
+    [collaborativeConsultationNotesEnabled, consultationCollabRoomId, consultations],
   );
   const [consultationYDoc, setConsultationYDoc] = useState<Y.Doc | null>(null);
   const [consultationYProvider, setConsultationYProvider] = useState<any | null>(null);
@@ -2083,6 +2087,15 @@ export default function MedicalConsultationsCard({
   }, []);
 
   useEffect(() => {
+    if (!collaborativeConsultationNotesEnabled) {
+      setConsultationYDoc(null);
+      setConsultationYProvider(null);
+      setConsultationYProviderSynced(false);
+      consultationYFieldsRef.current = null;
+      setConsultationRemoteUsers([]);
+      return;
+    }
+
     const { room, leave } = liveblocksClient.enterRoom(consultationCollabRoomId, {
       initialPresence: {
         name: currentUserName || currentUserEmail || "User",
@@ -2164,6 +2177,7 @@ export default function MedicalConsultationsCard({
       setConsultationRemoteUsers([]);
     };
   }, [
+    collaborativeConsultationNotesEnabled,
     consultationCollabRoomId,
     currentUserEmail,
     currentUserName,
@@ -2171,11 +2185,21 @@ export default function MedicalConsultationsCard({
 
   useEffect(() => {
     consultationNotesEditor?.setEditable(
-      consultationRecordType === "notes" && newConsultationOpen && !consultationLocked,
+      collaborativeConsultationNotesEnabled &&
+        consultationRecordType === "notes" &&
+        newConsultationOpen &&
+        !consultationLocked,
     );
-  }, [consultationLocked, consultationNotesEditor, consultationRecordType, newConsultationOpen]);
+  }, [
+    collaborativeConsultationNotesEnabled,
+    consultationLocked,
+    consultationNotesEditor,
+    consultationRecordType,
+    newConsultationOpen,
+  ]);
 
   useEffect(() => {
+    if (!collaborativeConsultationNotesEnabled) return;
     if (!activeCollaborativeConsultation || !consultationYDoc) return;
     const fields = consultationYFieldsRef.current;
     if (!fields) return;
@@ -2229,6 +2253,7 @@ export default function MedicalConsultationsCard({
     }
   }, [
     activeCollaborativeConsultation,
+    collaborativeConsultationNotesEnabled,
     consultationDate,
     consultationHour,
     consultationMinute,
@@ -2405,6 +2430,7 @@ export default function MedicalConsultationsCard({
   }, [editConsultationModalOpen, editConsultationTarget?.id, patientId]);
 
   useEffect(() => {
+    if (!collaborativeConsultationNotesEnabled) return;
     if (!newConsultationOpen || consultationRecordType !== "notes") return;
     if (consultationYApplyingRemoteRef.current) return;
 
@@ -2433,6 +2459,7 @@ export default function MedicalConsultationsCard({
     consultationRecordType,
     consultationRefIcd10,
     consultationTitle,
+    collaborativeConsultationNotesEnabled,
     newConsultationDraftId,
     newConsultationOpen,
   ]);
