@@ -482,9 +482,9 @@ function isBlankNotesHtml(value: string | null | undefined): boolean {
     .trim() === "";
 }
 
-function isConsultationYjsFragmentEmpty(ydoc: Y.Doc | null): boolean {
+function isConsultationYjsFragmentEmpty(ydoc: Y.Doc | null, field = "notes_tiptap"): boolean {
   if (!ydoc) return true;
-  const fragment = ydoc.getXmlFragment("default");
+  const fragment = ydoc.getXmlFragment(field);
   const textContent = fragment.toString().replace(/<[^>]*>/g, "").trim();
   return fragment.length === 0 || textContent.length === 0;
 }
@@ -830,6 +830,409 @@ function ServiceSearchPicker({
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function CollaborativeUnlockedNoteEditor({
+  row,
+  patientId,
+  currentUserEmail,
+  currentUserName,
+  medicalStaffOptions,
+  onDraftUpdated,
+  onFinalized,
+  onError,
+}: {
+  row: ConsultationRow;
+  patientId: string;
+  currentUserEmail: string | null;
+  currentUserName: string | null;
+  medicalStaffOptions: Provider[];
+  onDraftUpdated: (row: ConsultationRow) => void;
+  onFinalized: (row: ConsultationRow) => void;
+  onError: (message: string) => void;
+}) {
+  const roomId = useMemo(
+    () => `patient:${patientId}:consultation:${row.id}`,
+    [patientId, row.id],
+  );
+  const scheduled = row.scheduled_at ? new Date(row.scheduled_at) : new Date();
+  const scheduledValid = !Number.isNaN(scheduled.getTime());
+  const [title, setTitle] = useState(row.title === "Draft" ? "" : row.title || "");
+  const [date, setDate] = useState(scheduledValid ? formatLocalDateInputValue(scheduled) : formatLocalDateInputValue(new Date()));
+  const [hour, setHour] = useState(scheduledValid ? scheduled.getHours().toString().padStart(2, "0") : "00");
+  const [minute, setMinute] = useState(scheduledValid ? scheduled.getMinutes().toString().padStart(2, "0") : "00");
+  const [doctorId, setDoctorId] = useState(row.doctor_user_id || "");
+  const [diagnosisCode, setDiagnosisCode] = useState(row.diagnosis_code || "");
+  const [refIcd10, setRefIcd10] = useState(row.ref_icd10 || "");
+  const [contentHtml, setContentHtml] = useState(row.content || "");
+  const [savingState, setSavingState] = useState<"idle" | "pending" | "saving" | "saved">("idle");
+  const [locking, setLocking] = useState(false);
+  const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
+  const [provider, setProvider] = useState<any | null>(null);
+  const [providerSynced, setProviderSynced] = useState(false);
+  const [remoteUsers, setRemoteUsers] = useState<{ id: string; name: string; email: string | null }[]>([]);
+  const yfieldsRef = useRef<Y.Map<string> | null>(null);
+  const applyingRemoteRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveInFlightRef = useRef(false);
+  const initialContentReadyRef = useRef(false);
+
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({ link: false, undoRedo: false }),
+        Link.configure({
+          openOnClick: false,
+          autolink: true,
+          linkOnPaste: true,
+          HTMLAttributes: {
+            class: "text-sky-700 underline underline-offset-2",
+          },
+        }),
+        ...(ydoc
+          ? [
+              Collaboration.configure({
+                document: ydoc,
+                field: "notes_tiptap",
+              }),
+            ]
+          : []),
+        ...(provider
+          ? [
+              CollaborationCaret.configure({
+                provider,
+                user: {
+                  name: currentUserName || currentUserEmail || "User",
+                  color: "#0284c7",
+                },
+              }),
+            ]
+          : []),
+      ],
+      editable: !locking,
+      editorProps: {
+        attributes: {
+          class:
+            "min-h-[180px] cursor-text px-3 py-2 text-xs leading-5 text-slate-900 focus:outline-none [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:py-0.5 [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1.5 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-semibold [&_p]:my-1 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5",
+        },
+      },
+      immediatelyRender: false,
+      onUpdate: ({ editor }) => {
+        if (!initialContentReadyRef.current) return;
+        const html = editor.getHTML();
+        setContentHtml(isBlankNotesHtml(html) ? "" : html);
+        triggerSave();
+      },
+    },
+    [currentUserEmail, currentUserName, provider, ydoc],
+  );
+
+  useEffect(() => {
+    const { room, leave } = liveblocksClient.enterRoom(roomId, {
+      initialPresence: {
+        name: currentUserName || currentUserEmail || "User",
+        email: currentUserEmail,
+      },
+    });
+    const nextProvider = getYjsProviderForRoom(room);
+    const nextYdoc = nextProvider.getYDoc();
+    const yfields = nextYdoc.getMap<string>("fields");
+
+    setYdoc(nextYdoc);
+    setProvider(nextProvider);
+    setProviderSynced(Boolean(nextProvider.synced));
+    yfieldsRef.current = yfields;
+
+    const handleSync = (synced: boolean) => setProviderSynced(synced);
+    nextProvider.on("sync", handleSync);
+
+    room.updatePresence({
+      name: currentUserName || currentUserEmail || "User",
+      email: currentUserEmail,
+    });
+
+    if (!yfields.get("date")) yfields.set("date", date);
+    if (!yfields.get("hour")) yfields.set("hour", hour);
+    if (!yfields.get("minute")) yfields.set("minute", minute);
+    if (!yfields.get("doctorId")) yfields.set("doctorId", doctorId);
+    if (!yfields.get("title")) yfields.set("title", title);
+    if (!yfields.get("diagnosisCode")) yfields.set("diagnosisCode", diagnosisCode);
+    if (!yfields.get("refIcd10")) yfields.set("refIcd10", refIcd10);
+
+    const applyFields = () => {
+      applyingRemoteRef.current = true;
+      setDate(yfields.get("date") ?? "");
+      setHour(yfields.get("hour") ?? "");
+      setMinute(yfields.get("minute") ?? "");
+      setDoctorId(yfields.get("doctorId") ?? "");
+      setTitle(yfields.get("title") ?? "");
+      setDiagnosisCode(yfields.get("diagnosisCode") ?? "");
+      setRefIcd10(yfields.get("refIcd10") ?? "");
+      applyingRemoteRef.current = false;
+    };
+
+    applyFields();
+
+    yfields.observe(applyFields);
+    const unsubscribeOthers = room.subscribe("others", (others) => {
+      setRemoteUsers(
+        Array.from((others as any).values ? (others as any).values() : others as any[])
+          .map((other: any) => ({
+            id: String(other.connectionId ?? other.id ?? ""),
+            name: other.presence?.name || other.info?.name || "User",
+            email: other.presence?.email || other.info?.email || null,
+          }))
+          .filter((user) => user.id),
+      );
+    });
+
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      nextProvider.off("sync", handleSync);
+      yfields.unobserve(applyFields);
+      unsubscribeOthers();
+      nextProvider.destroy();
+      leave();
+      yfieldsRef.current = null;
+      setRemoteUsers([]);
+    };
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!providerSynced || !ydoc || !editor) return;
+
+    if (
+      isConsultationYjsFragmentEmpty(ydoc) &&
+      row.content &&
+      !isBlankNotesHtml(row.content)
+    ) {
+      editor.commands.setContent(row.content, { emitUpdate: false });
+      setContentHtml(row.content);
+    } else {
+      const html = editor.getHTML();
+      setContentHtml(isBlankNotesHtml(html) ? row.content || "" : html);
+    }
+
+    initialContentReadyRef.current = true;
+  }, [editor, providerSynced, row.content, ydoc]);
+
+  useEffect(() => {
+    if (applyingRemoteRef.current) return;
+    const fields = yfieldsRef.current;
+    if (!fields) return;
+    fields.doc?.transact(() => {
+      fields.set("date", date);
+      fields.set("hour", hour);
+      fields.set("minute", minute);
+      fields.set("doctorId", doctorId);
+      fields.set("title", title);
+      fields.set("diagnosisCode", diagnosisCode);
+      fields.set("refIcd10", refIcd10);
+    });
+    if (!initialContentReadyRef.current) return;
+    triggerSave();
+  }, [date, diagnosisCode, doctorId, hour, minute, refIcd10, title]);
+
+  async function saveDraft(options: { locked?: boolean; force?: boolean } = {}) {
+    if (!initialContentReadyRef.current) return null;
+    if (saveInFlightRef.current && !options.force) return null;
+    saveInFlightRef.current = true;
+    setSavingState("saving");
+
+    try {
+      const dateToUse = date || formatLocalDateInputValue(new Date());
+      const h = hour || "00";
+      const m = minute || "00";
+      const scheduledAt = new Date(`${dateToUse}T${h}:${m}:00`).toISOString();
+      const doctor = doctorId ? medicalStaffOptions.find((staff) => staff.id === doctorId) : null;
+      const doctorName = doctor?.name || row.doctor_name || null;
+      const {
+        data: { session },
+      } = await supabaseClient.auth.getSession();
+      const html = editor ? editor.getHTML() : contentHtml;
+
+      const response = await fetch("/api/consultation-drafts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          patientId,
+          roomId,
+          draftId: row.id,
+          title: title.trim() || "Consultation Note",
+          contentHtml: html,
+          recordType: "notes",
+          doctorId,
+          doctorName,
+          scheduledAt,
+          diagnosisCode,
+          refIcd10,
+          locked: options.locked === true,
+        }),
+      });
+
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.draft) {
+        onError(result?.error ?? "Failed to save consultation note.");
+        setSavingState("idle");
+        return null;
+      }
+
+      const savedRow: ConsultationRow = {
+        ...(result.draft as any),
+        invoice_id: null,
+        reference_number: row.reference_number ?? null,
+        linked_invoice_id: row.linked_invoice_id ?? null,
+        linked_invoice_status: row.linked_invoice_status ?? null,
+        linked_invoice_number: row.linked_invoice_number ?? null,
+        medidata_status: row.medidata_status ?? null,
+        invoice_pdf_path_tg: null,
+        invoice_pdf_path_tp: null,
+        invoice_pdf_path_reminder: null,
+        invoice_pdf_path_receipt: null,
+      };
+
+      setSavingState("saved");
+      setTimeout(() => setSavingState("idle"), 1600);
+      if (savedRow.is_draft === false) {
+        onFinalized(savedRow);
+      } else {
+        onDraftUpdated(savedRow);
+      }
+      return savedRow;
+    } catch {
+      onError("Failed to save consultation note.");
+      setSavingState("idle");
+      return null;
+    } finally {
+      saveInFlightRef.current = false;
+    }
+  }
+
+  function triggerSave() {
+    if (locking) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setSavingState("pending");
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      void saveDraft();
+    }, 1000);
+  }
+
+  async function lockNote() {
+    if (locking) return;
+    setLocking(true);
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const saved = await saveDraft({ locked: true, force: true });
+    if (!saved) setLocking(false);
+  }
+
+  const toolbarButtonClass =
+    "inline-flex h-7 min-w-7 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[11px] font-medium text-slate-700 transition-colors hover:bg-slate-100";
+
+  return (
+    <div className="rounded-2xl border border-sky-200 bg-sky-50/60 p-3 text-xs shadow-sm">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Unlocked note</div>
+          <div className="text-[10px] text-slate-500">Record ID: {row.consultation_id}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-slate-500">
+            {remoteUsers.length + 1} {remoteUsers.length === 0 ? "user" : "users"} editing
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              void lockNote();
+            }}
+            disabled={locking}
+            className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="5" y="8" width="10" height="8" rx="1.5" />
+              <path d="M7.5 8V5.8a2.5 2.5 0 0 1 5 0V8" />
+            </svg>
+            {locking ? "Locking" : "Lock"}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_420px]">
+        <label className="space-y-1">
+          <span className="block text-[11px] font-medium text-slate-700">Title</span>
+          <input
+            type="text"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="block text-[11px] font-medium text-slate-700">Doctor</span>
+          <select
+            value={doctorId}
+            onChange={(event) => setDoctorId(event.target.value)}
+            className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          >
+            <option value="">No doctor</option>
+            {medicalStaffOptions.map((doctor) => (
+              <option key={doctor.id} value={doctor.id}>
+                {doctor.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-[1fr_52px_52px_1fr_1fr]">
+        <label className="space-y-1">
+          <span className="block text-[11px] font-medium text-slate-700">Date</span>
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
+        </label>
+        <label className="space-y-1">
+          <span className="block text-[11px] font-medium text-slate-700">Hour</span>
+          <input type="text" value={hour} maxLength={2} onChange={(event) => setHour(event.target.value.replace(/[^0-9]/g, "").slice(0, 2))} className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
+        </label>
+        <label className="space-y-1">
+          <span className="block text-[11px] font-medium text-slate-700">Min</span>
+          <input type="text" value={minute} maxLength={2} onChange={(event) => setMinute(event.target.value.replace(/[^0-9]/g, "").slice(0, 2))} className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
+        </label>
+        <label className="space-y-1">
+          <span className="block text-[11px] font-medium text-slate-700">Diagnosis Code</span>
+          <input type="text" value={diagnosisCode} onChange={(event) => setDiagnosisCode(event.target.value)} className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
+        </label>
+        <label className="space-y-1">
+          <span className="block text-[11px] font-medium text-slate-700">Ref ICD-10</span>
+          <input type="text" value={refIcd10} onChange={(event) => setRefIcd10(event.target.value)} className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
+        </label>
+      </div>
+
+      <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
+          <button type="button" onClick={() => editor?.chain().focus().undo().run()} className={toolbarButtonClass} title="Undo">↶</button>
+          <button type="button" onClick={() => editor?.chain().focus().redo().run()} className={toolbarButtonClass} title="Redo">↷</button>
+          <span className="mx-1 h-5 w-px bg-slate-200" />
+          <button type="button" onClick={() => editor?.chain().focus().toggleBold().run()} className={toolbarButtonClass}>B</button>
+          <button type="button" onClick={() => editor?.chain().focus().toggleItalic().run()} className={toolbarButtonClass}>I</button>
+          <button type="button" onClick={() => editor?.chain().focus().toggleBulletList().run()} className={toolbarButtonClass}>•</button>
+          <button type="button" onClick={() => editor?.chain().focus().toggleOrderedList().run()} className={toolbarButtonClass}>1.</button>
+          <span className="ml-auto text-[10px]">
+            {savingState === "pending" ? "Unsaved changes..." : savingState === "saving" ? "Saving..." : savingState === "saved" ? "Saved" : "Live"}
+          </span>
+        </div>
+        <EditorContent editor={editor} />
       </div>
     </div>
   );
@@ -1233,8 +1636,10 @@ export default function MedicalConsultationsCard({
   const [newConsultationDraftId, setNewConsultationDraftId] = useState<string | null>(null);
   const [consultationLocked, setConsultationLocked] = useState(false);
   const [consultationNoteMenuOpen, setConsultationNoteMenuOpen] = useState(false);
+  const [unlockingConsultationId, setUnlockingConsultationId] = useState<string | null>(null);
   const [newConsultationAutosaveStatus, setNewConsultationAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved">("idle");
   const newConsultationAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const consultationLockSavingRef = useRef(false);
   const consultationCollabRoomId = useMemo(
     () => `patient:${patientId}:consultation-create`,
     [patientId],
@@ -1248,6 +1653,7 @@ export default function MedicalConsultationsCard({
             (row) =>
               row.record_type === "notes" &&
               row.collab_room_id === consultationCollabRoomId &&
+              row.is_draft !== false &&
               !row.is_archived,
           ) ?? null
         : null,
@@ -1548,6 +1954,7 @@ export default function MedicalConsultationsCard({
     const filtered = consultations.filter((row) => {
       const scheduled = row.scheduled_at ? new Date(row.scheduled_at) : null;
       if (!scheduled || Number.isNaN(scheduled.getTime())) return false;
+      if (row.record_type === "notes" && row.is_draft === true) return false;
 
       if (recordTypeFilter) {
         if (row.record_type !== recordTypeFilter) return false;
@@ -1576,6 +1983,24 @@ export default function MedicalConsultationsCard({
         return sortOrder === "desc" ? bTime - aTime : aTime - bTime;
       });
   }, [consultations, dateFrom, dateTo, sortOrder, recordTypeFilter]);
+
+  const unlockedDraftConsultations = useMemo(
+    () =>
+      consultations
+        .filter(
+          (row) =>
+            row.record_type === "notes" &&
+            row.is_draft === true &&
+            row.collab_room_id?.startsWith(`patient:${patientId}:consultation:`),
+        )
+        .sort((a, b) => {
+          const aTime = new Date(a.scheduled_at).getTime();
+          const bTime = new Date(b.scheduled_at).getTime();
+          if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
+          return bTime - aTime;
+        }),
+    [consultations, patientId],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -2288,12 +2713,50 @@ export default function MedicalConsultationsCard({
       .run();
   }
 
-  function toggleConsultationLock() {
+  async function toggleConsultationLock() {
     if (consultationRecordType !== "notes") return;
+    if (consultationLockSavingRef.current) return;
     const nextLocked = !consultationLocked;
+    consultationLockSavingRef.current = true;
+
+    if (newConsultationAutosaveTimerRef.current) {
+      clearTimeout(newConsultationAutosaveTimerRef.current);
+      newConsultationAutosaveTimerRef.current = null;
+    }
+
     setConsultationLocked(nextLocked);
-    consultationYFieldsRef.current?.set("locked", nextLocked ? "true" : "false");
-    triggerNewConsultationAutosave({ immediate: true, force: true, locked: nextLocked });
+    const fields = consultationYFieldsRef.current;
+    fields?.set("locked", nextLocked ? "true" : "false");
+    try {
+      const savedRow = await handleNewConsultationAutosave({ force: true, locked: nextLocked });
+
+      if (nextLocked) {
+        if (!savedRow) {
+          setConsultationLocked(false);
+          fields?.set("locked", "false");
+          return;
+        }
+
+        fields?.set("open", "false");
+        fields?.delete("draftId");
+        setConsultationNoteMenuOpen(false);
+        setNewConsultationDraftId(null);
+        setNewConsultationOpen(false);
+        setConsultations((prev) => {
+          const withoutDuplicateDraft = prev.filter(
+            (row) =>
+              row.id === savedRow.id ||
+              row.collab_room_id !== consultationCollabRoomId ||
+              row.is_draft !== true,
+          );
+          return withoutDuplicateDraft.some((row) => row.id === savedRow.id)
+            ? withoutDuplicateDraft.map((row) => (row.id === savedRow.id ? savedRow : row))
+            : [savedRow, ...withoutDuplicateDraft];
+        });
+      }
+    } finally {
+      consultationLockSavingRef.current = false;
+    }
   }
 
   function handleConsultationNotesCanvasMouseDown(event: ReactMouseEvent<HTMLDivElement>) {
@@ -2811,6 +3274,79 @@ export default function MedicalConsultationsCard({
       setEditConsultationMinute("");
     }
     setEditConsultationModalOpen(true);
+  }
+
+  async function handleUnlockConsultationNote(row: ConsultationRow) {
+    if (!row.id || row.record_type !== "notes") return;
+    if (unlockingConsultationId || consultationLockSavingRef.current) return;
+
+    if (newConsultationAutosaveTimerRef.current) {
+      clearTimeout(newConsultationAutosaveTimerRef.current);
+      newConsultationAutosaveTimerRef.current = null;
+    }
+
+    try {
+      setUnlockingConsultationId(row.id);
+      setConsultationsError(null);
+
+      const contentHtml = row.content || "";
+      const roomId = `patient:${patientId}:consultation:${row.id}`;
+
+      const {
+        data: { session },
+      } = await supabaseClient.auth.getSession();
+
+      const response = await fetch("/api/consultation-drafts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          patientId,
+          roomId,
+          draftId: row.id,
+          title: row.title || "Consultation Note",
+          contentHtml,
+          recordType: "notes",
+          doctorId: row.doctor_user_id || "",
+          doctorName: row.doctor_name || null,
+          scheduledAt: row.scheduled_at || new Date().toISOString(),
+          diagnosisCode: row.diagnosis_code || "",
+          refIcd10: row.ref_icd10 || "",
+          locked: false,
+        }),
+      });
+
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.draft) {
+        setConsultationsError(result?.error ?? "Failed to unlock consultation note.");
+        return;
+      }
+
+      const draftRow: ConsultationRow = {
+        ...(result.draft as any),
+        invoice_id: null,
+        reference_number: null,
+        linked_invoice_id: row.linked_invoice_id ?? null,
+        linked_invoice_status: row.linked_invoice_status ?? null,
+        linked_invoice_number: row.linked_invoice_number ?? null,
+        medidata_status: row.medidata_status ?? null,
+        invoice_pdf_path_tg: null,
+        invoice_pdf_path_tp: null,
+        invoice_pdf_path_reminder: null,
+        invoice_pdf_path_receipt: null,
+      };
+
+      setConsultations((prev) =>
+        prev.map((item) => (item.id === row.id ? draftRow : item)),
+      );
+      broadcastPatientRealtimeRefresh({ force: true });
+    } catch {
+      setConsultationsError("Failed to unlock consultation note.");
+    } finally {
+      setUnlockingConsultationId(null);
+    }
   }
 
   // Sync edit consultation content to contentEditable div
@@ -3585,6 +4121,7 @@ export default function MedicalConsultationsCard({
         body: JSON.stringify({
           patientId,
           roomId: consultationCollabRoomId,
+          draftId: newConsultationDraftId,
           title: consultationTitle.trim() || "Consultation Note",
           contentHtml: htmlContent,
           recordType: "notes",
@@ -3601,12 +4138,17 @@ export default function MedicalConsultationsCard({
       if (!response.ok || !result?.draft) {
         console.error("Autosave failed:", result?.error ?? response.statusText);
         setNewConsultationAutosaveStatus("idle");
-        return;
+        return null;
       }
 
       const data = result.draft;
-      setNewConsultationDraftId(data.id);
-      consultationYFieldsRef.current?.set("draftId", data.id);
+      if (data.is_draft === false) {
+        setNewConsultationDraftId(null);
+        consultationYFieldsRef.current?.delete("draftId");
+      } else {
+        setNewConsultationDraftId(data.id);
+        consultationYFieldsRef.current?.set("draftId", data.id);
+      }
       const newRow: ConsultationRow = {
         ...data,
         invoice_id: null,
@@ -3630,9 +4172,11 @@ export default function MedicalConsultationsCard({
 
       setNewConsultationAutosaveStatus("saved");
       setTimeout(() => setNewConsultationAutosaveStatus("idle"), 2000);
+      return newRow;
     } catch (err) {
       console.error("Autosave failed:", err);
       setNewConsultationAutosaveStatus("idle");
+      return null;
     }
   }
 
@@ -3645,6 +4189,7 @@ export default function MedicalConsultationsCard({
     // Clear existing timer
     if (newConsultationAutosaveTimerRef.current) {
       clearTimeout(newConsultationAutosaveTimerRef.current);
+      newConsultationAutosaveTimerRef.current = null;
     }
     
     setNewConsultationAutosaveStatus("pending");
@@ -3656,6 +4201,8 @@ export default function MedicalConsultationsCard({
     
     // Set new timer for 1 second
     newConsultationAutosaveTimerRef.current = setTimeout(() => {
+      newConsultationAutosaveTimerRef.current = null;
+      if (consultationLockSavingRef.current) return;
       void handleNewConsultationAutosave({ force: options.force, locked: options.locked });
     }, 1000);
   }
@@ -6540,7 +7087,9 @@ export default function MedicalConsultationsCard({
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={toggleConsultationLock}
+                            onClick={() => {
+                              void toggleConsultationLock();
+                            }}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
                             title={consultationLocked ? "Reopen note for everyone" : "Close note as read-only for everyone"}
                           >
@@ -6582,7 +7131,7 @@ export default function MedicalConsultationsCard({
                                 type="button"
                                 onClick={() => {
                                   setConsultationNoteMenuOpen(false);
-                                  toggleConsultationLock();
+                                  void toggleConsultationLock();
                                 }}
                                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
                               >
@@ -7071,7 +7620,7 @@ export default function MedicalConsultationsCard({
                             {(() => {
                               const doc = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
                               const nameLC = (doc?.name || "").toLowerCase();
-                              if (["miles", "nordback", "koltunova", "plakalo"].some((n) => nameLC.includes(n))) {
+                              if (["miles", "nordback", "koltunova", "plakalo", "guarino", "benani"].some((n) => nameLC.includes(n))) {
                                 return <span className="text-red-500 ml-0.5">*</span>;
                               }
                               return null;
@@ -7080,7 +7629,7 @@ export default function MedicalConsultationsCard({
                           {(() => {
                             const doc = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
                             const nameLC = (doc?.name || "").toLowerCase();
-                            const isNoAutoDoctor = ["miles", "nordback", "koltunova", "plakalo"].some((n) => nameLC.includes(n));
+                            const isNoAutoDoctor = ["miles", "nordback", "koltunova", "plakalo", "guarino", "benani"].some((n) => nameLC.includes(n));
                             if (isNoAutoDoctor) return null;
                             return (
                               <label className="flex items-center gap-1 cursor-pointer">
@@ -7100,7 +7649,7 @@ export default function MedicalConsultationsCard({
                         {(() => {
                           const doc = medicalStaffOptions.find((d) => d.id === consultationDoctorId);
                           const nameLC = (doc?.name || "").toLowerCase();
-                          const isNoAutoDoctor = ["miles", "nordback", "koltunova", "plakalo"].some((n) => nameLC.includes(n));
+                          const isNoAutoDoctor = ["miles", "nordback", "koltunova", "plakalo", "guarino", "benani"].some((n) => nameLC.includes(n));
                           const isEnabled = isNoAutoDoctor || billingEntityOverride;
                           return (
                             <select
@@ -8882,6 +9431,33 @@ export default function MedicalConsultationsCard({
           </div>
         )}
 
+        {unlockedDraftConsultations.length > 0 ? (
+          <div className="mt-3 space-y-3">
+            {unlockedDraftConsultations.map((row) => (
+              <CollaborativeUnlockedNoteEditor
+                key={row.id}
+                row={row}
+                patientId={patientId}
+                currentUserEmail={currentUserEmail}
+                currentUserName={currentUserName}
+                medicalStaffOptions={medicalStaffOptions}
+                onDraftUpdated={(updatedRow) => {
+                  setConsultations((prev) =>
+                    prev.map((item) => (item.id === updatedRow.id ? updatedRow : item)),
+                  );
+                }}
+                onFinalized={(finalizedRow) => {
+                  setConsultations((prev) =>
+                    prev.map((item) => (item.id === finalizedRow.id ? finalizedRow : item)),
+                  );
+                  broadcastPatientRealtimeRefresh({ force: true });
+                }}
+                onError={(message) => setConsultationsError(message)}
+              />
+            ))}
+          </div>
+        ) : null}
+
         <div className="mt-3 space-y-2">
           {consultationsError ? (
             <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[11px] text-red-700">
@@ -9119,6 +9695,23 @@ export default function MedicalConsultationsCard({
                         })()}
                         {!showArchived ? (
                           <>
+                            {isLockedNote ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void handleUnlockConsultationNote(row);
+                                }}
+                                disabled={unlockingConsultationId === row.id}
+                                className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700 shadow-sm hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                title="Unlock and edit this note with live collaboration"
+                              >
+                                <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="5" y="8" width="10" height="8" rx="1.5" />
+                                  <path d="M12.5 8V5.8a2.5 2.5 0 0 0-4.65-1.28" />
+                                </svg>
+                                {unlockingConsultationId === row.id ? "Unlocking" : "Unlock"}
+                              </button>
+                            ) : null}
                             {row.record_type !== "invoice" && !row.linked_invoice_id && (
                               <button
                                 type="button"

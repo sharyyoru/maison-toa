@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Liveblocks } from "@liveblocks/node";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-const roomPattern = /^patient:([0-9a-fA-F-]{36}):consultation-create$/;
+const roomPattern = /^patient:([0-9a-fA-F-]{36}):consultation(?:-create|:([0-9a-fA-F-]{36}))$/;
 
 export async function POST(request: NextRequest) {
   const secret = process.env.LIVEBLOCKS_SECRET_KEY;

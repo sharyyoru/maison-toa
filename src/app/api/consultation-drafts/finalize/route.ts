@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
       diagnosis_code: nullableText(body?.diagnosisCode),
       ref_icd10: nullableText(body?.refIcd10),
       is_draft: false,
+      collab_room_id: null,
     })
     .eq("id", draftId)
     .eq("patient_id", patientId)
