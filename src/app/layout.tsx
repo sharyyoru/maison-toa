@@ -51,9 +51,10 @@ export default async function RootLayout({
   const tNav = await getTranslations("nav");
   const tHeader = await getTranslations("header");
   return (
-    <html lang={locale}>
+    <html lang={locale} suppressHydrationWarning>
       <body
         className={`${manrope.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
       >
         <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef2ff,_#e0f2fe_40%,_#fdf2ff_80%)] px-4 py-6 sm:px-6 lg:px-8">
           <GlobalLoader />
