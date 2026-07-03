@@ -760,6 +760,7 @@
       "enlarge": "Enlarge",
       "edit": "Edit",
       "editPdf": "Edit PDF",
+      "annotatePdf": "Annotate PDF",
       "selectFilePreview": "Select a file from the list to see a larger preview.",
       "noPreviewUrl": "Unable to generate a preview URL for this file.",
       "noPreviewAvailable": "Preview not available",

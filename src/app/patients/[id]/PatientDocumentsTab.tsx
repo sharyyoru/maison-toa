@@ -1362,20 +1362,33 @@ export default function PatientDocumentsTab({
                           </svg>
                           {t("preview")}
                         </button>
-                        {/* Edit button for DOCX files */}
-                        {getExtension(item.name) === "docx" && item.source !== "patient-docs" && (
+                        {/* Edit button for editable files (DOCX and PDF) */}
+                        {item.source !== "patient-docs" && (getExtension(item.name) === "docx" || getExtension(item.name) === "pdf") && (
                           <button
                             type="button"
                             onClick={async (e) => {
                               e.stopPropagation();
                               setError(null);
-                              setSelectedFilePreviewLoading(true);
                               try {
                                 const url = await getFileAccessUrl(item);
-                                const response = await fetch(url);
-                                if (!response.ok) throw new Error("Failed to download document for editing");
-                                const blob = await response.blob();
-                                setEditingDocx({ item, blob, url });
+                                if (getExtension(item.name) === "docx") {
+                                  setSelectedFilePreviewLoading(true);
+                                  const response = await fetch(url);
+                                  if (!response.ok) throw new Error("Failed to download document for editing");
+                                  const blob = await response.blob();
+                                  setEditingDocx({ item, blob, url });
+                                } else {
+                                  // PDF: set selected file and open the annotation editor
+                                  setSelectedFile(item);
+                                  setSelectedFilePreviewUrl(url);
+                                  setPreviewModal({
+                                    url,
+                                    name: item.name,
+                                    mimeType,
+                                    uploadedAt: uploadDate || null,
+                                  });
+                                  setShowPdfEditor(true);
+                                }
                               } catch (err: any) {
                                 setError(err?.message || "Unable to open document for editing.");
                               } finally {
@@ -1383,12 +1396,12 @@ export default function PatientDocumentsTab({
                               }
                             }}
                             className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[10px] font-medium text-violet-700 hover:bg-violet-100 hover:border-violet-300 transition-colors"
-                            title="Edit document"
+                            title={getExtension(item.name) === "pdf" ? "Annotate PDF" : "Edit document"}
                           >
                             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
-                            {t("edit")}
+                            {getExtension(item.name) === "pdf" ? t("annotatePdf") : t("edit")}
                           </button>
                         )}
                         {/* Preview in Tab button - only show if context is available */}
@@ -1584,16 +1597,6 @@ export default function PatientDocumentsTab({
                     className="h-[320px] w-full rounded-md border border-slate-200 bg-white"
                     title={selectedFile.name}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPdfEditor(true)}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-sky-500 px-3 py-1.5 text-[11px] font-semibold text-white shadow hover:bg-sky-600"
-                  >
-                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    {t("editPdf")}
-                  </button>
                 </div>
               ) : isVideo ? (
                 <video
