@@ -489,6 +489,15 @@ function isConsultationYjsFragmentEmpty(ydoc: Y.Doc | null, field = "notes_tipta
   return fragment.length === 0 || textContent.length === 0;
 }
 
+function clearConsultationYjsFragment(ydoc: Y.Doc | null, field = "notes_tiptap") {
+  if (!ydoc) return;
+  const fragment = ydoc.getXmlFragment(field);
+  if (fragment.length === 0) return;
+  ydoc.transact(() => {
+    fragment.delete(0, fragment.length);
+  });
+}
+
 function getEditorPlainText(element: HTMLElement): string {
   return (element.innerText || element.textContent || "").replace(/\uFEFF/g, "");
 }
@@ -1638,6 +1647,13 @@ export default function MedicalConsultationsCard({
   const [newConsultationAutosaveStatus, setNewConsultationAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved">("idle");
   const newConsultationAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const consultationLockSavingRef = useRef(false);
+  const finalizedCreateDraftIdsRef = useRef<Set<string>>(new Set());
+  const createRoomOpenAllowedRef = useRef(false);
+  const suppressNewConsultationAutosaveRef = useRef(false);
+  const newConsultationAutosaveSeqRef = useRef(0);
+  const newConsultationAutosaveInFlightRef = useRef<Promise<ConsultationRow | null> | null>(null);
+  const newConsultationDraftIdRef = useRef<string | null>(null);
+  const newConsultationOpenRef = useRef(false);
   const consultationCollabRoomId = useMemo(
     () => `patient:${patientId}:consultation-create`,
     [patientId],
@@ -1651,7 +1667,7 @@ export default function MedicalConsultationsCard({
             (row) =>
               row.record_type === "notes" &&
               row.collab_room_id === consultationCollabRoomId &&
-              row.is_draft !== false &&
+              row.is_draft === true &&
               !row.is_archived,
           ) ?? null
         : null,
@@ -1722,6 +1738,8 @@ export default function MedicalConsultationsCard({
       },
       immediatelyRender: false,
       onUpdate: ({ editor }) => {
+        if (suppressNewConsultationAutosaveRef.current) return;
+        if (!newConsultationOpenRef.current || consultationLockSavingRef.current) return;
         const html = editor.getHTML();
         setConsultationContentHtml(isBlankNotesHtml(html) ? "" : html);
         const text = editor.getText();
@@ -1738,6 +1756,51 @@ export default function MedicalConsultationsCard({
     },
     [consultationYDoc, consultationYProvider, currentUserEmail, currentUserName],
   );
+
+  function resetNewConsultationNotesEditor() {
+    if (newConsultationAutosaveTimerRef.current) {
+      clearTimeout(newConsultationAutosaveTimerRef.current);
+      newConsultationAutosaveTimerRef.current = null;
+    }
+
+    setConsultationContentHtml("");
+    setConsultationMentionActive(false);
+    setConsultationMentionQuery("");
+    setConsultationMentionUserIds([]);
+    setConsultationLocked(false);
+    updateNewConsultationDraftId(null);
+    setNewConsultationAutosaveStatus("idle");
+    createRoomOpenAllowedRef.current = false;
+
+    const fields = consultationYFieldsRef.current;
+    fields?.doc?.transact(() => {
+      fields.set("open", "false");
+      fields.delete("draftId");
+      fields.set("locked", "false");
+    });
+    suppressNewConsultationAutosaveRef.current = true;
+    try {
+      clearConsultationYjsFragment(consultationYDoc);
+      consultationNotesEditor?.commands.clearContent(false);
+    } finally {
+      window.setTimeout(() => {
+        suppressNewConsultationAutosaveRef.current = false;
+      }, 0);
+    }
+  }
+
+  function updateNewConsultationDraftId(draftId: string | null) {
+    newConsultationDraftIdRef.current = draftId;
+    setNewConsultationDraftId(draftId);
+  }
+
+  useEffect(() => {
+    newConsultationOpenRef.current = newConsultationOpen;
+  }, [newConsultationOpen]);
+
+  useEffect(() => {
+    newConsultationDraftIdRef.current = newConsultationDraftId;
+  }, [newConsultationDraftId]);
 
   // Medication form state - supports multiple products
   const [medProducts, setMedProducts] = useState<MedProduct[]>([createEmptyMedProduct()]);
@@ -2549,6 +2612,33 @@ export default function MedicalConsultationsCard({
     const applyYFields = () => {
       const shouldOpen = yfields.get("open") === "true";
       const locked = yfields.get("locked") === "true";
+      const draftId = yfields.get("draftId") ?? null;
+      const recordType = (yfields.get("recordType") as ConsultationRecordType) || "notes";
+
+      if (
+        shouldOpen &&
+        recordType === "notes" &&
+        ((draftId && finalizedCreateDraftIdsRef.current.has(draftId)) ||
+          (!draftId && !createRoomOpenAllowedRef.current))
+      ) {
+        createRoomOpenAllowedRef.current = false;
+        yfields.doc?.transact(() => {
+          yfields.set("open", "false");
+          yfields.set("locked", "false");
+          yfields.delete("draftId");
+        });
+        suppressNewConsultationAutosaveRef.current = true;
+        try {
+          clearConsultationYjsFragment(ydoc);
+          consultationNotesEditor?.commands.clearContent(false);
+        } finally {
+          window.setTimeout(() => {
+            suppressNewConsultationAutosaveRef.current = false;
+          }, 0);
+        }
+        return;
+      }
+
       consultationYApplyingRemoteRef.current = true;
       setNewConsultationOpen(shouldOpen);
       setConsultationLocked(locked);
@@ -2557,10 +2647,10 @@ export default function MedicalConsultationsCard({
       setConsultationMinute(yfields.get("minute") ?? "");
       setConsultationDoctorId(yfields.get("doctorId") ?? "");
       setConsultationTitle(yfields.get("title") ?? "");
-      setConsultationRecordType((yfields.get("recordType") as ConsultationRecordType) || "notes");
+      setConsultationRecordType(recordType);
       setConsultationDiagnosisCode(yfields.get("diagnosisCode") ?? "");
       setConsultationRefIcd10(yfields.get("refIcd10") ?? "");
-      setNewConsultationDraftId(yfields.get("draftId") ?? null);
+      updateNewConsultationDraftId(draftId);
       consultationYApplyingRemoteRef.current = false;
     };
 
@@ -2727,10 +2817,25 @@ export default function MedicalConsultationsCard({
           return;
         }
 
-        fields?.set("open", "false");
-        fields?.delete("draftId");
+        finalizedCreateDraftIdsRef.current.add(savedRow.id);
+        createRoomOpenAllowedRef.current = false;
+        fields?.doc?.transact(() => {
+          fields.set("open", "false");
+          fields.set("locked", "false");
+          fields.delete("draftId");
+        });
+        suppressNewConsultationAutosaveRef.current = true;
+        try {
+          clearConsultationYjsFragment(consultationYDoc);
+          consultationNotesEditor?.commands.clearContent(false);
+        } finally {
+          window.setTimeout(() => {
+            suppressNewConsultationAutosaveRef.current = false;
+          }, 0);
+        }
+        setConsultationContentHtml("");
         setConsultationNoteMenuOpen(false);
-        setNewConsultationDraftId(null);
+        updateNewConsultationDraftId(null);
         setNewConsultationOpen(false);
         setConsultations((prev) => {
           const withoutDuplicateDraft = prev.filter(
@@ -4077,12 +4182,21 @@ export default function MedicalConsultationsCard({
   
   async function handleNewConsultationAutosave(options: { force?: boolean; locked?: boolean } = {}) {
     if (consultationRecordType !== "notes") return;
+    if (suppressNewConsultationAutosaveRef.current) return null;
+    if (!options.force && !newConsultationOpenRef.current) return null;
+
+    if (options.locked === true && newConsultationAutosaveInFlightRef.current) {
+      await newConsultationAutosaveInFlightRef.current.catch(() => null);
+    }
+
+    const runAutosave = (async () => {
+    const autosaveSeq = ++newConsultationAutosaveSeqRef.current;
 
     const htmlContent = consultationNotesEditor
       ? consultationNotesEditor.getHTML()
       : consultationContentHtml;
 
-    if (!options.force && !consultationTitle.trim() && isBlankNotesHtml(htmlContent)) return;
+    if (!options.force && !consultationTitle.trim() && isBlankNotesHtml(htmlContent)) return null;
 
     setNewConsultationAutosaveStatus("saving");
 
@@ -4111,7 +4225,7 @@ export default function MedicalConsultationsCard({
         body: JSON.stringify({
           patientId,
           roomId: consultationCollabRoomId,
-          draftId: newConsultationDraftId,
+          draftId: newConsultationDraftIdRef.current,
           title: consultationTitle.trim() || "Consultation Note",
           contentHtml: htmlContent,
           recordType: "notes",
@@ -4126,17 +4240,22 @@ export default function MedicalConsultationsCard({
 
       const result = await response.json().catch(() => null);
       if (!response.ok || !result?.draft) {
+        if (autosaveSeq !== newConsultationAutosaveSeqRef.current) return null;
         console.error("Autosave failed:", result?.error ?? response.statusText);
         setNewConsultationAutosaveStatus("idle");
         return null;
       }
 
+      if (autosaveSeq !== newConsultationAutosaveSeqRef.current) {
+        return null;
+      }
+
       const data = result.draft;
       if (data.is_draft === false) {
-        setNewConsultationDraftId(null);
+        updateNewConsultationDraftId(null);
         consultationYFieldsRef.current?.delete("draftId");
       } else {
-        setNewConsultationDraftId(data.id);
+        updateNewConsultationDraftId(data.id);
         consultationYFieldsRef.current?.set("draftId", data.id);
       }
       const newRow: ConsultationRow = {
@@ -4167,6 +4286,16 @@ export default function MedicalConsultationsCard({
       console.error("Autosave failed:", err);
       setNewConsultationAutosaveStatus("idle");
       return null;
+    }
+    })();
+
+    newConsultationAutosaveInFlightRef.current = runAutosave;
+    try {
+      return await runAutosave;
+    } finally {
+      if (newConsultationAutosaveInFlightRef.current === runAutosave) {
+        newConsultationAutosaveInFlightRef.current = null;
+      }
     }
   }
 
@@ -5260,6 +5389,11 @@ export default function MedicalConsultationsCard({
                         ? existingScheduled.getMinutes().toString().padStart(2, "0")
                         : minutePart;
                     const existingLocked = existingCollaborative?.is_draft === false;
+                    createRoomOpenAllowedRef.current = nextRecordType === "notes";
+                    if (nextRecordType === "notes" && !existingCollaborative) {
+                      resetNewConsultationNotesEditor();
+                      createRoomOpenAllowedRef.current = true;
+                    }
                     setConsultationDate(existingDate);
                     setConsultationHour(existingHour);
                     setConsultationMinute(existingMinute);
