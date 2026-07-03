@@ -3,8 +3,8 @@ import { GoogleTagManager, GoogleTagManagerNoScript, TrackingParamsCapture } fro
 import { LanguageProvider } from "@/contexts/LanguageContext";
 
 export const metadata: Metadata = {
-  title: "Book Appointment | Aesthetics Clinic",
-  description: "Book your appointment at Aesthetics Clinic Geneva",
+  title: "Book Appointment | Maison Tóā",
+  description: "Book your appointment at Maison Tóā",
 };
 
 export default function BookingLayout({
