@@ -952,6 +952,8 @@ export default function CalendarPage() {
   const [modificationEmailMessage, setModificationEmailMessage] = useState("");
   const [cancellationEmailPromptAppointment, setCancellationEmailPromptAppointment] =
     useState<CalendarAppointment | null>(null);
+  const [cancellationEmailPromptMode, setCancellationEmailPromptMode] =
+    useState<"delete" | "emailOnly">("delete");
   const [sendCancellationEmailNotification, setSendCancellationEmailNotification] =
     useState(false);
   const [cancellationEmailMessage, setCancellationEmailMessage] = useState("");
@@ -3998,14 +4000,19 @@ export default function CalendarPage() {
     }
   }
 
-  function openCancellationEmailPrompt(appointment: CalendarAppointment) {
+  function openCancellationEmailPrompt(
+    appointment: CalendarAppointment,
+    mode: "delete" | "emailOnly" = "delete",
+  ) {
     setCancellationEmailPromptAppointment(appointment);
+    setCancellationEmailPromptMode(mode);
     setSendCancellationEmailNotification(false);
     setCancellationEmailMessage("");
   }
 
   function closeCancellationEmailPrompt() {
     setCancellationEmailPromptAppointment(null);
+    setCancellationEmailPromptMode("delete");
     setSendCancellationEmailNotification(false);
     setCancellationEmailMessage("");
   }
@@ -4017,6 +4024,15 @@ export default function CalendarPage() {
 
     if (!appointment) {
       closeCancellationEmailPrompt();
+      return;
+    }
+
+    if (cancellationEmailPromptMode === "emailOnly") {
+      closeCancellationEmailPrompt();
+
+      if (shouldSend) {
+        await sendAppointmentConfirmationEmail(appointment, message, "cancellation");
+      }
       return;
     }
 
@@ -4060,6 +4076,9 @@ export default function CalendarPage() {
 
     const startIso = startLocal.toISOString();
     const endIso = endLocal.toISOString();
+    const bookingStatusChangedToCancelled =
+      normalizeString(editBookingStatus) === "annule" &&
+      normalizeString(getServiceAndStatusFromReason(editingAppointment.reason ?? "").statusLabel ?? "") !== "annule";
 
     try {
       setSavingEdit(true);
@@ -4150,7 +4169,10 @@ export default function CalendarPage() {
       setSavingEdit(false);
       setEditModalOpen(false);
       setEditingAppointment(null);
-      if (dateTimeChanged) {
+
+      if (bookingStatusChangedToCancelled) {
+        openCancellationEmailPrompt(updated, "emailOnly");
+      } else if (dateTimeChanged) {
         openModificationEmailPrompt(updated);
       }
     } catch {
@@ -5958,7 +5980,9 @@ export default function CalendarPage() {
                 <div>
                   <h2 className="text-sm font-semibold text-slate-900">Appointment cancelled</h2>
                   <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                    Delete this appointment and choose whether to email the patient.
+                    {cancellationEmailPromptMode === "delete"
+                      ? "Delete this appointment and choose whether to email the patient."
+                      : "Choose whether to email the patient about this cancellation."}
                   </p>
                 </div>
                 <button
@@ -6006,10 +6030,17 @@ export default function CalendarPage() {
               <div className="mt-4 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => void handleDeleteAppointment({
-                    appointment: cancellationEmailPromptAppointment,
-                    sendCancellationEmail: false,
-                  })}
+                  onClick={() => {
+                    if (cancellationEmailPromptMode === "delete") {
+                      void handleDeleteAppointment({
+                        appointment: cancellationEmailPromptAppointment,
+                        sendCancellationEmail: false,
+                      });
+                      return;
+                    }
+
+                    closeCancellationEmailPrompt();
+                  }}
                   disabled={deletingAppointment}
                   className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -6021,7 +6052,11 @@ export default function CalendarPage() {
                   disabled={deletingAppointment || !sendCancellationEmailNotification}
                   className="inline-flex items-center rounded-full border border-red-500 bg-red-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {deletingAppointment ? t("modal.deleting") : "Send and delete"}
+                  {deletingAppointment
+                    ? t("modal.deleting")
+                    : cancellationEmailPromptMode === "delete"
+                      ? "Send and delete"
+                      : "Send email"}
                 </button>
               </div>
             </div>
