@@ -8,6 +8,7 @@ import { supabaseClient } from "@/lib/supabaseClient";
 import { liveblocksClient } from "@/lib/liveblocksClient";
 import { getYjsProviderForRoom } from "@liveblocks/yjs";
 import { EditorContent, useEditor } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
@@ -114,8 +115,25 @@ type ConsultationRow = {
   is_draft?: boolean | null;
 };
 
+type EditorHistoryCommand = "undo" | "redo";
+
+function canRunEditorHistoryCommand(editor: Editor | null | undefined, command: EditorHistoryCommand) {
+  if (!editor || typeof editor.commands?.[command] !== "function") return false;
+  const commandChecker = editor.can()[command];
+  return typeof commandChecker === "function" ? commandChecker() : false;
+}
+
+function runEditorHistoryCommand(editor: Editor | null | undefined, command: EditorHistoryCommand) {
+  if (!editor || typeof editor.commands?.[command] !== "function") return;
+  const chainCommand = editor.chain().focus()[command];
+  if (typeof chainCommand === "function") {
+    chainCommand().run();
+  }
+}
+
 type PendingCreateConsultationNote = {
   id: string;
+  sourceDraftId?: string | null;
   date: string;
   hour: string;
   minute: string;
@@ -879,11 +897,17 @@ function PendingCreateConsultationNoteEditor({
   const [diagnosisCode, setDiagnosisCode] = useState(note.diagnosisCode);
   const [refIcd10, setRefIcd10] = useState(note.refIcd10);
   const [locking, setLocking] = useState(false);
+  const pendingToolbarButtonClass = (active = false) =>
+    `inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-2 text-[11px] font-medium transition-colors ${
+      active
+        ? "border-sky-200 bg-sky-50 text-sky-700"
+        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+    }`;
 
   const editor = useEditor(
     {
       extensions: [
-        StarterKit.configure({ link: false, undoRedo: false }),
+        StarterKit.configure({ link: false }),
         Link.configure({
           openOnClick: false,
           autolink: true,
@@ -897,7 +921,7 @@ function PendingCreateConsultationNoteEditor({
       editorProps: {
         attributes: {
           class:
-            "min-h-[180px] cursor-text px-3 py-2 text-xs leading-5 text-slate-900 focus:outline-none [&_p]:my-1 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5",
+            "min-h-[250px] cursor-text text-[13px] leading-6 text-slate-900 outline-none [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:py-0.5 [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1.5 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-semibold [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6",
         },
       },
     },
@@ -971,67 +995,113 @@ function PendingCreateConsultationNoteEditor({
   }
 
   return (
-    <div className="rounded-lg border border-sky-200/70 bg-sky-50/60 p-3 text-xs">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-sky-700">Consultation Note</div>
-          <div className="text-[10px] text-slate-400">Unsaved new note</div>
+    <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-3 text-xs shadow-sm">
+      <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1.4fr)] gap-2">
+        <div className="space-y-1">
+          <label className="block text-[11px] font-medium text-slate-700">Date</label>
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-slate-500">1 user editing</span>
-          <button type="button" onClick={lockNote} disabled={locking} className="inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-1 text-[10px] font-medium text-sky-700 shadow-sm hover:bg-sky-50 disabled:opacity-60">
-            {locking ? "Locking" : "Lock"}
-          </button>
-          <button type="button" onClick={() => onRemove(note.id)} disabled={locking} className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm hover:bg-slate-50 disabled:opacity-60" aria-label="Close note">
-            x
-          </button>
+        <div className="space-y-1">
+          <label className="block text-[11px] font-medium text-slate-700">Time</label>
+          <div className="flex items-center gap-1">
+            <input value={hour} maxLength={2} onChange={(event) => setHour(event.target.value.replace(/[^0-9]/g, ""))} className="w-10 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
+            <span className="text-xs text-slate-500">:</span>
+            <input value={minute} maxLength={2} onChange={(event) => setMinute(event.target.value.replace(/[^0-9]/g, ""))} className="w-10 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
+          </div>
         </div>
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-4">
-        <label className="space-y-1 md:col-span-2">
-          <span className="text-[10px] text-slate-600">Title</span>
-          <input value={title} onChange={(event) => setTitle(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm" />
-        </label>
-        <label className="space-y-1 md:col-span-2">
-          <span className="text-[10px] text-slate-600">Doctor</span>
-          <select value={doctorId} onChange={(event) => setDoctorId(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm">
+        <div className="space-y-1">
+          <label className="block text-[11px] font-medium text-slate-700">Doctor</label>
+          <select value={doctorId} onChange={(event) => setDoctorId(event.target.value)} className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500">
             <option value="">No doctor</option>
             {medicalStaffOptions.map((staff) => (
               <option key={staff.id} value={staff.id}>{staff.name}</option>
             ))}
           </select>
-        </label>
-        <label className="space-y-1">
-          <span className="text-[10px] text-slate-600">Date</span>
-          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm" />
-        </label>
-        <label className="space-y-1">
-          <span className="text-[10px] text-slate-600">Hour</span>
-          <input value={hour} onChange={(event) => setHour(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm" />
-        </label>
-        <label className="space-y-1">
-          <span className="text-[10px] text-slate-600">Min</span>
-          <input value={minute} onChange={(event) => setMinute(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm" />
-        </label>
-        <label className="space-y-1">
-          <span className="text-[10px] text-slate-600">Diagnosis Code</span>
-          <input value={diagnosisCode} onChange={(event) => setDiagnosisCode(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm" />
-        </label>
-        <label className="space-y-1 md:col-span-4">
-          <span className="text-[10px] text-slate-600">Ref ICD-10</span>
-          <input value={refIcd10} onChange={(event) => setRefIcd10(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm" />
-        </label>
+        </div>
       </div>
 
-      <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center gap-1 border-b border-slate-100 px-2 py-1">
-          <button type="button" onClick={() => editor?.chain().focus().toggleBold().run()} className="h-7 min-w-7 rounded border border-slate-200 px-2 text-[11px]">B</button>
-          <button type="button" onClick={() => editor?.chain().focus().toggleItalic().run()} className="h-7 min-w-7 rounded border border-slate-200 px-2 text-[11px]">I</button>
-          <button type="button" onClick={() => editor?.chain().focus().toggleBulletList().run()} className="h-7 min-w-7 rounded border border-slate-200 px-2 text-[11px]">•</button>
-          <span className="ml-auto text-[10px] text-slate-400">Live</span>
+      <div className="mt-2 grid grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)] gap-2">
+        <div className="space-y-1">
+          <label className="block text-[11px] font-medium text-slate-700">Title</label>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Consultation ID:" className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
         </div>
-        <EditorContent editor={editor} />
+        <div className="space-y-1">
+          <label className="block text-[11px] font-medium text-slate-700">Record type</label>
+          <select value="notes" disabled className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm disabled:bg-slate-50">
+            <option value="notes">Notes</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <label className="block text-[11px] font-medium text-slate-700">Diagnosis Code</label>
+          <input value={diagnosisCode} onChange={(event) => setDiagnosisCode(event.target.value)} placeholder="e.g. L91.0" className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
+        </div>
+        <div className="space-y-1">
+          <label className="block text-[11px] font-medium text-slate-700">Ref ICD-10</label>
+          <input value={refIcd10} onChange={(event) => setRefIcd10(event.target.value)} placeholder="e.g. Z42.1" className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
+        </div>
+      </div>
+
+      <div className="mt-2 space-y-1">
+        <label className="block text-[11px] font-medium text-slate-700">Notes</label>
+        <div className="overflow-visible rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-3 py-2.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v5h5" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-[12px] font-semibold text-slate-900">{title.trim() || "Consultation Note"}</div>
+                <div className="text-[10px] text-slate-500">Created: {date || "Today"} {hour || "--"}:{minute || "--"}</div>
+              </div>
+            </div>
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="text-[10px] font-medium text-slate-600">1 user editing</span>
+              <div className="hidden h-7 w-px bg-slate-200 md:block" />
+              <button type="button" onClick={lockNote} disabled={locking} className="inline-flex h-8 items-center justify-center rounded-full border border-slate-200 bg-white px-3 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60">
+                {locking ? "Locking" : "Lock"}
+              </button>
+              <div className="leading-tight">
+                <div className="text-[11px] font-semibold text-emerald-700">Open</div>
+                <div className="text-[9px] text-slate-500">Editable for all</div>
+              </div>
+              <button type="button" onClick={() => onRemove(note.id)} disabled={locking} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-60" aria-label="Close note">
+                x
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
+            <button type="button" onClick={() => runEditorHistoryCommand(editor, "undo")} disabled={!canRunEditorHistoryCommand(editor, "undo")} className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40" title="Undo">↶</button>
+            <button type="button" onClick={() => runEditorHistoryCommand(editor, "redo")} disabled={!canRunEditorHistoryCommand(editor, "redo")} className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40" title="Redo">↷</button>
+            <span className="mx-1 h-5 w-px bg-slate-200" />
+            <button type="button" onClick={() => editor?.chain().focus().toggleBold().run()} className={pendingToolbarButtonClass(!!editor?.isActive("bold"))}>B</button>
+            <button type="button" onClick={() => editor?.chain().focus().toggleItalic().run()} className={pendingToolbarButtonClass(!!editor?.isActive("italic"))}>I</button>
+            <button type="button" onClick={() => editor?.chain().focus().toggleStrike().run()} className={pendingToolbarButtonClass(!!editor?.isActive("strike"))}>S</button>
+            <button type="button" onClick={() => editor?.chain().focus().toggleCode().run()} className={pendingToolbarButtonClass(!!editor?.isActive("code"))}>{"</>"}</button>
+            <span className="mx-1 h-5 w-px bg-slate-200" />
+            <button type="button" onClick={() => editor?.chain().focus().toggleBulletList().run()} className={pendingToolbarButtonClass(!!editor?.isActive("bulletList"))}>•</button>
+            <button type="button" onClick={() => editor?.chain().focus().toggleOrderedList().run()} className={pendingToolbarButtonClass(!!editor?.isActive("orderedList"))}>1.</button>
+            <button type="button" onClick={() => editor?.chain().focus().toggleBlockquote().run()} className={pendingToolbarButtonClass(!!editor?.isActive("blockquote"))}>?</button>
+            <button type="button" onClick={() => editor?.chain().focus().setHorizontalRule().run()} className={pendingToolbarButtonClass()}>—</button>
+          </div>
+
+          <div className="relative max-h-[420px] min-h-[250px] overflow-y-auto bg-white px-4 py-4">
+            <EditorContent editor={editor} className="min-h-[250px] [&_.ProseMirror]:min-h-[250px] [&_.ProseMirror]:outline-none" />
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-3 py-2 text-[10px]">
+            <div className="flex min-w-0 items-center gap-1 text-slate-500">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span>Live</span>
+            </div>
+            <div className="shrink-0 text-slate-500">Unsaved new note</div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1423,8 +1493,8 @@ function CollaborativeUnlockedNoteEditor({
 
       <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          <button type="button" onClick={() => editor?.chain().focus().undo().run()} className={toolbarButtonClass} title="Undo">↶</button>
-          <button type="button" onClick={() => editor?.chain().focus().redo().run()} className={toolbarButtonClass} title="Redo">↷</button>
+          <button type="button" onClick={() => runEditorHistoryCommand(editor, "undo")} disabled={!canRunEditorHistoryCommand(editor, "undo")} className={toolbarButtonClass} title="Undo">↶</button>
+          <button type="button" onClick={() => runEditorHistoryCommand(editor, "redo")} disabled={!canRunEditorHistoryCommand(editor, "redo")} className={toolbarButtonClass} title="Redo">↷</button>
           <span className="mx-1 h-5 w-px bg-slate-200" />
           <button type="button" onClick={() => editor?.chain().focus().toggleBold().run()} className={toolbarButtonClass}>B</button>
           <button type="button" onClick={() => editor?.chain().focus().toggleItalic().run()} className={toolbarButtonClass}>I</button>
@@ -1837,6 +1907,7 @@ export default function MedicalConsultationsCard({
 
   // NEW CONSULTATION AUTOSAVE - Draft system like Notion/Google Docs
   const [newConsultationDraftId, setNewConsultationDraftId] = useState<string | null>(null);
+  const [suppressedCreateDraftId, setSuppressedCreateDraftId] = useState<string | null>(null);
   const [consultationLocked, setConsultationLocked] = useState(false);
   const [consultationNoteMenuOpen, setConsultationNoteMenuOpen] = useState(false);
   const [unlockingConsultationId, setUnlockingConsultationId] = useState<string | null>(null);
@@ -1856,6 +1927,15 @@ export default function MedicalConsultationsCard({
   );
   const collaborativeConsultationNotesEnabled =
     !recordTypeFilter || recordTypeFilter === "notes";
+  const pendingCreateConsultationSourceDraftIds = useMemo(
+    () =>
+      new Set(
+        pendingCreateConsultationNotes
+          .map((note) => note.sourceDraftId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [pendingCreateConsultationNotes],
+  );
   const activeCollaborativeConsultation = useMemo(
     () =>
       collaborativeConsultationNotesEnabled
@@ -1864,10 +1944,18 @@ export default function MedicalConsultationsCard({
               row.record_type === "notes" &&
               row.collab_room_id === consultationCollabRoomId &&
               row.is_draft === true &&
-              !row.is_archived,
+              !row.is_archived &&
+              !pendingCreateConsultationSourceDraftIds.has(row.id) &&
+              row.id !== suppressedCreateDraftId,
           ) ?? null
         : null,
-    [collaborativeConsultationNotesEnabled, consultationCollabRoomId, consultations],
+    [
+      collaborativeConsultationNotesEnabled,
+      consultationCollabRoomId,
+      consultations,
+      pendingCreateConsultationSourceDraftIds,
+      suppressedCreateDraftId,
+    ],
   );
   const [consultationYDoc, setConsultationYDoc] = useState<Y.Doc | null>(null);
   const [consultationYProvider, setConsultationYProvider] = useState<any | null>(null);
@@ -1966,7 +2054,6 @@ export default function MedicalConsultationsCard({
     setConsultationLocked(false);
     updateNewConsultationDraftId(null);
     setNewConsultationAutosaveStatus("idle");
-    createRoomOpenAllowedRef.current = false;
 
     const fields = consultationYFieldsRef.current;
     fields?.doc?.transact(() => {
@@ -2902,6 +2989,7 @@ export default function MedicalConsultationsCard({
   useEffect(() => {
     if (!collaborativeConsultationNotesEnabled) return;
     if (!activeCollaborativeConsultation || !consultationYDoc) return;
+    if (activeCollaborativeConsultation.id === suppressedCreateDraftId) return;
     const fields = consultationYFieldsRef.current;
     if (!fields) return;
     if (fields.get("open") === "true") return;
@@ -2961,6 +3049,7 @@ export default function MedicalConsultationsCard({
     consultationNotesEditor,
     consultationYDoc,
     consultationYProviderSynced,
+    suppressedCreateDraftId,
   ]);
 
   const notesToolbarButtonClass = (active = false) =>
@@ -4495,7 +4584,7 @@ export default function MedicalConsultationsCard({
     }
   }
 
-  function preserveOpenCreateConsultationNote() {
+  function preserveOpenCreateConsultationNote(sourceDraftId = newConsultationDraftIdRef.current) {
     if (!newConsultationOpenRef.current || consultationRecordType !== "notes" || consultationLocked) {
       return false;
     }
@@ -4508,22 +4597,55 @@ export default function MedicalConsultationsCard({
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2);
 
-    setPendingCreateConsultationNotes((prev) => [
-      ...prev,
-      {
-        id,
-        date: consultationDate,
-        hour: consultationHour,
-        minute: consultationMinute,
-        doctorId: consultationDoctorId,
-        title: consultationTitle,
-        diagnosisCode: consultationDiagnosisCode,
-        refIcd10: consultationRefIcd10,
-        contentHtml: html,
-      },
-    ]);
+    setPendingCreateConsultationNotes((prev) => {
+      if (
+        sourceDraftId &&
+        prev.some((item) => item.sourceDraftId === sourceDraftId)
+      ) {
+        return prev;
+      }
+
+      return [
+        {
+          id,
+          sourceDraftId,
+          date: consultationDate,
+          hour: consultationHour,
+          minute: consultationMinute,
+          doctorId: consultationDoctorId,
+          title: consultationTitle,
+          diagnosisCode: consultationDiagnosisCode,
+          refIcd10: consultationRefIcd10,
+          contentHtml: html,
+        },
+        ...prev,
+      ];
+    });
 
     return true;
+  }
+
+  async function preserveAndCloseOpenCreateNoteForInvoice() {
+    if (!newConsultationOpenRef.current || consultationRecordType !== "notes" || consultationLocked) {
+      return false;
+    }
+
+    if (newConsultationAutosaveTimerRef.current) {
+      clearTimeout(newConsultationAutosaveTimerRef.current);
+      newConsultationAutosaveTimerRef.current = null;
+    }
+
+    const inFlightRow = await newConsultationAutosaveInFlightRef.current?.catch(() => null);
+    const savedRow = await handleNewConsultationAutosave({ force: true });
+    const sourceDraftId =
+      savedRow?.id ??
+      inFlightRow?.id ??
+      newConsultationDraftIdRef.current;
+
+    const preserved = preserveOpenCreateConsultationNote(sourceDraftId);
+    setSuppressedCreateDraftId(sourceDraftId);
+    consultationYFieldsRef.current?.set("open", "false");
+    return preserved;
   }
 
   function triggerNewConsultationAutosave(
@@ -5590,6 +5712,7 @@ export default function MedicalConsultationsCard({
                   type="button"
                   onClick={async () => {
                     if (consultationSaving) return;
+                    const previousDraftId = newConsultationDraftIdRef.current;
                     const preservedExistingNote = preserveOpenCreateConsultationNote();
                     const now = new Date();
                     const datePart = formatLocalDateInputValue(now);
@@ -5602,6 +5725,9 @@ export default function MedicalConsultationsCard({
                       .toString()
                       .padStart(2, "0");
                     const nextRecordType = recordTypeFilter || "notes";
+                    if (nextRecordType === "notes") {
+                      setSuppressedCreateDraftId(previousDraftId);
+                    }
                     createRoomOpenAllowedRef.current = nextRecordType === "notes";
                     if (nextRecordType === "notes") {
                       resetNewConsultationNotesEditor();
@@ -7422,6 +7548,47 @@ export default function MedicalConsultationsCard({
                           </span>
                         </div>
                         <div className="hidden h-7 w-px bg-slate-200 md:block" />
+                        {!consultationLocked ? (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (consultationSaving) return;
+                              await preserveAndCloseOpenCreateNoteForInvoice();
+                              const now = new Date();
+                              setInvoiceFromConsultationId(null);
+                              setConsultationRecordType("invoice");
+                              setConsultationTitle("");
+                              setConsultationDoctorId("");
+                              setInvoiceProviderId("");
+                              setConsultationDiagnosisCode("");
+                              setConsultationRefIcd10("");
+                              setConsultationDate(formatLocalDateInputValue(now));
+                              setConsultationHour(now.getHours().toString().padStart(2, "0"));
+                              setConsultationMinute(now.getMinutes().toString().padStart(2, "0"));
+                              setInvoicePaymentMethod("");
+                              setInvoiceMode("individual");
+                              setInvoiceGroupId("");
+                              setInvoicePaymentTerm("full");
+                              setInvoiceExtraOption(null);
+                              setInvoiceInstallments([]);
+                              setInvoiceServiceLines([]);
+                              setInvoiceSelectedCategoryId("");
+                              setInvoiceSelectedServiceId("");
+                              setConsultationError(null);
+                              setNewConsultationOpen(true);
+                              setTimeout(() => {
+                                creationFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                              }, 100);
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 shadow-sm hover:bg-emerald-100"
+                            title="Create an invoice while keeping this note open"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414A1 1 0 0 1 19 9.414V19a2 2 0 0 1-2 2z" />
+                            </svg>
+                            Create Invoice
+                          </button>
+                        ) : null}
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
@@ -7508,8 +7675,8 @@ export default function MedicalConsultationsCard({
                     }`}>
                       <button
                         type="button"
-                        onClick={() => consultationNotesEditor?.chain().focus().undo().run()}
-                        disabled={!consultationNotesEditor?.can().undo()}
+                        onClick={() => runEditorHistoryCommand(consultationNotesEditor, "undo")}
+                        disabled={!canRunEditorHistoryCommand(consultationNotesEditor, "undo")}
                         className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-white text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                         title="Undo"
                       >
@@ -7519,8 +7686,8 @@ export default function MedicalConsultationsCard({
                       </button>
                       <button
                         type="button"
-                        onClick={() => consultationNotesEditor?.chain().focus().redo().run()}
-                        disabled={!consultationNotesEditor?.can().redo()}
+                        onClick={() => runEditorHistoryCommand(consultationNotesEditor, "redo")}
+                        disabled={!canRunEditorHistoryCommand(consultationNotesEditor, "redo")}
                         className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-white text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                         title="Redo"
                       >
@@ -10030,6 +10197,10 @@ export default function MedicalConsultationsCard({
                               <button
                                 type="button"
                                 onClick={async () => {
+                                  if (row.id === activeCollaborativeConsultation?.id) {
+                                    setSuppressedCreateDraftId(row.id);
+                                    consultationYFieldsRef.current?.set("open", "false");
+                                  }
                                   // Open new consultation form in invoice mode, prefilled from this consultation
                                   setInvoiceFromConsultationId(row.id);
                                   setConsultationRecordType("invoice");
