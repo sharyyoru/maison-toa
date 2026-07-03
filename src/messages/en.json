@@ -758,6 +758,7 @@
       "preview": "Preview",
       "previewInTab": "Preview in Tab",
       "enlarge": "Enlarge",
+      "edit": "Edit",
       "editPdf": "Edit PDF",
       "selectFilePreview": "Select a file from the list to see a larger preview.",
       "noPreviewUrl": "Unable to generate a preview URL for this file.",

@@ -758,6 +758,7 @@
       "preview": "Aperçu",
       "previewInTab": "Aperçu dans l'onglet",
       "enlarge": "Agrandir",
+      "edit": "Modifier",
       "editPdf": "Modifier le PDF",
       "selectFilePreview": "Sélectionnez un fichier de la liste pour voir un aperçu plus grand.",
       "noPreviewUrl": "Impossible de générer une URL d'aperçu pour ce fichier.",

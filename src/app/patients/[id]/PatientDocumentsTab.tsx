@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import BeforeAfterEditorModal from "./BeforeAfterEditorModal";
 import PdfAnnotationEditor from "@/components/PdfAnnotationEditor";
+import DocxPreviewEditor from "@/components/DocxEditor/DocxPreviewEditor";
 import DocumentTemplatesPanel from "@/components/DocumentTemplatesPanel";
 import EmailShareModal from "./EmailShareModal";
 import { formatSwissTime, formatSwissDateTime, SWISS_TIMEZONE } from "@/lib/swissTimezone";
@@ -144,6 +145,11 @@ export default function PatientDocumentsTab({
   const [newFolderName, setNewFolderName] = useState("");
   const [showBeforeAfterEditor, setShowBeforeAfterEditor] = useState(false);
   const [showPdfEditor, setShowPdfEditor] = useState(false);
+  const [editingDocx, setEditingDocx] = useState<{
+    item: ListedItem;
+    blob: Blob;
+    url: string;
+  } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [renamingFile, setRenamingFile] = useState<ListedItem | null>(null);
   const [newFileName, setNewFileName] = useState("");
@@ -1356,6 +1362,35 @@ export default function PatientDocumentsTab({
                           </svg>
                           {t("preview")}
                         </button>
+                        {/* Edit button for DOCX files */}
+                        {getExtension(item.name) === "docx" && item.source !== "patient-docs" && (
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setError(null);
+                              setSelectedFilePreviewLoading(true);
+                              try {
+                                const url = await getFileAccessUrl(item);
+                                const response = await fetch(url);
+                                if (!response.ok) throw new Error("Failed to download document for editing");
+                                const blob = await response.blob();
+                                setEditingDocx({ item, blob, url });
+                              } catch (err: any) {
+                                setError(err?.message || "Unable to open document for editing.");
+                              } finally {
+                                setSelectedFilePreviewLoading(false);
+                              }
+                            }}
+                            className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[10px] font-medium text-violet-700 hover:bg-violet-100 hover:border-violet-300 transition-colors"
+                            title="Edit document"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            {t("edit")}
+                          </button>
+                        )}
                         {/* Preview in Tab button - only show if context is available */}
                         {documentPreviewTabs && (
                           <button
@@ -1636,6 +1671,36 @@ export default function PatientDocumentsTab({
           }}
         />
       ) : null}
+      {editingDocx && (
+        <DocxPreviewEditor
+          documentBlob={editingDocx.blob}
+          documentTitle={editingDocx.item.name}
+          patientId={patientId}
+          documentId={editingDocx.item.id || editingDocx.item.name}
+          onSave={async (blob) => {
+            // Upload the edited DOCX back to the same storage path
+            const fullPath = [patientId, editingDocx.item.path].filter(Boolean).join("/");
+            const formData = new FormData();
+            formData.append("file", blob, editingDocx.item.name);
+            formData.append("bucket", BUCKET_NAME);
+            formData.append("path", fullPath);
+
+            const response = await fetch("/api/documents/upload", {
+              method: "POST",
+              body: formData,
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || result.error) {
+              throw new Error(result.error || "Failed to save edited document");
+            }
+
+            setEditingDocx(null);
+            setRefreshKey((k) => k + 1);
+          }}
+          onClose={() => setEditingDocx(null)}
+        />
+      )}
       {/* Rename Modal */}
       {renamingFile ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
