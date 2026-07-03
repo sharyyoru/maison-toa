@@ -31,6 +31,7 @@ export type EmailAttachment = {
 
 export type SendEmailOptions = {
   to: string | string[];
+  cc?: string | string[];
   subject: string;
   html: string;
   from?: string;
@@ -75,6 +76,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
 
   const {
     to,
+    cc,
     subject,
     html,
     from,
@@ -97,6 +99,10 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
     subject,
     html,
   };
+
+  if (cc) {
+    body.cc = Array.isArray(cc) ? cc : [cc];
+  }
 
   if (replyTo) {
     body.reply_to = replyTo;

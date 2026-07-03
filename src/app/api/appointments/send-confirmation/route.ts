@@ -9,6 +9,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const fromEmail = process.env.EMAIL_FROM_ADDRESS || "info@mail.maisontoa.com";
+const APPOINTMENT_UPDATE_CC_EMAIL = "info@maisontoa.com";
 
 type SendConfirmationPayload = {
   appointmentId: string;
@@ -25,7 +26,7 @@ type SendConfirmationPayload = {
   emailType?: "confirmation" | "modification" | "cancellation";
 };
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, subject: string, html: string, cc?: string) {
   if (!isEmailConfigured()) {
     console.log("Resend not configured, skipping email send");
     return;
@@ -33,6 +34,7 @@ async function sendEmail(to: string, subject: string, html: string) {
 
   const result = await sendEmailViaResend({
     to,
+    cc,
     subject,
     html,
   });
@@ -336,7 +338,12 @@ export async function POST(request: Request) {
       emailType
     );
 
-    await sendEmail(patientEmail, emailSubject, patientEmailHtml);
+    const ccEmail =
+      emailType === "modification" || emailType === "cancellation"
+        ? APPOINTMENT_UPDATE_CC_EMAIL
+        : undefined;
+
+    await sendEmail(patientEmail, emailSubject, patientEmailHtml, ccEmail);
     console.log(`✓ Branded appointment ${emailType} email sent to:`, patientEmail);
 
     // Store email record in database
