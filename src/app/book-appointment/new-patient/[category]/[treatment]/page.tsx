@@ -212,7 +212,7 @@ export default function SelectDoctorPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
               <span className="text-sm font-medium text-slate-700">
-                {loading ? t("common.loading") : treatment ? getLocalizedBookingName(treatment, language) : "Treatment"}
+                {loading ? t("common.loading") : treatment ? getLocalizedBookingName(treatment, language) : t("booking.treatment")}
               </span>
             </div>
           )}
@@ -263,6 +263,10 @@ export default function SelectDoctorPage() {
                       doctorName={doctor.name}
                       specialty={doctor.specialty}
                       imageUrl={doctor.image_url}
+                      readMoreLabel={t("common.readMore")}
+                      specialtyLabel={language === "fr" ? "Spécialité" : "Specialty"}
+                      aboutLabel={language === "fr" ? "À propos" : "About"}
+                      closeLabel={language === "fr" ? "Fermer" : "Close"}
                       maxLines={2}
                       className="mb-3"
                     />
@@ -340,7 +344,7 @@ export default function SelectDoctorPage() {
                               <p className="text-sm text-slate-500">{doctor.specialty}</p>
                             </div>
                             <div className="flex items-center gap-2 text-sm text-slate-500">
-                              <span>{slots.length} {slots.length === 1 ? "slot" : "slots"}</span>
+                              <span>{slots.length} {slots.length === 1 ? t("booking.slot") : t("booking.slots")}</span>
                               <svg className={`w-5 h-5 transition-transform ${selected ? "rotate-90 text-slate-900" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                               </svg>
@@ -386,7 +390,7 @@ export default function SelectDoctorPage() {
                       onClick={() => setShowSlotPicker(false)}
                       className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
                     >
-                      ← {t("doctor.backToAllDoctors") || "Back to specialist list"}
+                      ← {t("doctor.backToAllDoctors")}
                     </button>
                   </div>
                 </div>
@@ -403,7 +407,7 @@ export default function SelectDoctorPage() {
       <footer className="bg-white border-t border-slate-200 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <p className="text-center text-sm text-slate-500">
-            © {new Date().getFullYear()} Maison Toá. All rights reserved.
+            {t("common.footer").replace("{year}", new Date().getFullYear().toString())}
           </p>
         </div>
       </footer>

@@ -2,6 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { LanguageToggle } from "@/components/LanguageToggle";
 
 const CLINIC_LOCATIONS = [
   {
@@ -13,6 +15,8 @@ const CLINIC_LOCATIONS = [
 ];
 
 export default function LocationSelectionPage() {
+  const { language, t } = useLanguage();
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
       {/* Background decoration */}
@@ -23,17 +27,21 @@ export default function LocationSelectionPage() {
 
       <div className="relative max-w-6xl mx-auto px-4 py-8 sm:py-12 sm:px-6 lg:px-8">
         {/* Logo Header */}
-        <div className="text-center mb-6 sm:mb-8">
+        <div className="flex items-center justify-between mb-6 sm:mb-8">
+          <div className="w-20" />
           <Link href="/book-appointment">
             <Image
               src="/logos/maisontoa-logo.png"
               alt="Maison Toa"
               width={280}
               height={80}
-              className="h-12 sm:h-14 md:h-16 w-auto mx-auto"
+              className="h-12 sm:h-14 md:h-16 w-auto"
               priority
             />
           </Link>
+          <div className="w-20 flex justify-end">
+            <LanguageToggle />
+          </div>
         </div>
 
         {/* Back Link */}
@@ -44,16 +52,16 @@ export default function LocationSelectionPage() {
           <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Back
+          {t("common.back")}
         </Link>
 
         {/* Header */}
         <div className="text-center mb-8 sm:mb-12">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 mb-3 sm:mb-4">
-            Choose Your Location
+            {language === "fr" ? "Choisissez votre lieu" : "Choose Your Location"}
           </h1>
           <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto px-4">
-            Select your preferred clinic location to see available specialists
+            {language === "fr" ? "Sélectionnez votre clinique préférée pour voir les spécialistes disponibles" : "Select your preferred clinic location to see available specialists"}
           </p>
         </div>
 
@@ -82,17 +90,22 @@ export default function LocationSelectionPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </div>
-              <p className="mt-3 text-sm text-slate-600 hidden sm:block">{location.description}</p>
+              <p className="mt-3 text-sm text-slate-600 hidden sm:block">
+                {language === "fr" ? "Notre clinique au coeur de Lausanne" : location.description}
+              </p>
             </Link>
           ))}
         </div>
 
         {/* Info Section */}
         <div className="mt-10 sm:mt-16 bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-5 sm:p-8 border border-slate-200 shadow-sm text-center max-w-3xl mx-auto">
-          <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-3 sm:mb-4">All Locations Offer</h3>
+          <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-3 sm:mb-4">
+            {language === "fr" ? "Toutes les cliniques proposent" : "All Locations Offer"}
+          </h3>
           <p className="text-sm sm:text-base text-slate-600">
-            Free consultations, 3D simulations, and our full range of aesthetic services. 
-            Choose the location most convenient for you.
+            {language === "fr"
+              ? "Des consultations, des simulations 3D et toute notre gamme de services esthétiques. Choisissez le lieu qui vous convient le mieux."
+              : "Free consultations, 3D simulations, and our full range of aesthetic services. Choose the location most convenient for you."}
           </p>
         </div>
       </div>
@@ -101,7 +114,7 @@ export default function LocationSelectionPage() {
       <footer className="bg-slate-900 text-white py-6 sm:py-8 mt-12 sm:mt-16">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-slate-400 text-xs sm:text-sm">
-            © {new Date().getFullYear()} Aesthetics Clinic. All rights reserved.
+            {t("common.footer").replace("{year}", new Date().getFullYear().toString())}
           </p>
         </div>
       </footer>

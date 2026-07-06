@@ -97,7 +97,7 @@ export default function ExistingPatientCategoryPage() {
                   if (categories.length === 0) {
                     return (
                       <div className="text-center py-12">
-                        <p className="text-slate-600">No categories available at the moment.</p>
+                        <p className="text-slate-600">{t("booking.noCategoriesAvailable")}</p>
                       </div>
                     );
                   }

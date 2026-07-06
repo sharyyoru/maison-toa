@@ -183,7 +183,8 @@ function DoctorBookingContent() {
   const availabilityRequestSeq = useRef(0);
   const selectedDateRequestSeq = useRef(0);
 
-  const selectedService = treatment ? getLocalizedBookingName(treatment, language) : "General Consultation";
+  const selectedService = treatment ? getLocalizedBookingName(treatment, language) : (language === "fr" ? "Consultation générale" : "General Consultation");
+  const dateLocale = language === "fr" ? "fr-FR" : "en-US";
   const bookingFormElement = pageConfig.sections
     .flatMap((section) => section.elements)
     .find((element) => element.type === "booking-form");
@@ -590,9 +591,9 @@ function DoctorBookingContent() {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-900 mb-4">Doctor Not Found</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-4">{t("booking.doctorNotFound")}</h1>
           <Link href="/book-appointment" className="text-slate-900 hover:underline">
-            Back to Home
+            {t("success.backHome")}
           </Link>
         </div>
       </main>
@@ -608,27 +609,26 @@ function DoctorBookingContent() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-4">Appointment Booked!</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-4">{successTitle}</h1>
           <p className="text-slate-600 mb-6">
-            Your appointment with <strong>{doctor.name}</strong> has been confirmed. 
-            A confirmation email has been sent to <strong>{email}</strong>.
+            {t("success.message").replace("{doctor}", doctor.name).replace("{email}", email)}
           </p>
           <div className="bg-slate-50 rounded-xl p-4 mb-6 text-left">
             <p className="text-sm text-slate-600 mb-2">
-              <strong>Date:</strong> {formatSwissDateWithWeekday(parseSwissDate(selectedDate))}
+              <strong>{t("booking.date")}:</strong> {formatSwissDateWithWeekday(parseSwissDate(selectedDate))}
             </p>
             <p className="text-sm text-slate-600 mb-2">
-              <strong>Time:</strong> {selectedTime}
+              <strong>{t("booking.time")}:</strong> {selectedTime}
             </p>
             <p className="text-sm text-slate-600">
-              <strong>Service:</strong> {selectedService}
+              <strong>{t("booking.service")}:</strong> {selectedService}
             </p>
           </div>
           <Link
             href="/book-appointment"
             className="inline-flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-full font-medium hover:bg-slate-800 transition-colors"
           >
-            Back to Home
+            {successButtonText}
           </Link>
         </div>
       </main>
@@ -802,8 +802,12 @@ function DoctorBookingContent() {
                     onBlur={(e) => checkEmailExists(e.target.value)}
                     className={`w-full rounded-xl border px-4 py-3 text-slate-900 focus:ring-2 outline-none transition-all ${emailNotFoundError ? "border-amber-400 focus:border-amber-400 focus:ring-amber-100" : emailVerified ? "border-green-400 focus:border-green-400 focus:ring-green-100" : "border-slate-200 focus:border-slate-400 focus:ring-slate-200"}`}
                   />
-                  {emailChecking && <p className="text-xs text-slate-400 mt-1">Checking...</p>}
-                  {emailVerified && !emailChecking && <p className="text-xs text-green-600 mt-1">✓ Account found</p>}
+                  {emailChecking && <p className="text-xs text-slate-400 mt-1">{t("booking.emailChecking")}</p>}
+                  {emailVerified && !emailChecking && (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✓ {language === "fr" ? "Compte trouvé" : "Account found"}
+                    </p>
+                  )}
                   {emailNotFoundError && (
                     <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
                       <p className="text-xs text-amber-800 mb-2">
@@ -853,7 +857,7 @@ function DoctorBookingContent() {
                     disabled={!emailVerified || emailChecking || emailNotFoundError}
                     className="w-full bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {emailChecking ? "Checking..." : t("booking.continue")}
+                    {emailChecking ? t("booking.emailChecking") : t("booking.continue")}
                   </button>
                 </div>
               </div>
@@ -869,7 +873,7 @@ function DoctorBookingContent() {
                 {isLoadingDates ? (
                   <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-600"></div>
-                    <p className="text-sm text-slate-600">Checking availability...</p>
+                    <p className="text-sm text-slate-600">{t("booking.checkingAvailability")}</p>
                   </div>
                 ) : nextAvailableSlots.length > 0 ? (
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
@@ -877,7 +881,7 @@ function DoctorBookingContent() {
                       <svg className="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      <p className="text-sm font-medium text-emerald-700">Next 15 available slots</p>
+                      <p className="text-sm font-medium text-emerald-700">{t("booking.nextAvailableSlots")}</p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {nextAvailableSlots.map((slot) => {
@@ -902,7 +906,7 @@ function DoctorBookingContent() {
                             }`}
                           >
                             <span className="block">
-                              {new Date(slot.date + "T12:00:00").toLocaleDateString("en-US", { timeZone: SWISS_TIMEZONE, weekday: "short", month: "short", day: "numeric" })}
+                              {new Date(slot.date + "T12:00:00").toLocaleDateString(dateLocale, { timeZone: SWISS_TIMEZONE, weekday: "short", month: "short", day: "numeric" })}
                             </span>
                             <span className={isSelected ? "text-white" : "text-emerald-700"}>{slot.time}</span>
                           </button>
@@ -915,7 +919,7 @@ function DoctorBookingContent() {
                     <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
-                    <p className="text-sm text-amber-700">No available slots found</p>
+                    <p className="text-sm text-amber-700">{t("booking.noAvailableSlotsFound")}</p>
                   </div>
                 ) : null}
 
@@ -1006,7 +1010,7 @@ function DoctorBookingContent() {
                   <button
                     onClick={() => {
                       if (!notes.trim()) {
-                        setError(t("error.notesRequired") || "Please add a note about your visit before continuing.");
+                        setError(t("error.notesRequired"));
                         return;
                       }
                       if (selectedDate && selectedTime) {
@@ -1052,7 +1056,7 @@ function DoctorBookingContent() {
                   <div className="flex justify-between">
                     <span className="text-slate-600">{t("booking.date")}</span>
                     <span className="font-medium text-slate-900">
-                      {new Date(selectedDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: SWISS_TIMEZONE })}
+                      {new Date(selectedDate).toLocaleDateString(dateLocale, { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: SWISS_TIMEZONE })}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -1129,7 +1133,7 @@ function DoctorBookingContent() {
       <footer className="bg-slate-900 text-white py-8 mt-16">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-slate-400 text-sm">
-            © {new Date().getFullYear()} Maison Toá. All rights reserved.
+            {t("common.footer").replace("{year}", new Date().getFullYear().toString())}
           </p>
         </div>
       </footer>

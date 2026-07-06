@@ -7,6 +7,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, formatSwissDateWithWeekday, getSwissDayRange, getSwissSlotString, createSwissDateTime } from "@/lib/swissTimezone";
 import { pushToDataLayer } from "@/components/GoogleTagManager";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const DOCTORS: Record<string, {
   name: string;
@@ -199,6 +200,7 @@ function getAvailableDates(doctorSlug: string, locationId: string, maxDaysAhead:
 type BookingStep = "info" | "datetime" | "confirm";
 
 function DoctorBookingContent() {
+  const { language, t } = useLanguage();
   const params = useParams();
   const searchParams = useSearchParams();
   const slug = params.slug as string;
@@ -402,17 +404,17 @@ function DoctorBookingContent() {
 
   async function handleSubmit() {
     if (!firstName || !lastName || !email || !selectedDate || !selectedTime || !locationId) {
-      setError("Please fill in all required fields");
+      setError(t("error.required"));
       return;
     }
 
     if (!isValidEmail(email)) {
-      setError("Please enter a valid email address");
+      setError(t("error.invalidEmail"));
       return;
     }
 
     if (!isValidPhone(phone)) {
-      setError("Please enter a valid phone number");
+      setError(t("error.invalidPhone"));
       return;
     }
 
@@ -475,9 +477,9 @@ function DoctorBookingContent() {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-900 mb-4">Doctor Not Found</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-4">{t("booking.doctorNotFound")}</h1>
           <Link href="/book-appointment/doctors" className="text-slate-900 hover:underline">
-            Back to Doctors
+            {language === "fr" ? "Retour aux spécialistes" : "Back to Doctors"}
           </Link>
         </div>
       </main>
@@ -493,10 +495,9 @@ function DoctorBookingContent() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-4">Appointment Booked!</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-4">{t("success.title")}</h1>
           <p className="text-slate-600 mb-6">
-            Your appointment with <strong>{doctor.name}</strong> has been confirmed. 
-            A confirmation email has been sent to <strong>{email}</strong>.
+            {t("success.message").replace("{doctor}", doctor.name).replace("{email}", email)}
           </p>
           <div className="bg-slate-50 rounded-xl p-4 mb-6 text-left">
             <p className="text-sm text-slate-600 mb-2">
@@ -513,7 +514,7 @@ function DoctorBookingContent() {
             href="/book-appointment"
             className="inline-flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-full font-medium hover:bg-slate-800 transition-colors"
           >
-            Back to Home
+            {t("success.backHome")}
           </Link>
         </div>
       </main>
@@ -563,7 +564,7 @@ function DoctorBookingContent() {
           <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Back to Specialists
+          {t("booking.backToSpecialists")}
         </Link>
 
         {/* Location Badge */}
@@ -597,7 +598,7 @@ function DoctorBookingContent() {
 
           {/* Booking Form */}
           <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 lg:p-8 border border-slate-200">
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mb-4 sm:mb-6">Book an Appointment</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mb-4 sm:mb-6">{t("booking.title")}</h1>
 
             {/* Progress Steps */}
             <div className="flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-8 overflow-x-auto pb-2">
@@ -622,12 +623,12 @@ function DoctorBookingContent() {
                   <span className="hidden sm:inline">
                     {s === "info" && "Personal Info"}
                     {s === "datetime" && "Date & Time"}
-                    {s === "confirm" && "Confirm"}
+                    {s === "confirm" && t("booking.confirm")}
                   </span>
                   <span className="sm:hidden">
                     {s === "info" && "Info"}
                     {s === "datetime" && "Date"}
-                    {s === "confirm" && "Confirm"}
+                    {s === "confirm" && t("booking.confirm")}
                   </span>
                 </button>
               ))}
@@ -664,7 +665,7 @@ function DoctorBookingContent() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Address *</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">{t("booking.email")} *</label>
                   <input
                     type="email"
                     value={email}
@@ -685,18 +686,18 @@ function DoctorBookingContent() {
                   <button
                     onClick={() => {
                       if (!firstName || !lastName || !email) {
-                        setError("Please fill in all required fields");
+                        setError(t("error.required"));
                         return;
                       }
                       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                       if (!emailRegex.test(email.trim())) {
-                        setError("Please enter a valid email address");
+                        setError(t("error.invalidEmail"));
                         return;
                       }
                       if (phone.trim()) {
                         const phoneRegex = /^[+]?[\d\s()-]{7,20}$/;
                         if (!phoneRegex.test(phone.trim())) {
-                          setError("Please enter a valid phone number");
+                          setError(t("error.invalidPhone"));
                           return;
                         }
                       }
@@ -705,7 +706,7 @@ function DoctorBookingContent() {
                     }}
                     className="w-full bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors"
                   >
-                    Continue
+                    {t("booking.continue")}
                   </button>
                 </div>
               </div>
@@ -714,9 +715,9 @@ function DoctorBookingContent() {
             {/* Step 2: Date & Time */}
             {step === "datetime" && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-900 mb-4">Select Date & Time</h3>
+                <h3 className="text-lg font-semibold text-slate-900 mb-4">{t("booking.selectDate")}</h3>
                 <p className="text-sm text-slate-600 mb-4">
-                  Please select a date when {doctor.name} is available at {locationLabel}.
+                  {t("booking.selectDateDesc").replace("{doctor}", doctor.name).replace("{location}", locationLabel)}
                 </p>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Date *</label>
@@ -741,7 +742,7 @@ function DoctorBookingContent() {
                   />
                   {nearestAvailableDate && !selectedDate && (
                     <p className="mt-2 text-xs text-slate-500">
-                      Next available date: {new Date(nearestAvailableDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                      {t("booking.nextAvailable")} {new Date(nearestAvailableDate).toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", { weekday: "long", month: "long", day: "numeric" })}
                     </p>
                   )}
                   {availableDatesSet.size > 0 && (
@@ -755,7 +756,7 @@ function DoctorBookingContent() {
                 {selectedDate && blockedDates.has(selectedDate) && (
                   <div className="p-4 bg-red-50 border border-red-200 rounded-xl space-y-2">
                     <p className="text-sm text-red-700 font-medium">
-                      The clinic is closed on this date. Please select another date.
+                      {language === "fr" ? "La clinique est fermée à cette date. Veuillez sélectionner une autre date." : "The clinic is closed on this date. Please select another date."}
                     </p>
                     <p className="text-sm text-red-600 italic">
                       La clinique est fermée ce jour-là. Veuillez sélectionner une autre date.
@@ -771,7 +772,7 @@ function DoctorBookingContent() {
                     return (
                       <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
                         <p className="text-sm text-amber-700 font-medium">
-                          All time slots for {doctor.name} at {locationLabel} are fully booked on this day. Please select another date.
+                          {t("booking.noSlots")}
                         </p>
                         <p className="text-sm text-amber-600 italic">
                           Tous les créneaux pour {doctor.name.replace('Dr. ', 'Dr ')} à {locationLabel} sont complets à cette date. Veuillez choisir une autre date.
@@ -782,7 +783,7 @@ function DoctorBookingContent() {
                   
                   return (
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-3">Available Time Slots *</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-3">{t("booking.availableSlots")} *</label>
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                         {openSlots.map((time: string) => (
                           <button
@@ -844,12 +845,12 @@ function DoctorBookingContent() {
                         setStep("confirm");
                         setError(null);
                       } else {
-                        setError("Please select a date and time");
+                        setError(t("error.selectDateTime"));
                       }
                     }}
                     className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors"
                   >
-                    Continue
+                    {t("booking.continue")}
                   </button>
                 </div>
               </div>
@@ -858,7 +859,7 @@ function DoctorBookingContent() {
             {/* Step 3: Confirmation */}
             {step === "confirm" && (
               <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-slate-900 mb-4">Confirm Your Appointment</h3>
+                <h3 className="text-lg font-semibold text-slate-900 mb-4">{t("booking.confirmTitle")}</h3>
                 
                 <div className="bg-slate-50 rounded-xl p-5 space-y-4">
                   <div className="flex justify-between">
@@ -866,7 +867,7 @@ function DoctorBookingContent() {
                     <span className="font-medium text-slate-900">{firstName} {lastName}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600">Email</span>
+                    <span className="text-slate-600">{t("booking.email")}</span>
                     <span className="font-medium text-slate-900">{email}</span>
                   </div>
                   {phone && (
@@ -895,7 +896,7 @@ function DoctorBookingContent() {
                     <span className="font-medium text-slate-900">{selectedService}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600">Location</span>
+                    <span className="text-slate-600">{t("booking.location")}</span>
                     <span className="font-medium text-slate-900">{locationLabel}</span>
                   </div>
                   {notes && (
@@ -928,10 +929,10 @@ function DoctorBookingContent() {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        Booking...
+                        {t("booking.booking")}
                       </>
                     ) : (
-                      "Confirm Booking"
+                      t("booking.confirmBooking")
                     )}
                   </button>
                 </div>
@@ -945,7 +946,7 @@ function DoctorBookingContent() {
       <footer className="bg-slate-900 text-white py-8 mt-16">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-slate-400 text-sm">
-            © {new Date().getFullYear()} Aesthetics Clinic. All rights reserved.
+            {t("common.footer").replace("{year}", new Date().getFullYear().toString())}
           </p>
         </div>
       </footer>

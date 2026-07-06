@@ -77,6 +77,18 @@ const translations: Record<Language, Record<string, string>> = {
     "booking.noSlots": "All time slots are fully booked on this day. Please select another date.",
     "booking.notAvailable": "The doctor is not available on this date. Please select another date.",
     "booking.nextAvailable": "Next available date:",
+    "booking.emailChecking": "Checking...",
+    "booking.emailAvailable": "Email available",
+    "booking.accountFound": "Account found",
+    "booking.checkingAvailability": "Checking availability...",
+    "booking.nextAvailableSlots": "Next 15 available slots",
+    "booking.noAvailableSlotsFound": "No available slots found",
+    "booking.doctorNotFound": "Doctor not found",
+    "booking.noTreatmentsAvailable": "No treatments available in this category.",
+    "booking.noCategoriesAvailable": "No categories available at the moment.",
+    "booking.treatment": "Treatment",
+    "booking.slot": "slot",
+    "booking.slots": "slots",
     
     // Success
     "success.title": "Appointment Booked!",
@@ -88,6 +100,7 @@ const translations: Record<Language, Record<string, string>> = {
     "error.invalidEmail": "Please enter a valid email address",
     "error.invalidPhone": "Please enter a valid phone number",
     "error.selectDateTime": "Please select a date and time",
+    "error.notesRequired": "Please add a note about your visit before continuing.",
     
     // First visit
     "firstVisit.title": "Is this your first visit to Maison Toa?",
@@ -98,7 +111,8 @@ const translations: Record<Language, Record<string, string>> = {
     // Common
     "common.back": "Back",
     "common.loading": "Loading...",
-    "common.footer": "© {year} Maison Toá. All rights reserved.",
+    "common.readMore": "Read more",
+    "common.footer": "© {year} Maison Tóā",
   },
   fr: {
     // Main page
@@ -166,6 +180,18 @@ const translations: Record<Language, Record<string, string>> = {
     "booking.noSlots": "Tous les créneaux sont complets pour cette journée. Veuillez sélectionner une autre date.",
     "booking.notAvailable": "Le médecin n'est pas disponible à cette date. Veuillez sélectionner une autre date.",
     "booking.nextAvailable": "Prochaine date disponible:",
+    "booking.emailChecking": "Vérification...",
+    "booking.emailAvailable": "E-mail disponible",
+    "booking.accountFound": "Compte trouvé",
+    "booking.checkingAvailability": "Vérification des disponibilités...",
+    "booking.nextAvailableSlots": "15 prochains créneaux disponibles",
+    "booking.noAvailableSlotsFound": "Aucun créneau disponible trouvé",
+    "booking.doctorNotFound": "Médecin introuvable",
+    "booking.noTreatmentsAvailable": "Aucun traitement disponible dans cette catégorie.",
+    "booking.noCategoriesAvailable": "Aucune catégorie disponible pour le moment.",
+    "booking.treatment": "Traitement",
+    "booking.slot": "créneau",
+    "booking.slots": "créneaux",
     
     // Success
     "success.title": "Rendez-vous confirmé!",
@@ -177,6 +203,7 @@ const translations: Record<Language, Record<string, string>> = {
     "error.invalidEmail": "Veuillez entrer une adresse e-mail valide",
     "error.invalidPhone": "Veuillez entrer un numéro de téléphone valide",
     "error.selectDateTime": "Veuillez sélectionner une date et une heure",
+    "error.notesRequired": "Veuillez ajouter une note concernant votre visite avant de continuer.",
     
     // First visit
     "firstVisit.title": "Est-ce votre première visite au sein de Maison Tóā?",
@@ -187,7 +214,8 @@ const translations: Record<Language, Record<string, string>> = {
     // Common
     "common.back": "Retour",
     "common.loading": "Chargement...",
-    "common.footer": "© {year} Maison Toá. Tous droits réservés.",
+    "common.readMore": "Lire la suite",
+    "common.footer": "© {year} Maison Tóā",
   },
 };
 
@@ -196,7 +224,7 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 type Overrides = Record<Language, Record<string, string>>;
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("en");
+  const [language, setLanguageState] = useState<Language>("fr");
   const [overrides, setOverrides] = useState<Overrides>({ en: {}, fr: {} });
 
   useEffect(() => {

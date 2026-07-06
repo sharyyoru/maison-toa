@@ -8,6 +8,10 @@ interface DescriptionReadMoreProps {
   doctorName: string;
   specialty?: string;
   imageUrl?: string;
+  readMoreLabel?: string;
+  specialtyLabel?: string;
+  aboutLabel?: string;
+  closeLabel?: string;
   maxLines?: number;
   className?: string;
 }
@@ -17,6 +21,10 @@ export function DescriptionReadMore({
   doctorName,
   specialty,
   imageUrl,
+  readMoreLabel = "Read more",
+  specialtyLabel = "Specialty",
+  aboutLabel = "About",
+  closeLabel = "Close",
   maxLines = 2,
   className = "",
 }: DescriptionReadMoreProps) {
@@ -120,7 +128,7 @@ export function DescriptionReadMore({
           {specialty && (
             <>
               <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                Specialty
+                {specialtyLabel}
               </h4>
               <p className="text-sm sm:text-base text-slate-700 font-medium mb-4">
                 {specialty}
@@ -128,7 +136,7 @@ export function DescriptionReadMore({
             </>
           )}
           <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-            About
+            {aboutLabel}
           </h4>
           <p className="text-sm sm:text-base text-slate-600 leading-relaxed whitespace-pre-wrap">
             {description}
@@ -142,7 +150,7 @@ export function DescriptionReadMore({
             onClick={handleCloseModal}
             className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-xl transition-colors"
           >
-            Close
+            {closeLabel}
           </button>
         </div>
       </div>
@@ -172,7 +180,7 @@ export function DescriptionReadMore({
             className="relative z-10 mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-slate-900 transition-colors group py-1.5 px-1 -mx-1 cursor-pointer touch-manipulation"
           >
             <span className="underline decoration-slate-300 underline-offset-2 group-hover:decoration-slate-500">
-              Read more
+              {readMoreLabel}
             </span>
             <svg 
               className="w-3 h-3 transition-transform group-hover:translate-x-0.5" 

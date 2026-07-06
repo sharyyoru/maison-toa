@@ -36,7 +36,7 @@ interface Category {
 export default function NewPatientTreatmentsPage() {
   const router = useRouter();
   const params = useParams();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const pageConfig = useBookingPageConfig("treatment-selection");
   const categorySlug = params.category as string;
 
@@ -147,7 +147,7 @@ export default function NewPatientTreatmentsPage() {
                     return (
                       <div className="text-center py-12">
                         <p className="text-slate-600">
-                          No treatments available in this category.
+                          {t("booking.noTreatmentsAvailable")}
                         </p>
                       </div>
                     );
@@ -174,6 +174,9 @@ export default function NewPatientTreatmentsPage() {
                                     serviceName={getLocalizedBookingName(treatment, language)}
                                     duration={formatDuration(treatment.duration_minutes)}
                                     price={treatment.display_price != null ? `CHF ${treatment.display_price}` : undefined}
+                                    readMoreLabel={t("common.readMore")}
+                                    descriptionLabel={language === "fr" ? "Description" : "Description"}
+                                    closeLabel={language === "fr" ? "Fermer" : "Close"}
                                     maxLines={3}
                                     className="mb-4 flex-grow"
                                   />

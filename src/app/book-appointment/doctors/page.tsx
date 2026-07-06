@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // Doctor availability by location
 // Format: { [locationId]: { [dayOfWeek]: { start: "HH:MM", end: "HH:MM" } } }
@@ -94,6 +95,7 @@ const LOCATION_NAMES: Record<string, string> = {
 };
 
 function DoctorsListContent() {
+  const { language, t } = useLanguage();
   const searchParams = useSearchParams();
   const location = searchParams.get("location") || "";
 
@@ -138,7 +140,7 @@ function DoctorsListContent() {
           <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Change Location
+          {language === "fr" ? "Changer de lieu" : "Change Location"}
         </Link>
 
         {/* Header */}
@@ -151,10 +153,10 @@ function DoctorsListContent() {
             <span className="text-sm font-medium text-slate-700">{locationName}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 mb-3 sm:mb-4">
-            Available Specialists
+            {language === "fr" ? "Spécialistes disponibles" : "Available Specialists"}
           </h1>
           <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto px-4">
-            Select a specialist available at {locationName} to book your consultation
+            {language === "fr" ? `Sélectionnez un spécialiste disponible à ${locationName} pour réserver votre consultation` : `Select a specialist available at ${locationName} to book your consultation`}
           </p>
         </div>
 
@@ -184,7 +186,7 @@ function DoctorsListContent() {
                   <p className="text-xs sm:text-sm text-slate-500 font-medium mb-1 sm:mb-2 line-clamp-1">{doctor.specialty}</p>
                   <p className="text-xs sm:text-sm text-slate-500 line-clamp-2 hidden sm:block">{doctor.description}</p>
                   <div className="mt-2 sm:mt-4 flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-medium text-slate-900 group-hover:text-slate-700">
-                    <span>Book Consultation</span>
+                    <span>{t("doctor.bookConsultation")}</span>
                     <svg className="w-3 h-3 sm:w-4 sm:h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
@@ -195,22 +197,27 @@ function DoctorsListContent() {
           </div>
         ) : (
           <div className="text-center py-12">
-            <p className="text-slate-600 mb-4">No specialists available at this location.</p>
+            <p className="text-slate-600 mb-4">
+              {language === "fr" ? "Aucun spécialiste disponible à ce lieu." : "No specialists available at this location."}
+            </p>
             <Link
               href="/book-appointment/location"
               className="inline-flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-full font-medium hover:bg-slate-800 transition-colors"
             >
-              Choose Another Location
+              {language === "fr" ? "Choisir un autre lieu" : "Choose Another Location"}
             </Link>
           </div>
         )}
 
         {/* Info Section */}
         <div className="mt-10 sm:mt-16 bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-5 sm:p-8 border border-slate-200 shadow-sm text-center">
-          <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-3 sm:mb-4">General Consultation</h3>
+          <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-3 sm:mb-4">
+            {language === "fr" ? "Consultation générale" : "General Consultation"}
+          </h3>
           <p className="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto">
-            All appointments are for a general consultation where our specialists will discuss your needs 
-            and guide you to the best treatment options.
+            {language === "fr"
+              ? "Tous les rendez-vous sont des consultations générales durant lesquelles nos spécialistes discutent de vos besoins et vous orientent vers les meilleures options de traitement."
+              : "All appointments are for a general consultation where our specialists will discuss your needs and guide you to the best treatment options."}
           </p>
         </div>
       </div>
@@ -219,7 +226,7 @@ function DoctorsListContent() {
       <footer className="bg-slate-900 text-white py-6 sm:py-8 mt-12 sm:mt-16">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-slate-400 text-xs sm:text-sm">
-            © {new Date().getFullYear()} Maison Toa. All rights reserved.
+            {t("common.footer").replace("{year}", new Date().getFullYear().toString())}
           </p>
         </div>
       </footer>
