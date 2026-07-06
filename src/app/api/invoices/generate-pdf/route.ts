@@ -21,6 +21,47 @@ import {
   type InvoiceDiagnosis as SumexDiagnosis,
 } from "@/lib/sumexInvoice";
 import { deriveTariffType } from "@/lib/tariffType";
+import { PDFDocument, rgb } from "pdf-lib";
+
+/**
+ * DEBUG overlay: draws a gray rectangle over the area where "NOTE HONORAIRE"
+ * appears on Sumex1-generated PDFs. Gray makes it easy to spot and adjust.
+ *
+ * Position (A4 page = 595 x 842 pt):
+ *   - vertical: 25% down from top
+ *   - horizontal: spans from 20% to 80% of page width
+ *   - height: ~10% of page height
+ */
+async function overlayNoteHonoraireBox(pdfBuffer: Buffer): Promise<Buffer> {
+  try {
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
+    const pages = pdfDoc.getPages();
+    if (pages.length === 0) return pdfBuffer;
+
+    const firstPage = pages[0];
+    const { width, height } = firstPage.getSize();
+
+    const x = width * 0.2;
+    const boxWidth = width * 0.6; // from 20% to 80%
+    const y = height * 0.75 - height * 0.1; // 25% down from top, box grows downward
+    const boxHeight = height * 0.1;
+
+    firstPage.drawRectangle({
+      x,
+      y,
+      width: boxWidth,
+      height: boxHeight,
+      color: rgb(0.5, 0.5, 0.5),
+      borderColor: rgb(0.3, 0.3, 0.3),
+      borderWidth: 1,
+    });
+
+    return Buffer.from(await pdfDoc.save());
+  } catch (err) {
+    console.error("[GeneratePDF] overlayNoteHonoraireBox failed, returning original PDF:", err);
+    return pdfBuffer;
+  }
+}
 
 type PatientData = {
   first_name: string;
@@ -604,7 +645,7 @@ export async function POST(request: NextRequest) {
         }, { status: 500 });
       }
 
-      const pdfBuffer = sumexResult.pdfContent;
+      const pdfBuffer = await overlayNoteHonoraireBox(sumexResult.pdfContent);
       console.log(`[GeneratePDF] Sumex1 PDF: ${pdfBuffer.length} bytes, schema=${sumexResult.usedSchema}`);
 
       const typePrefix = invoiceType === "tg" ? "invoice" : invoiceType === "tp" ? "invoice-tp" : invoiceType === "reminder" ? "reminder" : "receipt";
@@ -856,8 +897,8 @@ export async function POST(request: NextRequest) {
 
         if (sumexResult2.success && sumexResult2.pdfContent) {
           console.log(`[GeneratePDF] Sumex1 unified PDF generated: ${sumexResult2.pdfContent.length} bytes, paymentMethod=${invoiceData.payment_method}`);
-          
-          let finalPdfBuffer = sumexResult2.pdfContent;
+
+          const finalPdfBuffer = await overlayNoteHonoraireBox(sumexResult2.pdfContent);
 
           const typePrefix2 = invoiceType === "tg" ? "invoice" : invoiceType === "tp" ? "invoice-tp" : invoiceType === "reminder" ? "reminder" : "receipt";
           const fileName = `${typePrefix2}-${invoiceData.invoice_number}-${Date.now()}.pdf`;
