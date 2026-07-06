@@ -41,8 +41,10 @@ async function overlayNoteHonoraireBox(pdfBuffer: Buffer): Promise<Buffer> {
     const firstPage = pages[0];
     const { width, height } = firstPage.getSize();
 
-    const x = width * 0.2;
-    const boxWidth = width * 0.6; // from 20% to 80%
+    // Shrink the box: left edge moved inward by 50% of the left margin,
+    // right edge moved inward by 20% of the right margin.
+    const x = width * 0.35;
+    const boxWidth = width * 0.39;
     // "Note d'honoraires" is at y ~93-108 from the top of the page.
     // Place the box from y=85 to y=125 from the top to cover it.
     const y = height - 125;
@@ -53,9 +55,8 @@ async function overlayNoteHonoraireBox(pdfBuffer: Buffer): Promise<Buffer> {
       y,
       width: boxWidth,
       height: boxHeight,
-      color: rgb(0.5, 0.5, 0.5),
-      borderColor: rgb(0.3, 0.3, 0.3),
-      borderWidth: 1,
+      color: rgb(1, 1, 1),
+      borderWidth: 0,
     });
 
     return Buffer.from(await pdfDoc.save());
