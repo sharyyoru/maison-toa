@@ -84,8 +84,8 @@ export async function POST(req: NextRequest) {
         provider_iban: billingEntity?.iban ?? null,
         provider_gln: billingEntity?.gln ?? null,
         provider_zsr: billingEntity?.zsr ?? null,
-        subtotal: fullPrice,
-        total_amount: depositAmount,  // pay page charges this amount (50% deposit)
+        subtotal: depositAmount,
+        total_amount: depositAmount,  // invoice is for the deposit amount only
         paid_amount: 0,
         status: "OPEN",
         payment_method: "online",
@@ -99,13 +99,13 @@ export async function POST(req: NextRequest) {
 
     if (invErr || !invoice) return NextResponse.json({ error: invErr?.message || "Failed to create invoice" }, { status: 500 });
 
-    // Create line item
+    // Create line item for the deposit amount only
     await supabaseAdmin.from("invoice_line_items").insert({
       invoice_id: invoice.id,
       name: service.name,
       quantity: 1,
-      unit_price: fullPrice,
-      total_price: fullPrice,
+      unit_price: depositAmount,
+      total_price: depositAmount,
     });
 
     // The pay page URL generates a fresh Stripe session on demand — no expiry issue

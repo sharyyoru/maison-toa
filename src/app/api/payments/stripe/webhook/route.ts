@@ -45,14 +45,14 @@ export async function POST(req: NextRequest) {
       const { type, invoice_id } = session.metadata || {};
 
       if (type === "invoice_deposit" && invoice_id) {
-        // Manual prepayment invoice — mark as PARTIAL_PAID
+        // Manual prepayment invoice — mark as PAID (invoice is for the deposit amount only)
         invoiceId = invoice_id;
         const paidAmount = (session.amount_total || 0) / 100;
         const fullPrice = parseFloat(session.metadata?.full_price || "0");
         const paymentIntentId = session.payment_intent as string;
 
         await supabase.from("invoices").update({
-          status: "PARTIAL_PAID",
+          status: "PAID",
           deposit_status: "paid",
           paid_amount: paidAmount,
           paid_at: new Date().toISOString(),
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
           metadata: { type: "invoice_deposit", full_price: fullPrice },
         }, { onConflict: "stripe_payment_intent_id" });
 
-        console.log(`[Stripe Webhook] Invoice deposit ${invoice_id} marked PARTIAL_PAID — CHF ${paidAmount}`);
+        console.log(`[Stripe Webhook] Invoice deposit ${invoice_id} marked PAID — CHF ${paidAmount}`);
 
       } else if (type === "invoice" && invoice_id) {
         invoiceId = invoice_id;
@@ -194,10 +194,10 @@ export async function POST(req: NextRequest) {
               provider_iban: provider?.iban ?? null,
               provider_gln: provider?.gln ?? null,
               provider_zsr: provider?.zsr ?? null,
-              subtotal: fullPrice,
-              total_amount: fullPrice,
+              subtotal: depositAmount,
+              total_amount: depositAmount,
               paid_amount: depositAmount,
-              status: "PARTIAL_PAID",
+              status: "PAID",
               paid_at: nowIso,
               stripe_payment_intent_id: paymentIntentId,
               payment_method: "online",
@@ -209,14 +209,14 @@ export async function POST(req: NextRequest) {
 
           invoiceId = newInvoice?.id ?? null;
 
-          // 5. Create line item for the consultation service
+          // 5. Create line item for the deposit amount actually paid
           if (invoiceId && m.service_id) {
             await supabase.from("invoice_line_items").insert({
               invoice_id: invoiceId,
               name: m.service_name || m.treatment_name,
               quantity: 1,
-              unit_price: fullPrice,
-              total_price: fullPrice,
+              unit_price: depositAmount,
+              total_price: depositAmount,
             });
           }
 
