@@ -943,7 +943,7 @@ export default function CalendarPage() {
   const [draftLocation, setDraftLocation] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [repeatAppointment, setRepeatAppointment] = useState(false);
-  const [sendEmailNotification, setSendEmailNotification] = useState(false);
+  const [sendEmailNotification, setSendEmailNotification] = useState(true);
   const [emailNotificationMessage, setEmailNotificationMessage] = useState("");
   const [modificationEmailPromptAppointment, setModificationEmailPromptAppointment] =
     useState<CalendarAppointment | null>(null);
@@ -2694,7 +2694,7 @@ export default function CalendarPage() {
     setDurationSearch(durationOption ? durationOption.label : `${durationMinutes} minutes`);
     
     setDraftDescription("");
-    setSendEmailNotification(false);
+    setSendEmailNotification(true);
     setEmailNotificationMessage("");
     resetCreateRecurrence();
     // Use the doctor from the dragged column if available, otherwise default
@@ -2990,6 +2990,31 @@ export default function CalendarPage() {
     try {
       setSavingCreate(true);
 
+      let shouldSendEmailNotification = sendEmailNotification;
+      if (sendEmailNotification && createPatientId) {
+        const dateStr = formatSwissYmd(startLocal);
+        const { start: sameDayStartIso, end: sameDayEndIso } = getSwissDayRange(dateStr);
+        const { count, error } = await supabaseClient
+          .from("appointments")
+          .select("id", { count: "exact", head: true })
+          .eq("patient_id", createPatientId)
+          .neq("status", "cancelled")
+          .gte("start_time", sameDayStartIso)
+          .lte("start_time", sameDayEndIso);
+
+        if (error) {
+          setCreateError(error.message ?? "Failed to check existing appointments.");
+          setSavingCreate(false);
+          return;
+        }
+
+        if ((count ?? 0) > 0) {
+          shouldSendEmailNotification = window.confirm(
+            "This patient already has one or more appointments today. Do you want to send another confirmation email?",
+          );
+        }
+      }
+
       // Use multi-doctor/multi-service API if multiple doctors or services selected
       const useMultiAPI = repeatAppointment || selectedDoctorIds.length > 0 || selectedServiceIds.length > 0;
       
@@ -3026,7 +3051,7 @@ export default function CalendarPage() {
             notes: draftDescription.trim() || null,
             allowOverlap: true,
             machineIds: selectedMachineIds.length > 0 ? selectedMachineIds : null,
-            sendEmailNotification,
+            sendEmailNotification: shouldSendEmailNotification,
           })
         });
         
@@ -3065,7 +3090,7 @@ export default function CalendarPage() {
             .eq('id', firstAppt.id)
             .single();
           
-          if (sendEmailNotification && fullApptData) {
+          if (shouldSendEmailNotification && fullApptData) {
             void sendAppointmentConfirmationEmail(
               fullApptData as unknown as CalendarAppointment,
               emailNotificationMessage,
@@ -3155,7 +3180,7 @@ export default function CalendarPage() {
           );
         }
 
-        if (sendEmailNotification) {
+        if (shouldSendEmailNotification) {
           void sendAppointmentConfirmationEmail(inserted, emailNotificationMessage);
         }
 
@@ -3179,7 +3204,7 @@ export default function CalendarPage() {
       setTimeSearch("");
       setDraftLocation("");
       setDraftDescription("");
-      setSendEmailNotification(false);
+      setSendEmailNotification(true);
       setEmailNotificationMessage("");
       setCreatePatientSearch("");
       setCreatePatientId(null);
@@ -3501,7 +3526,7 @@ export default function CalendarPage() {
       console.log('[Paste] Skipping doctor selection (caller will set target doctor)');
     }
     setDoctorConflicts({});
-    setSendEmailNotification(false);
+    setSendEmailNotification(true);
     setEmailNotificationMessage("");
     resetCreateRecurrence();
   }
@@ -3958,7 +3983,7 @@ export default function CalendarPage() {
         if (copiedAppointment && !createModalOpen && !editModalOpen) {
           e.preventDefault();
           handlePasteAppointment();
-          setSendEmailNotification(false);
+          setSendEmailNotification(true);
           setEmailNotificationMessage("");
           setCreateModalOpen(true);
         }
@@ -4310,7 +4335,7 @@ export default function CalendarPage() {
               setDraftLocation(CLINIC_LOCATION_OPTIONS[0] ?? "");
               setLocationSearch(CLINIC_LOCATION_OPTIONS[0] ?? "");
               setDraftDescription("");
-              setSendEmailNotification(false);
+              setSendEmailNotification(true);
               setEmailNotificationMessage("");
               resetCreateRecurrence();
               const defaultCalendar =
@@ -5371,7 +5396,7 @@ export default function CalendarPage() {
               type="button"
               onClick={() => {
                 handlePasteAppointment();
-                setSendEmailNotification(false);
+                setSendEmailNotification(true);
                 setEmailNotificationMessage("");
                 setCreateModalOpen(true);
                 setPasteContextMenu(null);
