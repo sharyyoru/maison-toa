@@ -306,7 +306,41 @@ export async function POST(req: NextRequest) {
         const rescheduleUrl = `${appUrl}/book-appointment`;
 
         if (email && isEmailConfigured()) {
+          // If the patient rebooked and successfully paid for the same slot, skip the cancellation email.
+          let rebooked = false;
           try {
+            const appointmentDate = m.appointment_date ? new Date(m.appointment_date) : null;
+            if (appointmentDate && !isNaN(appointmentDate.getTime())) {
+              const windowStart = new Date(appointmentDate.getTime() - 60 * 1000).toISOString();
+              const windowEnd = new Date(appointmentDate.getTime() + 60 * 1000).toISOString();
+
+              const { data: patientRows } = await supabase
+                .from("patients")
+                .select("id")
+                .ilike("email", email)
+                .limit(1);
+              const patientId = patientRows?.[0]?.id;
+
+              if (patientId) {
+                const { data: recentAppointments } = await supabase
+                  .from("appointments")
+                  .select("id")
+                  .eq("patient_id", patientId)
+                  .gte("start_time", windowStart)
+                  .lte("start_time", windowEnd)
+                  .neq("status", "cancelled")
+                  .limit(1);
+                if (recentAppointments && recentAppointments.length > 0) {
+                  rebooked = true;
+                  console.log(`[Stripe Webhook] Skipping expired booking-deposit email: patient ${email} already has a confirmed appointment for the same slot.`);
+                }
+              }
+            }
+          } catch (checkErr) {
+            console.error("[Stripe Webhook] Error checking for rebooking:", checkErr);
+          }
+
+          if (!rebooked) try {
             const html = brandedEmail(`
               <p style="margin:0 0 16px">${language === "fr" ? "Chère Madame / Cher Monsieur" : "Dear Sir / Madam"} <strong>${m.last_name || ""}</strong>,</p>
               <p style="margin:0 0 16px">
