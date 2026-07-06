@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
+import { sendEmail, isEmailConfigured } from "@/lib/email";
+import { generatePatientConfirmationEmail } from "@/lib/appointmentEmails";
+import { brandedEmail } from "@/utils/emailTemplate";
 import Stripe from "stripe";
 
 const supabase = createClient(
@@ -74,6 +77,59 @@ export async function POST(req: NextRequest) {
         }, { onConflict: "stripe_payment_intent_id" });
 
         console.log(`[Stripe Webhook] Invoice deposit ${invoice_id} marked PAID — CHF ${paidAmount}`);
+
+        // Send deposit-payment confirmation email to the patient
+        try {
+          const { data: inv } = await supabase
+            .from("invoices")
+            .select("patient_id, appointment_id, title")
+            .eq("id", invoice_id)
+            .single();
+
+          if (inv?.patient_id && inv?.appointment_id) {
+            const { data: patient } = await supabase
+              .from("patients")
+              .select("first_name, last_name, email, gender, language_preference")
+              .eq("id", inv.patient_id)
+              .single();
+
+            const { data: appt } = await supabase
+              .from("appointments")
+              .select("start_time, end_time, reason, location")
+              .eq("id", inv.appointment_id)
+              .single();
+
+            if (patient?.email && appt?.start_time) {
+              const language = patient.language_preference === "fr" ? "fr" : "en";
+              const doctorMatch = (appt.reason || "").match(/\[Doctor:\s*(.+?)\s*\]/i);
+              const doctorName = doctorMatch?.[1] || "Maison Tóā";
+              const serviceName = (appt.reason || "").split(" [Doctor:")[0].trim() || inv.title || "Consultation";
+              const appointmentDate = new Date(appt.start_time);
+
+              const html = generatePatientConfirmationEmail(
+                patient.last_name || "",
+                patient.gender || undefined,
+                doctorName,
+                appointmentDate,
+                serviceName,
+                appt.location || null,
+                language,
+                inv.appointment_id
+              );
+
+              await sendEmail({
+                to: patient.email,
+                subject: language === "fr"
+                  ? "Acompte reçu – Votre rendez-vous est confirmé | Maison Tóā"
+                  : "Deposit received – Your appointment is confirmed | Maison Tóā",
+                html,
+              });
+              console.log(`[Stripe Webhook] Confirmation email sent to ${patient.email}`);
+            }
+          }
+        } catch (emailErr) {
+          console.error("[Stripe Webhook] Failed to send confirmation email:", emailErr);
+        }
 
       } else if (type === "invoice" && invoice_id) {
         invoiceId = invoice_id;
@@ -235,6 +291,57 @@ export async function POST(req: NextRequest) {
 
         console.log(`[Stripe Webhook] Booking deposit processed — ${m.first_name} ${m.last_name}, CHF ${depositAmount} deposit for ${m.treatment_name}`);
 
+      } else {
+        status = "ignored";
+      }
+    } else if (event.type === "checkout.session.expired") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const { type } = session.metadata || {};
+
+      if (type === "booking_deposit") {
+        const m = session.metadata || {};
+        const email = m.email;
+        const language = m.language === "en" ? "en" : "fr";
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
+        const rescheduleUrl = `${appUrl}/book-appointment`;
+
+        if (email && isEmailConfigured()) {
+          try {
+            const html = brandedEmail(`
+              <p style="margin:0 0 16px">${language === "fr" ? "Chère Madame / Cher Monsieur" : "Dear Sir / Madam"} <strong>${m.last_name || ""}</strong>,</p>
+              <p style="margin:0 0 16px">
+                ${language === "fr"
+                  ? "Votre rendez-vous n'a pas été confirmé car nous n'avons pas reçu l'acompte dans le délai imparti."
+                  : "Your appointment was not confirmed because we did not receive the deposit within the required time."}
+              </p>
+              <p style="margin:0 0 24px">
+                ${language === "fr"
+                  ? "Si vous souhaitez reprendre rendez-vous, n'hésitez pas à réserver en ligne."
+                  : "If you would like to reschedule, please book a new appointment online."}
+              </p>
+              <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background-color:#1a1a18; border-radius:6px; text-align:center;">
+                    <a href="${rescheduleUrl}" style="display:inline-block; padding:14px 28px; color:#ffffff; font-size:15px; text-decoration:none; font-weight:500;">
+                      ${language === "fr" ? "Reprendre rendez-vous" : "Reschedule"}
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            `);
+
+            await sendEmail({
+              to: email,
+              subject: language === "fr"
+                ? "Rendez-vous non confirmé | Maison Tóā"
+                : "Appointment not confirmed | Maison Tóā",
+              html,
+            });
+            console.log(`[Stripe Webhook] Expired booking-deposit email sent to ${email}`);
+          } catch (emailErr) {
+            console.error("[Stripe Webhook] Failed to send expired booking-deposit email:", emailErr);
+          }
+        }
       } else {
         status = "ignored";
       }

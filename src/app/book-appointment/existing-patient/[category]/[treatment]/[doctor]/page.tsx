@@ -1088,13 +1088,13 @@ function DoctorBookingContent() {
                       <>
                         <p className="font-medium">Un acompte de 50% est demandé lors de la prise de rendez-vous pour toute première consultation.</p>
                         <p>Le montant de la consultation est déductible de tout traitement réalisé dans les 3 mois suivants.</p>
-                        <p className="font-medium">Votre rendez-vous sera automatiquement annulé si l&apos;acompte n&apos;est pas payé dans les 48 heures.</p>
+                        <p className="font-medium">Votre rendez-vous sera automatiquement annulé si l&apos;acompte n&apos;est pas payé dans les 24 heures.</p>
                       </>
                     ) : (
                       <>
                         <p className="font-medium">A 50% deposit is required when booking any first consultation appointment.</p>
                         <p>The consultation fee is deductible from any treatment carried out within the following 3 months.</p>
-                        <p className="font-medium">Your appointment will be automatically cancelled if the deposit is not paid within 48 hours.</p>
+                        <p className="font-medium">Your appointment will be automatically cancelled if the deposit is not paid within 24 hours.</p>
                       </>
                     )}
                   </div>
