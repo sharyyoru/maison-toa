@@ -99,14 +99,24 @@ export async function GET(request: NextRequest) {
               })
             : "—";
 
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
+          const rescheduleUrl = `${appUrl}/book-appointment`;
+
           const html = brandedEmail(`
             <p style="margin:0 0 16px">Chère Madame / Cher Monsieur <strong>${patient.last_name}</strong>,</p>
             <p style="margin:0 0 16px">
               Votre rendez-vous du <strong>${apptDate}</strong> a été annulé automatiquement car le paiement de l'acompte n'a pas été reçu dans le délai imparti de 48 heures.
             </p>
-            <p style="margin:0 0 16px">
+            <p style="margin:0 0 24px">
               Si vous souhaitez reprendre rendez-vous, n'hésitez pas à nous contacter ou à réserver en ligne.
             </p>
+            <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+              <tr>
+                <td style="background-color:#1a1a18; border-radius:6px; text-align:center;">
+                  <a href="${rescheduleUrl}" style="display:inline-block; padding:14px 28px; color:#ffffff; font-size:15px; text-decoration:none; font-weight:500;">Reprendre rendez-vous</a>
+                </td>
+              </tr>
+            </table>
             <p style="margin:0;font-size:12px;color:#94a3b8;">Facture réf. #${invoice.invoice_number}</p>
           `);
 
