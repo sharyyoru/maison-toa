@@ -16,6 +16,11 @@ const TardocGroupsTab = dynamic(
   { loading: () => <div className="text-xs text-slate-400 py-8 text-center">Loading…</div> },
 );
 
+const BookingLinksView = dynamic(
+  () => import("@/components/BookingLinksView"),
+  { loading: () => <div className="text-xs text-slate-400 py-8 text-center">Loading…</div> },
+);
+
 const TABS = [
   { id: "external-labs", label: "External Labs" },
   { id: "doctor-scheduling", label: "Doctor Scheduling" },
@@ -1328,7 +1333,7 @@ function BookingCategoriesTab() {
   const [activeSubTab, setActiveSubTab] = useState<"new" | "existing">("new");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedTreatmentId, setSelectedTreatmentId] = useState<string | null>(null);
-  const [view, setView] = useState<"categories" | "treatments" | "doctors" | "doctor-assignments" | "category-doctor-assignments" | "machines">("categories");
+  const [view, setView] = useState<"categories" | "treatments" | "doctors" | "doctor-assignments" | "category-doctor-assignments" | "machines" | "links">("categories");
 
   useEffect(() => {
     fetchData();
@@ -1537,10 +1542,18 @@ function BookingCategoriesTab() {
         >
           Machines
         </button>
+        <button
+          onClick={() => { setView("links"); setSelectedCategoryId(null); setSelectedTreatmentId(null); }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            view === "links" ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          Links
+        </button>
       </div>
 
-      {/* Sub-tabs for patient type — hidden in Doctors/assignment views */}
-      {view !== "doctors" && view !== "doctor-assignments" && view !== "category-doctor-assignments" && (
+      {/* Sub-tabs for patient type — hidden in Doctors/assignment and Links views */}
+      {view !== "doctors" && view !== "doctor-assignments" && view !== "category-doctor-assignments" && view !== "links" && (
         <div className="border-b border-slate-200">
           <div className="flex space-x-8">
             <button
@@ -1909,6 +1922,8 @@ function BookingCategoriesTab() {
         />
       ) : view === "machines" ? (
         <MachinesView services={services} />
+      ) : view === "links" ? (
+        <BookingLinksView categories={categories} treatments={treatments} doctors={doctors} />
       ) : null}
     </div>
   );
