@@ -25,6 +25,9 @@ export async function POST(req: NextRequest) {
         Payer l'acompte →
       </a>
     </div>
+    <p style="margin:16px 0 0;font-size:13px;color:#64748b;">
+      Veuillez régler votre acompte dans les 48 heures suivant la réception de cet e-mail. À défaut de paiement, votre rendez-vous sera automatiquement annulé.
+    </p>
   `);
 
   const result = await sendEmail({
