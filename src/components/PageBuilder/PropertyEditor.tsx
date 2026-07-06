@@ -11,6 +11,172 @@ interface PropertyEditorProps {
   onClose: () => void;
 }
 
+function Section({
+  title,
+  id,
+  expanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  id: string;
+  expanded: boolean;
+  onToggle: (section: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-b border-slate-200">
+      <button
+        onClick={() => onToggle(id)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+      >
+        <span className="text-sm font-medium text-slate-700">{title}</span>
+        <ChevronDown
+          className={`w-4 h-4 text-slate-400 transition-transform ${
+            expanded ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      {expanded && <div className="px-4 pb-4 space-y-4">{children}</div>}
+    </div>
+  );
+}
+
+function InputField({
+  label,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: "text" | "url" | "number";
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-500 mb-1.5">
+        {label}
+      </label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+      />
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-500 mb-1.5">
+        {label}
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all bg-white"
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function ToggleField({
+  label,
+  value,
+  onChange,
+  description,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+  description?: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <span className="text-sm font-medium text-slate-700">{label}</span>
+        {description && (
+          <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+        )}
+      </div>
+      <button
+        onClick={() => onChange(!value)}
+        className={`relative w-10 h-6 rounded-full transition-colors ${
+          value ? "bg-blue-500" : "bg-slate-200"
+        }`}
+      >
+        <span
+          className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+            value ? "translate-x-4" : ""
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+function LocalizedTextField({
+  label,
+  value,
+  language,
+  onChange,
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  language: "en" | "fr";
+  onChange: (value: string) => void;
+  multiline?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-500 mb-1.5">
+        {label} ({language.toUpperCase()})
+      </label>
+      {multiline ? (
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={3}
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all resize-none"
+        />
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+        />
+      )}
+      <p className="text-xs text-slate-400 mt-1">
+        Currently editing {language === "en" ? "English" : "French"} version
+      </p>
+    </div>
+  );
+}
+
 export function PropertyEditor({
   element,
   language,
@@ -47,186 +213,23 @@ export function PropertyEditor({
     });
   };
 
-  const Section = ({
-    title,
-    id,
-    children,
-  }: {
-    title: string;
-    id: string;
-    children: React.ReactNode;
-  }) => (
-    <div className="border-b border-slate-200">
-      <button
-        onClick={() => toggleSection(id)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
-      >
-        <span className="text-sm font-medium text-slate-700">{title}</span>
-        <ChevronDown
-          className={`w-4 h-4 text-slate-400 transition-transform ${
-            expandedSections.includes(id) ? "rotate-180" : ""
-          }`}
-        />
-      </button>
-      {expandedSections.includes(id) && (
-        <div className="px-4 pb-4 space-y-4">{children}</div>
-      )}
-    </div>
-  );
-
-  const InputField = ({
-    label,
-    value,
-    onChange,
-    type = "text",
-    placeholder,
-  }: {
-    label: string;
-    value: string;
-    onChange: (value: string) => void;
-    type?: "text" | "url" | "number";
-    placeholder?: string;
-  }) => (
-    <div>
-      <label className="block text-xs font-medium text-slate-500 mb-1.5">
-        {label}
-      </label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
-      />
-    </div>
-  );
-
-  const TextAreaField = ({
-    label,
-    value,
-    onChange,
-    rows = 3,
-    placeholder,
-  }: {
-    label: string;
-    value: string;
-    onChange: (value: string) => void;
-    rows?: number;
-    placeholder?: string;
-  }) => (
-    <div>
-      <label className="block text-xs font-medium text-slate-500 mb-1.5">
-        {label}
-      </label>
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={rows}
-        placeholder={placeholder}
-        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all resize-none"
-      />
-    </div>
-  );
-
-  const SelectField = ({
-    label,
-    value,
-    onChange,
-    options,
-  }: {
-    label: string;
-    value: string;
-    onChange: (value: string) => void;
-    options: { value: string; label: string }[];
-  }) => (
-    <div>
-      <label className="block text-xs font-medium text-slate-500 mb-1.5">
-        {label}
-      </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all bg-white"
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-
-  const ToggleField = ({
-    label,
-    value,
-    onChange,
-    description,
-  }: {
-    label: string;
-    value: boolean;
-    onChange: (value: boolean) => void;
-    description?: string;
-  }) => (
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <span className="text-sm font-medium text-slate-700">{label}</span>
-        {description && (
-          <p className="text-xs text-slate-500 mt-0.5">{description}</p>
-        )}
-      </div>
-      <button
-        onClick={() => onChange(!value)}
-        className={`relative w-10 h-6 rounded-full transition-colors ${
-          value ? "bg-blue-500" : "bg-slate-200"
-        }`}
-      >
-        <span
-          className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-            value ? "translate-x-4" : ""
-          }`}
-        />
-      </button>
-    </div>
-  );
-
-  const LocalizedTextField = ({
-    label,
-    propKey,
-    multiline = false,
-  }: {
-    label: string;
-    propKey: string;
-    multiline?: boolean;
-  }) => {
+  const renderLocalizedTextField = (
+    label: string,
+    propKey: string,
+    multiline = false
+  ) => {
     const value = (element.props as Record<string, unknown>)[propKey] as
       | { en: string; fr: string }
       | undefined;
-    
+
     return (
-      <div>
-        <label className="block text-xs font-medium text-slate-500 mb-1.5">
-          {label} ({language.toUpperCase()})
-        </label>
-        {multiline ? (
-          <textarea
-            value={value?.[language] || ""}
-            onChange={(e) => updateLocalizedText(propKey, language, e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all resize-none"
-          />
-        ) : (
-          <input
-            type="text"
-            value={value?.[language] || ""}
-            onChange={(e) => updateLocalizedText(propKey, language, e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
-          />
-        )}
-        <p className="text-xs text-slate-400 mt-1">
-          Currently editing {language === "en" ? "English" : "French"} version
-        </p>
-      </div>
+      <LocalizedTextField
+        label={label}
+        value={value?.[language] || ""}
+        language={language}
+        multiline={multiline}
+        onChange={(nextValue) => updateLocalizedText(propKey, language, nextValue)}
+      />
     );
   };
 
@@ -235,8 +238,8 @@ export function PropertyEditor({
       case "heading":
         return (
           <>
-            <Section title="Content" id="content">
-              <LocalizedTextField label="Heading Text" propKey="text" />
+            <Section title="Content" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
+              {renderLocalizedTextField("Heading Text", "text")}
               <SelectField
                 label="Level"
                 value={element.props.level}
@@ -251,7 +254,7 @@ export function PropertyEditor({
                 ]}
               />
             </Section>
-            <Section title="Style" id="style">
+            <Section title="Style" id="style" expanded={expandedSections.includes("style")} onToggle={toggleSection}>
               <SelectField
                 label="Alignment"
                 value={element.props.alignment}
@@ -277,14 +280,10 @@ export function PropertyEditor({
       case "text":
         return (
           <>
-            <Section title="Content" id="content">
-              <LocalizedTextField
-                label="Text Content"
-                propKey="content"
-                multiline
-              />
+            <Section title="Content" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
+              {renderLocalizedTextField("Text Content", "content", true)}
             </Section>
-            <Section title="Style" id="style">
+            <Section title="Style" id="style" expanded={expandedSections.includes("style")} onToggle={toggleSection}>
               <SelectField
                 label="Font Size"
                 value={element.props.fontSize}
@@ -323,8 +322,8 @@ export function PropertyEditor({
       case "button":
         return (
           <>
-            <Section title="Content" id="content">
-              <LocalizedTextField label="Button Text" propKey="text" />
+            <Section title="Content" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
+              {renderLocalizedTextField("Button Text", "text")}
               <InputField
                 label="Link URL"
                 value={element.props.href}
@@ -333,7 +332,7 @@ export function PropertyEditor({
                 placeholder="https://..."
               />
             </Section>
-            <Section title="Style" id="style">
+            <Section title="Style" id="style" expanded={expandedSections.includes("style")} onToggle={toggleSection}>
               <SelectField
                 label="Variant"
                 value={element.props.variant}
@@ -391,7 +390,7 @@ export function PropertyEditor({
       case "image":
         return (
           <>
-            <Section title="Image" id="content">
+            <Section title="Image" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
               <div className="space-y-3">
                 <InputField
                   label="Image URL"
@@ -412,10 +411,10 @@ export function PropertyEditor({
                     <ImageIcon className="w-8 h-8 text-slate-300" />
                   )}
                 </div>
-                <LocalizedTextField label="Alt Text" propKey="alt" />
+                {renderLocalizedTextField("Alt Text", "alt")}
               </div>
             </Section>
-            <Section title="Size" id="size">
+            <Section title="Size" id="size" expanded={expandedSections.includes("size")} onToggle={toggleSection}>
               <div className="grid grid-cols-2 gap-3">
                 <InputField
                   label="Width (px)"
@@ -437,7 +436,7 @@ export function PropertyEditor({
                 />
               </div>
             </Section>
-            <Section title="Style" id="style">
+            <Section title="Style" id="style" expanded={expandedSections.includes("style")} onToggle={toggleSection}>
               <ToggleField
                 label="Rounded Corners"
                 value={element.props.rounded || false}
@@ -454,7 +453,7 @@ export function PropertyEditor({
 
       case "spacer":
         return (
-          <Section title="Size" id="content">
+          <Section title="Size" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
             <SelectField
               label="Height"
               value={element.props.height}
@@ -474,7 +473,7 @@ export function PropertyEditor({
 
       case "divider":
         return (
-          <Section title="Style" id="style">
+          <Section title="Style" id="style" expanded={expandedSections.includes("style")} onToggle={toggleSection}>
             <SelectField
               label="Line Style"
               value={element.props.style}
@@ -511,7 +510,7 @@ export function PropertyEditor({
       case "logo":
         return (
           <>
-            <Section title="Image" id="content">
+            <Section title="Image" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
               <InputField
                 label="Logo URL"
                 value={element.props.src}
@@ -525,7 +524,7 @@ export function PropertyEditor({
                 onChange={(v) => onUpdate({ alt: v })}
               />
             </Section>
-            <Section title="Size" id="size">
+            <Section title="Size" id="size" expanded={expandedSections.includes("size")} onToggle={toggleSection}>
               <div className="grid grid-cols-2 gap-3">
                 <InputField
                   label="Width (px)"
@@ -541,7 +540,7 @@ export function PropertyEditor({
                 />
               </div>
             </Section>
-            <Section title="Style" id="style">
+            <Section title="Style" id="style" expanded={expandedSections.includes("style")} onToggle={toggleSection}>
               <SelectField
                 label="Alignment"
                 value={element.props.alignment}
@@ -561,13 +560,9 @@ export function PropertyEditor({
       case "card":
         return (
           <>
-            <Section title="Content" id="content">
-              <LocalizedTextField label="Title" propKey="title" />
-              <LocalizedTextField
-                label="Description"
-                propKey="description"
-                multiline
-              />
+            <Section title="Content" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
+              {renderLocalizedTextField("Title", "title")}
+              {renderLocalizedTextField("Description", "description", true)}
               <InputField
                 label="Image URL"
                 value={element.props.image || ""}
@@ -582,7 +577,7 @@ export function PropertyEditor({
                 type="url"
               />
             </Section>
-            <Section title="Style" id="style">
+            <Section title="Style" id="style" expanded={expandedSections.includes("style")} onToggle={toggleSection}>
               <SelectField
                 label="Variant"
                 value={element.props.variant}
@@ -604,13 +599,9 @@ export function PropertyEditor({
       case "hero":
         return (
           <>
-            <Section title="Content" id="content">
-              <LocalizedTextField label="Title" propKey="title" />
-              <LocalizedTextField
-                label="Subtitle"
-                propKey="subtitle"
-                multiline
-              />
+            <Section title="Content" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
+              {renderLocalizedTextField("Title", "title")}
+              {renderLocalizedTextField("Subtitle", "subtitle", true)}
               <ToggleField
                 label="Show Logo"
                 value={element.props.showLogo || false}
@@ -625,7 +616,7 @@ export function PropertyEditor({
                 />
               )}
             </Section>
-            <Section title="Style" id="style">
+            <Section title="Style" id="style" expanded={expandedSections.includes("style")} onToggle={toggleSection}>
               <SelectField
                 label="Alignment"
                 value={element.props.alignment}
@@ -656,7 +647,7 @@ export function PropertyEditor({
 
       case "feature-grid":
         return (
-          <Section title="Grid Settings" id="content">
+          <Section title="Grid Settings" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
             <SelectField
               label="Columns"
               value={String(element.props.columns)}
@@ -678,7 +669,7 @@ export function PropertyEditor({
       // Booking Flow Elements
       case "progress-stepper":
         return (
-          <Section title="Stepper Settings" id="content">
+          <Section title="Stepper Settings" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
             <InputField
               label="Current Step"
               value={String(element.props.currentStep)}
@@ -702,7 +693,7 @@ export function PropertyEditor({
       case "choice-buttons":
         return (
           <>
-            <Section title="Layout" id="style">
+            <Section title="Layout" id="style" expanded={expandedSections.includes("style")} onToggle={toggleSection}>
               <SelectField
                 label="Layout Direction"
                 value={element.props.layout}
@@ -715,7 +706,7 @@ export function PropertyEditor({
                 ]}
               />
             </Section>
-            <Section title="Choices" id="content">
+            <Section title="Choices" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
               <p className="text-xs text-slate-500 mb-2">
                 Configure choice buttons. Each choice has a label, icon, link, and style.
               </p>
@@ -757,7 +748,7 @@ export function PropertyEditor({
 
       case "category-grid":
         return (
-          <Section title="Grid Settings" id="content">
+          <Section title="Grid Settings" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
             <SelectField
               label="Patient Type"
               value={element.props.dynamicSource}
@@ -801,7 +792,7 @@ export function PropertyEditor({
 
       case "treatment-list":
         return (
-          <Section title="List Settings" id="content">
+          <Section title="List Settings" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
             <SelectField
               label="Columns"
               value={String(element.props.columns)}
@@ -840,15 +831,15 @@ export function PropertyEditor({
       case "booking-form":
         return (
           <>
-            <Section title="Form Title" id="content">
-              <LocalizedTextField label="Title" propKey="title" />
+            <Section title="Form Title" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
+              {renderLocalizedTextField("Title", "title")}
               <ToggleField
                 label="Show Step Tabs"
                 value={element.props.showTabs || false}
                 onChange={(v) => onUpdate({ showTabs: v })}
               />
             </Section>
-            <Section title="Form Fields" id="fields">
+            <Section title="Form Fields" id="fields" expanded={expandedSections.includes("fields")} onToggle={toggleSection}>
               <p className="text-xs text-slate-500 mb-2">
                 Fields shown in the booking form. Required fields are marked with *.
               </p>
@@ -871,9 +862,9 @@ export function PropertyEditor({
 
       case "time-slots":
         return (
-          <Section title="Time Slot Settings" id="content">
-            <LocalizedTextField label="Title" propKey="title" />
-            <LocalizedTextField label="Subtitle" propKey="subtitle" />
+          <Section title="Time Slot Settings" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
+            {renderLocalizedTextField("Title", "title")}
+            {renderLocalizedTextField("Subtitle", "subtitle")}
             <ToggleField
               label="Show Earliest Available"
               value={element.props.showEarliestAvailable || false}
@@ -884,8 +875,8 @@ export function PropertyEditor({
 
       case "confirmation-summary":
         return (
-          <Section title="Summary Settings" id="content">
-            <LocalizedTextField label="Title" propKey="title" />
+          <Section title="Summary Settings" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
+            {renderLocalizedTextField("Title", "title")}
             <p className="text-xs text-slate-500 mb-2">
               Fields to display in the confirmation summary.
             </p>
@@ -908,10 +899,10 @@ export function PropertyEditor({
       case "success-message":
         return (
           <>
-            <Section title="Content" id="content">
-              <LocalizedTextField label="Title" propKey="title" />
-              <LocalizedTextField label="Message" propKey="message" multiline />
-              <LocalizedTextField label="Button Text" propKey="buttonText" />
+            <Section title="Content" id="content" expanded={expandedSections.includes("content")} onToggle={toggleSection}>
+              {renderLocalizedTextField("Title", "title")}
+              {renderLocalizedTextField("Message", "message", true)}
+              {renderLocalizedTextField("Button Text", "buttonText")}
               <InputField
                 label="Button Link"
                 value={element.props.buttonHref}
@@ -919,7 +910,7 @@ export function PropertyEditor({
                 type="url"
               />
             </Section>
-            <Section title="Display Options" id="style">
+            <Section title="Display Options" id="style" expanded={expandedSections.includes("style")} onToggle={toggleSection}>
               <ToggleField
                 label="Show Success Icon"
                 value={element.props.showIcon || false}
@@ -966,3 +957,4 @@ export function PropertyEditor({
     </div>
   );
 }
+

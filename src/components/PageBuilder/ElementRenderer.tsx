@@ -73,7 +73,7 @@ export function ElementRenderer({
               alt={element.props.alt}
               width={element.props.width}
               height={element.props.height}
-              className="object-contain"
+              className="h-auto max-w-[220px] object-contain sm:max-w-none"
             />
           </div>
         );
