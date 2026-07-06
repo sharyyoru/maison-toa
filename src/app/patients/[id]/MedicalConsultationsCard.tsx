@@ -1916,6 +1916,8 @@ export default function MedicalConsultationsCard({
   const consultationLockSavingRef = useRef(false);
   const finalizedCreateDraftIdsRef = useRef<Set<string>>(new Set());
   const createRoomOpenAllowedRef = useRef(false);
+  // Used to ignore Yjs-driven closes immediately after the user clicked the + button.
+  const lastLocalOpenAtRef = useRef<number>(0);
   const suppressNewConsultationAutosaveRef = useRef(false);
   const newConsultationAutosaveSeqRef = useRef(0);
   const newConsultationAutosaveInFlightRef = useRef<Promise<ConsultationRow | null> | null>(null);
@@ -2904,6 +2906,13 @@ export default function MedicalConsultationsCard({
         ((draftId && finalizedCreateDraftIdsRef.current.has(draftId)) ||
           (!draftId && !createRoomOpenAllowedRef.current))
       ) {
+        // If the user just clicked the + button locally, ignore the Yjs-driven close
+        // for 500ms to avoid a race condition where remote sync closes the form.
+        const justOpenedLocally = Date.now() - lastLocalOpenAtRef.current < 500;
+        if (justOpenedLocally) {
+          console.warn("[Consultations] Ignoring Yjs-driven close immediately after local + button click");
+          return;
+        }
         createRoomOpenAllowedRef.current = false;
         yfields.doc?.transact(() => {
           yfields.set("open", "false");
@@ -5712,6 +5721,7 @@ export default function MedicalConsultationsCard({
                   type="button"
                   onClick={async () => {
                     if (consultationSaving) return;
+                    lastLocalOpenAtRef.current = Date.now();
                     const previousDraftId = newConsultationDraftIdRef.current;
                     const preservedExistingNote = preserveOpenCreateConsultationNote();
                     const now = new Date();
