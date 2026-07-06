@@ -43,8 +43,10 @@ async function overlayNoteHonoraireBox(pdfBuffer: Buffer): Promise<Buffer> {
 
     const x = width * 0.2;
     const boxWidth = width * 0.6; // from 20% to 80%
-    const y = height * 0.75 - height * 0.1; // 25% down from top, box grows downward
-    const boxHeight = height * 0.1;
+    // "Note d'honoraires" is at y ~93-108 from the top of the page.
+    // Place the box from y=85 to y=125 from the top to cover it.
+    const y = height - 125;
+    const boxHeight = 40;
 
     firstPage.drawRectangle({
       x,
