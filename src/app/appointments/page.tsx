@@ -945,6 +945,8 @@ export default function CalendarPage() {
   const [repeatAppointment, setRepeatAppointment] = useState(false);
   const [sendEmailNotification, setSendEmailNotification] = useState(true);
   const [emailNotificationMessage, setEmailNotificationMessage] = useState("");
+  const [duplicateEmailPromptOpen, setDuplicateEmailPromptOpen] = useState(false);
+  const duplicateEmailPromptResolveRef = useRef<((sendEmail: boolean) => void) | null>(null);
   const [modificationEmailPromptAppointment, setModificationEmailPromptAppointment] =
     useState<CalendarAppointment | null>(null);
   const [sendModificationEmailNotification, setSendModificationEmailNotification] =
@@ -1084,6 +1086,19 @@ export default function CalendarPage() {
     if (except !== "time") setTimeDropdownOpen(false);
     if (except !== "doctor") setCreateDoctorCalendarId("");
   };
+
+  function promptDuplicateAppointmentEmail() {
+    setDuplicateEmailPromptOpen(true);
+    return new Promise<boolean>((resolve) => {
+      duplicateEmailPromptResolveRef.current = resolve;
+    });
+  }
+
+  function resolveDuplicateAppointmentEmailPrompt(sendEmail: boolean) {
+    duplicateEmailPromptResolveRef.current?.(sendEmail);
+    duplicateEmailPromptResolveRef.current = null;
+    setDuplicateEmailPromptOpen(false);
+  }
   
   // Multi-doctor selection handlers
   function handleToggleDoctorSelection(doctorId: string) {
@@ -3009,9 +3024,7 @@ export default function CalendarPage() {
         }
 
         if ((count ?? 0) > 0) {
-          shouldSendEmailNotification = window.confirm(
-            "This patient already has one or more appointments today. Do you want to send another confirmation email?",
-          );
+          shouldSendEmailNotification = await promptDuplicateAppointmentEmail();
         }
       }
 
@@ -6082,6 +6095,48 @@ export default function CalendarPage() {
                     : cancellationEmailPromptMode === "delete"
                       ? "Send and delete"
                       : "Send email"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {duplicateEmailPromptOpen ? (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50">
+            <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.65)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">Confirmation email</h2>
+                  <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                    This patient already has one or more appointments today. Do you want to send another confirmation email?
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => resolveDuplicateAppointmentEmailPrompt(false)}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm hover:bg-slate-50"
+                >
+                  <span className="sr-only">{tCommon("close")}</span>
+                  <svg className="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 5l10 10" />
+                    <path d="M15 5L5 15" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => resolveDuplicateAppointmentEmailPrompt(false)}
+                  className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Do not send email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => resolveDuplicateAppointmentEmailPrompt(true)}
+                  className="inline-flex items-center rounded-full border border-sky-500 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700"
+                >
+                  Send email
                 </button>
               </div>
             </div>
