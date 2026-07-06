@@ -80,6 +80,29 @@ export default function DocumentTemplatesPanel({
     }
   }, [templateSearch]);
 
+  // Fetch patient details for placeholder substitution
+  const [patientDetails, setPatientDetails] = useState<{
+    first_name: string | null;
+    last_name: string | null;
+    dob: string | null;
+    phone: string | null;
+  } | null>(null);
+
+  const fetchPatientDetails = useCallback(async () => {
+    try {
+      const { data, error } = await supabaseClient
+        .from("patients")
+        .select("first_name, last_name, dob, phone")
+        .eq("id", patientId)
+        .single();
+      if (!error && data) {
+        setPatientDetails(data);
+      }
+    } catch (error) {
+      console.error("Error fetching patient details:", error);
+    }
+  }, [patientId]);
+
   // Fetch patient documents
   const fetchDocuments = useCallback(async () => {
     try {
@@ -97,7 +120,8 @@ export default function DocumentTemplatesPanel({
 
   useEffect(() => {
     fetchDocuments();
-  }, [fetchDocuments]);
+    fetchPatientDetails();
+  }, [fetchDocuments, fetchPatientDetails]);
 
   useEffect(() => {
     // If used as modal (onClose exists), fetch templates immediately
@@ -250,10 +274,12 @@ export default function DocumentTemplatesPanel({
     // Parse patient name into first/last
     const nameParts = patientName.split(' ');
     const patientData = {
-      firstName: nameParts[0] || '',
-      lastName: nameParts.slice(1).join(' ') || '',
+      firstName: patientDetails?.first_name || nameParts[0] || '',
+      lastName: patientDetails?.last_name || nameParts.slice(1).join(' ') || '',
       salutation: 'Mr/Ms',
-      birthdate: '',
+      birthdate: patientDetails?.dob
+        ? new Date(patientDetails.dob).toLocaleDateString('fr-FR', { day: 'numeric', month: 'numeric', year: 'numeric' })
+        : '',
     };
     
     return (

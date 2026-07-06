@@ -2,11 +2,138 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { readFile } from "fs/promises";
 import path from "path";
+import JSZip from "jszip";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
+function formatFrenchDate(date: Date): string {
+  return date.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatDob(dob: string | null | undefined): string {
+  if (!dob) return "";
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "numeric", year: "numeric" });
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function escapeRegexCharacter(character: string): string {
+  return character.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function replacePlaceholderInXml(xml: string, placeholder: string, value: string): string {
+  if (!value) {
+    // Keep blank when value is missing (do not show the placeholder text)
+    value = "";
+  }
+
+  const escapedValue = escapeXml(value);
+  if (xml.includes(placeholder)) {
+    return xml.split(placeholder).join(escapedValue);
+  }
+
+  // Handle Word splitting the placeholder across multiple <w:t> runs.
+  const fragmentedPattern = Array.from(placeholder)
+    .map(escapeRegexCharacter)
+    .join("(?:</w:t>(?:<[^>]*>)*<w:t[^>]*>)?");
+
+  return xml.replace(new RegExp(fragmentedPattern, "g"), escapedValue);
+}
+
+function removeNextFieldInstructions(xml: string): string {
+  // Remove Word NEXT field instructions that render as visible text in the editor.
+  let result = xml.replace(
+    /<w:r>(?:[^<]|<(?!\/w:r>))*?<w:instrText[^>]*>\s*NEXT\s*<\/w:instrText>(?:[^<]|<(?!\/w:r>))*?<\/w:r>/gi,
+    ""
+  );
+  // Remove orphaned begin/end field char markers left behind.
+  result = result.replace(
+    /<w:r>\s*<w:fldChar[^>]*\bfldCharType="begin"[^>]*\/>\s*<\/w:r>/gi,
+    ""
+  );
+  result = result.replace(
+    /<w:r>\s*<w:fldChar[^>]*\bfldCharType="end"[^>]*\/>\s*<\/w:r>/gi,
+    ""
+  );
+  return result;
+}
+
+async function applyTemplatePlaceholders(
+  buffer: Buffer,
+  patient: {
+    first_name?: string | null;
+    last_name?: string | null;
+    dob?: string | null;
+    gender?: string | null;
+    street_address?: string | null;
+    postal_code?: string | null;
+    town?: string | null;
+    phone?: string | null;
+  }
+): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(buffer);
+  const xmlFiles = Object.values(zip.files).filter(
+    (file) =>
+      !file.dir &&
+      /^word\/(document|header\d+|footer\d+)\.xml$/i.test(file.name)
+  );
+
+  const today = formatFrenchDate(new Date());
+  const defaultSalutation =
+    patient.gender?.toLowerCase() === "female"
+      ? "Madame"
+      : patient.gender?.toLowerCase() === "male"
+        ? "Monsieur"
+        : "";
+  const addressParts = [
+    patient.street_address || "",
+    patient.postal_code || "",
+    patient.town || "",
+  ].filter(Boolean);
+
+  const replacements = new Map<string, string>([
+    ["${currentDate}", today],
+    ["${currentDate.long}", today],
+    ["${patientInfo.lastName}", patient.last_name || ""],
+    ["${patientInfo.firstName}", patient.first_name || ""],
+    ["${patientInfo.birthdate}", formatDob(patient.dob)],
+    ["${patientInfo.socialSecurityNumber}", ""], // not stored in patients table
+    ["${patientInfo.salutation}", defaultSalutation],
+    ["${patientInfo.street}", patient.street_address || ""],
+    ["${patientInfo.streetNo}", ""], // not stored separately
+    ["${patientInfo.zip}", patient.postal_code || ""],
+    ["${patientInfo.city}", patient.town || ""],
+    ["${patientInfo.mobile}", patient.phone || ""],
+    ["${patientInfo.address}", addressParts.join(", ")],
+  ]);
+
+  for (const file of xmlFiles) {
+    let xml = await file.async("string");
+    replacements.forEach((value, placeholder) => {
+      xml = replacePlaceholderInXml(xml, placeholder, value);
+    });
+    xml = removeNextFieldInstructions(xml);
+    zip.file(file.name, xml);
+  }
+
+  return zip.generateAsync({ type: "nodebuffer" });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,6 +164,17 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    // Fetch patient data for placeholder substitution
+    const { data: patient } = await supabaseAdmin
+      .from("patients")
+      .select("first_name, last_name, dob, gender, street_address, postal_code, town, phone")
+      .eq("id", patientId)
+      .single();
+
+    // Substitute patient placeholders so the generated document is clean
+    templateBuffer = await applyTemplatePlaceholders(templateBuffer, patient || {});
+    console.log("Template placeholders applied");
 
     // Generate filename: templatename_patientname_date.docx
     const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 50);
