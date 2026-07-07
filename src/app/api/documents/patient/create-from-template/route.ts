@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
 import JSZip from "jszip";
-import supabaseAdmin from "@/lib/supabaseAdmin";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 function formatFrenchDate(date: Date): string {
   return date.toLocaleDateString("fr-FR", {
