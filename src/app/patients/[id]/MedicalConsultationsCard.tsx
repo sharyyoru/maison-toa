@@ -4636,7 +4636,7 @@ export default function MedicalConsultationsCard({
 
   async function preserveAndCloseOpenCreateNoteForInvoice() {
     if (!newConsultationOpenRef.current || consultationRecordType !== "notes" || consultationLocked) {
-      return false;
+      return null;
     }
 
     if (newConsultationAutosaveTimerRef.current) {
@@ -4654,7 +4654,7 @@ export default function MedicalConsultationsCard({
     const preserved = preserveOpenCreateConsultationNote(sourceDraftId);
     setSuppressedCreateDraftId(sourceDraftId);
     consultationYFieldsRef.current?.set("open", "false");
-    return preserved;
+    return sourceDraftId && preserved !== false ? sourceDraftId : null;
   }
 
   function triggerNewConsultationAutosave(
@@ -7563,9 +7563,9 @@ export default function MedicalConsultationsCard({
                             type="button"
                             onClick={async () => {
                               if (consultationSaving) return;
-                              await preserveAndCloseOpenCreateNoteForInvoice();
+                              const sourceConsultationId = await preserveAndCloseOpenCreateNoteForInvoice();
                               const now = new Date();
-                              setInvoiceFromConsultationId(null);
+                              setInvoiceFromConsultationId(sourceConsultationId);
                               setConsultationRecordType("invoice");
                               setConsultationTitle("");
                               setConsultationDoctorId("");
