@@ -2,6 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 /**
+ * Builds a specific, actionable error message from a generate-pdf failure
+ * response instead of just its generic top-level `error` field (e.g.
+ * "Sumex1 PDF generation failed" on its own). Surfaces `details`/`abortInfo`/
+ * `technicalDetails` when present so the real cause (e.g. an invalid IBAN)
+ * shows up directly in the job queue instead of requiring a manual dig-in.
+ */
+function buildJobErrorMessage(data: any, fallbackError?: string): string {
+  if (!data) return fallbackError || "Unknown error";
+
+  const parts: string[] = [];
+  if (data.error) parts.push(String(data.error));
+
+  if (data.details) {
+    const detailsStr = typeof data.details === "string" ? data.details : JSON.stringify(data.details);
+    if (detailsStr && detailsStr !== "{}" && !parts.includes(detailsStr)) {
+      parts.push(detailsStr);
+    }
+  }
+  if (data.abortInfo) parts.push(`abortInfo: ${data.abortInfo}`);
+  if (data.technicalDetails) parts.push(String(data.technicalDetails));
+
+  return parts.length > 0 ? parts.join(" — ") : (fallbackError || "Unknown error");
+}
+
+/**
  * Vercel Cron: /api/cron/process-pdf-jobs
  *
  * Runs every minute. Picks up one pending PDF generation job and calls the
@@ -103,7 +128,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Failure / retry
-    const errorMessage = result.data?.error || result.data?.details || result.error || "Unknown error";
+    const errorMessage = buildJobErrorMessage(result.data, result.error);
     const newRetryCount = (job.retry_count || 0) + 1;
     const newStatus = newRetryCount >= 3 ? "failed" : "pending";
 
