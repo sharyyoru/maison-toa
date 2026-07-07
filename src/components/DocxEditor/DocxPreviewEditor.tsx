@@ -23,6 +23,7 @@ interface DocxPreviewEditorProps {
   patientId: string;
   documentId: string;
   patientData?: PatientData;
+  isNewDocument?: boolean;
   onSave: (blob: Blob) => Promise<void>;
   onClose: () => void;
 }
@@ -65,6 +66,24 @@ function replacePlaceholderInXml(
     .join("(?:</w:t>(?:<[^>]*>)*<w:t[^>]*>)?");
 
   return xml.replace(new RegExp(fragmentedPattern, "g"), escapedValue);
+}
+
+function removeNextFieldInstructions(xml: string): string {
+  // Remove Word NEXT field instructions that render as visible text in the editor.
+  let result = xml.replace(
+    /<w:r>(?:[^<]|<(?!\/w:r>))*?<w:instrText[^>]*>\s*NEXT\s*<\/w:instrText>(?:[^<]|<(?!\/w:r>))*?<\/w:r>/gi,
+    ""
+  );
+  // Remove orphaned begin/end field char markers left behind.
+  result = result.replace(
+    /<w:r>\s*<w:fldChar[^>]*\bfldCharType="begin"[^>]*\/>\s*<\/w:r>/gi,
+    ""
+  );
+  result = result.replace(
+    /<w:r>\s*<w:fldChar[^>]*\bfldCharType="end"[^>]*\/>\s*<\/w:r>/gi,
+    ""
+  );
+  return result;
 }
 
 async function extractPlaceholders(
@@ -112,6 +131,7 @@ async function applyPlaceholders(
     replacements.forEach((value, placeholder) => {
       xml = replacePlaceholderInXml(xml, placeholder, value);
     });
+    xml = removeNextFieldInstructions(xml);
     zip.file(file.name, xml);
   }
 
@@ -125,6 +145,7 @@ export default function DocxPreviewEditor({
   documentBlob,
   documentTitle,
   patientData,
+  isNewDocument,
   onSave,
   onClose,
 }: DocxPreviewEditorProps) {
@@ -135,7 +156,7 @@ export default function DocxPreviewEditor({
   );
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [hasChanges, setHasChanges] = useState(isNewDocument ?? false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -188,7 +209,7 @@ export default function DocxPreviewEditor({
     setError(null);
 
     try {
-      const buffer = await editorRef.current?.save();
+      const buffer = await editorRef.current?.save({ selective: false });
       if (!buffer) throw new Error("The editor did not return a document");
 
       const blob = await applyPlaceholders(buffer, placeholders);

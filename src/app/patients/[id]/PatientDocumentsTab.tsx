@@ -126,14 +126,8 @@ export default function PatientDocumentsTab({
   patientId,
   patientName = "Patient",
 }: PatientDocumentsTabProps) {
-  // Try to use document preview tabs context (may not be available if not wrapped)
   const t = useTranslations("patient.documentsTab");
-  let documentPreviewTabs: ReturnType<typeof useDocumentPreviewTabs> | null = null;
-  try {
-    documentPreviewTabs = useDocumentPreviewTabs();
-  } catch {
-    // Context not available - that's fine, the button just won't appear
-  }
+  const documentPreviewTabs = useDocumentPreviewTabs();
 
   const [items, setItems] = useState<ListedItem[]>([]);
   const [currentPrefix, setCurrentPrefix] = useState<string>("");
@@ -1698,7 +1692,7 @@ export default function PatientDocumentsTab({
               throw new Error(result.error || "Failed to save edited document");
             }
 
-            setEditingDocx(null);
+            // Keep the editor open so the user can continue editing the saved document.
             setRefreshKey((k) => k + 1);
           }}
           onClose={() => setEditingDocx(null)}

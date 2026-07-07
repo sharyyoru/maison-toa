@@ -65,6 +65,7 @@ export default function DocumentTemplatesPanel({
   const [showEditor, setShowEditor] = useState(false);
   const [currentDocument, setCurrentDocument] = useState<PatientDocument | null>(null);
   const [documentBlob, setDocumentBlob] = useState<Blob | null>(null);
+  const [isNewDocument, setIsNewDocument] = useState(false);
   const [isLoadingEditor, setIsLoadingEditor] = useState(false);
 
   // Fetch templates
@@ -152,6 +153,7 @@ export default function DocumentTemplatesPanel({
   // Open document in editor - download blob via API for 100% fidelity
   const handleOpenDocument = async (doc: PatientDocument) => {
     setCurrentDocument(doc);
+    setIsNewDocument(false);
     setIsLoadingEditor(true);
     
     try {
@@ -252,6 +254,7 @@ export default function DocumentTemplatesPanel({
             file_path: data.fileName, // Store filename for later saves
           });
           setDocumentBlob(fileData);
+          setIsNewDocument(true);
           setShowEditor(true);
           fetchDocuments();
         } else {
@@ -289,11 +292,13 @@ export default function DocumentTemplatesPanel({
         patientId={patientId}
         documentId={currentDocument.id}
         patientData={patientData}
+        isNewDocument={isNewDocument}
         onSave={handleSaveDocument}
         onClose={() => {
           setShowEditor(false);
           setCurrentDocument(null);
           setDocumentBlob(null);
+          setIsNewDocument(false);
           fetchDocuments();
         }}
       />

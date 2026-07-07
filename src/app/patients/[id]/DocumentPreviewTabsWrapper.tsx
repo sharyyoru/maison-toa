@@ -50,11 +50,7 @@ interface DocumentPreviewTabsContextValue {
 const DocumentPreviewTabsContext = createContext<DocumentPreviewTabsContextValue | null>(null);
 
 export function useDocumentPreviewTabs() {
-  const context = useContext(DocumentPreviewTabsContext);
-  if (!context) {
-    throw new Error("useDocumentPreviewTabs must be used within DocumentPreviewTabsProvider");
-  }
-  return context;
+  return useContext(DocumentPreviewTabsContext);
 }
 
 function getExtension(name: string): string {
