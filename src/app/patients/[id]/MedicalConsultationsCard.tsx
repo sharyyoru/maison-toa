@@ -94,6 +94,7 @@ type ConsultationRow = {
   invoice_pdf_path_tp: string | null;
   invoice_pdf_path_reminder: string | null;
   invoice_pdf_path_receipt: string | null;
+  invoice_consultation_id?: string | null;
   payment_link_token: string | null;
   payrexx_payment_link: string | null;
   payrexx_payment_status: string | null;
@@ -2582,6 +2583,7 @@ export default function MedicalConsultationsCard({
             invoice_pdf_path_tp: inv.pdf_path_tp ?? null,
             invoice_pdf_path_reminder: inv.pdf_path_reminder ?? null,
             invoice_pdf_path_receipt: inv.pdf_path_receipt ?? null,
+            invoice_consultation_id: inv.consultation_id ?? null,
             payment_link_token: inv.payment_link_token ?? null,
             payrexx_payment_link: inv.payrexx_payment_link ?? null,
             payrexx_payment_status: inv.payrexx_payment_status ?? null,
@@ -5546,14 +5548,23 @@ export default function MedicalConsultationsCard({
     }
   }
 
-  function renderDraftLinkedInvoiceCard(row: ConsultationRow) {
-    if (recordTypeFilter || row.record_type === "invoice" || !row.linked_invoice_id) return null;
+  function getLinkedInvoiceForConsultation(row: ConsultationRow) {
+    if (row.record_type === "invoice") return null;
 
-    const linkedInvoice = consultations.find(
+    return consultations.find(
       (candidate) =>
-        candidate.invoice_id === row.linked_invoice_id &&
-        candidate.record_type === "invoice",
-    );
+        candidate.record_type === "invoice" &&
+        (
+          (row.linked_invoice_id && candidate.invoice_id === row.linked_invoice_id) ||
+          candidate.invoice_consultation_id === row.id
+        ),
+    ) ?? null;
+  }
+
+  function renderDraftLinkedInvoiceCard(row: ConsultationRow) {
+    if (recordTypeFilter || row.record_type === "invoice") return null;
+
+    const linkedInvoice = getLinkedInvoiceForConsultation(row);
     if (!linkedInvoice) return null;
 
     const effectiveStatus: InvoiceStatus =
@@ -5562,6 +5573,7 @@ export default function MedicalConsultationsCard({
     const statusDisplay = INVOICE_STATUS_DISPLAY[effectiveStatus];
     const totalAmount = linkedInvoice.invoice_total_amount ?? 0;
     const paidAmount = linkedInvoice.invoice_paid_amount ?? 0;
+    const isCash = typeof linkedInvoice.payment_method === "string" && linkedInvoice.payment_method === "Cash";
 
     return (
       <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/40 px-4 py-3">
@@ -5601,18 +5613,75 @@ export default function MedicalConsultationsCard({
           ) : null}
         </div>
 
+        {linkedInvoice.content ? (
+          <div
+            className="mt-2 rounded-md border border-slate-100 bg-white/80 px-3 py-2 text-[11px] text-slate-700 [&_table]:w-full [&_table]:text-[10px] [&_th]:pb-1 [&_th]:text-left [&_th]:font-medium [&_th]:text-slate-500 [&_td]:py-0.5 [&_td]:pr-2"
+            dangerouslySetInnerHTML={{ __html: linkedInvoice.content }}
+          />
+        ) : null}
+
+        {linkedInvoice.invoice_id && installmentSummaries[linkedInvoice.invoice_id] ? (
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-violet-100 bg-violet-50/60 px-3 py-2 text-[11px]">
+            <div className="flex items-center gap-1.5">
+              <svg className="h-3.5 w-3.5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              <span className="font-medium text-violet-700">
+                Installments: {installmentSummaries[linkedInvoice.invoice_id].paidCount}/{installmentSummaries[linkedInvoice.invoice_id].count} paid
+              </span>
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {linkedInvoice.invoice_pdf_path ? (
             <button type="button" onClick={() => handleViewPdf(linkedInvoice.invoice_pdf_path!)} className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-medium text-indigo-700 hover:bg-indigo-100">
               View PDF
             </button>
           ) : null}
+          {(() => {
+            const linkedQueued = anyInvoicePdfJobStatus(linkedInvoice.id);
+            return (
+              <button
+                type="button"
+                onClick={() => linkedQueued ? handleCancelPdfJob(linkedInvoice.id, "tg") : handleGenerateInvoicePdf(linkedInvoice.id)}
+                disabled={generatingPdf === linkedInvoice.id}
+                className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+              >
+                {generatingPdf === linkedInvoice.id ? "Queueing..." : linkedQueued ? `${linkedQueued.status === "processing" ? "Processing" : "Queued"} - Cancel` : linkedInvoice.invoice_pdf_path ? "Regenerate PDF" : "Generate PDF"}
+              </button>
+            );
+          })()}
           <button type="button" onClick={() => handleEditInvoice(linkedInvoice)} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50">
             Edit Invoice
           </button>
           <button type="button" onClick={() => handleManagePaymentStatus(linkedInvoice)} className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100">
             Payment Status
           </button>
+          <button type="button" onClick={() => handleOpenInstallments(linkedInvoice)} className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-700 hover:bg-violet-100">
+            Installments
+          </button>
+          <button type="button" onClick={() => handleCheckXml(linkedInvoice.id)} disabled={checkingXmlId === linkedInvoice.id} className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50">
+            {checkingXmlId === linkedInvoice.id ? "Checking..." : "Check XML"}
+          </button>
+          {(() => {
+            const insurancePending = insuranceNotifications.hasPendingJob(linkedInvoice.id);
+            return (
+              <button
+                type="button"
+                disabled={insurancePending}
+                onClick={() => { setInsuranceBillingTarget(linkedInvoice); setInsuranceBillingModalOpen(true); }}
+                className={`inline-flex items-center gap-1 rounded-md border border-teal-200 px-2 py-1 text-[10px] font-medium ${insurancePending ? "cursor-not-allowed bg-teal-100 text-teal-800" : "bg-teal-50 text-teal-700 hover:bg-teal-100"}`}
+              >
+                {insurancePending ? "Insurance pending" : "Insurance"}
+              </button>
+            );
+          })()}
+          {isCash && linkedInvoice.invoice_is_paid && linkedInvoice.cash_receipt_path ? (
+            <button type="button" onClick={() => handleViewCashReceipt(linkedInvoice.cash_receipt_path)} className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700 hover:bg-amber-100">
+              View Receipt
+            </button>
+          ) : null}
         </div>
       </div>
     );
