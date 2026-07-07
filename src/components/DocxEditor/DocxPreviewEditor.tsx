@@ -236,7 +236,13 @@ export default function DocxPreviewEditor({
     setError(null);
 
     try {
-      const buffer = await editorRef.current?.save({ selective: false });
+      // Selective (the default) preserves the original XML for anything the
+      // user didn't touch. A full repack (`selective: false`) re-serializes
+      // the whole document from the editor's internal model, which was
+      // found to drop explicit per-cell `<w:tcBorders w:val="none">`
+      // overrides - causing table borders that should stay invisible to
+      // reappear as stray horizontal/vertical lines after saving.
+      const buffer = await editorRef.current?.save();
       if (!buffer) throw new Error("The editor did not return a document");
 
       const blob = await applyPlaceholders(buffer, placeholders);
