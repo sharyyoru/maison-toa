@@ -225,3 +225,40 @@ textarea::placeholder {
     transform: translateY(0);
   }
 }
+
+/* Responsive logo sizing for booking page mobile optimization */
+.logo-mobile-responsive {
+  max-width: var(--logo-mobile-width, 140px);
+  height: auto;
+  object-fit: contain;
+}
+
+@media (min-width: 640px) {
+  .logo-mobile-responsive {
+    max-width: var(--logo-desktop-width, 280px);
+  }
+}
+
+/* Responsive image sizing for booking page mobile optimization */
+.image-mobile-responsive {
+  max-width: var(--image-mobile-width, 100%);
+  height: auto;
+  object-fit: cover;
+}
+
+@media (min-width: 640px) {
+  .image-mobile-responsive {
+    max-width: var(--image-desktop-width, 400px);
+  }
+}
+
+/* Responsive text sizing for booking page mobile optimization */
+.text-mobile-responsive {
+  font-size: var(--text-mobile-size, 1rem);
+}
+
+@media (min-width: 640px) {
+  .text-mobile-responsive {
+    font-size: var(--text-desktop-size, 1rem);
+  }
+}

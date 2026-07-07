@@ -67,6 +67,7 @@ export interface TextElement extends BaseElement {
     content: { en: string; fr: string };
     alignment: 'left' | 'center' | 'right';
     fontSize: 'sm' | 'base' | 'lg' | 'xl';
+    mobileFontSize?: 'sm' | 'base' | 'lg' | 'xl';
     color?: string;
   };
 }
@@ -78,6 +79,8 @@ export interface ImageElement extends BaseElement {
     alt: { en: string; fr: string };
     width?: number;
     height?: number;
+    mobileWidth?: number;
+    mobileHeight?: number;
     rounded?: boolean;
     shadow?: boolean;
   };
@@ -167,7 +170,10 @@ export interface LogoElement extends BaseElement {
     alt: string;
     width: number;
     height: number;
+    mobileWidth?: number;
+    mobileHeight?: number;
     alignment: 'left' | 'center' | 'right';
+    transparentBackground?: boolean;
   };
 }
 
@@ -357,6 +363,7 @@ export const ELEMENT_TEMPLATES: ElementTemplate[] = [
       content: { en: 'Your text here...', fr: 'Votre texte ici...' },
       alignment: 'center',
       fontSize: 'base',
+      mobileFontSize: 'base',
     },
   },
   {
@@ -367,6 +374,10 @@ export const ELEMENT_TEMPLATES: ElementTemplate[] = [
     defaultProps: {
       src: '/logos/maisontoa-logo.png',
       alt: { en: 'Image', fr: 'Image' },
+      width: 400,
+      height: 300,
+      mobileWidth: 280,
+      mobileHeight: 210,
       rounded: false,
       shadow: false,
     },
@@ -434,7 +445,10 @@ export const ELEMENT_TEMPLATES: ElementTemplate[] = [
       alt: 'Maison Toa',
       width: 200,
       height: 60,
+      mobileWidth: 140,
+      mobileHeight: 42,
       alignment: 'center',
+      transparentBackground: true,
     },
   },
   // Booking Flow Elements
@@ -553,7 +567,10 @@ export const DEFAULT_LANDING_PAGE: PageConfig = {
             alt: 'Maison Toa',
             width: 280,
             height: 80,
+            mobileWidth: 180,
+            mobileHeight: 58,
             alignment: 'center',
+            transparentBackground: true,
           },
         },
         {
@@ -580,6 +597,7 @@ export const DEFAULT_LANDING_PAGE: PageConfig = {
             },
             alignment: 'center',
             fontSize: 'lg',
+            mobileFontSize: 'base',
           },
         },
         {
@@ -592,6 +610,7 @@ export const DEFAULT_LANDING_PAGE: PageConfig = {
             },
             alignment: 'center',
             fontSize: 'lg',
+            mobileFontSize: 'base',
           },
         },
         {
@@ -604,6 +623,7 @@ export const DEFAULT_LANDING_PAGE: PageConfig = {
             },
             alignment: 'center',
             fontSize: 'lg',
+            mobileFontSize: 'base',
           },
         },
         {
@@ -616,6 +636,7 @@ export const DEFAULT_LANDING_PAGE: PageConfig = {
             },
             alignment: 'center',
             fontSize: 'lg',
+            mobileFontSize: 'base',
           },
         },
         {
@@ -628,6 +649,7 @@ export const DEFAULT_LANDING_PAGE: PageConfig = {
             },
             alignment: 'center',
             fontSize: 'lg',
+            mobileFontSize: 'base',
           },
         },
         {
@@ -679,7 +701,10 @@ export const DEFAULT_FIRST_VISIT_PAGE: PageConfig = {
             alt: 'Maison Toa',
             width: 280,
             height: 80,
+            mobileWidth: 180,
+            mobileHeight: 58,
             alignment: 'center',
+            transparentBackground: true,
           },
         },
         {
@@ -715,6 +740,7 @@ export const DEFAULT_FIRST_VISIT_PAGE: PageConfig = {
             },
             alignment: 'center',
             fontSize: 'lg',
+            mobileFontSize: 'base',
           },
         },
         {
@@ -781,7 +807,10 @@ export const DEFAULT_CATEGORY_PAGE: PageConfig = {
             alt: 'Maison Toa',
             width: 280,
             height: 80,
+            mobileWidth: 180,
+            mobileHeight: 58,
             alignment: 'center',
+            transparentBackground: true,
           },
         },
         {
@@ -817,6 +846,7 @@ export const DEFAULT_CATEGORY_PAGE: PageConfig = {
             },
             alignment: 'center',
             fontSize: 'lg',
+            mobileFontSize: 'base',
           },
         },
         {
@@ -870,7 +900,10 @@ export const DEFAULT_TREATMENT_PAGE: PageConfig = {
             alt: 'Maison Toa',
             width: 280,
             height: 80,
+            mobileWidth: 180,
+            mobileHeight: 58,
             alignment: 'center',
+            transparentBackground: true,
           },
         },
         {
@@ -948,7 +981,10 @@ export const DEFAULT_BOOKING_FORM_PAGE: PageConfig = {
             alt: 'Maison Toa',
             width: 280,
             height: 80,
+            mobileWidth: 180,
+            mobileHeight: 58,
             alignment: 'center',
+            transparentBackground: true,
           },
         },
         {
@@ -1025,7 +1061,10 @@ export const DEFAULT_CONFIRMATION_PAGE: PageConfig = {
             alt: 'Maison Toa',
             width: 280,
             height: 80,
+            mobileWidth: 180,
+            mobileHeight: 58,
             alignment: 'center',
+            transparentBackground: true,
           },
         },
         {
