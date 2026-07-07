@@ -142,20 +142,29 @@ export function ElementRenderer({
         );
       }
 
-      case "image":
+      case "image": {
+        const desktopWidth = element.props.width || 400;
+        const mobileWidth = element.props.mobileWidth || desktopWidth;
         return (
           <div className="flex justify-center">
             <Image
               src={element.props.src}
               alt={getLocalizedText(element.props.alt, language)}
-              width={element.props.width || 400}
+              width={desktopWidth}
               height={element.props.height || 300}
-              className={`object-cover ${
+              className={`image-mobile-responsive ${
                 element.props.rounded ? "rounded-2xl" : ""
               } ${element.props.shadow ? "shadow-lg" : ""}`}
+              style={
+                {
+                  "--image-mobile-width": `${mobileWidth}px`,
+                  "--image-desktop-width": `${desktopWidth}px`,
+                } as React.CSSProperties
+              }
             />
           </div>
         );
+      }
 
       case "button":
         const buttonVariants = {

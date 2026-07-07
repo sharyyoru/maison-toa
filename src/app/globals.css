@@ -238,3 +238,16 @@ textarea::placeholder {
     max-width: var(--logo-desktop-width, 280px);
   }
 }
+
+/* Responsive image sizing for booking page mobile optimization */
+.image-mobile-responsive {
+  max-width: var(--image-mobile-width, 100%);
+  height: auto;
+  object-fit: cover;
+}
+
+@media (min-width: 640px) {
+  .image-mobile-responsive {
+    max-width: var(--image-desktop-width, 400px);
+  }
+}

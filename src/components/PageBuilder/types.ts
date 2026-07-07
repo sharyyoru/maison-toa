@@ -79,6 +79,8 @@ export interface ImageElement extends BaseElement {
     alt: { en: string; fr: string };
     width?: number;
     height?: number;
+    mobileWidth?: number;
+    mobileHeight?: number;
     rounded?: boolean;
     shadow?: boolean;
   };
@@ -372,6 +374,10 @@ export const ELEMENT_TEMPLATES: ElementTemplate[] = [
     defaultProps: {
       src: '/logos/maisontoa-logo.png',
       alt: { en: 'Image', fr: 'Image' },
+      width: 400,
+      height: 300,
+      mobileWidth: 280,
+      mobileHeight: 210,
       rounded: false,
       shadow: false,
     },

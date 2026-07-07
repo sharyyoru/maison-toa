@@ -427,7 +427,7 @@ export function PropertyEditor({
                 {renderLocalizedTextField("Alt Text", "alt")}
               </div>
             </Section>
-            <Section title="Size" id="size" expanded={expandedSections.includes("size")} onToggle={toggleSection}>
+            <Section title="Desktop Size" id="desktop-size" expanded={expandedSections.includes("desktop-size")} onToggle={toggleSection}>
               <div className="grid grid-cols-2 gap-3">
                 <InputField
                   label="Width (px)"
@@ -443,6 +443,28 @@ export function PropertyEditor({
                   value={String(element.props.height || "")}
                   onChange={(v) =>
                     onUpdate({ height: v ? parseInt(v) : undefined })
+                  }
+                  type="number"
+                  placeholder="300"
+                />
+              </div>
+            </Section>
+            <Section title="Mobile Size" id="mobile-size" expanded={expandedSections.includes("mobile-size")} onToggle={toggleSection}>
+              <div className="grid grid-cols-2 gap-3">
+                <InputField
+                  label="Mobile Width (px)"
+                  value={String(element.props.mobileWidth || element.props.width || "")}
+                  onChange={(v) =>
+                    onUpdate({ mobileWidth: v ? parseInt(v) : undefined })
+                  }
+                  type="number"
+                  placeholder="400"
+                />
+                <InputField
+                  label="Mobile Height (px)"
+                  value={String(element.props.mobileHeight || element.props.height || "")}
+                  onChange={(v) =>
+                    onUpdate({ mobileHeight: v ? parseInt(v) : undefined })
                   }
                   type="number"
                   placeholder="300"
