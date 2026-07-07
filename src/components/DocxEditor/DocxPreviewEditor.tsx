@@ -1,12 +1,43 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   DocxEditor,
   type DocxEditorRef,
 } from "@eigenpal/docx-editor-react";
 import "@eigenpal/docx-editor-react/styles.css";
 import { removeNextFieldArtifacts } from "@/lib/docxFieldCleanup";
+
+interface EditorPaneProps {
+  documentBuffer: ArrayBuffer;
+  documentTitle: string;
+  onChange: () => void;
+  onError: (error: Error) => void;
+}
+
+// Isolated + memoized so that unrelated state changes elsewhere in
+// DocxPreviewEditor (typing in the filename field, editing a placeholder,
+// etc.) never re-render the underlying editor. Without this, every
+// keystroke re-renders DocxPreviewEditor and, in turn, this element - which
+// some editors treat as a cue to resync/reset from their input props.
+const EditorPane = React.memo(
+  React.forwardRef<DocxEditorRef, EditorPaneProps>(function EditorPane(
+    { documentBuffer, documentTitle, onChange, onError },
+    ref
+  ) {
+    return (
+      <DocxEditor
+        ref={ref}
+        documentBuffer={documentBuffer}
+        documentName={documentTitle}
+        documentNameEditable={false}
+        mode="editing"
+        onChange={onChange}
+        onError={onError}
+      />
+    );
+  })
+);
 
 interface PatientData {
   firstName?: string;
@@ -188,9 +219,17 @@ export default function DocxPreviewEditor({
     setHasChanges(true);
   };
 
-  const handleEditorChange = () => {
+  // Memoized so the underlying editor never receives a new callback
+  // reference on every keystroke in the filename field (some editors
+  // re-bind/reinitialize internal state when callback props change).
+  const handleEditorChange = useCallback(() => {
     setHasChanges(true);
-  };
+  }, []);
+
+  const handleEditorError = useCallback((editorError: Error) => {
+    console.error("DOCX editor error:", editorError);
+    setError("The document editor encountered an error");
+  }, []);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -301,17 +340,12 @@ export default function DocxPreviewEditor({
 
           {documentBuffer && (
             <div className="h-full overflow-auto">
-              <DocxEditor
+              <EditorPane
                 ref={editorRef}
                 documentBuffer={documentBuffer}
-                documentName={documentTitle}
-                documentNameEditable={false}
-                mode="editing"
+                documentTitle={documentTitle}
                 onChange={handleEditorChange}
-                onError={(editorError) => {
-                  console.error("DOCX editor error:", editorError);
-                  setError("The document editor encountered an error");
-                }}
+                onError={handleEditorError}
               />
             </div>
           )}
