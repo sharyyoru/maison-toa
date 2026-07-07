@@ -538,6 +538,7 @@ export function PageBuilder({
                             key={element.id}
                             element={element}
                             language={language}
+                            devicePreview={devicePreview}
                           />
                         ))}
                       </div>
@@ -604,6 +605,7 @@ export function PageBuilder({
                         <ElementRenderer
                           element={activeElement}
                           language={language}
+                          devicePreview={devicePreview}
                         />
                       </div>
                     )}

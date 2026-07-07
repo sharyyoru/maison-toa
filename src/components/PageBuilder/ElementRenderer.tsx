@@ -18,12 +18,15 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
+type DevicePreview = "desktop" | "tablet" | "mobile";
+
 interface ElementRendererProps {
   element: PageElement;
   language: "en" | "fr";
   isEditing?: boolean;
   isSelected?: boolean;
   onClick?: () => void;
+  devicePreview?: DevicePreview;
   customRenderers?: Partial<Record<PageElement["type"], (element: PageElement) => ReactNode>>;
 }
 
@@ -42,6 +45,7 @@ export function ElementRenderer({
   isEditing = false,
   isSelected = false,
   onClick,
+  devicePreview,
   customRenderers,
 }: ElementRendererProps) {
   const wrapperClasses = isEditing
@@ -59,6 +63,8 @@ export function ElementRenderer({
     switch (element.type) {
       case "logo": {
         const mobileWidth = element.props.mobileWidth || element.props.width;
+        const isPreviewMobile = devicePreview === "mobile";
+        const isPreviewDesktop = devicePreview === "desktop" || devicePreview === "tablet";
         return (
           <div
             className={`flex ${
@@ -83,6 +89,8 @@ export function ElementRenderer({
                 {
                   "--logo-mobile-width": `${mobileWidth}px`,
                   "--logo-desktop-width": `${element.props.width}px`,
+                  ...(isPreviewMobile && { "--logo-desktop-width": `${mobileWidth}px` }),
+                  ...(isPreviewDesktop && { "--logo-mobile-width": `${element.props.width}px` }),
                 } as React.CSSProperties
               }
             />
@@ -118,24 +126,33 @@ export function ElementRenderer({
         }
 
       case "text": {
-        const responsiveFontSizes = {
-          sm: { sm: "text-sm", base: "text-sm sm:text-base", lg: "text-sm sm:text-lg", xl: "text-sm sm:text-xl" },
-          base: { sm: "text-base sm:text-sm", base: "text-base", lg: "text-base sm:text-lg", xl: "text-base sm:text-xl" },
-          lg: { sm: "text-lg sm:text-sm", base: "text-lg sm:text-base", lg: "text-lg", xl: "text-lg sm:text-xl" },
-          xl: { sm: "text-xl sm:text-sm", base: "text-xl sm:text-base", lg: "text-xl sm:text-lg", xl: "text-xl" },
+        const fontSizeValues = {
+          sm: "0.875rem",
+          base: "1rem",
+          lg: "1.125rem",
+          xl: "1.25rem",
         };
         const mobileFontSize = element.props.mobileFontSize || element.props.fontSize;
-        const sizeClasses = responsiveFontSizes[mobileFontSize][element.props.fontSize];
+        const isPreviewMobile = devicePreview === "mobile";
+        const isPreviewDesktop = devicePreview === "desktop" || devicePreview === "tablet";
         return (
           <p
-            className={`${sizeClasses} text-slate-600 leading-relaxed ${
+            className={`text-mobile-responsive text-slate-600 leading-relaxed ${
               element.props.alignment === "center"
                 ? "text-center"
                 : element.props.alignment === "right"
                 ? "text-right"
                 : "text-left"
             }`}
-            style={{ color: element.props.color }}
+            style={
+              {
+                "--text-mobile-size": fontSizeValues[mobileFontSize],
+                "--text-desktop-size": fontSizeValues[element.props.fontSize],
+                ...(isPreviewMobile && { "--text-desktop-size": fontSizeValues[mobileFontSize] }),
+                ...(isPreviewDesktop && { "--text-mobile-size": fontSizeValues[element.props.fontSize] }),
+                color: element.props.color,
+              } as React.CSSProperties
+            }
           >
             {getLocalizedText(element.props.content, language)}
           </p>
@@ -145,6 +162,8 @@ export function ElementRenderer({
       case "image": {
         const desktopWidth = element.props.width || 400;
         const mobileWidth = element.props.mobileWidth || desktopWidth;
+        const isPreviewMobile = devicePreview === "mobile";
+        const isPreviewDesktop = devicePreview === "desktop" || devicePreview === "tablet";
         return (
           <div className="flex justify-center">
             <Image
@@ -159,6 +178,8 @@ export function ElementRenderer({
                 {
                   "--image-mobile-width": `${mobileWidth}px`,
                   "--image-desktop-width": `${desktopWidth}px`,
+                  ...(isPreviewMobile && { "--image-desktop-width": `${mobileWidth}px` }),
+                  ...(isPreviewDesktop && { "--image-mobile-width": `${desktopWidth}px` }),
                 } as React.CSSProperties
               }
             />
@@ -432,8 +453,8 @@ export function ElementRenderer({
                 }`}
                 style={
                   {
-                    "--logo-mobile-width": "140px",
-                    "--logo-desktop-width": "200px",
+                    "--logo-mobile-width": devicePreview === "desktop" || devicePreview === "tablet" ? "200px" : "140px",
+                    "--logo-desktop-width": devicePreview === "mobile" ? "140px" : "200px",
                   } as React.CSSProperties
                 }
               />
@@ -714,6 +735,7 @@ interface SectionRendererProps {
   isEditing?: boolean;
   selectedElementId?: string | null;
   onSelectElement?: (id: string) => void;
+  devicePreview?: DevicePreview;
   customRenderers?: Partial<Record<PageElement["type"], (element: PageElement) => ReactNode>>;
 }
 
@@ -723,6 +745,7 @@ export function SectionRenderer({
   isEditing = false,
   selectedElementId,
   onSelectElement,
+  devicePreview,
   customRenderers,
 }: SectionRendererProps) {
   const paddingSizes = {
@@ -755,6 +778,7 @@ export function SectionRenderer({
             isEditing={isEditing}
             isSelected={selectedElementId === element.id}
             onClick={() => onSelectElement?.(element.id)}
+            devicePreview={devicePreview}
             customRenderers={customRenderers}
           />
         ))}
