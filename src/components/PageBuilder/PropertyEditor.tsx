@@ -298,6 +298,19 @@ export function PropertyEditor({
                 ]}
               />
               <SelectField
+                label="Mobile Font Size"
+                value={element.props.mobileFontSize || element.props.fontSize}
+                onChange={(v) =>
+                  onUpdate({ mobileFontSize: v as "sm" | "base" | "lg" | "xl" })
+                }
+                options={[
+                  { value: "sm", label: "Small" },
+                  { value: "base", label: "Normal" },
+                  { value: "lg", label: "Large" },
+                  { value: "xl", label: "Extra Large" },
+                ]}
+              />
+              <SelectField
                 label="Alignment"
                 value={element.props.alignment}
                 onChange={(v) =>
@@ -524,7 +537,7 @@ export function PropertyEditor({
                 onChange={(v) => onUpdate({ alt: v })}
               />
             </Section>
-            <Section title="Size" id="size" expanded={expandedSections.includes("size")} onToggle={toggleSection}>
+            <Section title="Desktop Size" id="desktop-size" expanded={expandedSections.includes("desktop-size")} onToggle={toggleSection}>
               <div className="grid grid-cols-2 gap-3">
                 <InputField
                   label="Width (px)"
@@ -536,6 +549,22 @@ export function PropertyEditor({
                   label="Height (px)"
                   value={String(element.props.height)}
                   onChange={(v) => onUpdate({ height: parseInt(v) || 60 })}
+                  type="number"
+                />
+              </div>
+            </Section>
+            <Section title="Mobile Size" id="mobile-size" expanded={expandedSections.includes("mobile-size")} onToggle={toggleSection}>
+              <div className="grid grid-cols-2 gap-3">
+                <InputField
+                  label="Mobile Width (px)"
+                  value={String(element.props.mobileWidth || element.props.width)}
+                  onChange={(v) => onUpdate({ mobileWidth: v ? parseInt(v) : undefined })}
+                  type="number"
+                />
+                <InputField
+                  label="Mobile Height (px)"
+                  value={String(element.props.mobileHeight || element.props.height)}
+                  onChange={(v) => onUpdate({ mobileHeight: v ? parseInt(v) : undefined })}
                   type="number"
                 />
               </div>
@@ -552,6 +581,12 @@ export function PropertyEditor({
                   { value: "center", label: "Center" },
                   { value: "right", label: "Right" },
                 ]}
+              />
+              <ToggleField
+                label="Transparent Background"
+                value={element.props.transparentBackground ?? true}
+                onChange={(v) => onUpdate({ transparentBackground: v })}
+                description="Applies transparent background to the logo on mobile"
               />
             </Section>
           </>

@@ -57,7 +57,8 @@ export function ElementRenderer({
     if (customRenderer) return customRenderer(element);
 
     switch (element.type) {
-      case "logo":
+      case "logo": {
+        const mobileWidth = element.props.mobileWidth || element.props.width;
         return (
           <div
             className={`flex ${
@@ -73,10 +74,21 @@ export function ElementRenderer({
               alt={element.props.alt}
               width={element.props.width}
               height={element.props.height}
-              className="h-auto max-w-[220px] object-contain sm:max-w-none"
+              className={`logo-mobile-responsive ${
+                element.props.transparentBackground
+                  ? "bg-transparent"
+                  : ""
+              }`}
+              style={
+                {
+                  "--logo-mobile-width": `${mobileWidth}px`,
+                  "--logo-desktop-width": `${element.props.width}px`,
+                } as React.CSSProperties
+              }
             />
           </div>
         );
+      }
 
       case "heading":
         const headingSizes = {
@@ -105,16 +117,18 @@ export function ElementRenderer({
           return <h4 className={headingClasses} style={headingStyle}>{headingContent}</h4>;
         }
 
-      case "text":
-        const fontSizes = {
-          sm: "text-sm",
-          base: "text-base",
-          lg: "text-lg",
-          xl: "text-xl",
+      case "text": {
+        const responsiveFontSizes = {
+          sm: { sm: "text-sm", base: "text-sm sm:text-base", lg: "text-sm sm:text-lg", xl: "text-sm sm:text-xl" },
+          base: { sm: "text-base sm:text-sm", base: "text-base", lg: "text-base sm:text-lg", xl: "text-base sm:text-xl" },
+          lg: { sm: "text-lg sm:text-sm", base: "text-lg sm:text-base", lg: "text-lg", xl: "text-lg sm:text-xl" },
+          xl: { sm: "text-xl sm:text-sm", base: "text-xl sm:text-base", lg: "text-xl sm:text-lg", xl: "text-xl" },
         };
+        const mobileFontSize = element.props.mobileFontSize || element.props.fontSize;
+        const sizeClasses = responsiveFontSizes[mobileFontSize][element.props.fontSize];
         return (
           <p
-            className={`${fontSizes[element.props.fontSize]} text-slate-600 leading-relaxed ${
+            className={`${sizeClasses} text-slate-600 leading-relaxed ${
               element.props.alignment === "center"
                 ? "text-center"
                 : element.props.alignment === "right"
@@ -126,6 +140,7 @@ export function ElementRenderer({
             {getLocalizedText(element.props.content, language)}
           </p>
         );
+      }
 
       case "image":
         return (
@@ -399,13 +414,19 @@ export function ElementRenderer({
                 alt="Logo"
                 width={200}
                 height={60}
-                className={`mb-6 ${
+                className={`logo-mobile-responsive mb-6 ${
                   element.props.alignment === "center"
                     ? "mx-auto"
                     : element.props.alignment === "right"
                     ? "ml-auto"
                     : ""
                 }`}
+                style={
+                  {
+                    "--logo-mobile-width": "140px",
+                    "--logo-desktop-width": "200px",
+                  } as React.CSSProperties
+                }
               />
             )}
             <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-4">

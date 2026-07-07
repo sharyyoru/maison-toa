@@ -225,3 +225,16 @@ textarea::placeholder {
     transform: translateY(0);
   }
 }
+
+/* Responsive logo sizing for booking page mobile optimization */
+.logo-mobile-responsive {
+  max-width: var(--logo-mobile-width, 140px);
+  height: auto;
+  object-fit: contain;
+}
+
+@media (min-width: 640px) {
+  .logo-mobile-responsive {
+    max-width: var(--logo-desktop-width, 280px);
+  }
+}
