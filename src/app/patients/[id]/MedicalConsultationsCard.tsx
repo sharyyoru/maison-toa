@@ -2899,6 +2899,12 @@ export default function MedicalConsultationsCard({
       const locked = yfields.get("locked") === "true";
       const draftId = yfields.get("draftId") ?? null;
       const recordType = (yfields.get("recordType") as ConsultationRecordType) || "notes";
+      const justOpenedLocally = Date.now() - lastLocalOpenAtRef.current < 2000;
+
+      if (!shouldOpen && justOpenedLocally) {
+        console.warn("[Consultations] Ignoring stale Yjs close immediately after local + button click");
+        return;
+      }
 
       if (
         shouldOpen &&
@@ -2907,8 +2913,7 @@ export default function MedicalConsultationsCard({
           (!draftId && !createRoomOpenAllowedRef.current))
       ) {
         // If the user just clicked the + button locally, ignore the Yjs-driven close
-        // for 500ms to avoid a race condition where remote sync closes the form.
-        const justOpenedLocally = Date.now() - lastLocalOpenAtRef.current < 500;
+        // briefly to avoid a race condition where remote sync closes the form.
         if (justOpenedLocally) {
           console.warn("[Consultations] Ignoring Yjs-driven close immediately after local + button click");
           return;
