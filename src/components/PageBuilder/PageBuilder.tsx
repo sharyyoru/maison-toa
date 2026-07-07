@@ -579,6 +579,7 @@ export function PageBuilder({
                                   ? () => moveElement(element.id, "down")
                                   : undefined
                               }
+                              devicePreview={devicePreview}
                             />
                           ))}
                         </div>
