@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import supabaseAdmin from "@/lib/supabaseAdmin";
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,6 +7,8 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as Blob;
     const bucket = formData.get("bucket") as string || "patient-documents";
     const path = formData.get("path") as string;
+    const documentId = formData.get("documentId") as string;
+    const oldPath = formData.get("oldPath") as string;
 
     if (!file || !path) {
       return NextResponse.json(
@@ -38,6 +35,34 @@ export async function POST(request: NextRequest) {
         { error: `Failed to upload: ${error.message}` },
         { status: 500 }
       );
+    }
+
+    // Delete the old file if the path changed
+    if (oldPath && oldPath !== path) {
+      const { error: removeError } = await supabaseAdmin.storage
+        .from(bucket)
+        .remove([oldPath]);
+      if (removeError) {
+        console.error("Error removing old file:", removeError);
+      }
+    }
+
+    // Update the document record if a document ID was provided
+    if (documentId) {
+      const fileName = path.split('/').pop();
+      const title = fileName?.replace(/\.docx$/i, '');
+      const { error: updateError } = await supabaseAdmin
+        .from("patient_documents")
+        .update({
+          file_path: fileName,
+          title,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", documentId);
+
+      if (updateError) {
+        console.error("Error updating document record:", updateError);
+      }
     }
 
     console.log("Upload successful:", path);

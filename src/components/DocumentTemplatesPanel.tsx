@@ -62,9 +62,6 @@ export default function DocumentTemplatesPanel({
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'storage'>('storage');
   const [templateSearch, setTemplateSearch] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
-  const [newFileName, setNewFileName] = useState("");
-  const [fileNameError, setFileNameError] = useState<string | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [currentDocument, setCurrentDocument] = useState<PatientDocument | null>(null);
   const [documentBlob, setDocumentBlob] = useState<Blob | null>(null);
@@ -138,36 +135,6 @@ export default function DocumentTemplatesPanel({
   }, [showTemplateModal, fetchTemplates]);
 
 
-  const generateDefaultFileName = useCallback((templateName: string) => {
-    const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9-_]/g, "_").substring(0, 50);
-    const dateStr = new Date().toISOString().split("T")[0];
-    const safeName = patientName ? sanitize(patientName) : "Patient";
-    const safeTitle = sanitize(templateName);
-    const baseName = `${safeTitle}_${safeName}_${dateStr}`;
-
-    let candidate = `${baseName}.docx`;
-    let counter = 1;
-
-    while (documents.some((doc) => doc.file_path === candidate || `${doc.title}.docx` === candidate)) {
-      candidate = `${baseName}_${counter}.docx`;
-      counter++;
-    }
-
-    return candidate;
-  }, [documents, patientName]);
-
-  const handleSelectTemplate = (template: Template) => {
-    setSelectedTemplate(template);
-    setNewFileName(generateDefaultFileName(template.name));
-    setFileNameError(null);
-  };
-
-  const resetTemplateSelection = () => {
-    setSelectedTemplate(null);
-    setNewFileName("");
-    setFileNameError(null);
-  };
-
   // Delete document
   const handleDeleteDocument = async (documentId: string) => {
     if (!confirm("Are you sure you want to delete this document?")) return;
@@ -215,31 +182,46 @@ export default function DocumentTemplatesPanel({
   };
 
   // Save document blob to Supabase via API
-  const handleSaveDocument = async (blob: Blob) => {
+  const handleSaveDocument = async (blob: Blob, newFileName?: string) => {
     if (!currentDocument) return;
-    
+
     try {
-      // Use file_path if available, otherwise fall back to id.docx
-      const fileName = currentDocument.file_path || `${currentDocument.id}.docx`;
-      const uploadPath = `${patientId}/${fileName}`;
+      const originalFileName = currentDocument.file_path || `${currentDocument.id}.docx`;
+      const targetFileName = newFileName?.trim() || originalFileName;
+      const uploadPath = `${patientId}/${targetFileName}`;
+      const oldPath = targetFileName !== originalFileName ? `${patientId}/${originalFileName}` : undefined;
       console.log('Saving document to path:', uploadPath);
-      
+
       // Upload modified blob via API endpoint
       const formData = new FormData();
       formData.append('file', blob);
       formData.append('bucket', 'patient-documents');
       formData.append('path', uploadPath);
-      
+      if (oldPath) formData.append('oldPath', oldPath);
+      formData.append('documentId', currentDocument.id);
+
       const uploadResponse = await fetch('/api/documents/upload', {
         method: 'POST',
         body: formData,
       });
-      
+
       if (!uploadResponse.ok) {
         const errorData = await uploadResponse.json().catch(() => ({}));
         throw new Error(errorData.error || 'Upload failed');
       }
-      
+
+      if (targetFileName !== originalFileName) {
+        setCurrentDocument((prev) =>
+          prev
+            ? {
+                ...prev,
+                file_path: targetFileName,
+                title: targetFileName.replace(/\.docx$/i, ''),
+              }
+            : null
+        );
+      }
+
       alert('Document saved successfully!');
       fetchDocuments();
       onDocumentCreated?.(); // Trigger file storage refresh
@@ -250,12 +232,11 @@ export default function DocumentTemplatesPanel({
   };
 
   // Create new document from template
-  const handleCreateFromTemplate = async (template: Template, fileName: string) => {
+  const handleCreateFromTemplate = async (template: Template) => {
     try {
       setIsLoadingEditor(true);
       setShowTemplateModal(false);
-      setFileNameError(null);
-
+      
       // Create document from template
       const res = await fetch(`/api/documents/patient/create-from-template`, {
         method: "POST",
@@ -266,7 +247,6 @@ export default function DocumentTemplatesPanel({
           templateId: template.id,
           templatePath: template.file_path,
           title: template.name,
-          fileName: fileName.trim() || undefined,
         }),
       });
       
@@ -274,15 +254,12 @@ export default function DocumentTemplatesPanel({
       console.log('Create from template response:', data);
       
       if (data.success && data.document) {
-        setSelectedTemplate(null);
-        setNewFileName("");
-
         // Download the newly created document blob using API endpoint
         const downloadPath = data.storagePath || `${patientId}/${data.fileName}`;
         console.log('Downloading from path:', downloadPath);
-
+        
         const downloadResponse = await fetch(`/api/documents/download?bucket=patient-documents&path=${encodeURIComponent(downloadPath)}`);
-
+        
         if (downloadResponse.ok) {
           const fileData = await downloadResponse.blob();
           setCurrentDocument({
@@ -297,8 +274,7 @@ export default function DocumentTemplatesPanel({
           alert(`Document created but failed to open: ${errorData.error || 'Download failed'}`);
         }
       } else if (data.error) {
-        setIsLoadingEditor(false);
-        setFileNameError(data.error);
+        alert(`Error: ${data.error}`);
       }
     } catch (error: any) {
       console.error("Error creating document:", error);
@@ -328,6 +304,12 @@ export default function DocumentTemplatesPanel({
         patientId={patientId}
         documentId={currentDocument.id}
         patientData={patientData}
+        fileName={currentDocument.file_path}
+        onFileNameChange={(fileName) =>
+          setCurrentDocument((prev) =>
+            prev ? { ...prev, file_path: fileName } : null
+          )
+        }
         onSave={handleSaveDocument}
         onClose={() => {
           setShowEditor(false);
@@ -378,52 +360,7 @@ export default function DocumentTemplatesPanel({
             />
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            {selectedTemplate ? (
-              <div className="space-y-4">
-                <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <h3 className="font-medium text-slate-900">{selectedTemplate.name}</h3>
-                  {selectedTemplate.description && (
-                    <p className="text-sm text-slate-500 mt-1">{selectedTemplate.description}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Document filename
-                  </label>
-                  <input
-                    type="text"
-                    value={newFileName}
-                    onChange={(e) => {
-                      setNewFileName(e.target.value);
-                      setFileNameError(null);
-                    }}
-                    className="w-full rounded-lg border border-slate-200 bg-white py-2 px-4 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  />
-                  {fileNameError && (
-                    <p className="mt-1 text-sm text-red-600">{fileNameError}</p>
-                  )}
-                  <p className="mt-1 text-xs text-slate-500">
-                    Must end in .docx. You will see an error if this filename already exists.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => handleCreateFromTemplate(selectedTemplate, newFileName)}
-                    disabled={isLoadingEditor}
-                    className="flex-1 rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isLoadingEditor ? "Creating..." : "Create Document"}
-                  </button>
-                  <button
-                    onClick={resetTemplateSelection}
-                    disabled={isLoadingEditor}
-                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Back
-                  </button>
-                </div>
-              </div>
-            ) : templates.length === 0 ? (
+            {templates.length === 0 ? (
               <div className="text-center py-8 text-slate-500">
                 <p>No templates found</p>
               </div>
@@ -431,7 +368,7 @@ export default function DocumentTemplatesPanel({
               templates.map((template) => (
                 <button
                   key={template.id}
-                  onClick={() => handleSelectTemplate(template)}
+                  onClick={() => handleCreateFromTemplate(template)}
                   className="w-full text-left rounded-lg border border-slate-200 bg-white p-4 hover:border-sky-300 hover:bg-sky-50 transition-colors"
                 >
                   <div className="flex items-center gap-3">

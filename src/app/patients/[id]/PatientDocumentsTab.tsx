@@ -1674,13 +1674,27 @@ export default function PatientDocumentsTab({
           documentTitle={editingDocx.item.name}
           patientId={patientId}
           documentId={editingDocx.item.id || editingDocx.item.name}
-          onSave={async (blob) => {
-            // Upload the edited DOCX back to the same storage path
-            const fullPath = [patientId, editingDocx.item.path].filter(Boolean).join("/");
+          fileName={editingDocx.item.path}
+          onFileNameChange={(fileName) =>
+            setEditingDocx((prev) =>
+              prev ? { ...prev, item: { ...prev.item, path: fileName } } : null
+            )
+          }
+          onSave={async (blob, newFileName) => {
+            const originalFileName = editingDocx.item.path;
+            const targetFileName = newFileName?.trim() || originalFileName;
+            const fullPath = [patientId, targetFileName].filter(Boolean).join("/");
+            const oldPath =
+              targetFileName !== originalFileName
+                ? [patientId, originalFileName].filter(Boolean).join("/")
+                : undefined;
+
             const formData = new FormData();
-            formData.append("file", blob, editingDocx.item.name);
+            formData.append("file", blob, targetFileName);
             formData.append("bucket", BUCKET_NAME);
             formData.append("path", fullPath);
+            if (oldPath) formData.append("oldPath", oldPath);
+            if (editingDocx.item.id) formData.append("documentId", editingDocx.item.id);
 
             const response = await fetch("/api/documents/upload", {
               method: "POST",
@@ -1691,6 +1705,19 @@ export default function PatientDocumentsTab({
             if (!response.ok || result.error) {
               throw new Error(result.error || "Failed to save edited document");
             }
+
+            setEditingDocx((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    item: {
+                      ...prev.item,
+                      path: targetFileName,
+                      name: targetFileName.replace(/\.docx$/i, ""),
+                    },
+                  }
+                : null
+            );
 
             // Keep the editor open so the user can continue editing the saved document.
             setRefreshKey((k) => k + 1);

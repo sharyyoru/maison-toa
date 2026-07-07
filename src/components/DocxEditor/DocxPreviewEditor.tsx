@@ -23,7 +23,9 @@ interface DocxPreviewEditorProps {
   patientId: string;
   documentId: string;
   patientData?: PatientData;
-  onSave: (blob: Blob) => Promise<void>;
+  fileName?: string;
+  onFileNameChange?: (fileName: string) => void;
+  onSave: (blob: Blob, fileName?: string) => Promise<void>;
   onClose: () => void;
 }
 
@@ -144,6 +146,8 @@ export default function DocxPreviewEditor({
   documentBlob,
   documentTitle,
   patientData,
+  fileName,
+  onFileNameChange,
   onSave,
   onClose,
 }: DocxPreviewEditorProps) {
@@ -155,7 +159,12 @@ export default function DocxPreviewEditor({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [editedFileName, setEditedFileName] = useState(fileName || "");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEditedFileName(fileName || "");
+  }, [fileName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -211,7 +220,10 @@ export default function DocxPreviewEditor({
       if (!buffer) throw new Error("The editor did not return a document");
 
       const blob = await applyPlaceholders(buffer, placeholders);
-      await onSave(blob);
+      const targetFileName = fileName !== undefined && editedFileName.trim()
+        ? editedFileName.trim()
+        : undefined;
+      await onSave(blob, targetFileName);
       setHasChanges(false);
     } catch (saveError) {
       console.error("Error saving document:", saveError);
@@ -223,23 +235,39 @@ export default function DocxPreviewEditor({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
-      <div className="flex shrink-0 items-center justify-between bg-slate-800 px-4 py-3 text-white">
-        <h2 className="truncate text-lg font-semibold">{documentTitle}</h2>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSave}
-            disabled={isSaving || isLoading || !hasChanges}
-            className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSaving ? "Saving..." : "Save"}
-          </button>
-          <button
-            onClick={onClose}
-            className="rounded bg-slate-600 px-4 py-2 text-white hover:bg-slate-700"
-          >
-            Close
-          </button>
+      <div className="flex shrink-0 flex-col gap-2 bg-slate-800 px-4 py-3 text-white">
+        <div className="flex items-center justify-between">
+          <h2 className="truncate text-lg font-semibold">{documentTitle}</h2>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSave}
+              disabled={isSaving || isLoading || !hasChanges}
+              className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSaving ? "Saving..." : "Save"}
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded bg-slate-600 px-4 py-2 text-white hover:bg-slate-700"
+            >
+              Close
+            </button>
+          </div>
         </div>
+        {fileName !== undefined && (
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-300">Filename</label>
+            <input
+              type="text"
+              value={editedFileName}
+              onChange={(e) => {
+                setEditedFileName(e.target.value);
+                onFileNameChange?.(e.target.value);
+              }}
+              className="flex-1 rounded border border-slate-600 bg-slate-700 px-2 py-1 text-sm text-white placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            />
+          </div>
+        )}
       </div>
 
       {error && (

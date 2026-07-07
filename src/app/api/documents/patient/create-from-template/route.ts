@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { readFile } from "fs/promises";
 import path from "path";
 import JSZip from "jszip";
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import supabaseAdmin from "@/lib/supabaseAdmin";
 
 function formatFrenchDate(date: Date): string {
   return date.toLocaleDateString("fr-FR", {
@@ -143,13 +138,7 @@ async function fileNameExists(patientId: string, fileName: string): Promise<bool
     .eq("file_path", fileName)
     .maybeSingle();
 
-  if (existingDoc) return true;
-
-  const { data: files } = await supabaseAdmin.storage
-    .from("patient-documents")
-    .list(patientId);
-
-  return files?.some((file) => file.name === fileName) ?? false;
+  return !!existingDoc;
 }
 
 async function generateUniqueFileName(
@@ -288,7 +277,7 @@ export async function POST(request: NextRequest) {
       .from("patient-documents")
       .upload(patientDocPath, templateBuffer, {
         contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        upsert: false,
+        upsert: true,
       });
 
     if (uploadError) {
