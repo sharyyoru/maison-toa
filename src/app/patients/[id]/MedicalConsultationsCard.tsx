@@ -5513,6 +5513,78 @@ export default function MedicalConsultationsCard({
     }
   }
 
+  function renderDraftLinkedInvoiceCard(row: ConsultationRow) {
+    if (recordTypeFilter || row.record_type === "invoice" || !row.linked_invoice_id) return null;
+
+    const linkedInvoice = consultations.find(
+      (candidate) =>
+        candidate.invoice_id === row.linked_invoice_id &&
+        candidate.record_type === "invoice",
+    );
+    if (!linkedInvoice) return null;
+
+    const effectiveStatus: InvoiceStatus =
+      linkedInvoice.invoice_status ||
+      (linkedInvoice.invoice_is_paid ? "PAID" : "OPEN");
+    const statusDisplay = INVOICE_STATUS_DISPLAY[effectiveStatus];
+    const totalAmount = linkedInvoice.invoice_total_amount ?? 0;
+    const paidAmount = linkedInvoice.invoice_paid_amount ?? 0;
+
+    return (
+      <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/40 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <svg className="h-4 w-4 shrink-0 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span className="truncate text-[11px] font-semibold text-emerald-800">
+              Linked Invoice #{linkedInvoice.consultation_id}
+            </span>
+            {linkedInvoice.title ? (
+              <span className="truncate text-[10px] text-slate-600">{linkedInvoice.title}</span>
+            ) : null}
+          </div>
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${statusDisplay.bgColor} ${statusDisplay.color} ${statusDisplay.borderColor}`}>
+            {statusDisplay.label}
+          </span>
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-slate-100 bg-white/80 px-3 py-2 text-[11px]">
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-500">Total</span>
+            <span className="font-semibold text-slate-900">CHF {totalAmount.toFixed(2)}</span>
+          </div>
+          {paidAmount > 0 ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500">Paid</span>
+              <span className="font-semibold text-emerald-700">CHF {paidAmount.toFixed(2)}</span>
+            </div>
+          ) : null}
+          {linkedInvoice.payment_method ? (
+            <div className="flex items-center gap-1.5 sm:ml-auto">
+              <span className="text-slate-400">via</span>
+              <span className="font-medium text-slate-600">{linkedInvoice.payment_method}</span>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {linkedInvoice.invoice_pdf_path ? (
+            <button type="button" onClick={() => handleViewPdf(linkedInvoice.invoice_pdf_path!)} className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-medium text-indigo-700 hover:bg-indigo-100">
+              View PDF
+            </button>
+          ) : null}
+          <button type="button" onClick={() => handleEditInvoice(linkedInvoice)} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50">
+            Edit Invoice
+          </button>
+          <button type="button" onClick={() => handleManagePaymentStatus(linkedInvoice)} className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100">
+            Payment Status
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
@@ -5933,26 +6005,28 @@ export default function MedicalConsultationsCard({
         {unlockedDraftConsultations.length > 0 ? (
           <div className="mb-3 space-y-3">
             {unlockedDraftConsultations.map((row) => (
-              <CollaborativeUnlockedNoteEditor
-                key={row.id}
-                row={row}
-                patientId={patientId}
-                currentUserEmail={currentUserEmail}
-                currentUserName={currentUserName}
-                medicalStaffOptions={medicalStaffOptions}
-                onDraftUpdated={(updatedRow) => {
-                  setConsultations((prev) =>
-                    prev.map((item) => (item.id === updatedRow.id ? updatedRow : item)),
-                  );
-                }}
-                onFinalized={(finalizedRow) => {
-                  setConsultations((prev) =>
-                    prev.map((item) => (item.id === finalizedRow.id ? finalizedRow : item)),
-                  );
-                  broadcastPatientRealtimeRefresh({ force: true });
-                }}
-                onError={(message) => setConsultationsError(message)}
-              />
+              <div key={row.id}>
+                <CollaborativeUnlockedNoteEditor
+                  row={row}
+                  patientId={patientId}
+                  currentUserEmail={currentUserEmail}
+                  currentUserName={currentUserName}
+                  medicalStaffOptions={medicalStaffOptions}
+                  onDraftUpdated={(updatedRow) => {
+                    setConsultations((prev) =>
+                      prev.map((item) => (item.id === updatedRow.id ? updatedRow : item)),
+                    );
+                  }}
+                  onFinalized={(finalizedRow) => {
+                    setConsultations((prev) =>
+                      prev.map((item) => (item.id === finalizedRow.id ? finalizedRow : item)),
+                    );
+                    broadcastPatientRealtimeRefresh({ force: true });
+                  }}
+                  onError={(message) => setConsultationsError(message)}
+                />
+                {renderDraftLinkedInvoiceCard(row)}
+              </div>
             ))}
           </div>
         ) : null}
