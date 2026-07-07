@@ -188,12 +188,20 @@ export default function DocxPreviewEditor({
     setError(null);
 
     try {
-      const buffer = await editorRef.current?.save();
+      const buffer = await editorRef.current?.save({ selective: false });
       if (!buffer) throw new Error("The editor did not return a document");
 
       const blob = await applyPlaceholders(buffer, placeholders);
       await onSave(blob);
       setHasChanges(false);
+
+      // Reload the saved document into the editor so the user sees the
+      // latest saved version immediately without closing and reopening.
+      try {
+        await editorRef.current?.loadDocumentBuffer(blob);
+      } catch (reloadError) {
+        console.error("Error reloading document after save:", reloadError);
+      }
     } catch (saveError) {
       console.error("Error saving document:", saveError);
       setError("Failed to save document");
