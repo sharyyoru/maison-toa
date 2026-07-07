@@ -98,14 +98,31 @@ export function ElementRenderer({
         );
       }
 
-      case "heading":
+      case "heading": {
         const headingSizes = {
           h1: "text-3xl sm:text-4xl font-bold",
           h2: "text-2xl sm:text-3xl font-bold",
           h3: "text-xl sm:text-2xl font-semibold",
           h4: "text-lg sm:text-xl font-semibold",
         };
-        const headingClasses = `${headingSizes[element.props.level]} text-slate-900 ${
+        const mobileHeadingSizes = {
+          h1: "text-3xl font-bold",
+          h2: "text-2xl font-bold",
+          h3: "text-xl font-semibold",
+          h4: "text-lg font-semibold",
+        };
+        const desktopHeadingSizes = {
+          h1: "text-4xl font-bold",
+          h2: "text-3xl font-bold",
+          h3: "text-2xl font-semibold",
+          h4: "text-xl font-semibold",
+        };
+        const sizeClasses = devicePreview
+          ? devicePreview === "mobile"
+            ? mobileHeadingSizes[element.props.level]
+            : desktopHeadingSizes[element.props.level]
+          : headingSizes[element.props.level];
+        const headingClasses = `${sizeClasses} text-slate-900 ${
           element.props.alignment === "center"
             ? "text-center"
             : element.props.alignment === "right"
@@ -114,7 +131,7 @@ export function ElementRenderer({
         }`;
         const headingStyle = { color: element.props.color };
         const headingContent = getLocalizedText(element.props.text, language);
-        
+
         if (element.props.level === "h1") {
           return <h1 className={headingClasses} style={headingStyle}>{headingContent}</h1>;
         } else if (element.props.level === "h2") {
@@ -124,6 +141,7 @@ export function ElementRenderer({
         } else {
           return <h4 className={headingClasses} style={headingStyle}>{headingContent}</h4>;
         }
+      }
 
       case "text": {
         const fontSizeValues = {
@@ -459,10 +477,10 @@ export function ElementRenderer({
                 }
               />
             )}
-            <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-4">
+            <h1 className={`${devicePreview === "mobile" ? "text-4xl" : devicePreview === "desktop" || devicePreview === "tablet" ? "text-5xl" : "text-4xl sm:text-5xl"} font-bold text-slate-900 mb-4`}>
               {getLocalizedText(element.props.title, language)}
             </h1>
-            <p className="text-xl text-slate-600 max-w-2xl mx-auto">
+            <p className={`${devicePreview === "mobile" ? "text-lg" : devicePreview === "desktop" || devicePreview === "tablet" ? "text-xl" : "text-lg sm:text-xl"} text-slate-600 max-w-2xl mx-auto`}>
               {getLocalizedText(element.props.subtitle, language)}
             </p>
           </div>
