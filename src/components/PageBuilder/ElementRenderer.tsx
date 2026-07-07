@@ -18,15 +18,12 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-type DevicePreview = "desktop" | "tablet" | "mobile";
-
 interface ElementRendererProps {
   element: PageElement;
   language: "en" | "fr";
   isEditing?: boolean;
   isSelected?: boolean;
   onClick?: () => void;
-  devicePreview?: DevicePreview;
   customRenderers?: Partial<Record<PageElement["type"], (element: PageElement) => ReactNode>>;
 }
 
@@ -45,7 +42,6 @@ export function ElementRenderer({
   isEditing = false,
   isSelected = false,
   onClick,
-  devicePreview,
   customRenderers,
 }: ElementRendererProps) {
   const wrapperClasses = isEditing
@@ -61,10 +57,7 @@ export function ElementRenderer({
     if (customRenderer) return customRenderer(element);
 
     switch (element.type) {
-      case "logo": {
-        const mobileWidth = element.props.mobileWidth || element.props.width;
-        const isPreviewMobile = devicePreview === "mobile";
-        const isPreviewDesktop = devicePreview === "desktop" || devicePreview === "tablet";
+      case "logo":
         return (
           <div
             className={`flex ${
@@ -80,49 +73,19 @@ export function ElementRenderer({
               alt={element.props.alt}
               width={element.props.width}
               height={element.props.height}
-              className={`logo-mobile-responsive ${
-                element.props.transparentBackground
-                  ? "bg-transparent"
-                  : ""
-              }`}
-              style={
-                {
-                  "--logo-mobile-width": `${mobileWidth}px`,
-                  "--logo-desktop-width": `${element.props.width}px`,
-                  ...(isPreviewMobile && { "--logo-desktop-width": `${mobileWidth}px` }),
-                  ...(isPreviewDesktop && { "--logo-mobile-width": `${element.props.width}px` }),
-                } as React.CSSProperties
-              }
+              className="h-auto max-w-[220px] object-contain sm:max-w-none"
             />
           </div>
         );
-      }
 
-      case "heading": {
+      case "heading":
         const headingSizes = {
           h1: "text-3xl sm:text-4xl font-bold",
           h2: "text-2xl sm:text-3xl font-bold",
           h3: "text-xl sm:text-2xl font-semibold",
           h4: "text-lg sm:text-xl font-semibold",
         };
-        const mobileHeadingSizes = {
-          h1: "text-3xl font-bold",
-          h2: "text-2xl font-bold",
-          h3: "text-xl font-semibold",
-          h4: "text-lg font-semibold",
-        };
-        const desktopHeadingSizes = {
-          h1: "text-4xl font-bold",
-          h2: "text-3xl font-bold",
-          h3: "text-2xl font-semibold",
-          h4: "text-xl font-semibold",
-        };
-        const sizeClasses = devicePreview
-          ? devicePreview === "mobile"
-            ? mobileHeadingSizes[element.props.level]
-            : desktopHeadingSizes[element.props.level]
-          : headingSizes[element.props.level];
-        const headingClasses = `${sizeClasses} text-slate-900 ${
+        const headingClasses = `${headingSizes[element.props.level]} text-slate-900 ${
           element.props.alignment === "center"
             ? "text-center"
             : element.props.alignment === "right"
@@ -131,7 +94,7 @@ export function ElementRenderer({
         }`;
         const headingStyle = { color: element.props.color };
         const headingContent = getLocalizedText(element.props.text, language);
-
+        
         if (element.props.level === "h1") {
           return <h1 className={headingClasses} style={headingStyle}>{headingContent}</h1>;
         } else if (element.props.level === "h2") {
@@ -141,69 +104,43 @@ export function ElementRenderer({
         } else {
           return <h4 className={headingClasses} style={headingStyle}>{headingContent}</h4>;
         }
-      }
 
-      case "text": {
-        const fontSizeValues = {
-          sm: "0.875rem",
-          base: "1rem",
-          lg: "1.125rem",
-          xl: "1.25rem",
+      case "text":
+        const fontSizes = {
+          sm: "text-sm",
+          base: "text-base",
+          lg: "text-lg",
+          xl: "text-xl",
         };
-        const mobileFontSize = element.props.mobileFontSize || element.props.fontSize;
-        const isPreviewMobile = devicePreview === "mobile";
-        const isPreviewDesktop = devicePreview === "desktop" || devicePreview === "tablet";
         return (
           <p
-            className={`text-mobile-responsive text-slate-600 leading-relaxed ${
+            className={`${fontSizes[element.props.fontSize]} text-slate-600 leading-relaxed ${
               element.props.alignment === "center"
                 ? "text-center"
                 : element.props.alignment === "right"
                 ? "text-right"
                 : "text-left"
             }`}
-            style={
-              {
-                "--text-mobile-size": fontSizeValues[mobileFontSize],
-                "--text-desktop-size": fontSizeValues[element.props.fontSize],
-                ...(isPreviewMobile && { "--text-desktop-size": fontSizeValues[mobileFontSize] }),
-                ...(isPreviewDesktop && { "--text-mobile-size": fontSizeValues[element.props.fontSize] }),
-                color: element.props.color,
-              } as React.CSSProperties
-            }
+            style={{ color: element.props.color }}
           >
             {getLocalizedText(element.props.content, language)}
           </p>
         );
-      }
 
-      case "image": {
-        const desktopWidth = element.props.width || 400;
-        const mobileWidth = element.props.mobileWidth || desktopWidth;
-        const isPreviewMobile = devicePreview === "mobile";
-        const isPreviewDesktop = devicePreview === "desktop" || devicePreview === "tablet";
+      case "image":
         return (
           <div className="flex justify-center">
             <Image
               src={element.props.src}
               alt={getLocalizedText(element.props.alt, language)}
-              width={desktopWidth}
+              width={element.props.width || 400}
               height={element.props.height || 300}
-              className={`image-mobile-responsive ${
+              className={`object-cover ${
                 element.props.rounded ? "rounded-2xl" : ""
               } ${element.props.shadow ? "shadow-lg" : ""}`}
-              style={
-                {
-                  "--image-mobile-width": `${mobileWidth}px`,
-                  "--image-desktop-width": `${desktopWidth}px`,
-                  ...(isPreviewMobile && { "--image-desktop-width": `${mobileWidth}px` }),
-                  ...(isPreviewDesktop && { "--image-mobile-width": `${desktopWidth}px` }),
-                } as React.CSSProperties
-              }
             />
           </div>
         );
-      }
 
       case "button":
         const buttonVariants = {
@@ -462,25 +399,19 @@ export function ElementRenderer({
                 alt="Logo"
                 width={200}
                 height={60}
-                className={`logo-mobile-responsive mb-6 ${
+                className={`mb-6 ${
                   element.props.alignment === "center"
                     ? "mx-auto"
                     : element.props.alignment === "right"
                     ? "ml-auto"
                     : ""
                 }`}
-                style={
-                  {
-                    "--logo-mobile-width": devicePreview === "desktop" || devicePreview === "tablet" ? "200px" : "140px",
-                    "--logo-desktop-width": devicePreview === "mobile" ? "140px" : "200px",
-                  } as React.CSSProperties
-                }
               />
             )}
-            <h1 className={`${devicePreview === "mobile" ? "text-4xl" : devicePreview === "desktop" || devicePreview === "tablet" ? "text-5xl" : "text-4xl sm:text-5xl"} font-bold text-slate-900 mb-4`}>
+            <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-4">
               {getLocalizedText(element.props.title, language)}
             </h1>
-            <p className={`${devicePreview === "mobile" ? "text-lg" : devicePreview === "desktop" || devicePreview === "tablet" ? "text-xl" : "text-lg sm:text-xl"} text-slate-600 max-w-2xl mx-auto`}>
+            <p className="text-xl text-slate-600 max-w-2xl mx-auto">
               {getLocalizedText(element.props.subtitle, language)}
             </p>
           </div>
@@ -753,7 +684,6 @@ interface SectionRendererProps {
   isEditing?: boolean;
   selectedElementId?: string | null;
   onSelectElement?: (id: string) => void;
-  devicePreview?: DevicePreview;
   customRenderers?: Partial<Record<PageElement["type"], (element: PageElement) => ReactNode>>;
 }
 
@@ -763,7 +693,6 @@ export function SectionRenderer({
   isEditing = false,
   selectedElementId,
   onSelectElement,
-  devicePreview,
   customRenderers,
 }: SectionRendererProps) {
   const paddingSizes = {
@@ -796,7 +725,6 @@ export function SectionRenderer({
             isEditing={isEditing}
             isSelected={selectedElementId === element.id}
             onClick={() => onSelectElement?.(element.id)}
-            devicePreview={devicePreview}
             customRenderers={customRenderers}
           />
         ))}

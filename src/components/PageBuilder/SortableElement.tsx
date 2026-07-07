@@ -12,8 +12,6 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-type DevicePreview = "desktop" | "tablet" | "mobile";
-
 interface SortableElementProps {
   element: PageElement;
   language: "en" | "fr";
@@ -23,7 +21,6 @@ interface SortableElementProps {
   onDuplicate: () => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
-  devicePreview?: DevicePreview;
 }
 
 export function SortableElement({
@@ -35,7 +32,6 @@ export function SortableElement({
   onDuplicate,
   onMoveUp,
   onMoveDown,
-  devicePreview,
 }: SortableElementProps) {
   const {
     attributes,
@@ -69,7 +65,7 @@ export function SortableElement({
     >
       {/* Element Content */}
       <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <ElementRenderer element={element} language={language} isEditing devicePreview={devicePreview} />
+        <ElementRenderer element={element} language={language} isEditing />
       </div>
 
       {/* Toolbar */}
