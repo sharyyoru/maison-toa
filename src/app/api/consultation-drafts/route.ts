@@ -12,6 +12,38 @@ function nullableText(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+function userName(user: { email?: string | null; user_metadata?: Record<string, any> | null }) {
+  return (
+    user.user_metadata?.full_name ||
+    [user.user_metadata?.first_name, user.user_metadata?.last_name].filter(Boolean).join(" ") ||
+    user.email ||
+    "User"
+  );
+}
+
+async function logConsultationNoteEvent(params: {
+  patientId: string;
+  consultationId?: string | null;
+  collabRoomId?: string | null;
+  eventType: string;
+  user: { id: string; email?: string | null; user_metadata?: Record<string, any> | null };
+  requestId?: string | null;
+  metadata?: Record<string, unknown>;
+}) {
+  const { error } = await supabaseAdmin.from("consultation_note_events").insert({
+    patient_id: params.patientId,
+    consultation_id: params.consultationId ?? null,
+    collab_room_id: params.collabRoomId ?? null,
+    event_type: params.eventType,
+    actor_user_id: params.user.id,
+    actor_name: userName(params.user),
+    actor_email: params.user.email ?? null,
+    request_id: params.requestId ?? null,
+    metadata: params.metadata ?? {},
+  });
+  if (error) console.error("[consultation-note-events] insert failed", error.message);
+}
+
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization") ?? "";
   const token = authHeader.match(/^Bearer\s+(.+)$/i)?.[1];
@@ -55,6 +87,7 @@ export async function POST(request: NextRequest) {
   const existingDraft = draftById ?? draftByRoom;
 
   const locked = body?.locked === true;
+  const requestId = nullableText(body?.requestId);
 
   if (draftByRoom && draftByRoom.id !== draftById?.id && !locked) {
     const { error: releaseOtherError } = await supabaseAdmin
@@ -101,7 +134,7 @@ export async function POST(request: NextRequest) {
 
   const payload = {
     patient_id: patientId,
-    collab_room_id: locked ? null : roomId,
+    collab_room_id: roomId,
     is_draft: locked ? false : true,
     consultation_id: consultationId,
     title: text(body?.title).trim() || "Consultation Note",
@@ -139,11 +172,34 @@ export async function POST(request: NextRequest) {
   const { data, error } = await query;
 
   if (error || !data) {
+    await logConsultationNoteEvent({
+      patientId,
+      consultationId: existingDraft?.id ?? null,
+      collabRoomId: roomId,
+      eventType: locked ? "lock_failed" : existingDraft ? "autosave_failed" : "create_failed",
+      user,
+      requestId,
+      metadata: { error: error?.message ?? "Failed to save consultation draft" },
+    });
     return NextResponse.json(
       { error: error?.message ?? "Failed to save consultation draft" },
       { status: 500 },
     );
   }
+
+  await logConsultationNoteEvent({
+    patientId,
+    consultationId: data.id,
+    collabRoomId: roomId,
+    eventType: locked ? "locked" : existingDraft ? "autosaved" : "created",
+    user,
+    requestId,
+    metadata: {
+      isDraft: data.is_draft,
+      contentLength: text(body?.contentHtml).length,
+      title: data.title,
+    },
+  });
 
   return NextResponse.json({ draft: data });
 }

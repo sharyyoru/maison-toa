@@ -116,6 +116,23 @@ type ConsultationRow = {
   is_draft?: boolean | null;
 };
 
+function compareConsultationRows(a: ConsultationRow, b: ConsultationRow, direction: SortOrder = "desc") {
+  const aTime = new Date(a.scheduled_at).getTime();
+  const bTime = new Date(b.scheduled_at).getTime();
+
+  if (!Number.isNaN(aTime) && !Number.isNaN(bTime) && aTime !== bTime) {
+    return direction === "desc" ? bTime - aTime : aTime - bTime;
+  }
+
+  const aNumber = Number.parseInt(String(a.consultation_id ?? "").replace(/\D/g, ""), 10);
+  const bNumber = Number.parseInt(String(b.consultation_id ?? "").replace(/\D/g, ""), 10);
+  if (!Number.isNaN(aNumber) && !Number.isNaN(bNumber) && aNumber !== bNumber) {
+    return direction === "desc" ? bNumber - aNumber : aNumber - bNumber;
+  }
+
+  return direction === "desc" ? b.id.localeCompare(a.id) : a.id.localeCompare(b.id);
+}
+
 type EditorHistoryCommand = "undo" | "redo";
 
 function canRunEditorHistoryCommand(editor: Editor | null | undefined, command: EditorHistoryCommand) {
@@ -375,6 +392,21 @@ type ConsultationEditSyncPayload = {
   refIcd10: string;
 };
 
+type ConsultationNoteEvent = {
+  id: string;
+  patient_id: string;
+  consultation_id: string | null;
+  collab_room_id: string | null;
+  event_type: string;
+  actor_user_id: string | null;
+  actor_name: string | null;
+  actor_email: string | null;
+  client_id: string | null;
+  request_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
 function stripContentEditableCaretMarkers(html: string): string {
   return html.replace(/<span[^>]*data-caret-marker="[^"]+"[^>]*>\uFEFF<\/span>/g, "");
 }
@@ -492,7 +524,7 @@ function textToNotesHtml(value: string): string {
   return escapeHtml(value).replace(/\n/g, "<br>");
 }
 
-const CONSULTATION_NOTES_STARTING_LINES = 10;
+const CONSULTATION_NOTES_STARTING_LINES = 7;
 
 function buildBlankConsultationNotesDoc() {
   return {
@@ -501,6 +533,10 @@ function buildBlankConsultationNotesDoc() {
       type: "paragraph",
     })),
   };
+}
+
+function buildBlankConsultationNotesHtml() {
+  return Array.from({ length: CONSULTATION_NOTES_STARTING_LINES }, () => "<p></p>").join("");
 }
 
 function isBlankNotesHtml(value: string | null | undefined): boolean {
@@ -1116,6 +1152,7 @@ function CollaborativeUnlockedNoteEditor({
   medicalStaffOptions,
   onDraftUpdated,
   onFinalized,
+  onCreateInvoice,
   onError,
 }: {
   row: ConsultationRow;
@@ -1125,11 +1162,12 @@ function CollaborativeUnlockedNoteEditor({
   medicalStaffOptions: Provider[];
   onDraftUpdated: (row: ConsultationRow) => void;
   onFinalized: (row: ConsultationRow) => void;
+  onCreateInvoice: (row: ConsultationRow) => void;
   onError: (message: string) => void;
 }) {
   const roomId = useMemo(
-    () => `patient:${patientId}:consultation:${row.id}`,
-    [patientId, row.id],
+    () => row.collab_room_id || `patient:${patientId}:consultation:${row.id}`,
+    [patientId, row.collab_room_id, row.id],
   );
   const scheduled = row.scheduled_at ? new Date(row.scheduled_at) : new Date();
   const scheduledValid = !Number.isNaN(scheduled.getTime());
@@ -1289,6 +1327,12 @@ function CollaborativeUnlockedNoteEditor({
       editor.commands.setContent(row.content, { emitUpdate: false });
       contentHtmlRef.current = row.content;
       setContentHtml(row.content);
+    } else if (isConsultationYjsFragmentEmpty(ydoc) && isBlankNotesHtml(row.content)) {
+      editor.commands.setContent(buildBlankConsultationNotesDoc(), { emitUpdate: false });
+      editor.commands.focus("start");
+      const blankHtml = buildBlankConsultationNotesHtml();
+      contentHtmlRef.current = blankHtml;
+      setContentHtml(blankHtml);
     } else {
       const html = editor.getHTML();
       const nextHtml = isBlankNotesHtml(html) ? row.content || "" : html;
@@ -1432,6 +1476,13 @@ function CollaborativeUnlockedNoteEditor({
           <span className="text-[10px] text-slate-500">
             {remoteUsers.length + 1} {remoteUsers.length === 0 ? "user" : "users"} editing
           </span>
+          <button
+            type="button"
+            onClick={() => onCreateInvoice(row)}
+            className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 shadow-sm hover:bg-emerald-100"
+          >
+            Create Invoice
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -1913,6 +1964,12 @@ export default function MedicalConsultationsCard({
   const [editConsultationAutosaveStatus, setEditConsultationAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved">("idle");
   const editConsultationAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [invoiceFromConsultationSuccess, setInvoiceFromConsultationSuccess] = useState<string | null>(null);
+  const [noteEventsModal, setNoteEventsModal] = useState<{
+    row: ConsultationRow;
+    events: ConsultationNoteEvent[];
+    loading: boolean;
+    error: string | null;
+  } | null>(null);
 
   // NEW CONSULTATION AUTOSAVE - Draft system like Notion/Google Docs
   const [newConsultationDraftId, setNewConsultationDraftId] = useState<string | null>(null);
@@ -2302,6 +2359,9 @@ export default function MedicalConsultationsCard({
       { value: "form_photos", label: tf("recordFormPhotos") },
       { value: "medication", label: tf("recordMedication") },
     ];
+  const otherConsultationRecordTypeOptions = consultationRecordTypeOptions.filter(
+    (option) => option.value !== "notes",
+  );
 
   const filteredSortedConsultations = useMemo(() => {
     const fromDate = dateFrom ? new Date(dateFrom) : null;
@@ -2332,12 +2392,7 @@ export default function MedicalConsultationsCard({
 
     return filtered
       .slice()
-      .sort((a, b) => {
-        const aTime = new Date(a.scheduled_at).getTime();
-        const bTime = new Date(b.scheduled_at).getTime();
-        if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
-        return sortOrder === "desc" ? bTime - aTime : aTime - bTime;
-      });
+      .sort((a, b) => compareConsultationRows(a, b, sortOrder));
   }, [consultations, dateFrom, dateTo, sortOrder, recordTypeFilter]);
 
   const unlockedDraftConsultations = useMemo(
@@ -2349,12 +2404,7 @@ export default function MedicalConsultationsCard({
             row.is_draft === true &&
             row.collab_room_id?.startsWith(`patient:${patientId}:consultation:`),
         )
-        .sort((a, b) => {
-          const aTime = new Date(a.scheduled_at).getTime();
-          const bTime = new Date(b.scheduled_at).getTime();
-          if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
-          return bTime - aTime;
-        }),
+        .sort((a, b) => compareConsultationRows(a, b, "desc")),
     [consultations, patientId],
   );
 
@@ -2703,12 +2753,10 @@ export default function MedicalConsultationsCard({
           }
         }
 
-        // 5) Merge and sort by scheduled_at descending
-        const allRows = [...nonInvoiceRows, ...invoiceRows].sort((a, b) => {
-          const dateA = new Date(a.scheduled_at).getTime();
-          const dateB = new Date(b.scheduled_at).getTime();
-          return dateB - dateA;
-        });
+        // 5) Merge and sort newest first, using the record number as a stable tie-breaker.
+        const allRows = [...nonInvoiceRows, ...invoiceRows].sort((a, b) =>
+          compareConsultationRows(a, b, "desc"),
+        );
 
         if (!isMounted) return;
         consultationsRefreshSignatureRef.current = buildConsultationsRefreshSignature(allRows);
@@ -2995,6 +3043,83 @@ export default function MedicalConsultationsCard({
     currentUserEmail,
     currentUserName,
   ]);
+
+  async function logConsultationNoteEvent(
+    row: Pick<ConsultationRow, "id" | "patient_id" | "collab_room_id"> | null,
+    eventType: string,
+    metadata: Record<string, unknown> = {},
+  ) {
+    try {
+      const {
+        data: { session },
+      } = await supabaseClient.auth.getSession();
+      if (!session?.access_token) return;
+
+      const requestId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      await fetch("/api/consultation-note-events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          patientId: row?.patient_id ?? patientId,
+          consultationId: row?.id ?? null,
+          collabRoomId: row?.collab_room_id ?? null,
+          eventType,
+          clientId: consultationDraftClientIdRef.current,
+          requestId,
+          metadata,
+        }),
+      });
+      console.info("[consultation-note-event]", { requestId, eventType, metadata });
+    } catch (error) {
+      console.warn("[consultation-note-event] failed", eventType, error);
+    }
+  }
+
+  async function openConsultationNoteEvents(row: ConsultationRow) {
+    setNoteEventsModal({ row, events: [], loading: true, error: null });
+    try {
+      const {
+        data: { session },
+      } = await supabaseClient.auth.getSession();
+      if (!session?.access_token) {
+        setNoteEventsModal({ row, events: [], loading: false, error: "Missing Supabase session." });
+        return;
+      }
+
+      const params = new URLSearchParams({
+        patientId,
+        consultationId: row.id,
+      });
+      const response = await fetch(`/api/consultation-note-events?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        setNoteEventsModal({
+          row,
+          events: [],
+          loading: false,
+          error: data?.error ?? "Failed to load note logs.",
+        });
+        return;
+      }
+      setNoteEventsModal({
+        row,
+        events: (data?.events ?? []) as ConsultationNoteEvent[],
+        loading: false,
+        error: null,
+      });
+    } catch {
+      setNoteEventsModal({ row, events: [], loading: false, error: "Failed to load note logs." });
+    }
+  }
 
   useEffect(() => {
     consultationNotesEditor?.setEditable(
@@ -3696,7 +3821,7 @@ export default function MedicalConsultationsCard({
       setConsultationsError(null);
 
       const contentHtml = row.content || "";
-      const roomId = `patient:${patientId}:consultation:${row.id}`;
+      const roomId = row.collab_room_id || `patient:${patientId}:consultation:${row.id}`;
 
       const {
         data: { session },
@@ -3753,6 +3878,152 @@ export default function MedicalConsultationsCard({
     } finally {
       setUnlockingConsultationId(null);
     }
+  }
+
+  async function openInvoiceFormFromConsultation(row: ConsultationRow) {
+    setInvoiceFromConsultationId(row.id);
+    setConsultationRecordType("invoice");
+    setConsultationTitle(row.title || "");
+    setConsultationDoctorId("");
+    setInvoiceProviderId("");
+    setConsultationDiagnosisCode(row.diagnosis_code || "");
+    setConsultationRefIcd10(row.ref_icd10 || "");
+
+    const now = new Date();
+    setConsultationDate(formatLocalDateInputValue(now));
+    setConsultationHour(now.getHours().toString().padStart(2, "0"));
+    setConsultationMinute(now.getMinutes().toString().padStart(2, "0"));
+    setInvoicePaymentMethod("");
+    setInvoiceMode("individual");
+    setInvoiceGroupId("");
+    setInvoicePaymentTerm("full");
+    setInvoiceExtraOption(null);
+    setInvoiceInstallments([]);
+    setInvoiceServiceLines([]);
+    setInvoiceSelectedCategoryId("");
+    setInvoiceSelectedServiceId("");
+
+    if (row.doctor_user_id) {
+      let mappedProviderId =
+        userOptions.find((u) => u.id === row.doctor_user_id)?.provider_id ?? null;
+
+      if (!mappedProviderId) {
+        const { data: userRow } = await supabaseClient
+          .from("users")
+          .select("provider_id")
+          .eq("id", row.doctor_user_id)
+          .maybeSingle();
+        mappedProviderId = userRow?.provider_id ?? null;
+      }
+
+      if (mappedProviderId) {
+        if (medicalStaffOptions.some((staff) => staff.id === mappedProviderId)) {
+          setConsultationDoctorId(mappedProviderId);
+        }
+
+        let billingProviderId = mappedProviderId;
+        if (!billingEntityOptions.some((provider) => provider.id === billingProviderId)) {
+          const sourceProvider = providerOptions.find((provider) => provider.id === mappedProviderId);
+          if (sourceProvider?.gln) {
+            const billingByGln = billingEntityOptions.find(
+              (provider) => provider.gln === sourceProvider.gln,
+            );
+            if (billingByGln) billingProviderId = billingByGln.id;
+          }
+        }
+
+        if (billingEntityOptions.some((provider) => provider.id === billingProviderId)) {
+          setInvoiceProviderId(billingProviderId);
+        }
+      }
+    }
+
+    setNewConsultationOpen(true);
+    void logConsultationNoteEvent(row, "invoice_form_opened", { source: "consultation_note" });
+    setTimeout(() => {
+      creationFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  }
+
+  function openOtherRecordForm() {
+    if (consultationSaving) return;
+    lastLocalOpenAtRef.current = Date.now();
+    const preservedExistingNote = preserveOpenCreateConsultationNote();
+    const now = new Date();
+    const datePart = formatLocalDateInputValue(now);
+    const hourPart = now
+      .getHours()
+      .toString()
+      .padStart(2, "0");
+    const minutePart = now
+      .getMinutes()
+      .toString()
+      .padStart(2, "0");
+    const nextRecordType: ConsultationRecordType =
+      recordTypeFilter && recordTypeFilter !== "notes" ? recordTypeFilter : "invoice";
+
+    createRoomOpenAllowedRef.current = false;
+    setConsultationDate(datePart);
+    setConsultationHour(hourPart);
+    setConsultationMinute(minutePart);
+    setConsultationDoctorId("");
+    setConsultationError(null);
+    setConsultationTitle("");
+    setConsultationDiagnosisCode("");
+    setConsultationRefIcd10("");
+    setInvoiceFromConsultationId(null);
+    setConsultationRecordType(nextRecordType);
+    setConsultationContentHtml("");
+    consultationContentHtmlRef.current = "";
+    setConsultationDurationSeconds(0);
+    setConsultationStopwatchStartedAt(null);
+    setConsultationStopwatchNow(Date.now());
+    updateNewConsultationDraftId(null);
+    setConsultationLocked(false);
+    setNewConsultationAutosaveStatus("idle");
+    setPrescriptionLines([]);
+    setInvoicePaymentMethod("");
+    setInvoiceMode("individual");
+    setInvoiceGroupId("");
+    setInvoicePaymentTerm("full");
+    setInvoiceExtraOption(null);
+    setInvoiceInstallments([]);
+    setInvoiceServiceLines([]);
+    setInvoiceSelectedCategoryId("");
+    setInvoiceSelectedServiceId("");
+    setMedProducts([createEmptyMedProduct()]);
+    setMedIntakeNote("");
+    setMedIntakeFromDate(formatLocalDateInputValue(new Date()));
+    setMedDecisionSummary("");
+    setMedShowInMediplan(true);
+    setMedIsPrescription(true);
+    setMedSelectedTemplateId("");
+    setMedTemplateServiceFilter("");
+    setMedTemplateFilter("all");
+    if (currentUserId && nextRecordType !== "invoice") {
+      setConsultationDoctorId(currentUserId);
+    }
+    const yfields = consultationYFieldsRef.current;
+    consultationYDoc?.transact(() => {
+      consultationNotesEditor?.commands.clearContent(false);
+      yfields?.set("open", "true");
+      yfields?.set("locked", "false");
+      yfields?.set("date", datePart);
+      yfields?.set("hour", hourPart);
+      yfields?.set("minute", minutePart);
+      yfields?.set("doctorId", currentUserId && nextRecordType !== "invoice" ? currentUserId : "");
+      yfields?.set("title", "");
+      yfields?.set("recordType", nextRecordType);
+      yfields?.set("diagnosisCode", "");
+      yfields?.set("refIcd10", "");
+      yfields?.delete("draftId");
+    });
+    setNewConsultationOpen(true);
+    setTimeout(() => {
+      if (!preservedExistingNote) {
+        creationFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 100);
   }
 
   // Sync edit consultation content to contentEditable div
@@ -4490,6 +4761,99 @@ export default function MedicalConsultationsCard({
 
   // ========== NEW CONSULTATION AUTOSAVE ==========
   // Creates a draft consultation on first input, then auto-saves after 1 second of inactivity
+
+  async function createCollaborativeConsultationNote() {
+    if (consultationSaving) return;
+
+    try {
+      setConsultationSaving(true);
+      setConsultationsError(null);
+      setConsultationError(null);
+
+      const now = new Date();
+      const datePart = formatLocalDateInputValue(now);
+      const hourPart = now.getHours().toString().padStart(2, "0");
+      const minutePart = now.getMinutes().toString().padStart(2, "0");
+      const secondPart = now.getSeconds().toString().padStart(2, "0");
+      const scheduledAt = new Date(`${datePart}T${hourPart}:${minutePart}:${secondPart}`).toISOString();
+      const roomUuid =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}00000000`.slice(0, 8) + "-0000-4000-8000-000000000000";
+      const roomId = `patient:${patientId}:consultation:${roomUuid}`;
+      const doctor = currentUserId
+        ? userOptions.find((user) => user.id === currentUserId)
+        : null;
+
+      const {
+        data: { session },
+      } = await supabaseClient.auth.getSession();
+
+      const requestId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      const response = await fetch("/api/consultation-drafts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          patientId,
+          roomId,
+          title: "Consultation Note",
+          contentHtml: buildBlankConsultationNotesHtml(),
+          recordType: "notes",
+          doctorId: currentUserId ?? "",
+          doctorName: doctor?.full_name || doctor?.email || null,
+          scheduledAt,
+          diagnosisCode: "",
+          refIcd10: "",
+          locked: false,
+          requestId,
+        }),
+      });
+
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.draft) {
+        const message = result?.error ?? "Failed to create consultation note.";
+        setConsultationsError(message);
+        return;
+      }
+
+      const newRow: ConsultationRow = {
+        ...(result.draft as any),
+        invoice_id: null,
+        reference_number: null,
+        linked_invoice_id: null,
+        linked_invoice_status: null,
+        linked_invoice_number: null,
+        medidata_status: null,
+        invoice_pdf_path_tg: null,
+        invoice_pdf_path_tp: null,
+        invoice_pdf_path_reminder: null,
+        invoice_pdf_path_receipt: null,
+      };
+
+      setConsultations((prev) =>
+        prev.some((row) => row.id === newRow.id) ? prev : [newRow, ...prev],
+      );
+      broadcastPatientRealtimeRefresh({ force: true });
+      window.setTimeout(() => {
+        document.getElementById(`consultation-note-${newRow.id}`)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 100);
+    } catch (error) {
+      console.error("Failed to create collaborative consultation note:", error);
+      setConsultationsError("Failed to create consultation note.");
+    } finally {
+      setConsultationSaving(false);
+    }
+  }
   
   async function handleNewConsultationAutosave(options: { force?: boolean; locked?: boolean } = {}) {
     if (consultationRecordType !== "notes") return;
@@ -5896,97 +6260,9 @@ export default function MedicalConsultationsCard({
                   type="button"
                   onClick={async () => {
                     if (consultationSaving) return;
-                    lastLocalOpenAtRef.current = Date.now();
-                    const previousDraftId = newConsultationDraftIdRef.current;
-                    const preservedExistingNote = preserveOpenCreateConsultationNote();
-                    const now = new Date();
-                    const datePart = formatLocalDateInputValue(now);
-                    const hourPart = now
-                      .getHours()
-                      .toString()
-                      .padStart(2, "0");
-                    const minutePart = now
-                      .getMinutes()
-                      .toString()
-                      .padStart(2, "0");
-                    const nextRecordType = recordTypeFilter || "notes";
-                    if (nextRecordType === "notes") {
-                      setSuppressedCreateDraftId(previousDraftId);
-                    }
-                    createRoomOpenAllowedRef.current = nextRecordType === "notes";
-                    if (nextRecordType === "notes") {
-                      resetNewConsultationNotesEditor();
-                      createRoomOpenAllowedRef.current = true;
-                    }
-                    setConsultationDate(datePart);
-                    setConsultationHour(hourPart);
-                    setConsultationMinute(minutePart);
-                    setConsultationDoctorId("");
-                    setConsultationError(null);
-                    setConsultationTitle("");
-                    setConsultationDiagnosisCode("");
-                    setConsultationRefIcd10("");
-                    setInvoiceFromConsultationId(null);
-                    setConsultationRecordType(nextRecordType);
-                    setConsultationContentHtml("");
-                    consultationContentHtmlRef.current = "";
-                    setConsultationDurationSeconds(0);
-                    setConsultationStopwatchStartedAt(null);
-                    setConsultationStopwatchNow(Date.now());
-                    updateNewConsultationDraftId(null);
-                    setConsultationLocked(false);
-                    setNewConsultationAutosaveStatus("idle");
-                    setPrescriptionLines([]);
-                    setInvoicePaymentMethod("");
-                    setInvoiceMode("individual");
-                    setInvoiceGroupId("");
-                    setInvoicePaymentTerm("full");
-                    setInvoiceExtraOption(null);
-                    setInvoiceInstallments([]);
-                    setInvoiceServiceLines([]);
-                    setInvoiceSelectedCategoryId("");
-                    setInvoiceSelectedServiceId("");
-                    setMedProducts([createEmptyMedProduct()]);
-                    setMedIntakeNote("");
-                    setMedIntakeFromDate(formatLocalDateInputValue(new Date()));
-                    setMedDecisionSummary("");
-                    setMedShowInMediplan(true);
-                    setMedIsPrescription(true);
-                    setMedSelectedTemplateId("");
-                    setMedTemplateServiceFilter("");
-                    setMedTemplateFilter("all");
-                    if (currentUserId && nextRecordType !== "invoice") {
-                      setConsultationDoctorId(currentUserId);
-                    }
-                    const yfields = consultationYFieldsRef.current;
-                    consultationYDoc?.transact(() => {
-                      if (nextRecordType === "notes") {
-                        consultationNotesEditor?.commands.setContent(buildBlankConsultationNotesDoc(), { emitUpdate: false });
-                      } else {
-                        consultationNotesEditor?.commands.clearContent(false);
-                      }
-                      yfields?.set("open", "true");
-                      yfields?.set("locked", "false");
-                      yfields?.set("date", datePart);
-                      yfields?.set("hour", hourPart);
-                      yfields?.set("minute", minutePart);
-                      yfields?.set("doctorId", currentUserId && nextRecordType !== "invoice" ? currentUserId : "");
-                      yfields?.set("title", "");
-                      yfields?.set("recordType", nextRecordType);
-                      yfields?.set("diagnosisCode", "");
-                      yfields?.set("refIcd10", "");
-                      yfields?.delete("draftId");
-                    });
-                    setNewConsultationOpen(true);
-                    setTimeout(() => {
-                      if (nextRecordType === "notes") {
-                        consultationNotesEditor?.chain().focus().setTextSelection(1).run();
-                      }
-                      if (!preservedExistingNote) {
-                        creationFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                      }
-                    }, 100);
+                    await createCollaborativeConsultationNote();
                   }}
+                  title="Create consultation note"
                   className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sky-700 shadow-sm hover:bg-sky-100 hover:text-sky-800"
                 >
                   <svg
@@ -6003,6 +6279,34 @@ export default function MedicalConsultationsCard({
                       strokeLinejoin="round"
                     />
                   </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={openOtherRecordForm}
+                  title="Create invoice, file, photo, or other record"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                  >
+                    <path
+                      d="M6 3.5h5.5L15 7v9.5H6V3.5Z"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M11.5 3.5V7H15M8 10h5M8 12.5h5"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span className="hidden sm:inline">Other</span>
                 </button>
               </>
             ) : null}
@@ -6109,7 +6413,7 @@ export default function MedicalConsultationsCard({
         {unlockedDraftConsultations.length > 0 ? (
           <div className="mb-3 space-y-3">
             {unlockedDraftConsultations.map((row) => (
-              <div key={row.id}>
+              <div key={row.id} id={`consultation-note-${row.id}`}>
                 <CollaborativeUnlockedNoteEditor
                   row={row}
                   patientId={patientId}
@@ -6127,8 +6431,22 @@ export default function MedicalConsultationsCard({
                     );
                     broadcastPatientRealtimeRefresh({ force: true });
                   }}
+                  onCreateInvoice={(row) => {
+                    void openInvoiceFormFromConsultation(row);
+                  }}
                   onError={(message) => setConsultationsError(message)}
                 />
+                <div className="-mt-2 mb-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void openConsultationNoteEvents(row);
+                    }}
+                    className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50"
+                  >
+                    Logs
+                  </button>
+                </div>
                 {renderDraftLinkedInvoiceCard(row)}
               </div>
             ))}
@@ -7362,6 +7680,11 @@ export default function MedicalConsultationsCard({
                           setInvoiceFromConsultationSuccess(
                             `Invoice #${consultationId} created successfully! Switch to the Invoice tab to view it.`
                           );
+                          const sourceRow = consultations.find((row) => row.id === invoiceFromConsultationId) ?? null;
+                          void logConsultationNoteEvent(sourceRow, "invoice_linked", {
+                            invoiceId: invoiceRow.id,
+                            invoiceNumber: consultationId,
+                          });
                           // Auto-dismiss after 8 seconds
                           setTimeout(() => setInvoiceFromConsultationSuccess(null), 8000);
                         }
@@ -7640,7 +7963,7 @@ export default function MedicalConsultationsCard({
                     }
                     className={`block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 ${editingInvoiceId ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
-                    {consultationRecordTypeOptions.map((option) => (
+                    {otherConsultationRecordTypeOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
@@ -7741,7 +8064,14 @@ export default function MedicalConsultationsCard({
                             type="button"
                             onClick={async () => {
                               if (consultationSaving) return;
-                              const sourceConsultationId = await preserveAndCloseOpenCreateNoteForInvoice();
+                              const sourceConsultationId = newConsultationDraftIdRef.current;
+                              const sourceRow = sourceConsultationId
+                                ? consultations.find((row) => row.id === sourceConsultationId) ?? null
+                                : null;
+                              if (sourceRow) {
+                                await openInvoiceFormFromConsultation(sourceRow);
+                                return;
+                              }
                               const now = new Date();
                               setInvoiceFromConsultationId(sourceConsultationId);
                               setConsultationRecordType("invoice");
@@ -10381,10 +10711,22 @@ export default function MedicalConsultationsCard({
                                 {unlockingConsultationId === row.id ? "Unlocking" : "Unlock"}
                               </button>
                             ) : null}
+                            {isNotes ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void openConsultationNoteEvents(row);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50"
+                              >
+                                Logs
+                              </button>
+                            ) : null}
                             {row.record_type !== "invoice" && !row.linked_invoice_id && (
                               <button
                                 type="button"
                                 onClick={async () => {
+                                  await openInvoiceFormFromConsultation(row);
                                   if (row.id === activeCollaborativeConsultation?.id) {
                                     setSuppressedCreateDraftId(row.id);
                                     consultationYFieldsRef.current?.set("open", "false");
@@ -10569,12 +10911,11 @@ export default function MedicalConsultationsCard({
                       {/* Content/Notes */}
                       {isNotes && row.content ? (
                         <div
-                          className={`rounded-xl border px-3.5 py-3 text-[12px] leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 ${
+                          className={`rounded-xl border px-3.5 py-3 text-[12px] leading-relaxed [&_p]:min-h-[1.5em] [&_p]:whitespace-pre-wrap [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 ${
                             isLockedNote
                               ? "border-slate-300 bg-slate-200/70 text-slate-600"
                               : "border-slate-200 bg-slate-50/60 text-slate-700"
                           }`}
-                          style={{ whiteSpace: "pre-wrap" }}
                           dangerouslySetInnerHTML={{ __html: row.content }}
                         />
                       ) : (isPrescription || isInvoice) && row.content ? (
@@ -12125,6 +12466,70 @@ export default function MedicalConsultationsCard({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Consultation Note Logs Modal */}
+      {noteEventsModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-3xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Consultation Note Logs</h3>
+                <p className="text-[11px] text-slate-500">
+                  {noteEventsModal.row.title || noteEventsModal.row.consultation_id}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNoteEventsModal(null)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto p-4">
+              {noteEventsModal.loading ? (
+                <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  Loading logs...
+                </div>
+              ) : noteEventsModal.error ? (
+                <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {noteEventsModal.error}
+                </div>
+              ) : noteEventsModal.events.length === 0 ? (
+                <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  No logs recorded for this note yet.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {noteEventsModal.events.map((event) => (
+                    <div key={event.id} className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="font-semibold text-slate-900">{event.event_type}</div>
+                        <div className="text-[10px] text-slate-500">
+                          {new Date(event.created_at).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
+                        <span>Actor: {event.actor_name || event.actor_email || event.actor_user_id || "Unknown"}</span>
+                        {event.request_id ? <span>Request: {event.request_id}</span> : null}
+                        {event.collab_room_id ? <span>Room: {event.collab_room_id}</span> : null}
+                      </div>
+                      {event.metadata && Object.keys(event.metadata).length > 0 ? (
+                        <pre className="mt-2 max-h-32 overflow-auto rounded-md border border-slate-200 bg-white p-2 text-[10px] leading-relaxed text-slate-600">
+                          {JSON.stringify(event.metadata, null, 2)}
+                        </pre>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* Insurance Billing Modal */}

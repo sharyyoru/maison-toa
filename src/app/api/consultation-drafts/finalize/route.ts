@@ -10,6 +10,38 @@ function nullableText(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+function userName(user: { email?: string | null; user_metadata?: Record<string, any> | null }) {
+  return (
+    user.user_metadata?.full_name ||
+    [user.user_metadata?.first_name, user.user_metadata?.last_name].filter(Boolean).join(" ") ||
+    user.email ||
+    "User"
+  );
+}
+
+async function logConsultationNoteEvent(params: {
+  patientId: string;
+  consultationId?: string | null;
+  collabRoomId?: string | null;
+  eventType: string;
+  user: { id: string; email?: string | null; user_metadata?: Record<string, any> | null };
+  requestId?: string | null;
+  metadata?: Record<string, unknown>;
+}) {
+  const { error } = await supabaseAdmin.from("consultation_note_events").insert({
+    patient_id: params.patientId,
+    consultation_id: params.consultationId ?? null,
+    collab_room_id: params.collabRoomId ?? null,
+    event_type: params.eventType,
+    actor_user_id: params.user.id,
+    actor_name: userName(params.user),
+    actor_email: params.user.email ?? null,
+    request_id: params.requestId ?? null,
+    metadata: params.metadata ?? {},
+  });
+  if (error) console.error("[consultation-note-events] insert failed", error.message);
+}
+
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization") ?? "";
   const token = authHeader.match(/^Bearer\s+(.+)$/i)?.[1];
@@ -28,10 +60,18 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const draftId = text(body?.draftId);
   const patientId = text(body?.patientId);
+  const requestId = nullableText(body?.requestId);
 
   if (!draftId || !patientId) {
     return NextResponse.json({ error: "Missing draft or patient" }, { status: 400 });
   }
+
+  const { data: existingDraft } = await supabaseAdmin
+    .from("consultations")
+    .select("collab_room_id")
+    .eq("id", draftId)
+    .eq("patient_id", patientId)
+    .maybeSingle();
 
   const { data, error } = await supabaseAdmin
     .from("consultations")
@@ -50,7 +90,7 @@ export async function POST(request: NextRequest) {
       diagnosis_code: nullableText(body?.diagnosisCode),
       ref_icd10: nullableText(body?.refIcd10),
       is_draft: false,
-      collab_room_id: null,
+      collab_room_id: existingDraft?.collab_room_id ?? null,
     })
     .eq("id", draftId)
     .eq("patient_id", patientId)
@@ -60,11 +100,30 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error || !data) {
+    await logConsultationNoteEvent({
+      patientId,
+      consultationId: draftId,
+      collabRoomId: existingDraft?.collab_room_id ?? null,
+      eventType: "finalize_failed",
+      user,
+      requestId,
+      metadata: { error: error?.message ?? "Failed to finalize consultation draft" },
+    });
     return NextResponse.json(
       { error: error?.message ?? "Failed to finalize consultation draft" },
       { status: 500 },
     );
   }
+
+  await logConsultationNoteEvent({
+    patientId,
+    consultationId: data.id,
+    collabRoomId: data.collab_room_id ?? null,
+    eventType: "finalized",
+    user,
+    requestId,
+    metadata: { recordType: data.record_type, title: data.title },
+  });
 
   return NextResponse.json({ consultation: data });
 }
