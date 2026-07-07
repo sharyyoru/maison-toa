@@ -135,6 +135,51 @@ async function applyTemplatePlaceholders(
   return zip.generateAsync({ type: "nodebuffer" });
 }
 
+async function generateUniqueFileName(
+  patientId: string,
+  patientName: string,
+  title: string
+): Promise<string> {
+  const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9-_]/g, "_").substring(0, 50);
+  const dateStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  const safeName = patientName ? sanitize(patientName) : "Patient";
+  const safeTitle = sanitize(title);
+  const baseName = `${safeTitle}_${safeName}_${dateStr}`;
+
+  let candidate = `${baseName}.docx`;
+  let counter = 1;
+
+  while (true) {
+    // Check for an existing database record with the same file path
+    const { data: existingDoc } = await supabaseAdmin
+      .from("patient_documents")
+      .select("id")
+      .eq("patient_id", patientId)
+      .eq("file_path", candidate)
+      .maybeSingle();
+
+    if (existingDoc) {
+      candidate = `${baseName}_${counter}.docx`;
+      counter++;
+      continue;
+    }
+
+    // Check for an existing file in storage even if there is no DB record
+    const { data: files } = await supabaseAdmin.storage
+      .from("patient-documents")
+      .list(patientId);
+
+    const existsInStorage = files?.some((file) => file.name === candidate);
+
+    if (!existsInStorage) {
+      return candidate;
+    }
+
+    candidate = `${baseName}_${counter}.docx`;
+    counter++;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -176,12 +221,9 @@ export async function POST(request: NextRequest) {
     templateBuffer = await applyTemplatePlaceholders(templateBuffer, patient || {});
     console.log("Template placeholders applied");
 
-    // Generate filename: templatename_patientname_date.docx
-    const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 50);
-    const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const safeName = patientName ? sanitize(patientName) : 'Patient';
-    const safeTitle = sanitize(title);
-    const fileName = `${safeTitle}_${safeName}_${dateStr}.docx`;
+    // Generate a unique filename: templatename_patientname_date.docx
+    // Append a suffix if a document with the same name already exists today.
+    const fileName = await generateUniqueFileName(patientId, patientName || "", title);
 
     // Create database record with file path
     const { data: document, error: dbError } = await supabaseAdmin
@@ -216,7 +258,7 @@ export async function POST(request: NextRequest) {
       .from("patient-documents")
       .upload(patientDocPath, templateBuffer, {
         contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        upsert: true,
+        upsert: false,
       });
 
     if (uploadError) {
