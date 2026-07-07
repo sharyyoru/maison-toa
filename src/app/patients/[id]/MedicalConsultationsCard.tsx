@@ -1140,6 +1140,7 @@ function CollaborativeUnlockedNoteEditor({
   const [diagnosisCode, setDiagnosisCode] = useState(row.diagnosis_code || "");
   const [refIcd10, setRefIcd10] = useState(row.ref_icd10 || "");
   const [contentHtml, setContentHtml] = useState(row.content || "");
+  const contentHtmlRef = useRef(row.content || "");
   const [savingState, setSavingState] = useState<"idle" | "pending" | "saving" | "saved">("idle");
   const [locking, setLocking] = useState(false);
   const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
@@ -1195,7 +1196,7 @@ function CollaborativeUnlockedNoteEditor({
       onUpdate: ({ editor }) => {
         if (!initialContentReadyRef.current) return;
         const html = editor.getHTML();
-        setContentHtml(isBlankNotesHtml(html) ? "" : html);
+        contentHtmlRef.current = isBlankNotesHtml(html) ? "" : html;
         triggerSave();
       },
     },
@@ -1285,10 +1286,13 @@ function CollaborativeUnlockedNoteEditor({
       !isBlankNotesHtml(row.content)
     ) {
       editor.commands.setContent(row.content, { emitUpdate: false });
+      contentHtmlRef.current = row.content;
       setContentHtml(row.content);
     } else {
       const html = editor.getHTML();
-      setContentHtml(isBlankNotesHtml(html) ? row.content || "" : html);
+      const nextHtml = isBlankNotesHtml(html) ? row.content || "" : html;
+      contentHtmlRef.current = nextHtml;
+      setContentHtml(nextHtml);
     }
 
     initialContentReadyRef.current = true;
@@ -1327,7 +1331,7 @@ function CollaborativeUnlockedNoteEditor({
       const {
         data: { session },
       } = await supabaseClient.auth.getSession();
-      const html = editor ? editor.getHTML() : contentHtml;
+      const html = editor ? editor.getHTML() : contentHtmlRef.current || contentHtml;
 
       const response = await fetch("/api/consultation-drafts", {
         method: "POST",
@@ -1377,7 +1381,10 @@ function CollaborativeUnlockedNoteEditor({
       if (savedRow.is_draft === false) {
         onFinalized(savedRow);
       } else {
-        onDraftUpdated(savedRow);
+        onDraftUpdated({
+          ...savedRow,
+          content: row.content,
+        });
       }
       return savedRow;
     } catch {
@@ -1609,6 +1616,7 @@ export default function MedicalConsultationsCard({
   const [consultationRecordType, setConsultationRecordType] =
     useState<ConsultationRecordType>(recordTypeFilter === "invoice" ? "invoice" : "notes");
   const [consultationContentHtml, setConsultationContentHtml] = useState("");
+  const consultationContentHtmlRef = useRef("");
   const [consultationDiagnosisCode, setConsultationDiagnosisCode] = useState("");
   const [consultationRefIcd10, setConsultationRefIcd10] = useState("");
   // When creating invoice from an existing consultation, store the source consultation ID
@@ -2027,7 +2035,7 @@ export default function MedicalConsultationsCard({
         if (suppressNewConsultationAutosaveRef.current) return;
         if (!newConsultationOpenRef.current || consultationLockSavingRef.current) return;
         const html = editor.getHTML();
-        setConsultationContentHtml(isBlankNotesHtml(html) ? "" : html);
+        consultationContentHtmlRef.current = isBlankNotesHtml(html) ? "" : html;
         const text = editor.getText();
         const match = text.match(/@([^\s@]{0,50})$/);
         if (match) {
@@ -2050,6 +2058,7 @@ export default function MedicalConsultationsCard({
     }
 
     setConsultationContentHtml("");
+    consultationContentHtmlRef.current = "";
     setConsultationMentionActive(false);
     setConsultationMentionQuery("");
     setConsultationMentionUserIds([]);
@@ -3133,6 +3142,7 @@ export default function MedicalConsultationsCard({
           }, 0);
         }
         setConsultationContentHtml("");
+        consultationContentHtmlRef.current = "";
         setConsultationNoteMenuOpen(false);
         updateNewConsultationDraftId(null);
         setNewConsultationOpen(false);
@@ -4493,7 +4503,7 @@ export default function MedicalConsultationsCard({
 
     const htmlContent = consultationNotesEditor
       ? consultationNotesEditor.getHTML()
-      : consultationContentHtml;
+      : consultationContentHtmlRef.current || consultationContentHtml;
 
     if (!options.force && !consultationTitle.trim() && isBlankNotesHtml(htmlContent)) return null;
 
@@ -4570,13 +4580,31 @@ export default function MedicalConsultationsCard({
         invoice_pdf_path_reminder: null,
         invoice_pdf_path_receipt: null,
       };
+      let shouldBroadcastDraftChange = false;
       setConsultations((prev) => {
         const exists = prev.some((row) => row.id === data.id);
-        return exists
-          ? prev.map((row) => (row.id === data.id ? newRow : row))
-          : [newRow, ...prev];
+        if (!exists) {
+          shouldBroadcastDraftChange = true;
+          return [newRow, ...prev];
+        }
+
+        return prev.map((row) => {
+          if (row.id !== data.id) return row;
+          const metadataChanged =
+            row.title !== newRow.title ||
+            row.doctor_user_id !== newRow.doctor_user_id ||
+            row.doctor_name !== newRow.doctor_name ||
+            row.scheduled_at !== newRow.scheduled_at ||
+            row.diagnosis_code !== newRow.diagnosis_code ||
+            row.ref_icd10 !== newRow.ref_icd10 ||
+            row.is_draft !== newRow.is_draft;
+
+          return metadataChanged ? { ...newRow, content: row.content } : row;
+        });
       });
-      broadcastPatientRealtimeRefresh({ force: true });
+      if (data.is_draft === false || shouldBroadcastDraftChange) {
+        broadcastPatientRealtimeRefresh({ force: data.is_draft === false });
+      }
 
       setNewConsultationAutosaveStatus("saved");
       setTimeout(() => setNewConsultationAutosaveStatus("idle"), 2000);
@@ -4603,7 +4631,7 @@ export default function MedicalConsultationsCard({
       return false;
     }
 
-    const html = consultationNotesEditor?.getHTML() ?? consultationContentHtml;
+    const html = consultationNotesEditor?.getHTML() ?? (consultationContentHtmlRef.current || consultationContentHtml);
     if (!consultationTitle.trim() && isBlankNotesHtml(html)) return false;
 
     const id =
@@ -5642,6 +5670,7 @@ export default function MedicalConsultationsCard({
                     setInvoiceFromConsultationId(null);
                     setConsultationRecordType("prescription");
                     setConsultationContentHtml("");
+                    consultationContentHtmlRef.current = "";
                     setConsultationDurationSeconds(0);
                     setConsultationStopwatchStartedAt(null);
                     setConsultationStopwatchNow(Date.now());
@@ -5831,6 +5860,7 @@ export default function MedicalConsultationsCard({
                     setInvoiceFromConsultationId(null);
                     setConsultationRecordType(nextRecordType);
                     setConsultationContentHtml("");
+                    consultationContentHtmlRef.current = "";
                     setConsultationDurationSeconds(0);
                     setConsultationStopwatchStartedAt(null);
                     setConsultationStopwatchNow(Date.now());
