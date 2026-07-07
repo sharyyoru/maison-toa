@@ -135,6 +135,23 @@ async function applyTemplatePlaceholders(
   return zip.generateAsync({ type: "nodebuffer" });
 }
 
+async function fileNameExists(patientId: string, fileName: string): Promise<boolean> {
+  const { data: existingDoc } = await supabaseAdmin
+    .from("patient_documents")
+    .select("id")
+    .eq("patient_id", patientId)
+    .eq("file_path", fileName)
+    .maybeSingle();
+
+  if (existingDoc) return true;
+
+  const { data: files } = await supabaseAdmin.storage
+    .from("patient-documents")
+    .list(patientId);
+
+  return files?.some((file) => file.name === fileName) ?? false;
+}
+
 async function generateUniqueFileName(
   patientId: string,
   patientName: string,
@@ -150,40 +167,44 @@ async function generateUniqueFileName(
   let counter = 1;
 
   while (true) {
-    // Check for an existing database record with the same file path
-    const { data: existingDoc } = await supabaseAdmin
-      .from("patient_documents")
-      .select("id")
-      .eq("patient_id", patientId)
-      .eq("file_path", candidate)
-      .maybeSingle();
-
-    if (existingDoc) {
-      candidate = `${baseName}_${counter}.docx`;
-      counter++;
-      continue;
-    }
-
-    // Check for an existing file in storage even if there is no DB record
-    const { data: files } = await supabaseAdmin.storage
-      .from("patient-documents")
-      .list(patientId);
-
-    const existsInStorage = files?.some((file) => file.name === candidate);
-
-    if (!existsInStorage) {
+    if (!(await fileNameExists(patientId, candidate))) {
       return candidate;
     }
-
     candidate = `${baseName}_${counter}.docx`;
     counter++;
   }
 }
 
+async function resolveFileName(
+  patientId: string,
+  patientName: string,
+  title: string,
+  requestedFileName?: string
+): Promise<{ fileName: string } | { error: string }> {
+  if (!requestedFileName || requestedFileName.trim() === "") {
+    return { fileName: await generateUniqueFileName(patientId, patientName, title) };
+  }
+
+  let fileName = requestedFileName.trim();
+  if (!fileName.toLowerCase().endsWith(".docx")) {
+    fileName = `${fileName}.docx`;
+  }
+
+  if (fileName.length > 120) {
+    return { error: "Filename is too long." };
+  }
+
+  if (await fileNameExists(patientId, fileName)) {
+    return { error: `A document named "${fileName}" already exists. Please choose a different name.` };
+  }
+
+  return { fileName };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { patientId, templatePath, title, patientName } = body;
+    const { patientId, templatePath, title, patientName, fileName: requestedFileName } = body;
 
     if (!patientId || !title) {
       return NextResponse.json(
@@ -191,6 +212,19 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const resolved = await resolveFileName(
+      patientId,
+      patientName || "",
+      title,
+      requestedFileName
+    );
+
+    if ("error" in resolved) {
+      return NextResponse.json({ error: resolved.error }, { status: 409 });
+    }
+
+    const fileName = resolved.fileName;
 
     // Read template from local filesystem (public/documents)
     const templateFileName = templatePath || `${title}.docx`;
@@ -220,10 +254,6 @@ export async function POST(request: NextRequest) {
     // Substitute patient placeholders so the generated document is clean
     templateBuffer = await applyTemplatePlaceholders(templateBuffer, patient || {});
     console.log("Template placeholders applied");
-
-    // Generate a unique filename: templatename_patientname_date.docx
-    // Append a suffix if a document with the same name already exists today.
-    const fileName = await generateUniqueFileName(patientId, patientName || "", title);
 
     // Create database record with file path
     const { data: document, error: dbError } = await supabaseAdmin
