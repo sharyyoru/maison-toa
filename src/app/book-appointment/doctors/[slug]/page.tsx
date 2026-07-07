@@ -210,6 +210,7 @@ function DoctorBookingContent() {
   const locationId = searchParams.get("location") || "";
   const locationName = LOCATION_NAMES[locationId] || locationId;
   const locationLabel = LOCATION_LABELS[locationId] || locationId;
+  const dateLocale = language === "fr" ? "fr-FR" : "en-US";
 
   const [step, setStep] = useState<BookingStep>("info");
   const [loading, setLoading] = useState(false);
@@ -479,7 +480,7 @@ function DoctorBookingContent() {
         <div className="text-center">
           <h1 className="text-2xl font-bold text-slate-900 mb-4">{t("booking.doctorNotFound")}</h1>
           <Link href="/book-appointment/doctors" className="text-slate-900 hover:underline">
-            {language === "fr" ? "Retour aux spécialistes" : "Back to Doctors"}
+            {t("doctor.backToDoctors")}
           </Link>
         </div>
       </main>
@@ -501,13 +502,13 @@ function DoctorBookingContent() {
           </p>
           <div className="bg-slate-50 rounded-xl p-4 mb-6 text-left">
             <p className="text-sm text-slate-600 mb-2">
-              <strong>Date:</strong> {formatSwissDateWithWeekday(parseSwissDate(selectedDate))}
+              <strong>{t("booking.date")}:</strong> {formatSwissDateWithWeekday(parseSwissDate(selectedDate), dateLocale)}
             </p>
             <p className="text-sm text-slate-600 mb-2">
-              <strong>Time:</strong> {selectedTime}
+              <strong>{t("booking.time")}:</strong> {selectedTime}
             </p>
             <p className="text-sm text-slate-600">
-              <strong>Service:</strong> {selectedService}
+              <strong>{t("booking.service")}:</strong> {selectedService}
             </p>
           </div>
           <Link
@@ -754,12 +755,9 @@ function DoctorBookingContent() {
 
                 {/* Show warning when blocked date is selected */}
                 {selectedDate && blockedDates.has(selectedDate) && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl space-y-2">
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
                     <p className="text-sm text-red-700 font-medium">
-                      {language === "fr" ? "La clinique est fermée à cette date. Veuillez sélectionner une autre date." : "The clinic is closed on this date. Please select another date."}
-                    </p>
-                    <p className="text-sm text-red-600 italic">
-                      La clinique est fermée ce jour-là. Veuillez sélectionner une autre date.
+                      {t("booking.clinicClosed")}
                     </p>
                   </div>
                 )}

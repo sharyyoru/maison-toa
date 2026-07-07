@@ -183,7 +183,7 @@ function DoctorBookingContent() {
   const availabilityRequestSeq = useRef(0);
   const selectedDateRequestSeq = useRef(0);
 
-  const selectedService = treatment ? getLocalizedBookingName(treatment, language) : (language === "fr" ? "Consultation générale" : "General Consultation");
+  const selectedService = treatment ? getLocalizedBookingName(treatment, language) : t("common.generalConsultation");
   const dateLocale = language === "fr" ? "fr-FR" : "en-US";
   const bookingFormElement = pageConfig.sections
     .flatMap((section) => section.elements)
@@ -615,7 +615,7 @@ function DoctorBookingContent() {
           </p>
           <div className="bg-slate-50 rounded-xl p-4 mb-6 text-left">
             <p className="text-sm text-slate-600 mb-2">
-              <strong>{t("booking.date")}:</strong> {formatSwissDateWithWeekday(parseSwissDate(selectedDate))}
+              <strong>{t("booking.date")}:</strong> {formatSwissDateWithWeekday(parseSwissDate(selectedDate), dateLocale)}
             </p>
             <p className="text-sm text-slate-600 mb-2">
               <strong>{t("booking.time")}:</strong> {selectedTime}
@@ -805,7 +805,7 @@ function DoctorBookingContent() {
                   {emailChecking && <p className="text-xs text-slate-400 mt-1">{t("booking.emailChecking")}</p>}
                   {emailVerified && !emailChecking && (
                     <p className="text-xs text-green-600 mt-1">
-                      ✓ {language === "fr" ? "Compte trouvé" : "Account found"}
+                      ✓ {t("booking.accountFound")}
                     </p>
                   )}
                   {emailNotFoundError && (
@@ -819,7 +819,7 @@ function DoctorBookingContent() {
                         href="/book-appointment/new-patient"
                         className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
                       >
-                        {language === "fr" ? "Réserver en tant que nouveau patient" : "Book as new patient"}
+                        {t("common.bookAsNew")}
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>

@@ -95,7 +95,7 @@ const LOCATION_NAMES: Record<string, string> = {
 };
 
 function DoctorsListContent() {
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
   const searchParams = useSearchParams();
   const location = searchParams.get("location") || "";
 
@@ -140,7 +140,7 @@ function DoctorsListContent() {
           <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          {language === "fr" ? "Changer de lieu" : "Change Location"}
+          {t("location.change")}
         </Link>
 
         {/* Header */}
@@ -153,10 +153,10 @@ function DoctorsListContent() {
             <span className="text-sm font-medium text-slate-700">{locationName}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 mb-3 sm:mb-4">
-            {language === "fr" ? "Spécialistes disponibles" : "Available Specialists"}
+            {t("doctor.title")}
           </h1>
           <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto px-4">
-            {language === "fr" ? `Sélectionnez un spécialiste disponible à ${locationName} pour réserver votre consultation` : `Select a specialist available at ${locationName} to book your consultation`}
+            {t("doctor.subtitle").replace("{location}", locationName)}
           </p>
         </div>
 
@@ -198,13 +198,13 @@ function DoctorsListContent() {
         ) : (
           <div className="text-center py-12">
             <p className="text-slate-600 mb-4">
-              {language === "fr" ? "Aucun spécialiste disponible à ce lieu." : "No specialists available at this location."}
+              {t("location.noSpecialists")}
             </p>
             <Link
               href="/book-appointment/location"
               className="inline-flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-full font-medium hover:bg-slate-800 transition-colors"
             >
-              {language === "fr" ? "Choisir un autre lieu" : "Choose Another Location"}
+              {t("location.chooseAnother")}
             </Link>
           </div>
         )}
@@ -212,12 +212,10 @@ function DoctorsListContent() {
         {/* Info Section */}
         <div className="mt-10 sm:mt-16 bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-5 sm:p-8 border border-slate-200 shadow-sm text-center">
           <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-3 sm:mb-4">
-            {language === "fr" ? "Consultation générale" : "General Consultation"}
+            {t("common.generalConsultation")}
           </h3>
           <p className="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto">
-            {language === "fr"
-              ? "Tous les rendez-vous sont des consultations générales durant lesquelles nos spécialistes discutent de vos besoins et vous orientent vers les meilleures options de traitement."
-              : "All appointments are for a general consultation where our specialists will discuss your needs and guide you to the best treatment options."}
+            {t("common.generalConsultationDescription")}
           </p>
         </div>
       </div>

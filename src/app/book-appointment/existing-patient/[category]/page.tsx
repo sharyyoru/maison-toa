@@ -175,8 +175,8 @@ export default function ExistingPatientTreatmentsPage() {
                                     duration={formatDuration(treatment.duration_minutes)}
                                     price={treatment.display_price != null ? `CHF ${treatment.display_price}` : undefined}
                                     readMoreLabel={t("common.readMore")}
-                                    descriptionLabel={language === "fr" ? "Description" : "Description"}
-                                    closeLabel={language === "fr" ? "Fermer" : "Close"}
+                                    descriptionLabel={t("common.description")}
+                                    closeLabel={t("common.close")}
                                     maxLines={3}
                                     className="mb-4 flex-grow"
                                   />

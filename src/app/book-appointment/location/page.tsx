@@ -58,10 +58,10 @@ export default function LocationSelectionPage() {
         {/* Header */}
         <div className="text-center mb-8 sm:mb-12">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 mb-3 sm:mb-4">
-            {language === "fr" ? "Choisissez votre lieu" : "Choose Your Location"}
+            {t("location.choose")}
           </h1>
           <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto px-4">
-            {language === "fr" ? "Sélectionnez votre clinique préférée pour voir les spécialistes disponibles" : "Select your preferred clinic location to see available specialists"}
+            {t("location.chooseSubtitle")}
           </p>
         </div>
 
@@ -100,12 +100,10 @@ export default function LocationSelectionPage() {
         {/* Info Section */}
         <div className="mt-10 sm:mt-16 bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-5 sm:p-8 border border-slate-200 shadow-sm text-center max-w-3xl mx-auto">
           <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-3 sm:mb-4">
-            {language === "fr" ? "Toutes les cliniques proposent" : "All Locations Offer"}
+            {t("location.allOffer")}
           </h3>
           <p className="text-sm sm:text-base text-slate-600">
-            {language === "fr"
-              ? "Des consultations, des simulations 3D et toute notre gamme de services esthétiques. Choisissez le lieu qui vous convient le mieux."
-              : "Free consultations, 3D simulations, and our full range of aesthetic services. Choose the location most convenient for you."}
+            {t("location.allOfferDescription")}
           </p>
         </div>
       </div>

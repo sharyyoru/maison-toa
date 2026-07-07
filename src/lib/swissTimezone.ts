@@ -137,11 +137,11 @@ export function formatSwissYmd(date: Date | string): string {
 /**
  * Format date with weekday in Swiss timezone (for email confirmations)
  */
-export function formatSwissDateWithWeekday(date: Date | string): string {
+export function formatSwissDateWithWeekday(date: Date | string, locale: string = "en-US"): string {
   const d = typeof date === "string" ? new Date(date) : date;
   if (Number.isNaN(d.getTime())) return "—";
-  
-  return d.toLocaleDateString("en-US", {
+
+  return d.toLocaleDateString(locale, {
     weekday: "long",
     year: "numeric",
     month: "long",

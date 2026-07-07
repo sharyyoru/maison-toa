@@ -264,9 +264,9 @@ export default function SelectDoctorPage() {
                       specialty={doctor.specialty}
                       imageUrl={doctor.image_url}
                       readMoreLabel={t("common.readMore")}
-                      specialtyLabel={language === "fr" ? "Spécialité" : "Specialty"}
-                      aboutLabel={language === "fr" ? "À propos" : "About"}
-                      closeLabel={language === "fr" ? "Fermer" : "Close"}
+                      specialtyLabel={t("common.specialty")}
+                      aboutLabel={t("common.about")}
+                      closeLabel={t("common.close")}
                       maxLines={2}
                       className="mb-3"
                     />
@@ -311,7 +311,7 @@ export default function SelectDoctorPage() {
                 <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-slate-900">
-                      {t("doctor.earliestSlotsTitle") || "Earliest Available Slots"}
+                      {t("doctor.earliestSlotsTitle")}
                     </h3>
                     <button
                       type="button"
