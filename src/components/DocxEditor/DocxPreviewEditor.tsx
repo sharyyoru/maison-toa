@@ -23,6 +23,7 @@ interface DocxPreviewEditorProps {
   patientId: string;
   documentId: string;
   patientData?: PatientData;
+  isNewDocument?: boolean;
   onSave: (blob: Blob) => Promise<void>;
   onClose: () => void;
 }
@@ -125,6 +126,7 @@ export default function DocxPreviewEditor({
   documentBlob,
   documentTitle,
   patientData,
+  isNewDocument,
   onSave,
   onClose,
 }: DocxPreviewEditorProps) {
@@ -135,7 +137,7 @@ export default function DocxPreviewEditor({
   );
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [hasChanges, setHasChanges] = useState(isNewDocument ?? false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
