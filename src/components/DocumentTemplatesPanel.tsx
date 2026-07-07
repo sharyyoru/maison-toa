@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import dynamic from 'next/dynamic';
 
@@ -102,6 +102,20 @@ export default function DocumentTemplatesPanel({
       console.error("Error fetching patient details:", error);
     }
   }, [patientId]);
+
+  // Memoized so the editor doesn't reload the document on every unrelated
+  // re-render (e.g. while the user is typing in the filename field).
+  const patientData = useMemo(() => {
+    const nameParts = patientName.split(' ');
+    return {
+      firstName: patientDetails?.first_name || nameParts[0] || '',
+      lastName: patientDetails?.last_name || nameParts.slice(1).join(' ') || '',
+      salutation: 'Mr/Ms',
+      birthdate: patientDetails?.dob
+        ? new Date(patientDetails.dob).toLocaleDateString('fr-FR', { day: 'numeric', month: 'numeric', year: 'numeric' })
+        : '',
+    };
+  }, [patientName, patientDetails]);
 
   // Fetch patient documents
   const fetchDocuments = useCallback(async () => {
@@ -286,17 +300,6 @@ export default function DocumentTemplatesPanel({
 
   // Show editor fullscreen with 100% fidelity preview
   if (showEditor && currentDocument && documentBlob) {
-    // Parse patient name into first/last
-    const nameParts = patientName.split(' ');
-    const patientData = {
-      firstName: patientDetails?.first_name || nameParts[0] || '',
-      lastName: patientDetails?.last_name || nameParts.slice(1).join(' ') || '',
-      salutation: 'Mr/Ms',
-      birthdate: patientDetails?.dob
-        ? new Date(patientDetails.dob).toLocaleDateString('fr-FR', { day: 'numeric', month: 'numeric', year: 'numeric' })
-        : '',
-    };
-    
     return (
       <DocxPreviewEditor
         documentBlob={documentBlob}
@@ -305,11 +308,6 @@ export default function DocumentTemplatesPanel({
         documentId={currentDocument.id}
         patientData={patientData}
         fileName={currentDocument.file_path}
-        onFileNameChange={(fileName) =>
-          setCurrentDocument((prev) =>
-            prev ? { ...prev, file_path: fileName } : null
-          )
-        }
         onSave={handleSaveDocument}
         onClose={() => {
           setShowEditor(false);

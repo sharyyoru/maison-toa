@@ -6,6 +6,7 @@ import {
   type DocxEditorRef,
 } from "@eigenpal/docx-editor-react";
 import "@eigenpal/docx-editor-react/styles.css";
+import { removeNextFieldArtifacts } from "@/lib/docxFieldCleanup";
 
 interface PatientData {
   firstName?: string;
@@ -24,7 +25,6 @@ interface DocxPreviewEditorProps {
   documentId: string;
   patientData?: PatientData;
   fileName?: string;
-  onFileNameChange?: (fileName: string) => void;
   onSave: (blob: Blob, fileName?: string) => Promise<void>;
   onClose: () => void;
 }
@@ -67,24 +67,6 @@ function replacePlaceholderInXml(
     .join("(?:</w:t>(?:<[^>]*>)*<w:t[^>]*>)?");
 
   return xml.replace(new RegExp(fragmentedPattern, "g"), escapedValue);
-}
-
-function removeNextFieldInstructions(xml: string): string {
-  // Remove Word NEXT field instructions that render as visible text in the editor.
-  let result = xml.replace(
-    /<w:r>(?:[^<]|<(?!\/w:r>))*?<w:instrText[^>]*>\s*NEXT\s*<\/w:instrText>(?:[^<]|<(?!\/w:r>))*?<\/w:r>/gi,
-    ""
-  );
-  // Remove orphaned begin/end field char markers left behind.
-  result = result.replace(
-    /<w:r>\s*<w:fldChar[^>]*\bfldCharType="begin"[^>]*\/>\s*<\/w:r>/gi,
-    ""
-  );
-  result = result.replace(
-    /<w:r>\s*<w:fldChar[^>]*\bfldCharType="end"[^>]*\/>\s*<\/w:r>/gi,
-    ""
-  );
-  return result;
 }
 
 async function extractPlaceholders(
@@ -132,7 +114,7 @@ async function applyPlaceholders(
     replacements.forEach((value, placeholder) => {
       xml = replacePlaceholderInXml(xml, placeholder, value);
     });
-    xml = removeNextFieldInstructions(xml);
+    xml = removeNextFieldArtifacts(xml);
     zip.file(file.name, xml);
   }
 
@@ -147,7 +129,6 @@ export default function DocxPreviewEditor({
   documentTitle,
   patientData,
   fileName,
-  onFileNameChange,
   onSave,
   onClose,
 }: DocxPreviewEditorProps) {
@@ -227,7 +208,7 @@ export default function DocxPreviewEditor({
       setHasChanges(false);
     } catch (saveError) {
       console.error("Error saving document:", saveError);
-      setError("Failed to save document");
+      setError(saveError instanceof Error ? saveError.message : "Failed to save document");
     } finally {
       setIsSaving(false);
     }
@@ -262,7 +243,7 @@ export default function DocxPreviewEditor({
               value={editedFileName}
               onChange={(e) => {
                 setEditedFileName(e.target.value);
-                onFileNameChange?.(e.target.value);
+                setHasChanges(true);
               }}
               className="flex-1 rounded border border-slate-600 bg-slate-700 px-2 py-1 text-sm text-white placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
             />

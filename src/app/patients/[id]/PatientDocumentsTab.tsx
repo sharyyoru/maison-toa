@@ -1675,11 +1675,6 @@ export default function PatientDocumentsTab({
           patientId={patientId}
           documentId={editingDocx.item.id || editingDocx.item.name}
           fileName={editingDocx.item.path}
-          onFileNameChange={(fileName) =>
-            setEditingDocx((prev) =>
-              prev ? { ...prev, item: { ...prev.item, path: fileName } } : null
-            )
-          }
           onSave={async (blob, newFileName) => {
             const originalFileName = editingDocx.item.path;
             const targetFileName = newFileName?.trim() || originalFileName;

@@ -17,6 +17,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const isRename = !!oldPath && oldPath !== path;
+
+    // When renaming, make sure another document isn't already using the
+    // target filename before overwriting anything.
+    if (isRename) {
+      const { data: existingFile } = await supabaseAdmin.storage
+        .from(bucket)
+        .list(path.split('/').slice(0, -1).join('/'));
+      const targetName = path.split('/').pop();
+      const conflict = existingFile?.some((f) => f.name === targetName);
+      if (conflict) {
+        return NextResponse.json(
+          { error: `A file named "${targetName}" already exists.` },
+          { status: 409 }
+        );
+      }
+    }
+
     console.log(`Uploading to bucket: ${bucket}, path: ${path}`);
 
     const arrayBuffer = await file.arrayBuffer();
@@ -26,7 +44,7 @@ export async function POST(request: NextRequest) {
       .from(bucket)
       .upload(path, buffer, {
         contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        upsert: true,
+        upsert: !isRename,
       });
 
     if (error) {

@@ -3,6 +3,7 @@ import { readFile } from "fs/promises";
 import path from "path";
 import JSZip from "jszip";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { removeNextFieldArtifacts } from "@/lib/docxFieldCleanup";
 
 function formatFrenchDate(date: Date): string {
   return date.toLocaleDateString("fr-FR", {
@@ -49,24 +50,6 @@ function replacePlaceholderInXml(xml: string, placeholder: string, value: string
     .join("(?:</w:t>(?:<[^>]*>)*<w:t[^>]*>)?");
 
   return xml.replace(new RegExp(fragmentedPattern, "g"), escapedValue);
-}
-
-function removeNextFieldInstructions(xml: string): string {
-  // Remove Word NEXT field instructions that render as visible text in the editor.
-  let result = xml.replace(
-    /<w:r>(?:[^<]|<(?!\/w:r>))*?<w:instrText[^>]*>\s*NEXT\s*<\/w:instrText>(?:[^<]|<(?!\/w:r>))*?<\/w:r>/gi,
-    ""
-  );
-  // Remove orphaned begin/end field char markers left behind.
-  result = result.replace(
-    /<w:r>\s*<w:fldChar[^>]*\bfldCharType="begin"[^>]*\/>\s*<\/w:r>/gi,
-    ""
-  );
-  result = result.replace(
-    /<w:r>\s*<w:fldChar[^>]*\bfldCharType="end"[^>]*\/>\s*<\/w:r>/gi,
-    ""
-  );
-  return result;
 }
 
 async function applyTemplatePlaceholders(
@@ -123,71 +106,68 @@ async function applyTemplatePlaceholders(
     replacements.forEach((value, placeholder) => {
       xml = replacePlaceholderInXml(xml, placeholder, value);
     });
-    xml = removeNextFieldInstructions(xml);
+    xml = removeNextFieldArtifacts(xml);
     zip.file(file.name, xml);
   }
 
   return zip.generateAsync({ type: "nodebuffer" });
 }
 
-async function fileNameExists(patientId: string, fileName: string): Promise<boolean> {
-  const { data: existingDoc } = await supabaseAdmin
-    .from("patient_documents")
-    .select("id")
-    .eq("patient_id", patientId)
-    .eq("file_path", fileName)
-    .maybeSingle();
-
-  return !!existingDoc;
+function isDuplicateStorageError(error: { message?: string; statusCode?: string } | null): boolean {
+  if (!error) return false;
+  const message = (error.message || "").toLowerCase();
+  return (
+    error.statusCode === "409" ||
+    message.includes("already exists") ||
+    message.includes("duplicate")
+  );
 }
 
-async function generateUniqueFileName(
-  patientId: string,
-  patientName: string,
-  title: string
-): Promise<string> {
+function buildBaseFileName(patientName: string, title: string): string {
   const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9-_]/g, "_").substring(0, 50);
   const dateStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
   const safeName = patientName ? sanitize(patientName) : "Patient";
   const safeTitle = sanitize(title);
-  const baseName = `${safeTitle}_${safeName}_${dateStr}`;
-
-  let candidate = `${baseName}.docx`;
-  let counter = 1;
-
-  while (true) {
-    if (!(await fileNameExists(patientId, candidate))) {
-      return candidate;
-    }
-    candidate = `${baseName}_${counter}.docx`;
-    counter++;
-  }
+  return `${safeTitle}_${safeName}_${dateStr}`;
 }
 
-async function resolveFileName(
+/**
+ * Uploads the document under a filename that is guaranteed to be unique for
+ * this patient. Storage's `upsert: false` upload is atomic at the object-key
+ * level, so we use it (rather than a check-then-insert against the database,
+ * which is not race-safe since there is no unique constraint on file_path)
+ * to resolve naming conflicts by appending _1, _2, etc.
+ */
+async function uploadWithUniqueFileName(
   patientId: string,
-  patientName: string,
-  title: string,
-  requestedFileName?: string
-): Promise<{ fileName: string } | { error: string }> {
-  if (!requestedFileName || requestedFileName.trim() === "") {
-    return { fileName: await generateUniqueFileName(patientId, patientName, title) };
+  baseFileName: string,
+  buffer: Buffer
+): Promise<{ fileName: string; storagePath: string } | { error: string }> {
+  const withoutExt = baseFileName.replace(/\.docx$/i, "");
+  const maxAttempts = 30;
+
+  for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+    const candidate = attempt === 0 ? `${withoutExt}.docx` : `${withoutExt}_${attempt}.docx`;
+    const storagePath = `${patientId}/${candidate}`;
+
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from("patient-documents")
+      .upload(storagePath, buffer, {
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        upsert: false,
+      });
+
+    if (!uploadError) {
+      return { fileName: candidate, storagePath };
+    }
+
+    if (!isDuplicateStorageError(uploadError)) {
+      return { error: uploadError.message };
+    }
+    // Filename collision - try the next suffix.
   }
 
-  let fileName = requestedFileName.trim();
-  if (!fileName.toLowerCase().endsWith(".docx")) {
-    fileName = `${fileName}.docx`;
-  }
-
-  if (fileName.length > 120) {
-    return { error: "Filename is too long." };
-  }
-
-  if (await fileNameExists(patientId, fileName)) {
-    return { error: `A document named "${fileName}" already exists. Please choose a different name.` };
-  }
-
-  return { fileName };
+  return { error: "Could not find a unique filename after multiple attempts." };
 }
 
 export async function POST(request: NextRequest) {
@@ -202,18 +182,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const resolved = await resolveFileName(
-      patientId,
-      patientName || "",
-      title,
-      requestedFileName
-    );
-
-    if ("error" in resolved) {
-      return NextResponse.json({ error: resolved.error }, { status: 409 });
-    }
-
-    const fileName = resolved.fileName;
+    const baseFileName = requestedFileName?.trim()
+      ? requestedFileName.trim()
+      : buildBaseFileName(patientName || "", title);
 
     // Read template from local filesystem (public/documents)
     const templateFileName = templatePath || `${title}.docx`;
@@ -244,7 +215,22 @@ export async function POST(request: NextRequest) {
     templateBuffer = await applyTemplatePlaceholders(templateBuffer, patient || {});
     console.log("Template placeholders applied");
 
-    // Create database record with file path
+    // Upload with a filename guaranteed to be unique for this patient. Storage
+    // uploads with upsert:false are atomic at the object-key level, so this
+    // safely resolves same-day naming collisions by appending _1, _2, etc.
+    const uploadResult = await uploadWithUniqueFileName(patientId, baseFileName, templateBuffer);
+
+    if ("error" in uploadResult) {
+      console.error("Upload error:", uploadResult.error);
+      return NextResponse.json(
+        { error: `Failed to save document to storage: ${uploadResult.error}` },
+        { status: 500 }
+      );
+    }
+
+    const { fileName, storagePath: patientDocPath } = uploadResult;
+
+    // Create database record with the resolved file path
     const { data: document, error: dbError } = await supabaseAdmin
       .from("patient_documents")
       .insert({
@@ -263,28 +249,9 @@ export async function POST(request: NextRequest) {
 
     if (dbError || !document) {
       console.error("Database error:", dbError);
+      await supabaseAdmin.storage.from("patient-documents").remove([patientDocPath]);
       return NextResponse.json(
         { error: "Failed to create document record" },
-        { status: 500 }
-      );
-    }
-
-    // Upload to patient-docs bucket with human-readable filename
-    const patientDocPath = `${patientId}/${fileName}`;
-    console.log("Uploading to path:", patientDocPath);
-    
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from("patient-documents")
-      .upload(patientDocPath, templateBuffer, {
-        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.error("Upload error:", uploadError);
-      await supabaseAdmin.from("patient_documents").delete().eq("id", document.id);
-      return NextResponse.json(
-        { error: `Failed to save document to storage: ${uploadError.message}` },
         { status: 500 }
       );
     }

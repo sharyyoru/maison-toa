@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { FileText, Download, Eye, Search, FolderOpen, X, Loader2, Pencil } from "lucide-react";
 import { useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
@@ -105,13 +105,16 @@ export default function PatientTemplatesTab({
   const [editingDocument, setEditingDocument] = useState<EditingDocument | null>(null);
   const [generating, setGenerating] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const patientData = {
-    firstName: patientFirstName,
-    lastName: patientLastName,
-    email: patientEmail || undefined,
-    phone: patientPhone || undefined,
-    birthdate: patientDob || undefined,
-  };
+  const patientData = useMemo(
+    () => ({
+      firstName: patientFirstName,
+      lastName: patientLastName,
+      email: patientEmail || undefined,
+      phone: patientPhone || undefined,
+      birthdate: patientDob || undefined,
+    }),
+    [patientFirstName, patientLastName, patientEmail, patientPhone, patientDob]
+  );
 
   useEffect(() => {
     async function loadTemplates() {

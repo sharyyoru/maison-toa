@@ -1,3 +1,5 @@
+import { removeNextFieldArtifacts } from "./docxFieldCleanup";
+
 export async function sanitizeDocxForPreview(blob: Blob): Promise<Blob> {
   const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(blob);
@@ -15,9 +17,10 @@ export async function sanitizeDocxForPreview(blob: Blob): Promise<Blob> {
     if (!file) continue;
 
     const xml = await file.async("string");
-    const sanitizedXml = xml
+    let sanitizedXml = xml
       .replace(/<w:textDirection\b(?=[^>]*\bw:val="lrTb")[^>]*\/>/g, "")
       .replace(/<w:textDirection\b(?=[^>]*\bw:val="lrTb")[^>]*><\/w:textDirection>/g, "");
+    sanitizedXml = removeNextFieldArtifacts(sanitizedXml);
 
     if (sanitizedXml !== xml) {
       zip.file(fileName, sanitizedXml);
