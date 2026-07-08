@@ -6,7 +6,7 @@ import {
   type DocxEditorRef,
 } from "@eigenpal/docx-editor-react";
 import "@eigenpal/docx-editor-react/styles.css";
-import { removeNextFieldArtifacts } from "@/lib/docxFieldCleanup";
+import { removeNextFieldArtifacts, restoreDroppedBorderOverrides } from "@/lib/docxFieldCleanup";
 
 interface EditorPaneProps {
   documentBuffer: ArrayBuffer;
@@ -146,6 +146,11 @@ async function applyPlaceholders(
       xml = replacePlaceholderInXml(xml, placeholder, value);
     });
     xml = removeNextFieldArtifacts(xml);
+    // Restore border overrides that the editor serializer drops when it
+    // re-serializes cells/paragraphs that had explicit `none` borders.
+    // Without this, previously-hidden table/paragraph borders reappear as
+    // stray horizontal and vertical lines after saving.
+    xml = restoreDroppedBorderOverrides(xml);
     zip.file(file.name, xml);
   }
 
