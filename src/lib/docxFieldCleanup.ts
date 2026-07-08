@@ -34,30 +34,50 @@
  */
 const BORDER_SIDES = ["top", "left", "bottom", "right"] as const;
 const NIL_BORDER = (side: string) => `<w:${side} w:val="nil"/>`;
-
-function restoreMissingNilBorders(xml: string, tagName: "w:tcBorders" | "w:pBdr"): string {
-  // Match the open tag (allowing attributes), content, and close tag.
-  // Using a non-greedy match so we don't accidentally span multiple elements.
-  return xml.replace(
-    new RegExp(`(<${tagName}>)([\\s\\S]*?)(<\\/${tagName}>)`, "g"),
-    (match, open: string, content: string, close: string) => {
-      const missing = BORDER_SIDES.filter(
-        (side) => !new RegExp(`<w:${side}\\b`).test(content)
-      );
-      if (missing.length === 0) return match;
-      return `${open}${content}${missing.map(NIL_BORDER).join("")}${close}`;
-    }
-  );
-}
+const FULL_NIL_TCBORDERS = `<w:tcBorders>${BORDER_SIDES.map(NIL_BORDER).join("")}</w:tcBorders>`;
 
 /**
  * Fixes stray border lines introduced by the eigenpal editor's serializer
  * dropping explicit `none` border overrides from `<w:tcBorders>` and `<w:pBdr>`.
- * Call this on `word/document.xml` (and header/footer XML) after an editor save.
+ *
+ * The serializer's border-side function returns "" for any side with
+ * style === "none" || "nil". When ALL sides are none, the `<w:tcBorders>`
+ * wrapper element is also omitted entirely (empty output → skipped by the
+ * parent serializer). Without any `<w:tcBorders>`, the cell inherits borders
+ * from the table-level `<w:tblBorders>` definition, causing previously-hidden
+ * borders to reappear as stray lines.
+ *
+ * Two-pass fix applied to word/document.xml (and header/footer XML):
+ *   1. Any `<w:tcPr>` missing `<w:tcBorders>` gets a full nil override injected.
+ *   2. Any `<w:tcBorders>` or `<w:pBdr>` present but missing some sides gets
+ *      nil overrides for those sides.
  */
 export function restoreDroppedBorderOverrides(xml: string): string {
-  let result = restoreMissingNilBorders(xml, "w:tcBorders");
-  result = restoreMissingNilBorders(result, "w:pBdr");
+  // Pass 1: inject a full nil <w:tcBorders> into every <w:tcPr> that has none.
+  // This handles the case where eigenpal dropped the element entirely.
+  let result = xml.replace(
+    /(<w:tcPr\b[^>]*>)([\s\S]*?)(<\/w:tcPr>)/g,
+    (match, open: string, content: string, close: string) => {
+      if (content.includes("<w:tcBorders")) return match;
+      return `${open}${content}${FULL_NIL_TCBORDERS}${close}`;
+    }
+  );
+
+  // Pass 2: for any <w:tcBorders> or <w:pBdr> that exists but is missing
+  // some of the four standard sides, fill in nil overrides for those sides.
+  for (const tagName of ["w:tcBorders", "w:pBdr"] as const) {
+    result = result.replace(
+      new RegExp(`(<${tagName}>)([\\s\\S]*?)(<\\/${tagName}>)`, "g"),
+      (match, open: string, content: string, close: string) => {
+        const missing = BORDER_SIDES.filter(
+          (side) => !new RegExp(`<w:${side}\\b`).test(content)
+        );
+        if (missing.length === 0) return match;
+        return `${open}${content}${missing.map(NIL_BORDER).join("")}${close}`;
+      }
+    );
+  }
+
   return result;
 }
 const FIELD_SPAN_TEST =
