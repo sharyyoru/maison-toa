@@ -9,12 +9,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const PATIENT_SELF_SERVICE_CC_EMAIL = "info@maisontoa.com";
 const ADMIN_NOTIFICATION_EMAIL = "louise.goerig@maisontoa.com.";
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, subject: string, html: string, cc?: string) {
   if (!isEmailConfigured()) return;
   
-  const result = await sendEmailViaResend({ to, subject, html });
+  const result = await sendEmailViaResend({ to, subject, html, cc });
   if (!result.success) {
     console.error("Error sending email via Resend:", result.error);
   }
@@ -177,7 +178,7 @@ export async function POST(request: Request) {
         const subject = language === "fr"
           ? "Ajustement de votre rendez-vous chez Maison Tóā"
           : "Your appointment at Maison Tóā has been adjusted";
-        await sendEmail(patient.email, subject, html);
+        await sendEmail(patient.email, subject, html, PATIENT_SELF_SERVICE_CC_EMAIL);
       } catch (err) {
         console.error("Failed to send reschedule email:", err);
       }
