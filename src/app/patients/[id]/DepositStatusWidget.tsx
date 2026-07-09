@@ -2,8 +2,17 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { formatSwissAppointmentDateTime } from "@/lib/swissTimezone";
 
 type DepositStatus = "requested" | "paid" | "applied" | "refunded";
+
+type DepositAppointment = {
+  start_time: string | null;
+  end_time: string | null;
+  status: string | null;
+  location: string | null;
+  reason: string | null;
+};
 
 type DepositInvoice = {
   id: string;
@@ -12,6 +21,8 @@ type DepositInvoice = {
   paid_at: string | null;
   deposit_status: DepositStatus | null;
   status: string;
+  appointment_id: string | null;
+  appointment: DepositAppointment | null;
 };
 
 const STATUS_META: Record<DepositStatus, { label: string; accent: string; iconBg: string; iconColor: string; icon: React.ReactNode }> = {
@@ -280,7 +291,61 @@ export default function DepositStatusWidget({ patientId }: { patientId: string }
             </div>
           )}
         </div>
+
+        {/* Linked appointment */}
+        {deposit.appointment && deposit.appointment.start_time && (
+          <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                Linked appointment
+              </span>
+              {deposit.appointment.status && (
+                <span className={`rounded-full px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide
+                  ${deposit.appointment.status === "scheduled"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : deposit.appointment.status === "cancelled"
+                      ? "bg-red-100 text-red-700"
+                      : "bg-slate-200 text-slate-600"}`}
+                >
+                  {deposit.appointment.status}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-800">
+                  {(() => {
+                    const { date, time } = formatSwissAppointmentDateTime(deposit.appointment.start_time);
+                    return `${date} · ${time}`;
+                  })()}
+                </p>
+                <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                  {getAppointmentLabel(deposit.appointment)}
+                </p>
+              </div>
+              {deposit.appointment_id && (
+                <a
+                  href={`#rendezvous-${deposit.appointment_id}`}
+                  className="shrink-0 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-medium text-slate-600 hover:border-sky-300 hover:text-sky-600 transition-colors"
+                >
+                  View
+                </a>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+function getAppointmentLabel(appt: DepositAppointment): string {
+  const parts: string[] = [];
+  const reason = appt.reason || "";
+  const service = reason.split(" [Doctor:")[0].trim();
+  const doctorMatch = reason.match(/\[Doctor:\s*(.+?)\s*\]/i);
+  if (service) parts.push(service);
+  if (doctorMatch?.[1]) parts.push(`Dr. ${doctorMatch[1]}`);
+  if (appt.location) parts.push(appt.location);
+  return parts.join(" · ") || "Appointment";
 }

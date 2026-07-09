@@ -18,7 +18,10 @@ export async function GET(request: NextRequest) {
   // Using an OR filter: payment_link_token set OR deposit_deadline_at set OR deposit_status set.
   const { data, error } = await supabaseAdmin
     .from("invoices")
-    .select("id, invoice_number, total_amount, paid_at, deposit_status, status, deposit_deadline_at, appointment_id, payment_method, payment_link_token")
+    .select(
+      "id, invoice_number, total_amount, paid_at, deposit_status, status, deposit_deadline_at, appointment_id, payment_method, payment_link_token, " +
+      "appointments!appointment_id(start_time, end_time, status, location, reason)"
+    )
     .eq("patient_id", patientId)
     .eq("is_demo", false)
     .eq("is_archived", false)
