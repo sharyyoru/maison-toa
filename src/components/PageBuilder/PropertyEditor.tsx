@@ -1,7 +1,7 @@
 "use client";
 
 import { PageElement } from "./types";
-import { X, ChevronDown, Image as ImageIcon } from "lucide-react";
+import { X, ChevronDown, Image as ImageIcon, Loader2, Upload } from "lucide-react";
 import { useState } from "react";
 
 interface PropertyEditorProps {
@@ -183,6 +183,8 @@ export function PropertyEditor({
   onUpdate,
   onClose,
 }: PropertyEditorProps) {
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<string[]>([
     "content",
     "style",
@@ -231,6 +233,37 @@ export function PropertyEditor({
         onChange={(nextValue) => updateLocalizedText(propKey, language, nextValue)}
       />
     );
+  };
+
+  const uploadImage = async (file: File) => {
+    setUploadError(null);
+
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Please choose an image file.");
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/page-builder/upload-image", {
+        method: "POST",
+        body: formData,
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to upload image.");
+      }
+
+      onUpdate({ src: result.url });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Failed to upload image.");
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const renderElementProperties = () => {
@@ -412,6 +445,35 @@ export function PropertyEditor({
                   type="url"
                   placeholder="/images/..."
                 />
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
+                  {uploadingImage ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 text-slate-400" />
+                      Upload image
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingImage}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) await uploadImage(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {uploadError && (
+                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {uploadError}
+                  </p>
+                )}
                 <div className="aspect-video bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 overflow-hidden">
                   {element.props.src ? (
                     // eslint-disable-next-line @next/next/no-img-element
