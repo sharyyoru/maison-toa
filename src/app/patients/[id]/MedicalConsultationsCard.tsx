@@ -524,7 +524,7 @@ function textToNotesHtml(value: string): string {
   return escapeHtml(value).replace(/\n/g, "<br>");
 }
 
-const CONSULTATION_NOTES_STARTING_LINES = 7;
+const CONSULTATION_NOTES_STARTING_LINES = 2;
 
 function buildBlankConsultationNotesDoc() {
   return {
@@ -1228,7 +1228,7 @@ function CollaborativeUnlockedNoteEditor({
       editorProps: {
         attributes: {
           class:
-            "min-h-[180px] cursor-text px-3 py-2 text-xs leading-5 text-slate-900 focus:outline-none [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:py-0.5 [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1.5 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-semibold [&_p]:my-1 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5",
+            "min-h-[56px] cursor-text px-3 py-2 text-xs leading-5 text-slate-900 focus:outline-none [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:py-0.5 [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1.5 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-semibold [&_p]:my-1 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5",
         },
       },
       immediatelyRender: false,
