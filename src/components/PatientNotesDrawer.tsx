@@ -192,7 +192,7 @@ export default function PatientNotesDrawer({ patientId }: { patientId: string })
     <>
       {createPortal(
         <button type="button" onClick={() => setNotesOpen(o => !o)}
-          className={`fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold shadow-2xl transition-all ${
+          className={`fixed bottom-20 right-6 z-40 flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold shadow-2xl transition-all ${
             notesOpen
               ? "bg-sky-600 text-white shadow-sky-500/40"
               : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-slate-200/80"
