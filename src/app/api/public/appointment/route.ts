@@ -2,21 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { formatSwissDateWithWeekday, formatSwissTimeAmPm, formatSwissYmd, getSwissHourMinute } from "@/lib/swissTimezone";
 import { nameToSlug } from "@/lib/doctorAvailability";
+import { cleanAppointmentReason } from "@/lib/appointmentUtils";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-function parseServiceFromReason(reason: string | null): string {
-  if (!reason) return "";
-  return reason
-    .replace(/\s*\[Doctor:[^\]]*\]/gi, "")
-    .replace(/\s*\[Online Booking\]/gi, "")
-    .replace(/\s*\[Lang:[^\]]*\]/gi, "")
-    .replace(/\s*-\s*$/, "")
-    .trim();
-}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -77,7 +68,7 @@ export async function GET(request: Request) {
     formattedTime: formatSwissTimeAmPm(startDate),
     rawDate,
     rawTime,
-    service: parseServiceFromReason(appt.reason),
+    service: cleanAppointmentReason(appt.reason),
     location: appt.location || "Lausanne",
     status: appt.status,
   });

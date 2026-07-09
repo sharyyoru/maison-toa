@@ -1,5 +1,6 @@
 import { formatSwissDateWithWeekday, formatSwissTimeAmPm } from "@/lib/swissTimezone";
 import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
+import { cleanAppointmentReason } from "@/lib/appointmentUtils";
 
 export function formatAppointmentDate(date: Date, language = "en"): string {
   if (language === "fr") {
@@ -90,6 +91,7 @@ export function generatePatientConfirmationEmail(
   };
 
   const texts = isFrench ? t.fr : t.en;
+  const displayService = cleanAppointmentReason(service) || service;
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
   const manageUrl = appointmentId
@@ -100,7 +102,7 @@ export function generatePatientConfirmationEmail(
     infoRow(texts.practitioner, doctorName) +
     infoRow(texts.date, formatAppointmentDate(appointmentDate, language)) +
     infoRow(texts.time, formatAppointmentTime(appointmentDate, language)) +
-    infoRow(texts.treatment, service) +
+    infoRow(texts.treatment, displayService) +
     (location ? infoRow(isFrench ? "Lieu" : "Location", location) : "");
 
   const body = `
@@ -149,6 +151,7 @@ export function generateDoctorNotificationEmail(
   notes: string | null,
   location: string | null
 ): string {
+  const displayService = cleanAppointmentReason(service) || service;
   const patientRows =
     infoRow("Name", patientName) +
     infoRow("Email", patientEmail) +
@@ -157,7 +160,7 @@ export function generateDoctorNotificationEmail(
   const appointmentRows =
     infoRow("Date", formatAppointmentDate(appointmentDate)) +
     infoRow("Time", formatAppointmentTime(appointmentDate)) +
-    infoRow("Service", service) +
+    infoRow("Service", displayService) +
     (location ? infoRow("Location", location) : "");
 
   const body = `
@@ -183,6 +186,7 @@ export function generatePatientReminderEmail(
   appointmentId: string
 ): string {
   const isFrench = language === "fr";
+  const displayService = cleanAppointmentReason(service) || service;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
   const manageUrl = `${appUrl}/appointments/manage?id=${appointmentId}`;
   const salutation = isFrench
@@ -200,10 +204,10 @@ export function generatePatientReminderEmail(
   const rows = isFrench
     ? infoRow("Date", formatAppointmentDate(appointmentDate, language)) +
       infoRow("Heure", formatAppointmentTime(appointmentDate, language)) +
-      infoRow("Soin", service)
+      infoRow("Soin", displayService)
     : infoRow("Date", formatAppointmentDate(appointmentDate, language)) +
       infoRow("Time", formatAppointmentTime(appointmentDate, language)) +
-      infoRow("Treatment", service);
+      infoRow("Treatment", displayService);
 
   const body = isFrench
     ? `

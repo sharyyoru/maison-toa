@@ -12,6 +12,20 @@ export type AppointmentWithNotes = {
 };
 
 /**
+ * Remove internal metadata that is appended to legacy appointment reason values.
+ * The remaining text is safe for patient-facing treatment/service display.
+ */
+export function cleanAppointmentReason(reason: string | null | undefined): string {
+  if (!reason) return "";
+
+  return reason
+    .replace(/\s*\[(?:Doctor|Category|Notes|Status|Lang):\s*[^\]]*\]/gi, "")
+    .replace(/\s*\[Online Booking\]/gi, "")
+    .replace(/\s*-\s*$/, "")
+    .trim();
+}
+
+/**
  * Extract notes from an appointment, with fallback to parsing the reason field
  * for old appointments created before the notes column was added
  */
@@ -42,17 +56,9 @@ export function getAppointmentTitle(appointment: AppointmentWithNotes): string |
     return appointment.title;
   }
 
-  // Fallback: use the reason field (which contains patient name and service)
-  // but strip out the [Doctor: ...] and [Notes: ...] parts
+  // Fallback: use the reason field but strip out internal metadata tags.
   if (appointment.reason) {
-    let title = appointment.reason;
-    
-    // Remove [Doctor: ...] pattern
-    title = title.replace(/\s*\[Doctor:\s*[^\]]+\]/g, '');
-    
-    // Remove [Notes: ...] pattern
-    title = title.replace(/\s*\[Notes:\s*[^\]]+\]/g, '');
-    
+    const title = cleanAppointmentReason(appointment.reason);
     return title.trim() || null;
   }
 

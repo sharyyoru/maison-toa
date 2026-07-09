@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { parseSwissDateTimeLocal, formatSwissDateWithWeekday, formatSwissTimeAmPm } from "@/lib/swissTimezone";
 import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
 import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
+import { cleanAppointmentReason } from "@/lib/appointmentUtils";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,16 +27,6 @@ function getSalutation(lastName: string, gender: string | null, language: string
   if (gender === "female") return fr ? `Chère Madame ${lastName}` : `Dear Ms. ${lastName}`;
   if (gender === "male") return fr ? `Cher Monsieur ${lastName}` : `Dear Mr. ${lastName}`;
   return fr ? "Madame, Monsieur," : "Dear Sir or Madam,";
-}
-
-function parseServiceFromReason(reason: string | null): string {
-  if (!reason) return "";
-  return reason
-    .replace(/\s*\[Doctor:[^\]]*\]/gi, "")
-    .replace(/\s*\[Online Booking\]/gi, "")
-    .replace(/\s*\[Lang:[^\]]*\]/gi, "")
-    .replace(/\s*-\s*$/, "")
-    .trim();
 }
 
 function generateRescheduleEmail(
@@ -171,7 +162,7 @@ export async function POST(request: Request) {
           patient.gender ?? null,
           doctorName,
           newStartDate,
-          parseServiceFromReason(appt.reason),
+          cleanAppointmentReason(appt.reason),
           language,
           id
         );
@@ -189,7 +180,7 @@ export async function POST(request: Request) {
       const patientName = patient
         ? `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim()
         : "Unknown patient";
-      const service = parseServiceFromReason(appt.reason) || "-";
+      const service = cleanAppointmentReason(appt.reason) || "-";
       const newDateStr = newStartDate.toLocaleString("en-GB", {
         timeZone: "Europe/Zurich", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
       });

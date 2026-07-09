@@ -4,6 +4,7 @@ import { formatSwissDateWithWeekday, formatSwissTimeAmPm } from "@/lib/swissTime
 import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
 import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
 import { normalizePatientLanguage } from "@/lib/languagePreference";
+import { cleanAppointmentReason } from "@/lib/appointmentUtils";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -175,7 +176,7 @@ function generatePatientConfirmationEmail(
     infoRow(texts.practitioner, doctorName) +
     infoRow(texts.date, formatDate(appointmentDate, language)) +
     infoRow(texts.time, formatTime(appointmentDate, language)) +
-    infoRow(texts.treatment, service) +
+    infoRow(texts.treatment, cleanAppointmentReason(service) || service) +
     (location ? infoRow(isFrench ? "Lieu" : "Location", location) : "");
 
   const body = `
