@@ -2408,6 +2408,29 @@ export default function MedicalConsultationsCard({
     [consultations, patientId],
   );
 
+  const currentMedicalStaffProvider = useMemo(() => {
+    if (!currentUserId && !currentUserEmail) return null;
+
+    const currentUser = currentUserId
+      ? userOptions.find((user) => user.id === currentUserId)
+      : null;
+    const mappedProviderId = currentUser?.provider_id ?? null;
+
+    if (mappedProviderId) {
+      const mappedProvider = medicalStaffOptions.find((staff) => staff.id === mappedProviderId);
+      if (mappedProvider) return mappedProvider;
+    }
+
+    const normalizedEmail = currentUserEmail?.trim().toLowerCase();
+    if (!normalizedEmail) return null;
+
+    return (
+      medicalStaffOptions.find(
+        (staff) => staff.email?.trim().toLowerCase() === normalizedEmail,
+      ) ?? null
+    );
+  }, [currentUserEmail, currentUserId, medicalStaffOptions, userOptions]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -4781,9 +4804,7 @@ export default function MedicalConsultationsCard({
           ? crypto.randomUUID()
           : `${Date.now()}00000000`.slice(0, 8) + "-0000-4000-8000-000000000000";
       const roomId = `patient:${patientId}:consultation:${roomUuid}`;
-      const doctor = currentUserId
-        ? userOptions.find((user) => user.id === currentUserId)
-        : null;
+      const doctor = currentMedicalStaffProvider;
 
       const {
         data: { session },
@@ -4806,8 +4827,8 @@ export default function MedicalConsultationsCard({
           title: "Consultation Note",
           contentHtml: buildBlankConsultationNotesHtml(),
           recordType: "notes",
-          doctorId: currentUserId ?? "",
-          doctorName: doctor?.full_name || doctor?.email || null,
+          doctorId: doctor?.id ?? "",
+          doctorName: doctor?.name || doctor?.email || null,
           scheduledAt,
           diagnosisCode: "",
           refIcd10: "",
