@@ -135,8 +135,12 @@ export async function POST(req: NextRequest) {
         invoiceId = invoice_id;
         const paidAmount = (session.amount_total || 0) / 100;
         const paymentIntentId = session.payment_intent as string;
+        const isDepositInvoice = !!session.metadata?.payment_token;
 
-        // Mark invoice paid
+        // Mark invoice paid. If it was accessed via a payment_link_token (the
+        // "Acompte 50%" flow), also sync deposit_status so the cockpit widget
+        // reflects the paid state. The old invoice_deposit branch handled this
+        // for a separate flow, but create-session uses type="invoice".
         await supabase
           .from("invoices")
           .update({
@@ -146,6 +150,7 @@ export async function POST(req: NextRequest) {
             stripe_payment_intent_id: paymentIntentId,
             stripe_session_id: null,
             stripe_session_expires_at: null,
+            ...(isDepositInvoice ? { deposit_status: "paid" } : {}),
           })
           .eq("id", invoice_id);
 
