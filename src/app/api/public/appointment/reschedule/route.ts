@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { parseSwissDateTimeLocal, formatSwissDateWithWeekday, formatSwissTimeAmPm } from "@/lib/swissTimezone";
+import { formatSwissDateWithWeekday, formatSwissTimeAmPm, formatSwissYmd, getSwissSlotString, parseSwissDateTimeLocal } from "@/lib/swissTimezone";
 import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
 import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
 import { cleanAppointmentReason } from "@/lib/appointmentUtils";
+import { nameToSlug } from "@/lib/doctorAvailability";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -91,6 +92,12 @@ function parseLangFromReason(reason: string | null): string {
   return match ? match[1].toLowerCase() : "fr";
 }
 
+function getDoctorNameFromReason(reason: string | null): string {
+  if (!reason) return "";
+  const match = reason.match(/\[Doctor:\s*(.+?)\s*\]/i);
+  return match ? match[1].trim() : "";
+}
+
 export async function POST(request: Request) {
   try {
     const { id, newAppointmentDate } = await request.json();
@@ -120,6 +127,42 @@ export async function POST(request: Request) {
     const newStartDate = parseSwissDateTimeLocal(newAppointmentDate);
     const newEndDate = new Date(newStartDate.getTime() + 60 * 60 * 1000); // 1 hour
 
+    let doctorName = "";
+    if (appt.provider_id) {
+      const { data: provider } = await supabase
+        .from("providers")
+        .select("name")
+        .eq("id", appt.provider_id)
+        .single();
+      doctorName = provider?.name ?? "";
+    }
+    if (!doctorName) {
+      doctorName = getDoctorNameFromReason(appt.reason);
+    }
+
+    const doctorSlug = doctorName ? nameToSlug(doctorName) : "";
+    const requestedDate = formatSwissYmd(newStartDate);
+    const requestedTime = getSwissSlotString(newStartDate);
+
+    if (!doctorSlug || !requestedDate || !requestedTime) {
+      return NextResponse.json({ error: "Unable to verify doctor availability" }, { status: 400 });
+    }
+
+    const slotsUrl = new URL("/api/public/appointment/slots", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000");
+    slotsUrl.searchParams.set("doctorSlug", doctorSlug);
+    slotsUrl.searchParams.set("date", requestedDate);
+    slotsUrl.searchParams.set("excludeId", id);
+    const slotsRes = await fetch(slotsUrl);
+    const slotsData = await slotsRes.json();
+    const availableSlots: string[] = Array.isArray(slotsData.availableSlots) ? slotsData.availableSlots : [];
+
+    if (!slotsRes.ok || !availableSlots.includes(requestedTime)) {
+      return NextResponse.json(
+        { error: "This time slot is no longer available. Please choose another time." },
+        { status: 409 }
+      );
+    }
+
     // Update appointment times
     const { error: updateError } = await supabase
       .from("appointments")
@@ -139,20 +182,6 @@ export async function POST(request: Request) {
       .select("first_name, last_name, email, gender")
       .eq("id", appt.patient_id)
       .single();
-
-    let doctorName = "";
-    if (appt.provider_id) {
-      const { data: provider } = await supabase
-        .from("providers")
-        .select("name")
-        .eq("id", appt.provider_id)
-        .single();
-      doctorName = provider?.name ?? "";
-    }
-    if (!doctorName && appt.reason) {
-      const match = appt.reason.match(/\[Doctor:\s*(.+?)\s*\]/i);
-      if (match) doctorName = match[1];
-    }
 
     // Send reschedule confirmation email
     if (patient?.email) {

@@ -43,6 +43,10 @@ function getOccupiedSwissSlots(startTimeIso: string, endTimeIso: string): string
   return slots;
 }
 
+function normalizeDoctorSlug(value: string): string {
+  return nameToSlug(value.replace(/^Dr\.?\s+/i, "")).replace(/^dr-/, "");
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const doctorSlug = searchParams.get("doctorSlug");
@@ -54,6 +58,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing doctorSlug or date" }, { status: 400 });
   }
 
+  const normalizedDoctorSlug = normalizeDoctorSlug(doctorSlug);
   const parsedDate = parseSwissDate(date);
   const dayOfWeek = getSwissDayOfWeek(parsedDate);
 
@@ -63,7 +68,7 @@ export async function GET(request: Request) {
     .select("id, name")
     .limit(50);
 
-  const provider = providers?.find(p => nameToSlug(p.name) === doctorSlug);
+  const provider = providers?.find(p => normalizeDoctorSlug(p.name) === normalizedDoctorSlug);
   const providerId = provider?.id ?? null;
   const providerName = provider?.name || doctorName;
 
@@ -99,7 +104,7 @@ export async function GET(request: Request) {
   // If the DB has a schedule but the day is disabled, allSlots stays [] intentionally.
   if (!dbScheduleFound) {
     const { generateTimeSlots } = await import("@/lib/doctorAvailability");
-    allSlots = generateTimeSlots(doctorSlug, "lausanne", dayOfWeek);
+    allSlots = generateTimeSlots(normalizedDoctorSlug, "lausanne", dayOfWeek);
     console.log(`[Slots API] Using hardcoded availability fallback: ${allSlots.length} slots`);
   }
 
@@ -117,12 +122,17 @@ export async function GET(request: Request) {
     .gt("end_time", start)
     .neq("status", "cancelled");
 
-  const maxCapacity = MULTI_CAPACITY_DOCTORS.includes(doctorSlug) ? 3 : 1;
-  const doctorSlugPattern = new RegExp(`\\[Doctor:\\s*${doctorSlug.replace(/-/g, "[ -]?")}`, "i");
+  const maxCapacity = MULTI_CAPACITY_DOCTORS.includes(normalizedDoctorSlug) ? 3 : 1;
+  const doctorSlugPattern = new RegExp(`\\[Doctor:\\s*${normalizedDoctorSlug.replace(/-/g, "[ -]?")}`, "i");
 
-  const isThisDoctor = (apt: { provider_id: string | null; reason: string | null }) =>
-    (providerId && apt.provider_id === providerId) ||
-    !!(apt.reason?.match(doctorSlugPattern));
+  const isThisDoctor = (apt: { provider_id: string | null; reason: string | null }) => {
+    if (providerId && apt.provider_id === providerId) return true;
+
+    const doctorMatch = apt.reason?.match(/\[Doctor:\s*(.+?)\s*\]/i);
+    if (doctorMatch && normalizeDoctorSlug(doctorMatch[1]) === normalizedDoctorSlug) return true;
+
+    return !!(apt.reason?.match(doctorSlugPattern));
+  };
 
   const patientApts = (existingAppointments ?? []).filter(
     apt => !apt.no_patient && isThisDoctor(apt) && !(excludeId && apt.id === excludeId)
