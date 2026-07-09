@@ -121,7 +121,12 @@ export default function DepositStatusWidget({ patientId }: { patientId: string }
 
   if (!deposit) return null;
 
-  const currentStatus: DepositStatus = deposit.deposit_status ?? "requested";
+  // Derive effective status: if deposit_status is not set yet (e.g. invoice was
+  // marked paid manually before deposit_status sync was in place), fall back to
+  // "paid" when the invoice status is already PAID, otherwise "requested".
+  const currentStatus: DepositStatus =
+    deposit.deposit_status ??
+    (deposit.status === "PAID" || deposit.status === "PARTIAL_PAID" ? "paid" : "requested");
   const meta = STATUS_META[currentStatus];
   const canEdit = currentStatus !== "requested";
 

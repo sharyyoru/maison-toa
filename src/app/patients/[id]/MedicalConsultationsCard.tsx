@@ -5610,6 +5610,23 @@ export default function MedicalConsultationsCard({
         invoiceUpdateData.paid_amount = null;
       }
 
+      // If this is a deposit invoice (has a payment_link_token, meaning it was
+      // created via the "Acompte 50%" flow), also sync deposit_status so the
+      // cockpit widget updates — manual payment doesn't go through the Stripe
+      // webhook which is the only other place that sets deposit_status.
+      if (status === "PAID") {
+        const target = consultations.find(c => c.id === invoiceId);
+        if (target?.payment_link_token) {
+          invoiceUpdateData.deposit_status = "paid";
+        }
+      } else if (status === "OPEN" || status === "CANCELLED") {
+        // If reverting a deposit invoice back to unpaid, reset deposit_status too
+        const target = consultations.find(c => c.id === invoiceId);
+        if (target?.payment_link_token) {
+          invoiceUpdateData.deposit_status = "requested";
+        }
+      }
+
       const { error } = await supabaseClient
         .from("invoices")
         .update(invoiceUpdateData)

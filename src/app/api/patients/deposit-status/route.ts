@@ -3,25 +3,27 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 // GET /api/patients/deposit-status?patientId=xxx
 // Returns the most recent deposit invoice for a patient.
-// A deposit invoice is identified by: deposit_deadline_at set OR deposit_status set OR
-// (appointment_id set AND payment_method = 'online').
-// Prefers non-CANCELLED invoices. Returns the most recent one overall.
+// A deposit invoice is identified by any of:
+//   - payment_link_token is set (created via "Acompte 50%" button)
+//   - deposit_deadline_at is set (deadline was triggered)
+//   - deposit_status is set (status was updated)
+// Non-CANCELLED invoices are preferred. Returns the most recent one overall.
 export async function GET(request: NextRequest) {
   const patientId = request.nextUrl.searchParams.get("patientId");
   if (!patientId) {
     return NextResponse.json({ error: "Missing patientId" }, { status: 400 });
   }
 
-  // Fetch all deposit-like invoices for this patient, prefer non-CANCELLED
+  // Single query: any invoice that looks like a deposit invoice, most recent first.
+  // Using an OR filter: payment_link_token set OR deposit_deadline_at set OR deposit_status set.
   const { data, error } = await supabaseAdmin
     .from("invoices")
-    .select("id, invoice_number, total_amount, paid_at, deposit_status, status, deposit_deadline_at, appointment_id, payment_method")
+    .select("id, invoice_number, total_amount, paid_at, deposit_status, status, deposit_deadline_at, appointment_id, payment_method, payment_link_token")
     .eq("patient_id", patientId)
     .eq("is_demo", false)
     .eq("is_archived", false)
-    .not("appointment_id", "is", null)
-    .not("deposit_deadline_at", "is", null)
     .neq("status", "CANCELLED")
+    .or("payment_link_token.not.is.null,deposit_deadline_at.not.is.null,deposit_status.not.is.null")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -30,22 +32,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // If no active deposit found, fall back to most recent non-cancelled deposit with deposit_status set
-  if (!data) {
-    const { data: fallback } = await supabaseAdmin
-      .from("invoices")
-      .select("id, invoice_number, total_amount, paid_at, deposit_status, status, deposit_deadline_at, appointment_id, payment_method")
-      .eq("patient_id", patientId)
-      .eq("is_demo", false)
-      .eq("is_archived", false)
-      .not("deposit_status", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return NextResponse.json({ deposit: fallback ?? null });
-  }
-
-  return NextResponse.json({ deposit: data });
+  return NextResponse.json({ deposit: data ?? null });
 }
 
 // PATCH /api/patients/deposit-status
