@@ -123,11 +123,23 @@ function isDuplicateStorageError(error: { message?: string; statusCode?: string 
   );
 }
 
+function sanitizeForFileName(str: string): string {
+  // Strip accents and keep only filesystem-safe characters for the storage
+  // path. The original (accented) title is stored separately in the database.
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[<>\:"/\\|?*\x00-\x1f]/g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .substring(0, 50);
+}
+
 function buildBaseFileName(patientName: string, title: string): string {
-  const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9-_]/g, "_").substring(0, 50);
   const dateStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-  const safeName = patientName ? sanitize(patientName) : "Patient";
-  const safeTitle = sanitize(title);
+  const safeName = patientName ? sanitizeForFileName(patientName) : "Patient";
+  const safeTitle = sanitizeForFileName(title);
   return `${safeTitle}_${safeName}_${dateStr}`;
 }
 
@@ -230,13 +242,15 @@ export async function POST(request: NextRequest) {
 
     const { fileName, storagePath: patientDocPath } = uploadResult;
 
-    // Create database record with the resolved file path
+    // Create database record with the resolved file path.
+    // Keep the original title (which may contain accents / special characters)
+    // as the display title; only the storage filename is ASCII-sanitized.
     const { data: document, error: dbError } = await supabaseAdmin
       .from("patient_documents")
       .insert({
         patient_id: patientId,
         template_id: null,
-        title: fileName.replace('.docx', ''), // Human-readable title
+        title: title.trim(), // Human-readable title (accents preserved)
         content: `Document created from template: ${title}`,
         status: "draft",
         version: 1,

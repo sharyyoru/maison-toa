@@ -6,6 +6,7 @@ import BeforeAfterEditorModal from "./BeforeAfterEditorModal";
 import PdfAnnotationEditor from "@/components/PdfAnnotationEditor";
 import DocxPreviewEditor from "@/components/DocxEditor/DocxPreviewEditor";
 import DocumentTemplatesPanel from "@/components/DocumentTemplatesPanel";
+import DocumentPrintView from "@/components/DocumentPrintView";
 import EmailShareModal from "./EmailShareModal";
 import { formatSwissTime, formatSwissDateTime, SWISS_TIMEZONE } from "@/lib/swissTimezone";
 import { useTranslations } from "next-intl";
@@ -150,6 +151,7 @@ export default function PatientDocumentsTab({
   const [renaming, setRenaming] = useState(false);
 
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [printDocument, setPrintDocument] = useState<{ item: ListedItem; blob: Blob } | null>(null);
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<{ name: string; size: number }[]>([]);
@@ -966,6 +968,44 @@ export default function PatientDocumentsTab({
     }
   }
 
+  async function handleDownloadFile(item: ListedItem) {
+    try {
+      setError(null);
+      const url = await getFileAccessUrl(item);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to download ${item.name}`);
+
+      const blob = await response.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = item.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to download file.");
+    }
+  }
+
+  async function handleDownloadDocx(item: ListedItem) {
+    await handleDownloadFile(item);
+  }
+
+  async function handleDownloadPdf(item: ListedItem) {
+    try {
+      setError(null);
+      const url = await getFileAccessUrl(item);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to load ${item.name}`);
+
+      const blob = await response.blob();
+      setPrintDocument({ item, blob });
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to prepare PDF.");
+    }
+  }
+
   const selectedMimeType = (() => {
     if (!selectedFile || selectedFile.kind !== "file") return "";
     // Always resolve by extension first for known types (metadata can be wrong, e.g. jfif → application/octet-stream)
@@ -1423,6 +1463,39 @@ export default function PatientDocumentsTab({
                             </svg>
                             {t("previewInTab")}
                           </button>
+                        )}
+                        {/* Download options for generated DOCX documents */}
+                        {ext === "docx" && item.source !== "patient-docs" && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await handleDownloadDocx(item);
+                              }}
+                              className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[10px] font-medium text-sky-700 hover:bg-sky-100 hover:border-sky-300 transition-colors"
+                              title="Download DOCX"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              DOCX
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await handleDownloadPdf(item);
+                              }}
+                              className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[10px] font-medium text-rose-700 hover:bg-rose-100 hover:border-rose-300 transition-colors"
+                              title="Download PDF"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                              </svg>
+                              PDF
+                            </button>
+                          </>
                         )}
                         {/* Action buttons - show on hover (only for patient_document bucket files) */}
                         {item.source !== "patient-docs" && (
@@ -2084,6 +2157,14 @@ export default function PatientDocumentsTab({
         error={emailError}
         patientName={patientName}
       />
+      {/* PDF Print View */}
+      {printDocument && (
+        <DocumentPrintView
+          blob={printDocument.blob}
+          title={printDocument.item.name.replace(/\.docx$/i, "")}
+          onClose={() => setPrintDocument(null)}
+        />
+      )}
     </>
   );
 }
