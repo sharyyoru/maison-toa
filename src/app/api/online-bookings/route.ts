@@ -82,6 +82,12 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status"); // optional filter
   const search = searchParams.get("search") || "";
+  const service = searchParams.get("service") || "";
+  const doctor = searchParams.get("doctor") || "";
+  const appointmentFrom = searchParams.get("appointmentFrom") || "";
+  const appointmentTo = searchParams.get("appointmentTo") || "";
+  const createdFrom = searchParams.get("createdFrom") || "";
+  const createdTo = searchParams.get("createdTo") || "";
   const page = parseInt(searchParams.get("page") || "1", 10);
   const pageSize = 50;
 
@@ -107,6 +113,30 @@ export async function GET(request: NextRequest) {
     query = query.or(
       `reason.ilike.%${search}%`
     );
+  }
+
+  if (service) {
+    query = query.ilike("reason", `%${service}%`);
+  }
+
+  if (doctor && doctor !== "all") {
+    query = query.ilike("reason", `%[Doctor: ${doctor}]%`);
+  }
+
+  if (appointmentFrom) {
+    query = query.gte("start_time", `${appointmentFrom}T00:00:00.000Z`);
+  }
+
+  if (appointmentTo) {
+    query = query.lte("start_time", `${appointmentTo}T23:59:59.999Z`);
+  }
+
+  if (createdFrom) {
+    query = query.gte("created_at", `${createdFrom}T00:00:00.000Z`);
+  }
+
+  if (createdTo) {
+    query = query.lte("created_at", `${createdTo}T23:59:59.999Z`);
   }
 
   const { data, error, count } = await query;

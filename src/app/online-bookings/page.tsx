@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
-import { formatSwissDateWithWeekday, formatSwissTimeAmPm, formatSwissYmd, formatSwissDate, formatSwissTime } from "@/lib/swissTimezone";
+import { formatSwissDateWithWeekday, formatSwissTimeAmPm, formatSwissYmd, formatSwissTime } from "@/lib/swissTimezone";
 
 type BookingStatus = "scheduled" | "confirmed" | "completed" | "cancelled" | "no_show";
 
@@ -45,7 +45,7 @@ function parseReason(reason: string | null): { service: string; doctor: string; 
   const doctorMatch = reason.match(/\[Doctor:\s*(.+?)\s*\]/i);
   const doctor = doctorMatch ? doctorMatch[1] : "";
   // Remove markers from the reason to get service + notes
-  let clean = reason
+  const clean = reason
     .replace(/\s*\[Doctor:[^\]]*\]/gi, "")
     .replace(/\s*\[Online Booking\]/gi, "")
     .replace(/\s*\[Lang:[^\]]*\]/gi, "")
@@ -95,6 +95,14 @@ export default function OnlineBookingsPage() {
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
+  const [doctorFilter, setDoctorFilter] = useState("all");
+  const [serviceFilter, setServiceFilter] = useState("");
+  const [appointmentFrom, setAppointmentFrom] = useState("");
+  const [appointmentTo, setAppointmentTo] = useState("");
+  const [createdFrom, setCreatedFrom] = useState("");
+  const [createdTo, setCreatedTo] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   // Delete modal state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -127,6 +135,13 @@ export default function OnlineBookingsPage() {
       const params = new URLSearchParams({
         page: String(page),
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
+        ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+        ...(doctorFilter !== "all" ? { doctor: doctorFilter } : {}),
+        ...(serviceFilter ? { service: serviceFilter } : {}),
+        ...(appointmentFrom ? { appointmentFrom } : {}),
+        ...(appointmentTo ? { appointmentTo } : {}),
+        ...(createdFrom ? { createdFrom } : {}),
+        ...(createdTo ? { createdTo } : {}),
       });
       const res = await fetch(`/api/online-bookings?${params}`);
       const data = await res.json();
@@ -138,13 +153,118 @@ export default function OnlineBookingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch]);
+  }, [page, debouncedSearch, statusFilter, doctorFilter, serviceFilter, appointmentFrom, appointmentTo, createdFrom, createdTo]);
 
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, doctorFilter, serviceFilter, appointmentFrom, appointmentTo, createdFrom, createdTo]);
+
+  const doctorOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const booking of bookings) {
+      const doctor = parseReason(booking.reason).doctor.trim();
+      if (doctor) names.add(doctor);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [bookings]);
+
+  const hasActiveFilters =
+    !!search ||
+    statusFilter !== "all" ||
+    doctorFilter !== "all" ||
+    !!serviceFilter ||
+    !!appointmentFrom ||
+    !!appointmentTo ||
+    !!createdFrom ||
+    !!createdTo;
+
+  const resetFilters = () => {
+    setSearch("");
+    setDebouncedSearch("");
+    setStatusFilter("all");
+    setDoctorFilter("all");
+    setServiceFilter("");
+    setAppointmentFrom("");
+    setAppointmentTo("");
+    setCreatedFrom("");
+    setCreatedTo("");
+    setPage(1);
+  };
+
+  const buildQueryParams = (targetPage: number) => new URLSearchParams({
+    page: String(targetPage),
+    ...(search ? { search } : {}),
+    ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+    ...(doctorFilter !== "all" ? { doctor: doctorFilter } : {}),
+    ...(serviceFilter ? { service: serviceFilter } : {}),
+    ...(appointmentFrom ? { appointmentFrom } : {}),
+    ...(appointmentTo ? { appointmentTo } : {}),
+    ...(createdFrom ? { createdFrom } : {}),
+    ...(createdTo ? { createdTo } : {}),
+  });
+
+  const exportToExcel = async () => {
+    if (typeof window === "undefined" || exporting) return;
+
+    setExporting(true);
+    setError(null);
+    try {
+      const XLSX = await import("xlsx");
+      const allBookings: Booking[] = [];
+      for (let exportPage = 1; ; exportPage += 1) {
+        const res = await fetch(`/api/online-bookings?${buildQueryParams(exportPage)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to export bookings");
+        allBookings.push(...(data.bookings || []));
+        if (!data.bookings || data.bookings.length < PAGE_SIZE || allBookings.length >= (data.total || 0)) break;
+      }
+
+      const rows = allBookings.map((booking) => {
+        const { service, doctor, notes } = parseReason(booking.reason);
+        const appointmentDate = new Date(booking.start_time);
+        const createdDate = new Date(booking.created_at);
+        return {
+          Patient: booking.patient
+            ? `${booking.patient.first_name} ${booking.patient.last_name}`.trim()
+            : "",
+          Email: booking.patient?.email || "",
+          Phone: booking.patient?.phone || "",
+          Service: service,
+          Doctor: doctor,
+          Status: booking.status,
+          "Appointment Date": formatSwissDateWithWeekday(appointmentDate),
+          "Appointment Time": formatSwissTimeAmPm(appointmentDate),
+          "Created Date": formatSwissDateWithWeekday(createdDate),
+          "Created Time": formatSwissTimeAmPm(createdDate),
+          Location: booking.location || "",
+          Notes: notes,
+          "Patient Source": booking.patient?.source || "",
+          "Booking ID": booking.id,
+        };
+      });
+
+      const workbook = XLSX.utils.book_new();
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      sheet["!cols"] = [
+        { wch: 24 }, { wch: 32 }, { wch: 18 }, { wch: 36 }, { wch: 24 },
+        { wch: 14 }, { wch: 28 }, { wch: 14 }, { wch: 28 }, { wch: 14 },
+        { wch: 20 }, { wch: 40 }, { wch: 18 }, { wch: 38 },
+      ];
+      sheet["!autofilter"] = { ref: `A1:N${Math.max(rows.length + 1, 1)}` };
+      XLSX.utils.book_append_sheet(workbook, sheet, "Online Bookings");
+      XLSX.writeFile(workbook, `online-bookings-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export bookings");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const openDeleteModal = (booking: Booking) => {
     setDeletingBooking(booking);
@@ -295,7 +415,8 @@ export default function OnlineBookingsPage() {
       </div>
 
       {/* Filters */}
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
         <input
           type="text"
           value={search}
@@ -303,7 +424,93 @@ export default function OnlineBookingsPage() {
           placeholder="Search by service or doctor…"
           className="h-9 w-64 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
         />
-        <span className="ml-auto text-sm text-slate-500">{total} booking{total !== 1 ? "s" : ""}</span>
+          <input
+            type="text"
+            value={serviceFilter}
+            onChange={(e) => setServiceFilter(e.target.value)}
+            placeholder="Filter by service..."
+            className="h-9 w-56 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+          />
+          <select
+            value={doctorFilter}
+            onChange={(e) => setDoctorFilter(e.target.value)}
+            className="h-9 w-48 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
+          >
+            <option value="all">All doctors</option>
+            {doctorOptions.map((doctor) => (
+              <option key={doctor} value={doctor}>{doctor}</option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as BookingStatus | "all")}
+            className="h-9 w-40 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
+          >
+            <option value="all">All statuses</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="no_show">No show</option>
+          </select>
+          <span className="ml-auto text-sm text-slate-500">{total} booking{total !== 1 ? "s" : ""}</span>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="grid gap-1 text-xs font-medium text-slate-500">
+            Appointment from
+            <input
+              type="date"
+              value={appointmentFrom}
+              onChange={(e) => setAppointmentFrom(e.target.value)}
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 focus:border-slate-400 focus:outline-none"
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-medium text-slate-500">
+            Appointment to
+            <input
+              type="date"
+              value={appointmentTo}
+              onChange={(e) => setAppointmentTo(e.target.value)}
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 focus:border-slate-400 focus:outline-none"
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-medium text-slate-500">
+            Created from
+            <input
+              type="date"
+              value={createdFrom}
+              onChange={(e) => setCreatedFrom(e.target.value)}
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 focus:border-slate-400 focus:outline-none"
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-medium text-slate-500">
+            Created to
+            <input
+              type="date"
+              value={createdTo}
+              onChange={(e) => setCreatedTo(e.target.value)}
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 focus:border-slate-400 focus:outline-none"
+            />
+          </label>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Reset
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={exportToExcel}
+            disabled={exporting || loading}
+            className="ml-auto h-9 rounded-lg bg-slate-900 px-3 text-xs font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exporting ? "Exporting..." : "Export Excel"}
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -342,9 +549,8 @@ export default function OnlineBookingsPage() {
               </tr>
             )}
             {!loading && bookings.map((booking) => {
-              const { service, doctor, notes } = parseReason(booking.reason);
+              const { service, doctor } = parseReason(booking.reason);
               const apptDate = new Date(booking.start_time);
-              const isNew = booking.patient?.source === "online_booking";
 
               return (
                 <tr key={booking.id} className="hover:bg-slate-50/60">
