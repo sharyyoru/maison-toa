@@ -170,6 +170,7 @@ type AppointmentPatientSuggestion = {
   last_name: string | null;
   email: string | null;
   phone: string | null;
+  date_of_birth?: string | null;
 };
 
 function formatPatientFileName(firstName?: string | null, lastName?: string | null) {
@@ -1204,6 +1205,12 @@ export default function CalendarPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingAppointment, setDeletingAppointment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [editPatientSearch, setEditPatientSearch] = useState("");
+  const [editPatientDropdownOpen, setEditPatientDropdownOpen] = useState(false);
+  const [editPatientOptions, setEditPatientOptions] = useState<AppointmentPatientSuggestion[]>([]);
+  const [editPatientOptionsLoading, setEditPatientOptionsLoading] = useState(false);
+  const [editPatientOptionsError, setEditPatientOptionsError] = useState<string | null>(null);
 
   const appointmentRealtimeReloadBlocked =
     createModalOpen ||
@@ -1235,6 +1242,7 @@ export default function CalendarPage() {
 
   // Helper to close all edit modal dropdowns
   const closeEditModalDropdowns = () => {
+    setEditPatientDropdownOpen(false);
     setEditCategoryDropdownOpen(false);
     setEditBookingStatusDropdownOpen(false);
     setEditProviderDropdownOpen(false);
@@ -1246,6 +1254,10 @@ export default function CalendarPage() {
     if (savingEdit || deletingAppointment) return;
     setEditModalOpen(false);
     setEditingAppointment(null);
+    setEditPatientId(null);
+    setEditPatientSearch("");
+    setEditPatientOptions([]);
+    setEditPatientOptionsError(null);
     setShowDeleteConfirm(false);
     closeEditModalDropdowns();
   };
@@ -1867,6 +1879,95 @@ export default function CalendarPage() {
     
     return () => clearTimeout(debounce);
   }, [createPatientSearch]);
+
+  useEffect(() => {
+    if (!editModalOpen) return;
+
+    const trimmed = editPatientSearch.trim();
+
+    if (trimmed.length === 0) {
+      let isMounted = true;
+      setEditPatientOptionsLoading(true);
+      setEditPatientOptionsError(null);
+
+      (async () => {
+        try {
+          const { data, error } = await supabaseClient
+            .from("patients")
+            .select("id, first_name, last_name, email, phone, date_of_birth:dob")
+            .order("created_at", { ascending: false })
+            .limit(20);
+
+          if (!isMounted) return;
+          if (error || !data) {
+            setEditPatientOptions([]);
+            setEditPatientOptionsError(error?.message ?? "Failed to load patients.");
+          } else {
+            setEditPatientOptions(data as AppointmentPatientSuggestion[]);
+          }
+          setEditPatientOptionsLoading(false);
+        } catch {
+          if (!isMounted) return;
+          setEditPatientOptions([]);
+          setEditPatientOptionsError("Failed to load patients.");
+          setEditPatientOptionsLoading(false);
+        }
+      })();
+
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const debounce = setTimeout(async () => {
+      setEditPatientOptionsLoading(true);
+      setEditPatientOptionsError(null);
+
+      try {
+        const words = trimmed.split(/\s+/).filter((word) => word.length > 0);
+
+        let query = supabaseClient
+          .from("patients")
+          .select("id, first_name, last_name, email, phone, date_of_birth:dob");
+
+        for (const word of words) {
+          const term = `%${word}%`;
+          query = query.or(
+            `first_name.ilike.${term},last_name.ilike.${term},email.ilike.${term},phone.ilike.${term}`,
+          );
+        }
+
+        query = query.order("created_at", { ascending: false }).limit(30);
+
+        const { data, error } = await query;
+
+        if (error || !data) {
+          setEditPatientOptions([]);
+          setEditPatientOptionsError(error?.message ?? "Failed to search patients.");
+        } else {
+          let filtered = data as AppointmentPatientSuggestion[];
+          if (words.length > 1) {
+            filtered = filtered.filter((patient) => {
+              const fullName = `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.toLowerCase();
+              const email = (patient.email ?? "").toLowerCase();
+              const phone = (patient.phone ?? "").toLowerCase();
+              const combined = `${fullName} ${email} ${phone}`;
+              return words.every((word) => combined.includes(word.toLowerCase()));
+            });
+          }
+          setEditPatientOptions(filtered);
+        }
+
+        setEditPatientOptionsLoading(false);
+      } catch {
+        setEditPatientOptions([]);
+        setEditPatientOptionsError("Failed to search patients.");
+        setEditPatientOptionsLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(debounce);
+  }, [editModalOpen, editPatientSearch]);
 
   useEffect(() => {
     if (!isDraggingRange) return;
@@ -3252,6 +3353,13 @@ export default function CalendarPage() {
     setEditingAppointment(appt);
     setEditError(null);
     setSavingEdit(false);
+    setEditPatientId(appt.patient_id ?? appt.patient?.id ?? null);
+    setEditPatientSearch(
+      formatPatientFileName(appt.patient?.first_name, appt.patient?.last_name) ||
+        "Unknown patient",
+    );
+    setEditPatientDropdownOpen(false);
+    setEditPatientOptionsError(null);
 
     const workflow = appointmentStatusToWorkflow(appt.status);
     setEditWorkflowStatus(workflow);
@@ -4091,6 +4199,11 @@ export default function CalendarPage() {
       return;
     }
 
+    if (!editPatientId) {
+      setEditError("Please select a patient.");
+      return;
+    }
+
     const startLocal = new Date(`${editDate}T${editTime}:00`);
     if (Number.isNaN(startLocal.getTime())) {
       setEditError("Invalid date or time.");
@@ -4154,6 +4267,7 @@ export default function CalendarPage() {
       const { data, error } = await supabaseClient
         .from("appointments")
         .update({
+          patient_id: editPatientId,
           status: nextStatus,
           start_time: startIso,
           end_time: endIso,
@@ -4165,7 +4279,7 @@ export default function CalendarPage() {
         })
         .eq("id", editingAppointment.id)
         .select(
-          "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+          "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
         )
         .single();
 
@@ -4207,6 +4321,9 @@ export default function CalendarPage() {
       setSavingEdit(false);
       setEditModalOpen(false);
       setEditingAppointment(null);
+      setEditPatientId(null);
+      setEditPatientSearch("");
+      setEditPatientOptions([]);
 
       if (bookingStatusChangedToCancelled) {
         openCancellationEmailPrompt(updated, "emailOnly");
@@ -5464,6 +5581,90 @@ export default function CalendarPage() {
                 {/* Patient Information */}
                 <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
                   <p className="text-[11px] font-semibold text-slate-700">Patient Information</p>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={editPatientSearch}
+                      onChange={(event) => {
+                        setEditPatientSearch(event.target.value);
+                        setEditPatientDropdownOpen(true);
+                        setEditPatientId(null);
+                      }}
+                      onFocus={() => {
+                        closeEditModalDropdowns();
+                        setEditPatientDropdownOpen(true);
+                      }}
+                      placeholder={t("modal.selectPatient")}
+                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                    />
+                    {editPatientSearch ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditPatientId(null);
+                          setEditPatientSearch("");
+                          setEditPatientDropdownOpen(true);
+                        }}
+                        className="absolute right-2 top-1.5 text-slate-400 hover:text-slate-600 text-xs"
+                      >
+                        x
+                      </button>
+                    ) : null}
+                    {editPatientDropdownOpen ? (
+                      <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+                        {editPatientOptionsLoading ? (
+                          <div className="px-2 py-1.5 text-[11px] text-slate-500">
+                            {t("modal.loadingPatients")}
+                          </div>
+                        ) : editPatientOptions.length === 0 ? (
+                          <div className="px-2 py-1.5 text-[11px] text-slate-500">
+                            {t("modal.noPatientsFound")}
+                          </div>
+                        ) : (
+                          editPatientOptions.map((patient) => {
+                            const name = formatPatientFileName(patient.first_name, patient.last_name) || t("modal.unnamedPatient");
+                            const details = patient.email || patient.phone || t("modal.noContactDetails");
+                            return (
+                              <button
+                                key={patient.id}
+                                type="button"
+                                onClick={() => {
+                                  setEditPatientId(patient.id);
+                                  setEditPatientSearch(name);
+                                  setEditPatientDropdownOpen(false);
+                                  setEditingAppointment((current) =>
+                                    current
+                                      ? {
+                                          ...current,
+                                          patient_id: patient.id,
+                                          patient: {
+                                            id: patient.id,
+                                            first_name: patient.first_name,
+                                            last_name: patient.last_name,
+                                            email: patient.email,
+                                            phone: patient.phone,
+                                            date_of_birth: patient.date_of_birth,
+                                          },
+                                        }
+                                      : current,
+                                  );
+                                }}
+                                className={`flex w-full flex-col items-start px-2 py-1.5 text-left hover:bg-slate-50 ${
+                                  editPatientId === patient.id ? "bg-sky-50 text-sky-700" : "text-slate-700"
+                                }`}
+                              >
+                                <span className="text-[11px] font-medium">{name}</span>
+                                <span className="text-[10px] text-slate-500">{details}</span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                  {editPatientOptionsError ? (
+                    <p className="text-[10px] text-red-600">{editPatientOptionsError}</p>
+                  ) : null}
                   <div className="space-y-1">
                     {editingAppointment.patient?.id ? (
                       <Link
@@ -5474,7 +5675,7 @@ export default function CalendarPage() {
                       </Link>
                     ) : (
                       <p className="text-[11px] text-slate-800 font-medium">
-                        Unknown patient
+                        No patient selected
                       </p>
                     )}
                     {editingAppointment.patient?.email && (
@@ -5489,7 +5690,7 @@ export default function CalendarPage() {
                     )}
                     {editingAppointment.patient?.date_of_birth && (
                       <p className="text-[10px] text-slate-500">
-                        📅 {new Date(editingAppointment.patient.date_of_birth + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
+                        {new Date(editingAppointment.patient.date_of_birth + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
                       </p>
                     )}
                   </div>
