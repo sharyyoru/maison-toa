@@ -11,22 +11,26 @@ import { sanitizeDocxForPreview } from "./docxPreviewSanitizer";
  * This is a client-side workaround because the Vercel deployment does not have
  * a server-side DOCX→PDF converter such as LibreOffice available.
  */
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function convertDocxBlobToPdf(blob: Blob, fileName: string): Promise<void> {
+  // Render off-screen but fully visible so docx-preview can lay out pages and
+  // html2canvas can capture them. Display:none or visibility:hidden would break
+  // both rendering and capture.
   const container = document.createElement("div");
   container.style.position = "fixed";
   container.style.left = "-99999px";
-  container.style.top = "0";
-  container.style.opacity = "0";
-  container.style.pointerEvents = "none";
+  container.style.top = "-99999px";
   container.style.width = "210mm";
-  container.style.zIndex = "-1";
+  container.style.pointerEvents = "none";
   document.body.appendChild(container);
 
   try {
     const sanitizedBlob = await sanitizeDocxForPreview(blob);
 
     await renderAsync(sanitizedBlob, container, undefined, {
-      className: "docx-pdf-render",
       inWrapper: true,
       ignoreWidth: false,
       ignoreHeight: false,
@@ -38,9 +42,20 @@ export async function convertDocxBlobToPdf(blob: Blob, fileName: string): Promis
       renderFooters: true,
     });
 
-    const pages = container.querySelectorAll(".docx-pdf-render .docx-wrapper > section.docx");
+    // Give the browser a tick to finish painting the rendered DOM.
+    await wait(100);
+
+    // docx-preview usually nests <section class="docx"> pages under
+    // .docx-wrapper. Tolerate any depth; if no sections exist, fall back to
+    // capturing the whole rendered wrapper as a single page.
+    let pages = container.querySelectorAll("section.docx");
     if (pages.length === 0) {
-      throw new Error("Document rendered with no pages");
+      const wrapper = container.querySelector(".docx-wrapper");
+      if (wrapper) {
+        pages = [wrapper] as unknown as NodeListOf<Element>;
+      } else {
+        throw new Error("Document rendered with no pages");
+      }
     }
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
