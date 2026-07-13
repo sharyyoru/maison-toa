@@ -1208,6 +1208,7 @@ export default function CalendarPage() {
   const [deletingAppointment, setDeletingAppointment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const editOriginalPatientIdRef = useRef<string | null>(null);
   const [editPatientSearch, setEditPatientSearch] = useState("");
   const [editPatientDropdownOpen, setEditPatientDropdownOpen] = useState(false);
   const [editPatientOptions, setEditPatientOptions] = useState<AppointmentPatientSuggestion[]>([]);
@@ -1256,6 +1257,7 @@ export default function CalendarPage() {
     if (savingEdit || deletingAppointment) return;
     setEditModalOpen(false);
     setEditingAppointment(null);
+    editOriginalPatientIdRef.current = null;
     setEditPatientId(null);
     setEditPatientSearch("");
     setEditPatientOptions([]);
@@ -3353,6 +3355,7 @@ export default function CalendarPage() {
 
   function openEditModalForAppointment(appt: CalendarAppointment) {
     setEditingAppointment(appt);
+    editOriginalPatientIdRef.current = appt.patient_id ?? appt.patient?.id ?? null;
     setEditError(null);
     setSavingEdit(false);
     setEditPatientId(appt.patient_id ?? appt.patient?.id ?? null);
@@ -4304,7 +4307,7 @@ export default function CalendarPage() {
       const dateTimeChanged =
         new Date(editingAppointment.start_time).getTime() !== new Date(updated.start_time).getTime() ||
         previousEndTime !== updatedEndTime;
-      const patientChanged = editingAppointment.patient_id !== updated.patient_id;
+      const patientChanged = editOriginalPatientIdRef.current !== updated.patient_id;
 
       if (dateTimeChanged) {
         await syncPendingAppointmentReminder(updated);
@@ -4329,6 +4332,7 @@ export default function CalendarPage() {
       setSavingEdit(false);
       setEditModalOpen(false);
       setEditingAppointment(null);
+      editOriginalPatientIdRef.current = null;
       setEditPatientId(null);
       setEditPatientSearch("");
       setEditPatientOptions([]);
@@ -4396,6 +4400,7 @@ export default function CalendarPage() {
       closeCancellationEmailPrompt();
       setEditModalOpen(false);
       setEditingAppointment(null);
+      editOriginalPatientIdRef.current = null;
     } catch {
       setEditError("Failed to delete appointment.");
       setDeletingAppointment(false);
