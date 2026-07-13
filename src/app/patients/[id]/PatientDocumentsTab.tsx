@@ -6,8 +6,8 @@ import BeforeAfterEditorModal from "./BeforeAfterEditorModal";
 import PdfAnnotationEditor from "@/components/PdfAnnotationEditor";
 import DocxPreviewEditor from "@/components/DocxEditor/DocxPreviewEditor";
 import DocumentTemplatesPanel from "@/components/DocumentTemplatesPanel";
-import DocumentPrintView from "@/components/DocumentPrintView";
 import EmailShareModal from "./EmailShareModal";
+import { convertDocxBlobToPdf } from "@/lib/docxToPdf";
 import { formatSwissTime, formatSwissDateTime, SWISS_TIMEZONE } from "@/lib/swissTimezone";
 import { useTranslations } from "next-intl";
 import dynamic from 'next/dynamic';
@@ -151,7 +151,7 @@ export default function PatientDocumentsTab({
   const [renaming, setRenaming] = useState(false);
 
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [printDocument, setPrintDocument] = useState<{ item: ListedItem; blob: Blob } | null>(null);
+  const [downloadingPdfPaths, setDownloadingPdfPaths] = useState<Set<string>>(new Set());
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<{ name: string; size: number }[]>([]);
@@ -995,14 +995,22 @@ export default function PatientDocumentsTab({
   async function handleDownloadPdf(item: ListedItem) {
     try {
       setError(null);
+      setDownloadingPdfPaths((prev) => new Set(prev).add(item.path));
+
       const url = await getFileAccessUrl(item);
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Failed to load ${item.name}`);
 
       const blob = await response.blob();
-      setPrintDocument({ item, blob });
+      await convertDocxBlobToPdf(blob, item.name);
     } catch (err: any) {
-      setError(err?.message ?? "Failed to prepare PDF.");
+      setError(err?.message ?? "Failed to convert document to PDF.");
+    } finally {
+      setDownloadingPdfPaths((prev) => {
+        const next = new Set(prev);
+        next.delete(item.path);
+        return next;
+      });
     }
   }
 
@@ -1370,164 +1378,164 @@ export default function PatientDocumentsTab({
                             )}
                           </div>
                         </div>
-                        {/* Preview button */}
-                        <button
-                          type="button"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              const url = await getFileAccessUrl(item);
-                              setPreviewModal({
-                                url,
-                                name: item.name,
-                                mimeType,
-                                uploadedAt: uploadDate || null,
-                              });
-                            } catch (err: any) {
-                              setError(err?.message || "Unable to generate a preview URL for this file.");
-                            }
-                          }}
-                          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[10px] font-medium text-sky-700 hover:bg-sky-100 hover:border-sky-300 transition-colors"
-                          title="Preview"
-                        >
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          {t("preview")}
-                        </button>
-                        {/* Edit button for editable files (DOCX and PDF) */}
-                        {item.source !== "patient-docs" && (getExtension(item.name) === "docx" || getExtension(item.name) === "pdf") && (
-                          <button
-                            type="button"
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              setError(null);
-                              try {
-                                const url = await getFileAccessUrl(item);
-                                if (getExtension(item.name) === "docx") {
-                                  setSelectedFilePreviewLoading(true);
-                                  const response = await fetch(url);
-                                  if (!response.ok) throw new Error("Failed to download document for editing");
-                                  const blob = await response.blob();
-                                  setEditingDocx({ item, blob, url });
-                                } else {
-                                  // PDF: set selected file and open the annotation editor
-                                  setSelectedFile(item);
-                                  setSelectedFilePreviewUrl(url);
-                                  setPreviewModal({
-                                    url,
-                                    name: item.name,
-                                    mimeType,
-                                    uploadedAt: uploadDate || null,
-                                  });
-                                  setShowPdfEditor(true);
-                                }
-                              } catch (err: any) {
-                                setError(err?.message || "Unable to open document for editing.");
-                              } finally {
-                                setSelectedFilePreviewLoading(false);
-                              }
-                            }}
-                            className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[10px] font-medium text-violet-700 hover:bg-violet-100 hover:border-violet-300 transition-colors"
-                            title={getExtension(item.name) === "pdf" ? "Annotate PDF" : "Edit document"}
-                          >
-                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            {getExtension(item.name) === "pdf" ? t("annotatePdf") : t("edit")}
-                          </button>
-                        )}
-                        {/* Preview in Tab button - only show if context is available */}
-                        {documentPreviewTabs && (
+                        {/* Action toolbar */}
+                        <div className="flex-shrink-0 flex items-center gap-0.5">
                           <button
                             type="button"
                             onClick={async (e) => {
                               e.stopPropagation();
                               try {
                                 const url = await getFileAccessUrl(item);
-                                documentPreviewTabs?.addTab({
-                                  name: item.name,
+                                setPreviewModal({
                                   url,
+                                  name: item.name,
                                   mimeType,
+                                  uploadedAt: uploadDate || null,
                                 });
                               } catch (err: any) {
                                 setError(err?.message || "Unable to generate a preview URL for this file.");
                               }
                             }}
-                            className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-colors"
-                            title="Preview in Tab"
+                            className="rounded-lg p-1.5 text-sky-600 hover:bg-sky-50 transition-colors"
+                            title="Preview"
                           >
-                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
-                            {t("previewInTab")}
                           </button>
-                        )}
-                        {/* Download options for generated DOCX documents */}
-                        {ext === "docx" && item.source !== "patient-docs" && (
-                          <>
+                          {item.source !== "patient-docs" && (getExtension(item.name) === "docx" || getExtension(item.name) === "pdf") && (
                             <button
                               type="button"
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                await handleDownloadDocx(item);
+                                setError(null);
+                                try {
+                                  const url = await getFileAccessUrl(item);
+                                  if (getExtension(item.name) === "docx") {
+                                    setSelectedFilePreviewLoading(true);
+                                    const response = await fetch(url);
+                                    if (!response.ok) throw new Error("Failed to download document for editing");
+                                    const blob = await response.blob();
+                                    setEditingDocx({ item, blob, url });
+                                  } else {
+                                    setSelectedFile(item);
+                                    setSelectedFilePreviewUrl(url);
+                                    setPreviewModal({
+                                      url,
+                                      name: item.name,
+                                      mimeType,
+                                      uploadedAt: uploadDate || null,
+                                    });
+                                    setShowPdfEditor(true);
+                                  }
+                                } catch (err: any) {
+                                  setError(err?.message || "Unable to open document for editing.");
+                                } finally {
+                                  setSelectedFilePreviewLoading(false);
+                                }
                               }}
-                              className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[10px] font-medium text-sky-700 hover:bg-sky-100 hover:border-sky-300 transition-colors"
-                              title="Download DOCX"
+                              className="rounded-lg p-1.5 text-violet-600 hover:bg-violet-50 transition-colors"
+                              title={getExtension(item.name) === "pdf" ? "Annotate PDF" : "Edit document"}
                             >
-                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              DOCX
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                await handleDownloadPdf(item);
-                              }}
-                              className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[10px] font-medium text-rose-700 hover:bg-rose-100 hover:border-rose-300 transition-colors"
-                              title="Download PDF"
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                              </svg>
-                              PDF
-                            </button>
-                          </>
-                        )}
-                        {/* Action buttons - show on hover (only for patient_document bucket files) */}
-                        {item.source !== "patient-docs" && (
-                          <div className="flex-shrink-0 hidden group-hover:flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleStartRename(item);
-                              }}
-                              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-                              title="Rename"
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                               </svg>
                             </button>
+                          )}
+                          {documentPreviewTabs && (
                             <button
                               type="button"
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
-                                handleDeleteFile(item);
+                                try {
+                                  const url = await getFileAccessUrl(item);
+                                  documentPreviewTabs?.addTab({
+                                    name: item.name,
+                                    url,
+                                    mimeType,
+                                  });
+                                } catch (err: any) {
+                                  setError(err?.message || "Unable to generate a preview URL for this file.");
+                                }
                               }}
-                              className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                              title="Delete"
+                              className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-50 transition-colors"
+                              title="Preview in Tab"
                             >
-                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                               </svg>
                             </button>
-                          </div>
-                        )}
+                          )}
+                          {ext === "docx" && item.source !== "patient-docs" && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  await handleDownloadDocx(item);
+                                }}
+                                className="rounded-lg p-1.5 text-sky-600 hover:bg-sky-50 transition-colors"
+                                title="Download DOCX"
+                              >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  await handleDownloadPdf(item);
+                                }}
+                                disabled={downloadingPdfPaths.has(item.path)}
+                                className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Download PDF"
+                              >
+                                {downloadingPdfPaths.has(item.path) ? (
+                                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                  </svg>
+                                ) : (
+                                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                  </svg>
+                                )}
+                              </button>
+                            </>
+                          )}
+                          {item.source !== "patient-docs" && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStartRename(item);
+                                }}
+                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                                title="Rename"
+                              >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteFile(item);
+                                }}
+                                className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                title="Delete"
+                              >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -2157,14 +2165,6 @@ export default function PatientDocumentsTab({
         error={emailError}
         patientName={patientName}
       />
-      {/* PDF Print View */}
-      {printDocument && (
-        <DocumentPrintView
-          blob={printDocument.blob}
-          title={printDocument.item.name.replace(/\.docx$/i, "")}
-          onClose={() => setPrintDocument(null)}
-        />
-      )}
     </>
   );
 }
