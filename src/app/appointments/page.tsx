@@ -950,6 +950,8 @@ export default function CalendarPage() {
   const duplicateEmailPromptResolveRef = useRef<((sendEmail: boolean) => void) | null>(null);
   const [modificationEmailPromptAppointment, setModificationEmailPromptAppointment] =
     useState<CalendarAppointment | null>(null);
+  const [modificationEmailPromptType, setModificationEmailPromptType] =
+    useState<"modification" | "confirmation">("modification");
   const [sendModificationEmailNotification, setSendModificationEmailNotification] =
     useState(false);
   const [modificationEmailMessage, setModificationEmailMessage] = useState("");
@@ -4122,15 +4124,20 @@ export default function CalendarPage() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [copiedAppointment, createModalOpen, editModalOpen, pasteContextMenu]);
 
-  function openModificationEmailPrompt(appointment: CalendarAppointment) {
+  function openModificationEmailPrompt(
+    appointment: CalendarAppointment,
+    emailType: "modification" | "confirmation" = "modification",
+  ) {
     if (!appointment.patient?.email) return;
     setModificationEmailPromptAppointment(appointment);
+    setModificationEmailPromptType(emailType);
     setSendModificationEmailNotification(false);
     setModificationEmailMessage("");
   }
 
   function closeModificationEmailPrompt() {
     setModificationEmailPromptAppointment(null);
+    setModificationEmailPromptType("modification");
     setSendModificationEmailNotification(false);
     setModificationEmailMessage("");
   }
@@ -4142,7 +4149,7 @@ export default function CalendarPage() {
     closeModificationEmailPrompt();
 
     if (appointment && shouldSend) {
-      await sendAppointmentConfirmationEmail(appointment, message, "modification");
+      await sendAppointmentConfirmationEmail(appointment, message, modificationEmailPromptType);
     }
   }
 
@@ -4297,6 +4304,7 @@ export default function CalendarPage() {
       const dateTimeChanged =
         new Date(editingAppointment.start_time).getTime() !== new Date(updated.start_time).getTime() ||
         previousEndTime !== updatedEndTime;
+      const patientChanged = editingAppointment.patient_id !== updated.patient_id;
 
       if (dateTimeChanged) {
         await syncPendingAppointmentReminder(updated);
@@ -4327,6 +4335,8 @@ export default function CalendarPage() {
 
       if (bookingStatusChangedToCancelled) {
         openCancellationEmailPrompt(updated, "emailOnly");
+      } else if (patientChanged) {
+        openModificationEmailPrompt(updated, "confirmation");
       } else if (dateTimeChanged) {
         openModificationEmailPrompt(updated);
       }
@@ -6149,9 +6159,15 @@ export default function CalendarPage() {
             <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.65)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold text-slate-900">Appointment modified</h2>
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    {modificationEmailPromptType === "confirmation"
+                      ? "Appointment patient changed"
+                      : "Appointment modified"}
+                  </h2>
                   <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                    Send an appointment modification email to the patient?
+                    {modificationEmailPromptType === "confirmation"
+                      ? "Send an appointment confirmation email to the newly assigned patient?"
+                      : "Send an appointment modification email to the patient?"}
                   </p>
                 </div>
                 <button
@@ -6187,7 +6203,11 @@ export default function CalendarPage() {
                     value={modificationEmailMessage}
                     onChange={(event) => setModificationEmailMessage(event.target.value)}
                     rows={4}
-                    placeholder="Add a message for the modification email"
+                    placeholder={
+                      modificationEmailPromptType === "confirmation"
+                        ? "Add a message for the confirmation email"
+                        : "Add a message for the modification email"
+                    }
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
