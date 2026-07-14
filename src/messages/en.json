@@ -1465,6 +1465,8 @@
       "upload": "Upload",
       "specialty": "Specialty",
       "slugUrlKey": "Slug (URL key)",
+      "appointmentsCalendar": "Appointments Calendar",
+      "calendarNotLinked": "Not linked",
       "namePlaceholder": "Dr. Jane Doe",
       "specialtyPlaceholder": "Dermatology",
       "slugPlaceholder": "jane-doe",

@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS booking_doctors (
   image_url TEXT,
   description TEXT,
   slug TEXT UNIQUE NOT NULL,
+  calendar_provider_id UUID REFERENCES providers(id) ON DELETE SET NULL,
   enabled BOOLEAN NOT NULL DEFAULT true,
   order_index INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),

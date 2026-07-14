@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -38,17 +39,15 @@ export async function GET(request: NextRequest) {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Resolve the canonical name from booking_doctors when slug is provided
+    // Resolve the selected appointments calendar first, then its linked user.
     let canonicalName = doctorName || "";
+    let linkedProviderId: string | null = null;
     if (doctorSlug) {
-      const { data: bookingDoctor } = await supabase
-        .from("booking_doctors")
-        .select("name")
-        .eq("slug", doctorSlug)
-        .single();
-      if (bookingDoctor?.name) {
+      const calendarLink = await resolveBookingDoctorCalendar(supabase, doctorSlug);
+      linkedProviderId = calendarLink?.providerId ?? null;
+      if (calendarLink?.bookingDoctorName) {
         // Strip "Dr." prefix for the users table lookup
-        canonicalName = bookingDoctor.name.replace(/^Dr\.\s*/i, "").trim();
+        canonicalName = calendarLink.bookingDoctorName.replace(/^Dr\.\s*/i, "").trim();
       }
     } else if (doctorName) {
       canonicalName = doctorName.replace(/^Dr\.\s*/i, "").trim();
@@ -59,12 +58,24 @@ export async function GET(request: NextRequest) {
     }
 
     // Search users table directly by full_name — no providers indirection
-    const { data: matchedUser } = await supabase
-      .from("users")
-      .select("id")
-      .ilike("full_name", `%${canonicalName}%`)
-      .limit(1)
-      .single();
+    const { data: linkedUser } = linkedProviderId
+      ? await supabase
+          .from("users")
+          .select("id")
+          .eq("provider_id", linkedProviderId)
+          .limit(1)
+          .maybeSingle()
+      : { data: null };
+
+    const { data: nameMatchedUser } = linkedUser
+      ? { data: null }
+      : await supabase
+          .from("users")
+          .select("id")
+          .ilike("full_name", `%${canonicalName}%`)
+          .limit(1)
+          .maybeSingle();
+    const matchedUser = linkedUser || nameMatchedUser;
 
     if (!matchedUser) {
       console.log(`[Doctor Availability] User not found for name: ${canonicalName}`);

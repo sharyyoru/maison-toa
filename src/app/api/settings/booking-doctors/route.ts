@@ -85,6 +85,29 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "doctors must be an array" }, { status: 400 });
     }
 
+    const calendarProviderIds = [
+      ...new Set(
+        doctors
+          .map((doctor: { calendar_provider_id?: string | null }) => doctor.calendar_provider_id)
+          .filter((id: string | null | undefined): id is string => Boolean(id))
+      ),
+    ];
+
+    if (calendarProviderIds.length > 0) {
+      const { data: calendarProviders, error: calendarProvidersError } = await supabaseAdmin
+        .from("providers")
+        .select("id")
+        .in("id", calendarProviderIds)
+        .in("role", ["doctor", "nurse", "technician"]);
+
+      if (calendarProvidersError || calendarProviders?.length !== calendarProviderIds.length) {
+        return NextResponse.json(
+          { error: "One or more selected appointment calendars are invalid." },
+          { status: 400 }
+        );
+      }
+    }
+
     const { data: existing } = await supabaseAdmin
       .from("booking_doctors")
       .select("id");
@@ -109,6 +132,7 @@ export async function PUT(request: NextRequest) {
         image_url?: string;
         description?: string;
         slug: string;
+        calendar_provider_id?: string | null;
         enabled: boolean;
         order_index: number;
       }) => ({
@@ -118,6 +142,7 @@ export async function PUT(request: NextRequest) {
         image_url: d.image_url || null,
         description: d.description || null,
         slug: d.slug,
+        calendar_provider_id: d.calendar_provider_id || null,
         enabled: d.enabled,
         order_index: d.order_index,
         updated_at: new Date().toISOString(),

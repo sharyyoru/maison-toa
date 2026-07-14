@@ -1112,6 +1112,7 @@ interface BookingDoctor {
   image_url: string;
   description: string;
   slug: string;
+  calendar_provider_id: string | null;
   enabled: boolean;
   order_index: number;
 }
@@ -1326,6 +1327,7 @@ function BookingCategoriesTab() {
   const [categories, setCategories] = useState<BookingCategory[]>([]);
   const [treatments, setTreatments] = useState<BookingTreatment[]>([]);
   const [doctors, setDoctors] = useState<BookingDoctor[]>([]);
+  const [calendarProviders, setCalendarProviders] = useState<ProviderOption[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [serviceCategories, setServiceCategories] = useState<ServiceCategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1341,21 +1343,24 @@ function BookingCategoriesTab() {
 
   const fetchData = async () => {
     try {
-      const [catRes, treatRes, docRes, servRes, serviceCategoriesResult] = await Promise.all([
+      const [catRes, treatRes, docRes, servRes, calendarProvidersRes, serviceCategoriesResult] = await Promise.all([
         fetch("/api/settings/booking-categories"),
         fetch("/api/settings/booking-treatments"),
         fetch("/api/settings/booking-doctors"),
         fetch("/api/services?active=true"),
+        fetch("/api/providers?role=doctor,nurse,technician"),
         supabaseClient.from("service_categories").select("id, name, color").order("name", { ascending: true }),
       ]);
       const catData = await catRes.json();
       const treatData = await treatRes.json();
       const docData = await docRes.json();
       const servData = await servRes.json();
+      const calendarProvidersData = await calendarProvidersRes.json();
       setCategories(catData.categories || []);
       setTreatments(treatData.treatments || []);
       setDoctors(docData.doctors || []);
       setServices(servData.services || []);
+      setCalendarProviders(calendarProvidersData.providers || []);
       setServiceCategories(serviceCategoriesResult.data || []);
     } catch (error) {
       console.error("Failed to fetch data:", error);
@@ -1421,6 +1426,7 @@ function BookingCategoriesTab() {
       image_url: "",
       description: "",
       slug: "",
+      calendar_provider_id: null,
       enabled: true,
       order_index: doctors.length,
     };
@@ -1898,6 +1904,7 @@ function BookingCategoriesTab() {
       ) : view === "doctors" ? (
         <DoctorsView
           doctors={doctors}
+          calendarProviders={calendarProviders}
           saving={saving}
           onAdd={addDoctor}
           onUpdate={updateDoctor}
@@ -2172,6 +2179,7 @@ function MachinesView({ services }: { services: { id: string; name: string; cate
 
 interface DoctorsViewProps {
   doctors: BookingDoctor[];
+  calendarProviders: ProviderOption[];
   saving: boolean;
   onAdd: () => void;
   onUpdate: (id: string, field: keyof BookingDoctor, value: any) => void;
@@ -2187,7 +2195,7 @@ const DOCTOR_PLACEHOLDER = (
   </svg>
 );
 
-function DoctorsView({ doctors, saving, onAdd, onUpdate, onDelete, onSave }: DoctorsViewProps) {
+function DoctorsView({ doctors, calendarProviders, saving, onAdd, onUpdate, onDelete, onSave }: DoctorsViewProps) {
   const t = useTranslations("settingsPage.booking");
   const tc = useTranslations("settingsPage.common");
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
@@ -2313,15 +2321,32 @@ function DoctorsView({ doctors, saving, onAdd, onUpdate, onDelete, onSave }: Doc
                         />
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-medium text-slate-500 mb-1">{tc("description")}</label>
-                      <input
-                        type="text"
-                        value={doc.description}
-                        onChange={(e) => onUpdate(doc.id, "description", e.target.value)}
-                        placeholder={t("descPlaceholder")}
-                        className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-medium text-slate-500 mb-1">{tc("description")}</label>
+                        <input
+                          type="text"
+                          value={doc.description}
+                          onChange={(e) => onUpdate(doc.id, "description", e.target.value)}
+                          placeholder={t("descPlaceholder")}
+                          className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-1">{t("appointmentsCalendar")}</label>
+                        <select
+                          value={doc.calendar_provider_id || ""}
+                          onChange={(e) => onUpdate(doc.id, "calendar_provider_id", e.target.value || null)}
+                          className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:ring-1 focus:ring-sky-400 outline-none"
+                        >
+                          <option value="">{t("calendarNotLinked")}</option>
+                          {calendarProviders.map((provider) => (
+                            <option key={provider.id} value={provider.id}>
+                              {provider.name || provider.full_name || t("unnamed")}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                     <div className="flex items-center justify-between">
                       <label className="flex items-center gap-1.5 text-xs text-slate-600">

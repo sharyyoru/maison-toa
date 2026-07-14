@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -34,21 +35,17 @@ export async function GET(request: NextRequest) {
     // shortened (for example "Claire"), while the provider record uses the
     // full name. The slug is the stable identifier shared by the booking flow.
     let canonicalDoctorName = doctorName?.replace(/^Dr\.\s*/i, "").trim() || "";
+    let providerId: string | null = null;
     if (doctorSlug) {
-      const { data: bookingDoctor } = await supabase
-        .from("booking_doctors")
-        .select("name")
-        .eq("slug", doctorSlug)
-        .maybeSingle();
-
-      if (bookingDoctor?.name) {
-        canonicalDoctorName = bookingDoctor.name.replace(/^Dr\.\s*/i, "").trim();
+      const calendarLink = await resolveBookingDoctorCalendar(supabase, doctorSlug);
+      if (calendarLink) {
+        canonicalDoctorName = calendarLink.bookingDoctorName.replace(/^Dr\.\s*/i, "").trim();
+        providerId = calendarLink.providerId;
       }
     }
 
-    // If doctor name is provided, first look up the provider ID.
-    let providerId: string | null = null;
-    if (canonicalDoctorName) {
+    // Legacy fallback for booking doctors that are not mapped yet.
+    if (!providerId && canonicalDoctorName) {
       const nameParts = canonicalDoctorName
         .toLowerCase()
         .split(/\s+/)
@@ -56,6 +53,7 @@ export async function GET(request: NextRequest) {
       const { data: providerCandidates } = await supabase
         .from("providers")
         .select("id, name")
+        .in("role", ["doctor", "nurse", "technician"])
         .or(
           `name.ilike.%${canonicalDoctorName}%,name.ilike.%${nameParts[0] || canonicalDoctorName}%`
         )
