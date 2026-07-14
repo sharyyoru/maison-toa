@@ -6594,6 +6594,21 @@ export default function MedicalConsultationsCard({
                     return;
                   }
 
+                  // ICD-10 required for TARDOC, ACF and insurance invoices (CHM/Sumex standard)
+                  const needsDiagnosis =
+                    invoicePaymentMethod === "Insurance" ||
+                    invoiceServiceLines.some((l) =>
+                      l.serviceId.startsWith("tardoc-") ||
+                      l.serviceId.startsWith("flatrate-") ||
+                      l.serviceId.startsWith("tma-")
+                    );
+                  if (needsDiagnosis && invoiceDiagnosisCodes.length === 0) {
+                    setConsultationError(
+                      "Code ICD-10 requis \u2014 veuillez saisir au moins un code diagnostic (ex. Z00.0) pour cette facture."
+                    );
+                    return;
+                  }
+
                   if (invoicePaymentTerm === "installment") {
                     const validInstallments = invoiceInstallments.filter(
                       (installment) =>
@@ -8760,9 +8775,24 @@ export default function MedicalConsultationsCard({
                     </div>
 
                     {/* ── ICD-10 Diagnosis Codes ── */}
+                    {(() => {
+                      const isInsuranceInvoice =
+                        invoicePaymentMethod === "Insurance" ||
+                        invoiceServiceLines.some((l) =>
+                          l.serviceId.startsWith("tardoc-") ||
+                          l.serviceId.startsWith("flatrate-") ||
+                          l.serviceId.startsWith("tma-")
+                        );
+                      return (
                     <div className="space-y-1">
                       <label className="block text-[11px] font-medium text-slate-700">
                         Codes ICD-10 (diagnostic)
+                        {isInsuranceInvoice && <span className="ml-0.5 text-red-500">*</span>}
+                        {isInsuranceInvoice && (
+                          <span className="ml-1.5 text-[10px] font-normal text-slate-400">
+                            requis pour Sumex/CHM
+                          </span>
+                        )}
                       </label>
                       <div className="flex gap-2">
                         <input
@@ -8778,8 +8808,12 @@ export default function MedicalConsultationsCard({
                             }
                             setInvoiceDiagnosisInput("");
                           }}
-                          placeholder="ex. L91.0 puis Entrée"
-                          className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                          placeholder={isInsuranceInvoice ? "ex. Z00.0 puis Entrée (requis)" : "ex. L91.0 puis Entrée"}
+                          className={`flex-1 rounded-lg border px-2 py-1.5 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-1 ${
+                            isInsuranceInvoice && invoiceDiagnosisCodes.length === 0
+                              ? "border-red-300 bg-red-50/30 focus:border-red-400 focus:ring-red-300"
+                              : "border-slate-200 bg-white focus:border-sky-500 focus:ring-sky-500"
+                          }`}
                         />
                         <button
                           type="button"
@@ -8815,6 +8849,8 @@ export default function MedicalConsultationsCard({
                         </div>
                       )}
                     </div>
+                      );
+                    })()}
 
                     {/* â”€â”€ Appointment link (optional, for deposit invoices) â”€â”€ */}
                     <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
