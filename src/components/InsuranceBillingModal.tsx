@@ -59,6 +59,8 @@ type InsuranceBillingModalProps = {
   invoiceAmount: number | null;
   durationMinutes?: number;
   onSuccess?: (submission: any) => void;
+  /** Pre-set the reminder level dropdown (overrides the value loaded from the DB) */
+  initialReminderLevel?: number;
 };
 
 export default function InsuranceBillingModal({
@@ -70,6 +72,7 @@ export default function InsuranceBillingModal({
   invoiceAmount,
   durationMinutes = 15,
   onSuccess,
+  initialReminderLevel,
 }: InsuranceBillingModalProps) {
   const [billingType, setBillingType] = useState<BillingType>("TG");
   const [lawType, setLawType] = useState<SwissLawType>("KVG");
@@ -301,7 +304,9 @@ export default function InsuranceBillingModal({
           if (inv.billing_type) setBillingType(inv.billing_type as BillingType);
           if (inv.health_insurance_law) setLawType(inv.health_insurance_law as SwissLawType);
           if (inv.treatment_reason) setTreatmentReason(inv.treatment_reason);
-          if (typeof inv.reminder_level === 'number') setReminderLevel(inv.reminder_level);
+          // initialReminderLevel (from reminder popup) takes priority over the DB value
+          if (typeof initialReminderLevel === 'number') setReminderLevel(initialReminderLevel);
+          else if (typeof inv.reminder_level === 'number') setReminderLevel(inv.reminder_level);
           if (inv.accident_date) setAccidentDate(inv.accident_date);
           if (inv.diagnosis_codes && Array.isArray(inv.diagnosis_codes)) {
             const codes = inv.diagnosis_codes.map((d: any) => d.code).filter(Boolean);

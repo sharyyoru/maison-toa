@@ -95,6 +95,11 @@ type ConsultationRow = {
   invoice_pdf_path_reminder: string | null;
   invoice_pdf_path_receipt: string | null;
   invoice_consultation_id?: string | null;
+  invoice_due_date: string | null;
+  invoice_reminder_level: number;
+  invoice_reminder_1_sent_at: string | null;
+  invoice_reminder_2_sent_at: string | null;
+  invoice_reminder_3_sent_at: string | null;
   payment_link_token: string | null;
   payrexx_payment_link: string | null;
   payrexx_payment_status: string | null;
@@ -1024,6 +1029,11 @@ function PendingCreateConsultationNoteEditor({
         invoice_pdf_path_tp: null,
         invoice_pdf_path_reminder: null,
         invoice_pdf_path_receipt: null,
+        invoice_due_date: null,
+        invoice_reminder_level: 0,
+        invoice_reminder_1_sent_at: null,
+        invoice_reminder_2_sent_at: null,
+        invoice_reminder_3_sent_at: null,
       });
     } catch {
       onError("Failed to lock consultation note.");
@@ -1419,6 +1429,11 @@ function CollaborativeUnlockedNoteEditor({
         invoice_pdf_path_tp: null,
         invoice_pdf_path_reminder: null,
         invoice_pdf_path_receipt: null,
+        invoice_due_date: null,
+        invoice_reminder_level: 0,
+        invoice_reminder_1_sent_at: null,
+        invoice_reminder_2_sent_at: null,
+        invoice_reminder_3_sent_at: null,
       };
 
       setSavingState("saved");
@@ -1933,6 +1948,8 @@ export default function MedicalConsultationsCard({
 
   const [insuranceBillingModalOpen, setInsuranceBillingModalOpen] = useState(false);
   const [insuranceBillingTarget, setInsuranceBillingTarget] = useState<ConsultationRow | null>(null);
+  const [insuranceBillingReminderOverride, setInsuranceBillingReminderOverride] = useState<number | null>(null);
+  const [reminderPopupInvoiceId, setReminderPopupInvoiceId] = useState<string | null>(null);
 
   const invoiceModalOpen =
     paymentStatusModalOpen ||
@@ -2620,7 +2637,7 @@ export default function MedicalConsultationsCard({
         const { data: invoiceData, error: invoiceError } = await supabaseClient
           .from("invoices")
           .select(
-            "id, patient_id, consultation_id, invoice_number, invoice_date, treatment_date, doctor_user_id, doctor_name, provider_name, payment_method, total_amount, subtotal, paid_amount, status, is_complimentary, cash_receipt_path, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, title, reference_number",
+            "id, patient_id, consultation_id, invoice_number, invoice_date, due_date, treatment_date, doctor_user_id, doctor_name, provider_name, payment_method, total_amount, subtotal, paid_amount, status, is_complimentary, cash_receipt_path, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, title, reference_number, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at",
           )
           .eq("patient_id", patientId)
           .eq("is_archived", showArchived ? true : false)
@@ -2659,6 +2676,11 @@ export default function MedicalConsultationsCard({
             invoice_pdf_path_reminder: inv.pdf_path_reminder ?? null,
             invoice_pdf_path_receipt: inv.pdf_path_receipt ?? null,
             invoice_consultation_id: inv.consultation_id ?? null,
+            invoice_due_date: inv.due_date ?? null,
+            invoice_reminder_level: inv.reminder_level ?? 0,
+            invoice_reminder_1_sent_at: inv.reminder_1_sent_at ?? null,
+            invoice_reminder_2_sent_at: inv.reminder_2_sent_at ?? null,
+            invoice_reminder_3_sent_at: inv.reminder_3_sent_at ?? null,
             payment_link_token: inv.payment_link_token ?? null,
             payrexx_payment_link: inv.payrexx_payment_link ?? null,
             payrexx_payment_status: inv.payrexx_payment_status ?? null,
@@ -3892,6 +3914,11 @@ export default function MedicalConsultationsCard({
         invoice_pdf_path_tp: null,
         invoice_pdf_path_reminder: null,
         invoice_pdf_path_receipt: null,
+        invoice_due_date: null,
+        invoice_reminder_level: 0,
+        invoice_reminder_1_sent_at: null,
+        invoice_reminder_2_sent_at: null,
+        invoice_reminder_3_sent_at: null,
       };
 
       setConsultations((prev) =>
@@ -4862,6 +4889,11 @@ export default function MedicalConsultationsCard({
         invoice_pdf_path_tp: null,
         invoice_pdf_path_reminder: null,
         invoice_pdf_path_receipt: null,
+        invoice_due_date: null,
+        invoice_reminder_level: 0,
+        invoice_reminder_1_sent_at: null,
+        invoice_reminder_2_sent_at: null,
+        invoice_reminder_3_sent_at: null,
       };
 
       setConsultations((prev) =>
@@ -4972,6 +5004,11 @@ export default function MedicalConsultationsCard({
         invoice_pdf_path_tp: null,
         invoice_pdf_path_reminder: null,
         invoice_pdf_path_receipt: null,
+        invoice_due_date: null,
+        invoice_reminder_level: 0,
+        invoice_reminder_1_sent_at: null,
+        invoice_reminder_2_sent_at: null,
+        invoice_reminder_3_sent_at: null,
       };
       let shouldBroadcastDraftChange = false;
       setConsultations((prev) => {
@@ -7709,6 +7746,11 @@ export default function MedicalConsultationsCard({
                           invoice_pdf_path_tp: null,
                           invoice_pdf_path_reminder: null,
                           invoice_pdf_path_receipt: null,
+                          invoice_due_date: null,
+                          invoice_reminder_level: 0,
+                          invoice_reminder_1_sent_at: null,
+                          invoice_reminder_2_sent_at: null,
+                          invoice_reminder_3_sent_at: null,
                           payment_link_token: null,
                           payrexx_payment_link: null,
                           payrexx_payment_status: null,
@@ -11541,12 +11583,120 @@ export default function MedicalConsultationsCard({
                                 <button
                                   type="button"
                                   disabled={insurancePending}
-                                  onClick={() => { setInsuranceBillingTarget(row); setInsuranceBillingModalOpen(true); }}
+                                  onClick={() => { setInsuranceBillingReminderOverride(null); setInsuranceBillingTarget(row); setInsuranceBillingModalOpen(true); }}
                                   className={`inline-flex items-center gap-1 rounded-md border border-teal-200 px-2 py-1 text-[10px] font-medium transition-colors ${insurancePending ? "bg-teal-100 text-teal-800 cursor-not-allowed" : "bg-teal-50 text-teal-700 hover:bg-teal-100"}`}
                                 >
                                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                                  {insurancePending ? "â³ Insurance" : "Insurance"}
+                                  {insurancePending ? "⏳ Insurance" : "Insurance"}
                                 </button>
+                              );
+                            })()}
+
+                            {/* Créer un rappel */}
+                            {row.invoice_status !== "PAID" && row.invoice_status !== "CANCELLED" && row.invoice_id && (() => {
+                              const rl = row.invoice_reminder_level ?? 0;
+                              const nextLevel = Math.min(rl + 1, 3) as 1 | 2 | 3;
+                              const levelLabel = nextLevel === 1 ? "1er rappel" : nextLevel === 2 ? "2e rappel" : "3e rappel";
+                              const isOpen = reminderPopupInvoiceId === row.invoice_id;
+                              return (
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={() => setReminderPopupInvoiceId(isOpen ? null : row.invoice_id)}
+                                    className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+                                    title={`Créer un rappel — ${levelLabel}`}
+                                  >
+                                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                                    Rappel ▾
+                                  </button>
+                                  {isOpen && (
+                                    <>
+                                      <div className="fixed inset-0 z-40" onClick={() => setReminderPopupInvoiceId(null)} />
+                                      <div className="absolute left-0 top-full z-50 mt-1 w-52 rounded-xl border border-amber-200 bg-white shadow-xl">
+                                        <div className="flex items-center justify-between border-b border-amber-100 px-3 py-2">
+                                          <div>
+                                            <p className="text-[11px] font-semibold text-slate-900">Créer un rappel</p>
+                                            <p className="text-[10px] text-amber-700">{levelLabel}</p>
+                                          </div>
+                                          <button onClick={() => setReminderPopupInvoiceId(null)} className="text-slate-400 hover:text-slate-600">
+                                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                          </button>
+                                        </div>
+                                        <div className="p-2 space-y-1">
+                                          <button
+                                            type="button"
+                                            onClick={async () => {
+                                              setReminderPopupInvoiceId(null);
+                                              const res = await fetch("/api/invoices/generate-pdf", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ invoiceId: row.invoice_id, invoiceType: "reminder", reminderLevel: nextLevel }),
+                                              });
+                                              const json = await res.json();
+                                              if (json.pdfUrl) window.open(json.pdfUrl, "_blank");
+                                              else if (json.pdfPath) {
+                                                const { data: u } = await supabaseClient.storage.from("invoice-pdfs").createSignedUrl(json.pdfPath, 300);
+                                                if (u?.signedUrl) window.open(u.signedUrl, "_blank");
+                                              }
+                                              const now = new Date().toISOString();
+                                              const upd: Record<string, unknown> = { reminder_level: nextLevel };
+                                              if (nextLevel === 1) upd.reminder_1_sent_at = now;
+                                              else if (nextLevel === 2) upd.reminder_2_sent_at = now;
+                                              else upd.reminder_3_sent_at = now;
+                                              await supabaseClient.from("invoices").update(upd).eq("id", row.invoice_id!);
+                                            }}
+                                            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[11px] font-medium text-slate-700 hover:bg-amber-50 transition-colors"
+                                          >
+                                            <svg className="h-4 w-4 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                            Imprimer
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={!patientEmail}
+                                            onClick={async () => {
+                                              if (!patientEmail) return;
+                                              setReminderPopupInvoiceId(null);
+                                              await fetch("/api/invoices/generate-pdf", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ invoiceId: row.invoice_id, invoiceType: "reminder", reminderLevel: nextLevel }),
+                                              });
+                                              await fetch("/api/invoices/send-email", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ invoiceId: row.invoice_id, recipientEmail: patientEmail, documentType: "reminder" }),
+                                              });
+                                              const now = new Date().toISOString();
+                                              const upd: Record<string, unknown> = { reminder_level: nextLevel };
+                                              if (nextLevel === 1) upd.reminder_1_sent_at = now;
+                                              else if (nextLevel === 2) upd.reminder_2_sent_at = now;
+                                              else upd.reminder_3_sent_at = now;
+                                              await supabaseClient.from("invoices").update(upd).eq("id", row.invoice_id!);
+                                            }}
+                                            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[11px] font-medium text-slate-700 hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                          >
+                                            <svg className="h-4 w-4 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                            Envoyer par e-mail
+                                            {!patientEmail && <span className="ml-auto text-[9px] text-slate-400">sans email</span>}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setReminderPopupInvoiceId(null);
+                                              setInsuranceBillingReminderOverride(nextLevel);
+                                              setInsuranceBillingTarget(row);
+                                              setInsuranceBillingModalOpen(true);
+                                            }}
+                                            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[11px] font-medium text-slate-700 hover:bg-teal-50 transition-colors"
+                                          >
+                                            <svg className="h-4 w-4 shrink-0 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                            Envoyer via Medidata
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
                               );
                             })()}
                           </div>
@@ -12687,15 +12837,27 @@ export default function MedicalConsultationsCard({
         onClose={() => {
           setInsuranceBillingModalOpen(false);
           setInsuranceBillingTarget(null);
+          setInsuranceBillingReminderOverride(null);
         }}
-        consultationId={insuranceBillingTarget?.id || ""}
+        consultationId={insuranceBillingTarget?.invoice_id || insuranceBillingTarget?.id || ""}
         patientId={patientId}
         patientName={insuranceBillingTarget?.title || "Patient"}
         invoiceAmount={insuranceBillingTarget?.invoice_total_amount || null}
         durationMinutes={insuranceBillingTarget?.duration_seconds ? Math.ceil(insuranceBillingTarget.duration_seconds / 60) : 15}
-        onSuccess={() => {
+        initialReminderLevel={insuranceBillingReminderOverride ?? undefined}
+        onSuccess={async () => {
+          if (insuranceBillingReminderOverride && insuranceBillingTarget?.invoice_id) {
+            const now = new Date().toISOString();
+            const lvl = insuranceBillingReminderOverride as 1 | 2 | 3;
+            const upd: Record<string, unknown> = { reminder_level: lvl };
+            if (lvl === 1) upd.reminder_1_sent_at = now;
+            else if (lvl === 2) upd.reminder_2_sent_at = now;
+            else upd.reminder_3_sent_at = now;
+            await supabaseClient.from("invoices").update(upd).eq("id", insuranceBillingTarget.invoice_id);
+          }
           setInsuranceBillingModalOpen(false);
           setInsuranceBillingTarget(null);
+          setInsuranceBillingReminderOverride(null);
         }}
       />
 

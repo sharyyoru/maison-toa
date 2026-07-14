@@ -18,6 +18,7 @@ type InvoiceRow = {
   patient_id: string | null;
   invoice_number: string;
   invoice_date: string | null;
+  due_date: string | null;
   doctor_user_id: string | null;
   doctor_name: string | null;
   provider_id: string | null;
@@ -39,6 +40,10 @@ type InvoiceRow = {
   is_archived: boolean;
   health_insurance_law: string | null;
   billing_type: string | null;
+  reminder_level: number;
+  reminder_1_sent_at: string | null;
+  reminder_2_sent_at: string | null;
+  reminder_3_sent_at: string | null;
 };
 
 type PatientInfo = { id: string; first_name: string | null; last_name: string | null; email: string | null };
@@ -147,6 +152,7 @@ export default function InvoicesPage() {
   const [billingTypeFilter, setBillingTypeFilter] = useState<string>("all");
   const [insuranceFilter, setInsuranceFilter] = useState<string>("all");
   const [jobIssueFilter, setJobIssueFilter] = useState<string>("all");
+  const [reminderFilter, setReminderFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -190,6 +196,13 @@ export default function InvoicesPage() {
   // Insurance modal state
   const [insuranceModalOpen, setInsuranceModalOpen] = useState(false);
   const [insuranceTarget, setInsuranceTarget] = useState<InvoiceRow | null>(null);
+  // When opening the insurance modal from the reminder popup, pre-set the reminder level
+  const [insuranceReminderOverride, setInsuranceReminderOverride] = useState<number | null>(null);
+
+  // Reminder action popup state
+  const [reminderPopupRow, setReminderPopupRow] = useState<InvoiceRow | null>(null);
+  const [reminderPopupPos, setReminderPopupPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [reminderActionLoading, setReminderActionLoading] = useState<string | null>(null); // "print"|"email"|"medidata"
 
   // Bulk insurance modal state
   const [bulkInsuranceOpen, setBulkInsuranceOpen] = useState(false);
@@ -212,7 +225,7 @@ export default function InvoicesPage() {
 
         const { data, error: err } = await supabaseClient
           .from("invoices")
-          .select("id, patient_id, invoice_number, invoice_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, paid_amount, status, is_complimentary, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, pdf_generated_at, updated_at, created_by_user_id, created_by_name, is_archived, health_insurance_law, billing_type")
+          .select("id, patient_id, invoice_number, invoice_date, due_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, paid_amount, status, is_complimentary, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, pdf_generated_at, updated_at, created_by_user_id, created_by_name, is_archived, health_insurance_law, billing_type, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at")
           .eq("is_archived", false)
           .is("parent_invoice_id", null)
           .order("invoice_date", { ascending: false });
@@ -359,6 +372,63 @@ export default function InvoicesPage() {
     return Array.from(s).sort();
   }, [invoices]);
 
+  // ---------------------------------------------------------------------------
+  // Reminder helpers
+  // ---------------------------------------------------------------------------
+
+  /** Overdue days relative to the effective due date (invoice_date + 30d fallback) */
+  function overdueBaseDays(row: InvoiceRow): number {
+    const base = row.due_date ?? (row.invoice_date ? row.invoice_date.slice(0, 10) : null);
+    if (!base) return 0;
+    const due = new Date(base);
+    const now = new Date();
+    return Math.floor((now.getTime() - due.getTime()) / 86_400_000);
+  }
+
+  /** Days since a specific sent_at timestamp */
+  function daysSince(ts: string | null): number {
+    if (!ts) return 0;
+    return Math.floor((new Date().getTime() - new Date(ts).getTime()) / 86_400_000);
+  }
+
+  /** Next reminder level that should be sent for a row, or null if not yet due */
+  function nextReminderLevel(row: InvoiceRow): 1 | 2 | 3 | null {
+    const rl = row.reminder_level ?? 0;
+    if (rl === 0) return overdueBaseDays(row) >= 35 ? 1 : null;
+    if (rl === 1) return daysSince(row.reminder_1_sent_at) >= 25 ? 2 : null;
+    if (rl === 2) return daysSince(row.reminder_2_sent_at) >= 20 ? 3 : null;
+    return null;
+  }
+
+  /** "Échu depuis" label for a row, e.g. "47j — 1er rappel dû" */
+  function echuDepuisLabel(row: InvoiceRow): string | null {
+    const rl = row.reminder_level ?? 0;
+    if (rl === 0) {
+      const d = overdueBaseDays(row);
+      if (d <= 0) return null;
+      const rem = nextReminderLevel(row);
+      return `${d}j${rem ? " — 1er rappel dû" : ""}`;
+    }
+    if (rl === 1) {
+      const d = daysSince(row.reminder_1_sent_at);
+      if (d <= 0) return null;
+      const rem = nextReminderLevel(row);
+      return `${d}j depuis 1er rappel${rem ? " — 2e dû" : ""}`;
+    }
+    if (rl === 2) {
+      const d = daysSince(row.reminder_2_sent_at);
+      if (d <= 0) return null;
+      const rem = nextReminderLevel(row);
+      return `${d}j depuis 2e rappel${rem ? " — 3e dû" : ""}`;
+    }
+    if (rl >= 3) {
+      const d = daysSince(row.reminder_3_sent_at);
+      if (d <= 0) return null;
+      return `${d}j depuis 3e rappel`;
+    }
+    return null;
+  }
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return invoices.filter(r => {
@@ -412,6 +482,36 @@ export default function InvoicesPage() {
             break;
         }
       }
+      if (reminderFilter !== "all") {
+        const rl = r.reminder_level ?? 0;
+        const isPaid = r.status === "PAID" || r.status === "CANCELLED";
+        switch (reminderFilter) {
+          case "r1_due":
+            // 1st reminder due: overdue ≥35d, no reminder sent yet, not paid
+            if (isPaid || rl !== 0 || overdueBaseDays(r) < 35) return false;
+            break;
+          case "r2_due":
+            // 2nd reminder due: ≥25d since 1st reminder
+            if (isPaid || rl !== 1 || daysSince(r.reminder_1_sent_at) < 25) return false;
+            break;
+          case "r3_due":
+            // 3rd reminder due: ≥20d since 2nd reminder
+            if (isPaid || rl !== 2 || daysSince(r.reminder_2_sent_at) < 20) return false;
+            break;
+          case "r1_sent":
+            if (rl < 1) return false;
+            break;
+          case "r2_sent":
+            if (rl < 2) return false;
+            break;
+          case "r3_sent":
+            if (rl < 3) return false;
+            break;
+          case "any_due":
+            if (isPaid || nextReminderLevel(r) === null) return false;
+            break;
+        }
+      }
       if (q) {
         const pName = patientName(r.patient_id).toLowerCase();
         const invNum = (r.invoice_number || "").toLowerCase();
@@ -420,7 +520,7 @@ export default function InvoicesPage() {
       }
       return true;
     });
-  }, [invoices, search, statusFilter, paymentMethodFilter, billingTypeFilter, insuranceFilter, jobIssueFilter, latestInsByInvoice, latestJobIssueByInvoice, dateFrom, dateTo, patientName]);
+  }, [invoices, search, statusFilter, paymentMethodFilter, billingTypeFilter, insuranceFilter, jobIssueFilter, reminderFilter, latestInsByInvoice, latestJobIssueByInvoice, dateFrom, dateTo, patientName]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE));
   const paginated = useMemo(() => {
@@ -682,8 +782,96 @@ export default function InvoicesPage() {
 
   const handleOpenInsurance = (row: InvoiceRow) => {
     setInsuranceTarget(row);
+    setInsuranceReminderOverride(null);
     setInsuranceModalOpen(true);
   };
+
+  // ---------------------------------------------------------------------------
+  // Reminder actions
+  // ---------------------------------------------------------------------------
+
+  /** Persist reminder_level + sent_at after dispatching a reminder */
+  async function markReminderSent(row: InvoiceRow, level: 1 | 2 | 3) {
+    const now = new Date().toISOString();
+    const update: Record<string, unknown> = { reminder_level: level };
+    if (level === 1) update.reminder_1_sent_at = now;
+    else if (level === 2) update.reminder_2_sent_at = now;
+    else update.reminder_3_sent_at = now;
+
+    await supabaseClient.from("invoices").update(update).eq("id", row.id);
+
+    // Refresh the row in local state
+    setInvoices(prev => prev.map(r => r.id === row.id
+      ? {
+          ...r,
+          reminder_level: level,
+          reminder_1_sent_at: level === 1 ? now : r.reminder_1_sent_at,
+          reminder_2_sent_at: level === 2 ? now : r.reminder_2_sent_at,
+          reminder_3_sent_at: level === 3 ? now : r.reminder_3_sent_at,
+        }
+      : r
+    ));
+  }
+
+  async function handleReminderPrint(row: InvoiceRow, level: 1 | 2 | 3) {
+    setReminderActionLoading("print");
+    try {
+      // Trigger PDF generation for reminder level, then open it
+      const res = await fetch("/api/invoices/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId: row.id, invoiceType: "reminder", reminderLevel: level }),
+      });
+      const json = await res.json();
+      if (json.pdfUrl) {
+        window.open(json.pdfUrl, "_blank");
+      } else if (json.pdfPath) {
+        // Get signed URL from storage
+        const { data: urlData } = await supabaseClient.storage.from("invoice-pdfs").createSignedUrl(json.pdfPath, 300);
+        if (urlData?.signedUrl) window.open(urlData.signedUrl, "_blank");
+      }
+      await markReminderSent(row, level);
+      setReminderPopupRow(null);
+    } catch (err) {
+      console.error("Reminder print error:", err);
+    } finally {
+      setReminderActionLoading(null);
+    }
+  }
+
+  async function handleReminderEmail(row: InvoiceRow, level: 1 | 2 | 3) {
+    const email = patientEmail(row.patient_id);
+    if (!email) return;
+    setReminderActionLoading("email");
+    try {
+      // First generate/ensure PDF exists, then send
+      await fetch("/api/invoices/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId: row.id, invoiceType: "reminder", reminderLevel: level }),
+      });
+      const res = await fetch("/api/invoices/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId: row.id, recipientEmail: email, documentType: "reminder" }),
+      });
+      if (res.ok) {
+        await markReminderSent(row, level);
+        setReminderPopupRow(null);
+      }
+    } catch (err) {
+      console.error("Reminder email error:", err);
+    } finally {
+      setReminderActionLoading(null);
+    }
+  }
+
+  function handleReminderMediadata(row: InvoiceRow, level: 1 | 2 | 3) {
+    setReminderPopupRow(null);
+    setInsuranceTarget(row);
+    setInsuranceReminderOverride(level);
+    setInsuranceModalOpen(true);
+  }
 
   // ---------------------------------------------------------------------------
   // PDF staleness badge
@@ -973,10 +1161,20 @@ export default function InvoicesPage() {
           <option value="pdf_failed">❌ PDF generation failed</option>
           <option value="insurance_failed">❌ Insurance submission failed</option>
         </select>
+        <select value={reminderFilter} onChange={e => setReminderFilter(e.target.value)} className={`rounded-lg border px-2.5 py-1.5 text-xs text-slate-900 shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-400 ${reminderFilter !== "all" ? "border-amber-400 bg-amber-50 font-medium text-amber-800" : "border-slate-200 bg-white"}`}>
+          <option value="all">Rappels — tous</option>
+          <option value="any_due">⏰ Rappel dû (tous niveaux)</option>
+          <option value="r1_due">📋 1er rappel dû (≥35j échu)</option>
+          <option value="r2_due">📋 2e rappel dû (≥25j depuis 1er)</option>
+          <option value="r3_due">📋 3e rappel dû (≥20j depuis 2e)</option>
+          <option value="r1_sent">✉ 1er rappel envoyé</option>
+          <option value="r2_sent">✉ 2e rappel envoyé</option>
+          <option value="r3_sent">✉ 3e rappel envoyé</option>
+        </select>
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
-        {(search || statusFilter !== "all" || paymentMethodFilter !== "all" || billingTypeFilter !== "all" || insuranceFilter !== "all" || jobIssueFilter !== "all" || dateFrom || dateTo) && (
-          <button type="button" onClick={() => { setSearch(""); setStatusFilter("all"); setPaymentMethodFilter("all"); setBillingTypeFilter("all"); setInsuranceFilter("all"); setJobIssueFilter("all"); setDateFrom(""); setDateTo(""); }} className="text-[10px] text-sky-600 hover:text-sky-800 font-medium">
+        {(search || statusFilter !== "all" || paymentMethodFilter !== "all" || billingTypeFilter !== "all" || insuranceFilter !== "all" || jobIssueFilter !== "all" || reminderFilter !== "all" || dateFrom || dateTo) && (
+          <button type="button" onClick={() => { setSearch(""); setStatusFilter("all"); setPaymentMethodFilter("all"); setBillingTypeFilter("all"); setInsuranceFilter("all"); setJobIssueFilter("all"); setReminderFilter("all"); setDateFrom(""); setDateTo(""); }} className="text-[10px] text-sky-600 hover:text-sky-800 font-medium">
             Clear filters
           </button>
         )}
@@ -1027,6 +1225,9 @@ export default function InvoicesPage() {
                 <th className="px-3 py-2.5 font-semibold text-slate-600 text-right">Amount</th>
                 <th className="px-3 py-2.5 font-semibold text-slate-600 text-right">Paid</th>
                 <th className="px-3 py-2.5 font-semibold text-slate-600 text-right">Remaining</th>
+                {reminderFilter !== "all" && (
+                  <th className="px-3 py-2.5 font-semibold text-amber-700 whitespace-nowrap">Échu depuis</th>
+                )}
                 <th className="px-3 py-2.5 font-semibold text-slate-600">Status</th>
                 <th className="px-3 py-2.5 font-semibold text-slate-600">Method</th>
                 <th className="px-3 py-2.5 font-semibold text-slate-600">Insurance</th>
@@ -1066,6 +1267,24 @@ export default function InvoicesPage() {
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       {remaining > 0.01 ? <span className="text-amber-700 font-medium">{formatCurrency(remaining)}</span> : <span className="text-slate-400">-</span>}
                     </td>
+                    {reminderFilter !== "all" && (() => {
+                      const label = echuDepuisLabel(row);
+                      const rl = row.reminder_level ?? 0;
+                      const colorCls = rl === 0
+                        ? "text-amber-700 bg-amber-50"
+                        : rl === 1
+                        ? "text-orange-700 bg-orange-50"
+                        : "text-red-700 bg-red-50";
+                      return (
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {label ? (
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${colorCls}`}>
+                              {label}
+                            </span>
+                          ) : <span className="text-slate-300">—</span>}
+                        </td>
+                      );
+                    })()}
                     <td className="px-3 py-2">
                       <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>
                     </td>
@@ -1150,6 +1369,22 @@ export default function InvoicesPage() {
                             );
                           })()
                         )}
+
+                        {/* Créer un rappel */}
+                        {row.status !== "PAID" && row.status !== "CANCELLED" && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                              setReminderPopupPos({ top: rect.bottom + 4, left: rect.right - 180 });
+                              setReminderPopupRow(reminderPopupRow?.id === row.id ? null : row);
+                            }}
+                            className="inline-flex items-center gap-0.5 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+                            title="Créer un rappel"
+                          >
+                            Rappel ▾
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1181,14 +1416,88 @@ export default function InvoicesPage() {
       {insuranceTarget && (
         <InsuranceBillingModal
           isOpen={insuranceModalOpen}
-          onClose={() => { setInsuranceModalOpen(false); setInsuranceTarget(null); }}
+          onClose={() => { setInsuranceModalOpen(false); setInsuranceTarget(null); setInsuranceReminderOverride(null); }}
           consultationId={insuranceTarget.id}
           patientId={insuranceTarget.patient_id || ""}
           patientName={patientName(insuranceTarget.patient_id)}
           invoiceAmount={Number(insuranceTarget.total_amount) || null}
-          onSuccess={() => { setInsuranceModalOpen(false); setInsuranceTarget(null); }}
+          initialReminderLevel={insuranceReminderOverride ?? undefined}
+          onSuccess={async () => {
+            // If opened via reminder flow, mark reminder as sent
+            if (insuranceReminderOverride) {
+              await markReminderSent(insuranceTarget, insuranceReminderOverride as 1 | 2 | 3);
+            }
+            setInsuranceModalOpen(false);
+            setInsuranceTarget(null);
+            setInsuranceReminderOverride(null);
+          }}
         />
       )}
+
+      {/* Reminder action popup (fixed-positioned) */}
+      {reminderPopupRow && (() => {
+        const row = reminderPopupRow;
+        const level = ((row.reminder_level ?? 0) + 1) as 1 | 2 | 3;
+        const cappedLevel = Math.min(level, 3) as 1 | 2 | 3;
+        const levelLabel = cappedLevel === 1 ? "1er rappel" : cappedLevel === 2 ? "2e rappel" : "3e rappel";
+        const hasEmail = !!patientEmail(row.patient_id);
+        return (
+          <>
+            {/* click-outside overlay */}
+            <div className="fixed inset-0 z-40" onClick={() => setReminderPopupRow(null)} />
+            <div
+              className="fixed z-50 w-52 rounded-xl border border-amber-200 bg-white shadow-xl"
+              style={{ top: reminderPopupPos.top, left: reminderPopupPos.left }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-amber-100 px-3 py-2">
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-900">Créer un rappel</p>
+                  <p className="text-[10px] text-amber-700">{levelLabel} — {row.invoice_number}</p>
+                </div>
+                <button onClick={() => setReminderPopupRow(null)} className="text-slate-400 hover:text-slate-600">
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              {/* Actions */}
+              <div className="p-2 space-y-1">
+                {/* Print */}
+                <button
+                  type="button"
+                  disabled={reminderActionLoading === "print"}
+                  onClick={() => handleReminderPrint(row, cappedLevel)}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[11px] font-medium text-slate-700 hover:bg-amber-50 disabled:opacity-50 transition-colors"
+                >
+                  <svg className="h-4 w-4 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                  {reminderActionLoading === "print" ? "Génération…" : "Imprimer"}
+                </button>
+                {/* Email */}
+                <button
+                  type="button"
+                  disabled={!hasEmail || reminderActionLoading === "email"}
+                  onClick={() => handleReminderEmail(row, cappedLevel)}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[11px] font-medium text-slate-700 hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title={!hasEmail ? "Aucun e-mail enregistré pour ce patient" : undefined}
+                >
+                  <svg className="h-4 w-4 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                  {reminderActionLoading === "email" ? "Envoi…" : "Envoyer par e-mail"}
+                  {!hasEmail && <span className="ml-auto text-[9px] text-slate-400">sans email</span>}
+                </button>
+                {/* Medidata */}
+                <button
+                  type="button"
+                  disabled={!row.patient_id}
+                  onClick={() => handleReminderMediadata(row, cappedLevel)}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[11px] font-medium text-slate-700 hover:bg-teal-50 disabled:opacity-50 transition-colors"
+                >
+                  <svg className="h-4 w-4 shrink-0 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                  Envoyer via Medidata
+                </button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* Bulk insurance send modal */}
       {bulkInsuranceOpen && (

@@ -138,6 +138,10 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "rejected", label: "Rejected" },
   { value: "paid", label: "Paid" },
   { value: "partially_paid", label: "Partially Paid" },
+  { value: "reminder_1", label: "1er Rappel" },
+  { value: "reminder_2", label: "2e Rappel" },
+  { value: "reminder_3", label: "3e Rappel" },
+  { value: "collection", label: "Recouvrement" },
   { value: "cancelled", label: "Cancelled" },
 ];
 const AUTO_POLL_INTERVAL_MS = 12 * 60 * 60 * 1000;
@@ -1286,6 +1290,22 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                         {sub.law_type && (
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
                             {sub.law_type}
+                          </span>
+                        )}
+                        {/* Reminder level badge — derived from submission status */}
+                        {sub.status === "reminder_1" && (
+                          <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-semibold text-yellow-700">
+                            📧 1er rappel
+                          </span>
+                        )}
+                        {sub.status === "reminder_2" && (
+                          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+                            📧 2e rappel
+                          </span>
+                        )}
+                        {sub.status === "reminder_3" && (
+                          <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+                            📧 3e rappel
                           </span>
                         )}
                       </div>
