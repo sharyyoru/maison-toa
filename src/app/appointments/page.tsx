@@ -396,7 +396,8 @@ const APPOINTMENT_CATEGORY_OPTIONS = [
 
 type CalendarAppointment = {
   id: string;
-  patient_id: string;
+  patient_id: string | null;
+  no_patient: boolean;
   provider_id: string | null;
   start_time: string;
   end_time: string | null;
@@ -974,6 +975,7 @@ export default function CalendarPage() {
     useState(false);
   const [createPatientId, setCreatePatientId] = useState<string | null>(null);
   const [createPatientName, setCreatePatientName] = useState("");
+  const [createNoPatient, setCreateNoPatient] = useState(false);
   const [consultationDuration, setConsultationDuration] = useState(15);
   const [patientOptions, setPatientOptions] = useState<
     AppointmentPatientSuggestion[]
@@ -1208,6 +1210,7 @@ export default function CalendarPage() {
   const [deletingAppointment, setDeletingAppointment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [editNoPatient, setEditNoPatient] = useState(false);
   const editOriginalPatientIdRef = useRef<string | null>(null);
   const [editPatientSearch, setEditPatientSearch] = useState("");
   const [editPatientDropdownOpen, setEditPatientDropdownOpen] = useState(false);
@@ -1259,6 +1262,7 @@ export default function CalendarPage() {
     setEditingAppointment(null);
     editOriginalPatientIdRef.current = null;
     setEditPatientId(null);
+    setEditNoPatient(false);
     setEditPatientSearch("");
     setEditPatientOptions([]);
     setEditPatientOptionsError(null);
@@ -1314,7 +1318,7 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -2799,6 +2803,7 @@ export default function CalendarPage() {
     setCreatePatientSearch("");
     setCreatePatientId(null);
     setCreatePatientName("");
+    setCreateNoPatient(false);
     setConsultationDuration(durationMinutes);
     setSelectedServiceId("");
     setServiceSearch("");
@@ -3022,6 +3027,11 @@ export default function CalendarPage() {
 
     setCreateError(null);
 
+    if (!createNoPatient && !createPatientId) {
+      setCreateError("Please select a patient or choose No patient.");
+      return;
+    }
+
     // Check if at least one service is selected OR custom text is entered
     const hasServiceSelection = selectedServiceId || selectedServiceIds.length > 0;
     const hasCustomServiceText = serviceSearch.trim().length > 0;
@@ -3110,7 +3120,7 @@ export default function CalendarPage() {
     try {
       setSavingCreate(true);
 
-      let shouldSendEmailNotification = sendEmailNotification;
+      let shouldSendEmailNotification = createNoPatient ? false : sendEmailNotification;
       if (sendEmailNotification && createPatientId) {
         const dateStr = formatSwissYmd(startLocal);
         const { start: sameDayStartIso, end: sameDayEndIso } = getSwissDayRange(dateStr);
@@ -3154,7 +3164,8 @@ export default function CalendarPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            patientId: createPatientId,
+            patientId: createNoPatient ? null : createPatientId,
+            noPatient: createNoPatient,
             providerIds,
             serviceIds,
             serviceQuantities,
@@ -3203,7 +3214,7 @@ export default function CalendarPage() {
           const { data: fullApptData } = await supabaseClient
             .from("appointments")
             .select(
-              "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
             )
             .eq('id', firstAppt.id)
             .single();
@@ -3222,7 +3233,7 @@ export default function CalendarPage() {
         const { data: refreshedData } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -3262,7 +3273,8 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("appointments")
           .insert({
-            patient_id: createPatientId,
+            patient_id: createNoPatient ? null : createPatientId,
+            no_patient: createNoPatient,
             start_time: startIso,
             end_time: endIso,
             reason,
@@ -3272,7 +3284,7 @@ export default function CalendarPage() {
             source: "manual",
           })
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .single();
 
@@ -3327,6 +3339,7 @@ export default function CalendarPage() {
       setCreatePatientSearch("");
       setCreatePatientId(null);
       setCreatePatientName("");
+      setCreateNoPatient(false);
       setConsultationDuration(15);
       setSelectedServiceId("");
       setServiceSearch("");
@@ -3359,9 +3372,12 @@ export default function CalendarPage() {
     setEditError(null);
     setSavingEdit(false);
     setEditPatientId(appt.patient_id ?? appt.patient?.id ?? null);
+    setEditNoPatient(appt.no_patient === true);
     setEditPatientSearch(
-      formatPatientFileName(appt.patient?.first_name, appt.patient?.last_name) ||
-        "Unknown patient",
+      appt.no_patient
+        ? ""
+        : formatPatientFileName(appt.patient?.first_name, appt.patient?.last_name) ||
+          "Unknown patient",
     );
     setEditPatientDropdownOpen(false);
     setEditPatientOptionsError(null);
@@ -3520,6 +3536,7 @@ export default function CalendarPage() {
       setCreatePatientName(patientName);
       setCreatePatientSearch(patientName);
     }
+    setCreateNoPatient(copiedAppointment.no_patient === true);
 
     if (matchedServices.length > 0) {
       // Service selection normally applies the service defaults. During paste,
@@ -3652,7 +3669,7 @@ export default function CalendarPage() {
       console.log('[Paste] Skipping doctor selection (caller will set target doctor)');
     }
     setDoctorConflicts({});
-    setSendEmailNotification(true);
+    setSendEmailNotification(copiedAppointment.no_patient !== true);
     setEmailNotificationMessage("");
     resetCreateRecurrence();
   }
@@ -4109,7 +4126,7 @@ export default function CalendarPage() {
         if (copiedAppointment && !createModalOpen && !editModalOpen) {
           e.preventDefault();
           handlePasteAppointment();
-          setSendEmailNotification(true);
+          setSendEmailNotification(copiedAppointment.no_patient !== true);
           setEmailNotificationMessage("");
           setCreateModalOpen(true);
         }
@@ -4209,8 +4226,8 @@ export default function CalendarPage() {
       return;
     }
 
-    if (!editPatientId) {
-      setEditError("Please select a patient.");
+    if (!editNoPatient && !editPatientId) {
+      setEditError("Please select a patient or choose No patient.");
       return;
     }
 
@@ -4277,7 +4294,8 @@ export default function CalendarPage() {
       const { data, error } = await supabaseClient
         .from("appointments")
         .update({
-          patient_id: editPatientId,
+          patient_id: editNoPatient ? null : editPatientId,
+          no_patient: editNoPatient,
           status: nextStatus,
           start_time: startIso,
           end_time: endIso,
@@ -4289,7 +4307,7 @@ export default function CalendarPage() {
         })
         .eq("id", editingAppointment.id)
         .select(
-          "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
+          "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
         )
         .single();
 
@@ -4334,14 +4352,15 @@ export default function CalendarPage() {
       setEditingAppointment(null);
       editOriginalPatientIdRef.current = null;
       setEditPatientId(null);
+      setEditNoPatient(false);
       setEditPatientSearch("");
       setEditPatientOptions([]);
 
-      if (bookingStatusChangedToCancelled) {
+      if (bookingStatusChangedToCancelled && updated.patient) {
         openCancellationEmailPrompt(updated, "emailOnly");
-      } else if (patientChanged) {
+      } else if (patientChanged && updated.patient) {
         openModificationEmailPrompt(updated, "confirmation");
-      } else if (dateTimeChanged) {
+      } else if (dateTimeChanged && updated.patient) {
         openModificationEmailPrompt(updated);
       }
     } catch {
@@ -4471,6 +4490,7 @@ export default function CalendarPage() {
               setCreatePatientSearch("");
               setCreatePatientId(null);
               setCreatePatientName("");
+              setCreateNoPatient(false);
               setSelectedServiceId("");
               setServiceSearch("");
               setBookingStatus("");
@@ -5596,10 +5616,31 @@ export default function CalendarPage() {
                 {/* Patient Information */}
                 <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
                   <p className="text-[11px] font-semibold text-slate-700">Patient Information</p>
+                  <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-2 py-1.5">
+                    <span className="text-[11px] font-medium text-slate-700">No patient</span>
+                    <input
+                      type="checkbox"
+                      checked={editNoPatient}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setEditNoPatient(checked);
+                        setEditPatientDropdownOpen(false);
+                        if (checked) {
+                          setEditPatientId(null);
+                          setEditPatientSearch("");
+                          setEditingAppointment((current) =>
+                            current ? { ...current, patient_id: null, no_patient: true, patient: null } : current,
+                          );
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    />
+                  </label>
                   <div className="relative">
                     <input
                       type="text"
                       value={editPatientSearch}
+                      disabled={editNoPatient}
                       onChange={(event) => {
                         setEditPatientSearch(event.target.value);
                         setEditPatientDropdownOpen(true);
@@ -5610,7 +5651,7 @@ export default function CalendarPage() {
                         setEditPatientDropdownOpen(true);
                       }}
                       placeholder={t("modal.selectPatient")}
-                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     />
                     {editPatientSearch ? (
                       <button
@@ -5645,6 +5686,7 @@ export default function CalendarPage() {
                                 type="button"
                                 onClick={() => {
                                   setEditPatientId(patient.id);
+                                  setEditNoPatient(false);
                                   setEditPatientSearch(name);
                                   setEditPatientDropdownOpen(false);
                                   setEditingAppointment((current) =>
@@ -5652,6 +5694,7 @@ export default function CalendarPage() {
                                       ? {
                                           ...current,
                                           patient_id: patient.id,
+                                          no_patient: false,
                                           patient: {
                                             id: patient.id,
                                             first_name: patient.first_name,
@@ -6472,10 +6515,31 @@ export default function CalendarPage() {
                       </button>
                     </div>
                   </div>
+                  <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
+                    <span className="text-[11px] font-medium text-slate-700">No patient</span>
+                    <input
+                      type="checkbox"
+                      checked={createNoPatient}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setCreateNoPatient(checked);
+                        setShowCreatePatientSuggestions(false);
+                        if (checked) {
+                          setCreatePatientId(null);
+                          setCreatePatientName("");
+                          setCreatePatientSearch("");
+                          setSendEmailNotification(false);
+                          setEmailNotificationMessage("");
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    />
+                  </label>
                   <div className="relative">
                     <input
                       type="text"
                       value={createPatientSearch}
+                      disabled={createNoPatient}
                       onChange={(event) => {
                         setCreatePatientSearch(event.target.value);
                         setShowCreatePatientSuggestions(true);
@@ -6484,7 +6548,7 @@ export default function CalendarPage() {
                       }}
                       onFocus={() => { closeAllCreateDropdowns("patient"); setShowCreatePatientSuggestions(true); }}
                       placeholder={t("modal.selectPatient")}
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     />
                     {showCreatePatientSuggestions ? (
                       <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-xs shadow-lg">
@@ -6508,6 +6572,7 @@ export default function CalendarPage() {
                                 className="flex w-full flex-col items-start px-3 py-1.5 text-left hover:bg-slate-50"
                                 onClick={() => {
                                   setCreatePatientId(p.id);
+                                  setCreateNoPatient(false);
                                   setCreatePatientName(name);
                                   setCreatePatientSearch(name);
                                   setShowCreatePatientSuggestions(false);
@@ -6724,12 +6789,13 @@ export default function CalendarPage() {
                     <input
                       type="checkbox"
                       checked={sendEmailNotification}
+                      disabled={createNoPatient}
                       onChange={(event) => {
                         const checked = event.target.checked;
                         setSendEmailNotification(checked);
                         if (!checked) setEmailNotificationMessage("");
                       }}
-                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </label>
                   {sendEmailNotification ? (

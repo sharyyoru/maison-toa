@@ -1465,6 +1465,8 @@
       "upload": "Télécharger",
       "specialty": "Spécialité",
       "slugUrlKey": "Slug (clé URL)",
+      "appointmentsCalendar": "Agenda des rendez-vous",
+      "calendarNotLinked": "Non lié",
       "namePlaceholder": "Dr. Jane Doe",
       "specialtyPlaceholder": "Dermatologie",
       "slugPlaceholder": "jane-doe",

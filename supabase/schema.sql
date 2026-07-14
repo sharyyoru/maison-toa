@@ -95,7 +95,8 @@ END $$;
 -- Appointments
 create table if not exists appointments (
   id uuid primary key default gen_random_uuid(),
-  patient_id uuid not null references patients(id) on delete cascade,
+  patient_id uuid references patients(id) on delete cascade,
+  no_patient boolean not null default false,
   provider_id uuid references providers(id) on delete set null,
   start_time timestamptz not null,
   end_time timestamptz,

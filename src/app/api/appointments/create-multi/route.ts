@@ -7,6 +7,7 @@ export async function POST(request: Request) {
   try {
     const {
       patientId,
+      noPatient = false,
       providerIds,
       serviceIds,
       serviceQuantities,
@@ -25,6 +26,13 @@ export async function POST(request: Request) {
     } = await request.json();
     
     // Input validation
+    if (!noPatient && !patientId) {
+      return NextResponse.json(
+        { error: 'A patient must be selected unless No patient is enabled' },
+        { status: 400 }
+      );
+    }
+
     if (!providerIds || !Array.isArray(providerIds) || providerIds.length === 0) {
       return NextResponse.json(
         { error: 'At least one doctor must be selected' },
@@ -126,7 +134,7 @@ export async function POST(request: Request) {
       .select('id, name')
       .in('id', providerIds);
 
-    const { data: patient } = patientId
+    const { data: patient } = !noPatient && patientId
       ? await supabase
           .from('patients')
           .select('id, first_name, last_name, email, gender, language_preference')
@@ -197,7 +205,8 @@ export async function POST(request: Request) {
       }
       
       return {
-        patient_id: patientId || null,
+        patient_id: noPatient ? null : patientId,
+        no_patient: Boolean(noPatient),
         provider_id: providerId,
         appointment_group_id: providerIds.length > 1 ? appointmentGroupId : null,
         start_time: appointmentTime.startTime,

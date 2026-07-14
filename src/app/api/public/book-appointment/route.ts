@@ -9,6 +9,7 @@ import {
   generatePatientReminderEmail,
 } from "@/lib/appointmentEmails";
 import { normalizePatientLanguage } from "@/lib/languagePreference";
+import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -199,44 +200,55 @@ export async function POST(request: Request) {
     // So we just parse it directly - no need for additional timezone conversion
     const appointmentDateObj = new Date(appointmentDate);
 
-    // Look up the provider ID for this doctor to filter appointments correctly
+    // Use the exact /appointments calendar selected on the booking doctor.
+    // Keep the legacy name lookup only for doctors that are not mapped yet.
     let providerId: string | null = null;
     const doctorNameClean = doctorName.replace(/^Dr\.\s*/i, "").trim();
     const doctorNameParts = doctorNameClean.split(" ");
     const doctorFirstName = doctorNameParts[0] || "";
     const doctorLastName = doctorNameParts.slice(1).join(" ") || "";
     
-    // Try multiple name formats: "FirstName LastName", "LastName FirstName", or partial matches
-    const { data: provider } = await supabase
-      .from("providers")
-      .select("id, name")
-      .or(`name.ilike.%${doctorNameClean}%,name.ilike.%${doctorLastName} ${doctorFirstName}%,name.ilike.%${doctorFirstName}%`)
-      .limit(1)
-      .single();
-    
-    if (provider) {
-      providerId = provider.id;
-      console.log(`[Booking] Found provider: ${provider.name} (${provider.id}) for doctor: ${doctorName}`);
-    } else {
-      console.log(`[Booking] Provider not found for: ${doctorName}, trying alternate lookup...`);
-      
-      // Try searching by individual name parts
-      const { data: altProvider } = await supabase
+    const calendarLink = await resolveBookingDoctorCalendar(supabase, doctorSlug);
+    if (calendarLink?.providerId) {
+      providerId = calendarLink.providerId;
+      console.log(
+        `[Booking] Using mapped calendar: ${calendarLink.bookingDoctorName} -> ${calendarLink.providerName} (${providerId})`
+      );
+    }
+
+    if (!providerId) {
+      // Try multiple name formats: "FirstName LastName", "LastName FirstName", or partial matches
+      const { data: provider } = await supabase
         .from("providers")
         .select("id, name")
-        .or(`name.ilike.%${doctorFirstName}%,name.ilike.%${doctorLastName}%`)
-        .limit(10);
-      
-      if (altProvider && altProvider.length > 0) {
-        // Find the best match - one that contains both first and last name
-        const bestMatch = altProvider.find(p => {
-          const pName = (p.name || "").toLowerCase();
-          return pName.includes(doctorFirstName.toLowerCase()) && pName.includes(doctorLastName.toLowerCase());
-        });
-        
-        if (bestMatch) {
-          providerId = bestMatch.id;
-          console.log(`[Booking] Found provider via alternate lookup: ${bestMatch.name} (${bestMatch.id})`);
+        .in("role", ["doctor", "nurse", "technician"])
+        .or(`name.ilike.%${doctorNameClean}%,name.ilike.%${doctorLastName} ${doctorFirstName}%,name.ilike.%${doctorFirstName}%`)
+        .limit(1)
+        .maybeSingle();
+
+      if (provider) {
+        providerId = provider.id;
+        console.log(`[Booking] Found provider: ${provider.name} (${provider.id}) for doctor: ${doctorName}`);
+      } else {
+        console.log(`[Booking] Provider not found for: ${doctorName}, trying alternate lookup...`);
+
+        const { data: altProvider } = await supabase
+          .from("providers")
+          .select("id, name")
+          .in("role", ["doctor", "nurse", "technician"])
+          .or(`name.ilike.%${doctorFirstName}%,name.ilike.%${doctorLastName}%`)
+          .limit(10);
+
+        if (altProvider && altProvider.length > 0) {
+          const bestMatch = altProvider.find(p => {
+            const pName = (p.name || "").toLowerCase();
+            return pName.includes(doctorFirstName.toLowerCase()) && pName.includes(doctorLastName.toLowerCase());
+          });
+
+          if (bestMatch) {
+            providerId = bestMatch.id;
+            console.log(`[Booking] Found provider via alternate lookup: ${bestMatch.name} (${bestMatch.id})`);
+          }
         }
       }
     }
@@ -487,8 +499,10 @@ export async function POST(request: Request) {
       const { data: providerBySimpleName } = await supabase
         .from("providers")
         .select("id")
+        .in("role", ["doctor", "nurse", "technician"])
         .ilike("name", `%${simpleName.split(" ")[0]}%`)
-        .single();
+        .limit(1)
+        .maybeSingle();
       
       if (providerBySimpleName) {
         providerId = providerBySimpleName.id;

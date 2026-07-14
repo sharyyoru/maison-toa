@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getSwissDayOfWeek, getSwissDayRange, getSwissHourMinute } from "@/lib/swissTimezone";
 import { MULTI_CAPACITY_DOCTORS, nameToSlug } from "@/lib/doctorAvailability";
 import { parseSwissDate } from "@/lib/swissTimezone";
+import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -62,15 +63,21 @@ export async function GET(request: Request) {
   const parsedDate = parseSwissDate(date);
   const dayOfWeek = getSwissDayOfWeek(parsedDate);
 
-  // Look up the provider by slug to get their name
-  const { data: providers } = await supabase
-    .from("providers")
-    .select("id, name")
-    .limit(50);
+  const calendarLink = await resolveBookingDoctorCalendar(supabase, doctorSlug);
+  let providerId = calendarLink?.providerId ?? null;
+  let providerName = calendarLink?.providerName || calendarLink?.bookingDoctorName || doctorName;
 
-  const provider = providers?.find(p => normalizeDoctorSlug(p.name) === normalizedDoctorSlug);
-  const providerId = provider?.id ?? null;
-  const providerName = provider?.name || doctorName;
+  // Legacy fallback for booking doctors that are not mapped yet.
+  if (!providerId) {
+    const { data: providers } = await supabase
+      .from("providers")
+      .select("id, name")
+      .in("role", ["doctor", "nurse", "technician"])
+      .limit(50);
+    const provider = providers?.find(p => normalizeDoctorSlug(p.name) === normalizedDoctorSlug);
+    providerId = provider?.id ?? null;
+    providerName = provider?.name || providerName;
+  }
 
   // Fetch availability from database (always Lausanne)
   let allSlots: string[] = [];
@@ -79,7 +86,7 @@ export async function GET(request: Request) {
   if (providerName) {
     try {
       const availRes = await fetch(
-        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/public/doctor-availability?doctorName=${encodeURIComponent(providerName)}`
+        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/public/doctor-availability?doctorSlug=${encodeURIComponent(doctorSlug)}&doctorName=${encodeURIComponent(providerName)}`
       );
 
       if (availRes.ok) {
