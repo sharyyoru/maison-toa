@@ -239,7 +239,13 @@ export async function POST(req: NextRequest) {
           const nextNumber = String(seqRow ?? Date.now());
 
           const nowIso = new Date().toISOString();
-          const title = `Acompte – ${m.treatment_name}`;
+          // Always use the treatment name (stored in Stripe metadata at session creation
+          // time) for both the invoice title and the line-item description.
+          // Many treatments share a single generic "Acompte consultation" service in the
+          // DB, so m.service_name is unreliable and can show the wrong treatment.
+          // m.treatment_name is set directly from the booking form's selected treatment.
+          const displayName = m.treatment_name || m.service_label || m.service_name || "Traitement";
+          const title = `Acompte 50% – ${displayName}`;
 
           const { data: newInvoice } = await supabase
             .from("invoices")
@@ -270,11 +276,13 @@ export async function POST(req: NextRequest) {
 
           invoiceId = newInvoice?.id ?? null;
 
-          // 5. Create line item for the deposit amount actually paid
-          if (invoiceId && m.service_id) {
+          // 5. Create line item for the deposit amount actually paid.
+          // Use the treatment name (never the linked service name) so the invoice
+          // always shows the correct treatment the patient booked.
+          if (invoiceId) {
             await supabase.from("invoice_line_items").insert({
               invoice_id: invoiceId,
-              name: m.service_name || m.treatment_name,
+              name: displayName,
               quantity: 1,
               unit_price: depositAmount,
               total_price: depositAmount,
