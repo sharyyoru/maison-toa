@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "whatsapp": "node server/whatsapp-server.js"
+    "whatsapp": "node server/whatsapp-server.js",
+    "test": "for f in src/__tests__/*.test.ts; do echo \"\\n--- $f ---\"; node_modules/.bin/tsx \"$f\" || exit 1; done",
+    "test:reminder": "node_modules/.bin/tsx src/__tests__/reminderTracking.test.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -72,6 +74,7 @@
     "pdf2json": "^4.0.2",
     "pg": "^8.20.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   }
 }
