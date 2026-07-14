@@ -657,7 +657,7 @@ async function testHandleReminderMediadata() {
   let ok = true;
 
   const row = makeRow({ id: "inv-medidata-01" });
-  let insuranceTarget: InvoiceRow | null = null;
+  let insuranceTarget: InvoiceRow | null = null as InvoiceRow | null;
   let reminderOverride: number | null = null;
   let modalOpen = false;
   let popupClosed = false;

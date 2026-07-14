@@ -6497,7 +6497,7 @@ export default function MedicalConsultationsCard({
             </button>
           </div>
         </div>
-        {unlockedDraftConsultations.length > 0 ? (
+        {!recordTypeFilter && unlockedDraftConsultations.length > 0 ? (
           <div className="mb-3 space-y-3">
             {unlockedDraftConsultations.map((row) => (
               <div key={row.id} id={`consultation-note-${row.id}`}>
