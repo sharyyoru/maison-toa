@@ -268,6 +268,9 @@ export async function POST(req: NextRequest) {
               paid_at: nowIso,
               stripe_payment_intent_id: paymentIntentId,
               payment_method: "online",
+              // Store the exact service name the patient selected on the booking
+              // platform so it's visible in the CRM and on the invoice.
+              notes: `Service réservé en ligne: ${displayName}`,
               is_archived: false,
               is_demo: false,
             })

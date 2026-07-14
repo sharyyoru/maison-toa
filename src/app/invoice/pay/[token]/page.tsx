@@ -3,6 +3,13 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
+type LineItem = {
+  name: string | null;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+};
+
 type InvoiceData = {
   id: string;
   invoice_number: string;
@@ -14,6 +21,10 @@ type InvoiceData = {
   pdf_path: string | null;
   payment_link_expires_at: string | null;
   payrexx_payment_link: string | null;
+  title: string | null;
+  notes: string | null;
+  service_label: string | null;
+  line_items: LineItem[];
 };
 
 type PatientData = {
@@ -115,15 +126,34 @@ export default function InvoicePaymentPage() {
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
           <h2 className="mb-4 text-lg font-semibold text-slate-900">Invoice Details</h2>
           <div className="mb-6 space-y-3 border-b border-slate-100 pb-6 text-sm">
-            <div className="flex justify-between"><span className="text-slate-600">Invoice Number:</span><span className="font-medium">{invoice.invoice_number}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">Patient:</span><span className="font-medium">{patient.first_name} {patient.last_name}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">Date:</span><span className="font-medium">{new Date(invoice.invoice_date).toLocaleDateString("fr-CH")}</span></div>
-            {invoice.doctor_name && <div className="flex justify-between"><span className="text-slate-600">Doctor:</span><span className="font-medium">{invoice.doctor_name}</span></div>}
+            <div className="flex justify-between"><span className="text-slate-600">Numéro de facture :</span><span className="font-medium">{invoice.invoice_number}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Patient :</span><span className="font-medium">{patient.first_name} {patient.last_name}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Date :</span><span className="font-medium">{new Date(invoice.invoice_date).toLocaleDateString("fr-CH")}</span></div>
+            {invoice.doctor_name && <div className="flex justify-between"><span className="text-slate-600">Médecin :</span><span className="font-medium">{invoice.doctor_name}</span></div>}
           </div>
 
-          <div className="mb-6 flex items-center justify-between rounded-lg bg-slate-50 p-4">
-            <span className="text-lg font-semibold text-slate-900">Total Amount:</span>
-            <span className="text-2xl font-bold text-slate-900">{formattedAmount} CHF</span>
+          {/* Service breakdown */}
+          {(invoice.line_items?.length > 0 || invoice.service_label) && (
+            <div className="mb-6 rounded-lg border border-slate-100 bg-slate-50 p-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Service</p>
+              {invoice.line_items?.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {invoice.line_items.map((item, i) => (
+                    <li key={i} className="flex items-center justify-between text-sm">
+                      <span className="text-slate-800 font-medium">{item.name || "Prestation"}</span>
+                      <span className="text-slate-600 ml-4 whitespace-nowrap">CHF {Number(item.total_price).toFixed(2)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm font-medium text-slate-800">{invoice.service_label}</p>
+              )}
+            </div>
+          )}
+
+          <div className="mb-6 flex items-center justify-between rounded-lg bg-slate-900 p-4 text-white">
+            <span className="text-base font-semibold">Acompte à régler :</span>
+            <span className="text-2xl font-bold">{formattedAmount} CHF</span>
           </div>
 
           {invoice.pdf_path && (

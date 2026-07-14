@@ -91,6 +91,8 @@ export async function POST(req: NextRequest) {
         payment_method: "online",
         payment_link_token: paymentLinkToken,
         appointment_id: appointmentId ?? null,
+        // Surface the booked service in the notes field so it's visible everywhere
+        notes: `Service: ${service.name}`,
         is_archived: false,
         is_demo: false,
       })
