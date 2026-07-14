@@ -1694,6 +1694,8 @@ export default function MedicalConsultationsCard({
   const [invoiceLawType, setInvoiceLawType] = useState("KVG");
   const [invoiceAccidentDate, setInvoiceAccidentDate] = useState("");
   const [invoiceNotes, setInvoiceNotes] = useState("");
+  const [invoiceDiagnosisCodes, setInvoiceDiagnosisCodes] = useState<string[]>([]);
+  const [invoiceDiagnosisInput, setInvoiceDiagnosisInput] = useState("");
   const [tardocSearchQuery, setTardocSearchQuery] = useState("");
   const [tardocSearchResults, setTardocSearchResults] = useState<any[]>([]);
   const [tardocSearchLoading, setTardocSearchLoading] = useState(false);
@@ -3925,6 +3927,8 @@ export default function MedicalConsultationsCard({
     setInvoiceServiceLines([]);
     setInvoiceSelectedCategoryId("");
     setInvoiceSelectedServiceId("");
+    setInvoiceDiagnosisCodes([]);
+    setInvoiceDiagnosisInput("");
 
     if (row.doctor_user_id) {
       let mappedProviderId =
@@ -4014,6 +4018,8 @@ export default function MedicalConsultationsCard({
     setInvoiceServiceLines([]);
     setInvoiceSelectedCategoryId("");
     setInvoiceSelectedServiceId("");
+    setInvoiceDiagnosisCodes([]);
+    setInvoiceDiagnosisInput("");
     setMedProducts([createEmptyMedProduct()]);
     setMedIntakeNote("");
     setMedIntakeFromDate(formatLocalDateInputValue(new Date()));
@@ -5499,6 +5505,12 @@ export default function MedicalConsultationsCard({
         setInvoiceLawType(inv.health_insurance_law || "KVG");
         setInvoiceAccidentDate(inv.accident_date || "");
         setInvoiceNotes(inv.notes || "");
+        setInvoiceDiagnosisCodes(
+          Array.isArray(inv.diagnosis_codes)
+            ? inv.diagnosis_codes.map((d: any) => (typeof d === "string" ? d : d?.code)).filter(Boolean)
+            : []
+        );
+        setInvoiceDiagnosisInput("");
 
         // Date & time
         if (inv.treatment_date || inv.invoice_date) {
@@ -7373,10 +7385,9 @@ export default function MedicalConsultationsCard({
                           if (invoiceLawType === "UVG" && invoiceAccidentDate) {
                             invoicePayload.accident_date = invoiceAccidentDate;
                           }
-                          invoicePayload.diagnosis_codes = [
-                            { code: "U", type: "cantonal" },
-                            { code: "Z", type: "ICD" },
-                          ];
+                          invoicePayload.diagnosis_codes = invoiceDiagnosisCodes.length > 0
+                            ? invoiceDiagnosisCodes.map((c) => ({ code: c, type: "ICD" }))
+                            : undefined;
                         }
 
                         // Add ACF/TARDOC-specific invoice fields (when ACF or TARDOC lines present)
@@ -7389,6 +7400,9 @@ export default function MedicalConsultationsCard({
                           if (invoiceLawType === "UVG" && invoiceAccidentDate) {
                             invoicePayload.accident_date = invoiceAccidentDate;
                           }
+                          invoicePayload.diagnosis_codes = invoiceDiagnosisCodes.length > 0
+                            ? invoiceDiagnosisCodes.map((c) => ({ code: c, type: "ICD" }))
+                            : undefined;
                         }
 
                         // Build line items payload (shared between insert and update)
@@ -7500,6 +7514,8 @@ export default function MedicalConsultationsCard({
                           setInvoiceServiceLines([]);
                           setInvoiceSelectedCategoryId("");
                           setInvoiceSelectedServiceId("");
+                          setInvoiceDiagnosisCodes([]);
+                          setInvoiceDiagnosisInput("");
                           setConsultationDiagnosisCode("");
                           setConsultationRefIcd10("");
                           setInvoiceFromConsultationId(null);
@@ -7862,6 +7878,8 @@ export default function MedicalConsultationsCard({
                     setInvoiceServiceLines([]);
                     setInvoiceSelectedCategoryId("");
                     setInvoiceSelectedServiceId("");
+                    setInvoiceDiagnosisCodes([]);
+                    setInvoiceDiagnosisInput("");
                     setConsultationDiagnosisCode("");
                     setConsultationRefIcd10("");
                     setInvoiceFromConsultationId(null);
@@ -8739,6 +8757,63 @@ export default function MedicalConsultationsCard({
                         rows={2}
                         className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                       />
+                    </div>
+
+                    {/* ── ICD-10 Diagnosis Codes ── */}
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-medium text-slate-700">
+                        Codes ICD-10 (diagnostic)
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={invoiceDiagnosisInput}
+                          onChange={(e) => setInvoiceDiagnosisInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            e.preventDefault();
+                            const code = invoiceDiagnosisInput.trim().toUpperCase();
+                            if (code && !invoiceDiagnosisCodes.includes(code)) {
+                              setInvoiceDiagnosisCodes([...invoiceDiagnosisCodes, code]);
+                            }
+                            setInvoiceDiagnosisInput("");
+                          }}
+                          placeholder="ex. L91.0 puis Entrée"
+                          className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const code = invoiceDiagnosisInput.trim().toUpperCase();
+                            if (code && !invoiceDiagnosisCodes.includes(code)) {
+                              setInvoiceDiagnosisCodes([...invoiceDiagnosisCodes, code]);
+                            }
+                            setInvoiceDiagnosisInput("");
+                          }}
+                          className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-200"
+                        >
+                          Ajouter
+                        </button>
+                      </div>
+                      {invoiceDiagnosisCodes.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {invoiceDiagnosisCodes.map((code) => (
+                            <span
+                              key={code}
+                              className="inline-flex items-center gap-1 rounded-full bg-sky-50 border border-sky-200 px-2 py-0.5 text-[11px] text-sky-800"
+                            >
+                              {code}
+                              <button
+                                type="button"
+                                onClick={() => setInvoiceDiagnosisCodes(invoiceDiagnosisCodes.filter((c) => c !== code))}
+                                className="text-sky-400 hover:text-sky-700 leading-none"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* â”€â”€ Appointment link (optional, for deposit invoices) â”€â”€ */}
