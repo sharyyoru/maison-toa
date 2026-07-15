@@ -196,10 +196,20 @@ export async function findMultipleEarliestSlots(
   durationMinutes = 60,
   count = 5,
   maxDaysAhead = 30,
-  treatmentId?: string
+  treatmentId?: string,
+  categorySlug?: string,
+  patientType?: "new" | "existing",
 ): Promise<EarliestDoctorResult[]> {
   const slotsByDoctor = await Promise.all(
-    doctors.map((doctor) => getMultipleOpenSlots(doctor, durationMinutes, count, maxDaysAhead, treatmentId))
+    doctors.map((doctor) => getMultipleOpenSlots(
+      doctor,
+      durationMinutes,
+      count,
+      maxDaysAhead,
+      treatmentId,
+      categorySlug,
+      patientType,
+    ))
   );
 
   return slotsByDoctor.flat();
@@ -213,7 +223,9 @@ async function getMultipleOpenSlots(
   durationMinutes: number,
   count: number,
   maxDaysAhead: number,
-  treatmentId?: string
+  treatmentId?: string,
+  categorySlug?: string,
+  patientType?: "new" | "existing",
 ): Promise<EarliestDoctorResult[]> {
   const { availability } = await getDoctorAvailability(doctor);
   const today = getSwissToday();
@@ -233,13 +245,16 @@ async function getMultipleOpenSlots(
   
   try {
     const treatmentParam = treatmentId && treatmentId !== "none" ? `&treatmentId=${treatmentId}` : "";
+    const categoryParam = categorySlug ? `&categorySlug=${encodeURIComponent(categorySlug)}` : "";
+    const patientTypeParam = patientType ? `&patientType=${patientType}` : "";
     const res = await fetch(
-      `/api/appointments/check-availability?start=${rangeStart.toISOString()}&end=${rangeEnd.toISOString()}&doctor=${encodeURIComponent(doctor.name)}&slug=${doctor.slug}${treatmentParam}`
+      `/api/appointments/check-availability?start=${rangeStart.toISOString()}&end=${rangeEnd.toISOString()}&doctor=${encodeURIComponent(doctor.name)}&slug=${doctor.slug}${treatmentParam}${categoryParam}${patientTypeParam}`
     );
     const data = await res.json();
     
-    if (data.fullSlots && Array.isArray(data.fullSlots)) {
-      data.fullSlots.forEach((isoTime: string) => {
+    const unavailableStarts = data.unavailableStarts || data.fullSlots;
+    if (unavailableStarts && Array.isArray(unavailableStarts)) {
+      unavailableStarts.forEach((isoTime: string) => {
         const slotDate = new Date(isoTime);
         const dateStr = formatSwissYmd(slotDate);
         const timeStr = getSwissSlotString(slotDate);
@@ -268,7 +283,7 @@ async function getMultipleOpenSlots(
     const bookedSlots = allBookedSlots.get(dateString) || [];
     
     for (const slot of slots) {
-      if (!slotConflicts(slot, durationMinutes, bookedSlots)) {
+      if (!bookedSlots.includes(slot)) {
         results.push({ doctor, date: dateString, time: slot });
         if (results.length >= count) break;
       }

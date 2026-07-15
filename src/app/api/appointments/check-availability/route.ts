@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
+import { resolveBookingSecondaryCalendar } from "@/lib/bookingSecondaryCalendar";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -20,6 +21,8 @@ export async function GET(request: NextRequest) {
   const doctorName = searchParams.get("doctor"); // Optional: filter by doctor name
   const doctorSlug = searchParams.get("slug"); // Optional: doctor slug for capacity lookup
   const treatmentId = searchParams.get("treatmentId"); // Optional: for machine availability
+  const categorySlug = searchParams.get("categorySlug");
+  const patientType = searchParams.get("patientType");
 
   if (!start || !end) {
     return NextResponse.json(
@@ -71,10 +74,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const bookingContext = await resolveBookingSecondaryCalendar(supabase, {
+      treatmentId,
+      categorySlug,
+      patientType,
+    });
+    const secondaryCalendar = bookingContext.secondaryCalendar;
+    const primaryDurationMinutes = secondaryCalendar?.providerId === providerId
+      ? Math.max(bookingContext.primaryDurationMinutes, secondaryCalendar.durationMinutes)
+      : bookingContext.primaryDurationMinutes;
+
     // Fetch appointments that OVERLAP the date range (not just those starting within it).
     // This correctly catches multi-day blocking events (VACANCES, STOP) that started
     // before the queried day but still cover it.
-    let query = supabase
+    const query = supabase
       .from("appointments")
       .select("id, start_time, end_time, status, reason, no_patient, provider_id")
       .lt("start_time", end)   // appointment starts before the range ends
@@ -100,7 +113,9 @@ export async function GET(request: NextRequest) {
 
     const matchesDoctor = (apt: { provider_id: string | null; reason: string | null }) => {
       if (!canonicalDoctorName) return true;
-      if (providerId && apt.provider_id === providerId) return true;
+      // A persisted calendar assignment is authoritative. Only fall back to
+      // the legacy reason tag when the appointment has no provider at all.
+      if (providerId && apt.provider_id) return apt.provider_id === providerId;
       if (apt.reason) {
         const match = apt.reason.match(/\[Doctor:\s*(.+?)\s*\]/i);
         if (match && match[1].toLowerCase().includes(doctorNameLower)) return true;
@@ -254,10 +269,47 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const unavailableStarts = new Set<string>();
+    const occupiedIntervals = [...new Set(fullSlots)].map((iso) => {
+      const intervalStart = new Date(iso);
+      return { start: intervalStart, end: new Date(intervalStart.getTime() + 30 * 60 * 1000) };
+    });
+
+    let secondaryAppointments: Array<{ start_time: string; end_time: string }> = [];
+    if (secondaryCalendar && secondaryCalendar.providerId !== providerId) {
+      const { data: resourceAppointments, error: resourceError } = await supabase
+        .from("appointments")
+        .select("start_time, end_time")
+        .eq("provider_id", secondaryCalendar.providerId)
+        .lt("start_time", end)
+        .gt("end_time", start)
+        .not("status", "in", "(cancelled,no_show)");
+      if (resourceError) {
+        console.error("Error checking secondary calendar availability:", resourceError);
+        return NextResponse.json({ error: "Failed to check secondary calendar availability" }, { status: 500 });
+      }
+      secondaryAppointments = resourceAppointments || [];
+    }
+
+    for (const slotStart of allSlots) {
+      const primaryEnd = new Date(slotStart.getTime() + primaryDurationMinutes * 60 * 1000);
+      const primaryBlocked = occupiedIntervals.some(
+        (interval) => interval.start < primaryEnd && interval.end > slotStart,
+      );
+      const secondaryEnd = new Date(
+        slotStart.getTime() + (secondaryCalendar?.durationMinutes || 0) * 60 * 1000,
+      );
+      const secondaryBlocked = secondaryAppointments.some(
+        (appointment) => new Date(appointment.start_time) < secondaryEnd && new Date(appointment.end_time) > slotStart,
+      );
+      if (primaryBlocked || secondaryBlocked) unavailableStarts.add(slotStart.toISOString());
+    }
+
     return NextResponse.json({
       appointments: patientAppointments,
       slotCounts,
-      fullSlots,
+      fullSlots: [...new Set(fullSlots)],
+      unavailableStarts: [...unavailableStarts],
       maxConcurrent: maxCapacity
     });
   } catch (error) {

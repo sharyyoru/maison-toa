@@ -9,15 +9,15 @@ type FetchAvailabilityParams = {
   doctorName: string;
   doctorSlug: string;
   treatmentId: string;
+  categorySlug?: string;
+  patientType?: "new" | "existing";
   signal?: AbortSignal;
 };
 
 type GetNextOpenSlotsParams = {
   dates: string[];
   blockedSlotsByDate: BlockedSlotsByDate;
-  durationMinutes: number;
   generateTimeSlots: (date: string) => string[];
-  slotConflicts: (time: string, durationMinutes: number, blockedSlots: string[]) => boolean;
   limit?: number;
 };
 
@@ -37,6 +37,8 @@ export async function fetchAvailabilityWindow({
   doctorName,
   doctorSlug,
   treatmentId,
+  categorySlug,
+  patientType,
   signal,
 }: FetchAvailabilityParams): Promise<BlockedSlotsByDate> {
   const params = new URLSearchParams({
@@ -46,26 +48,24 @@ export async function fetchAvailabilityWindow({
     slug: doctorSlug,
     treatmentId,
   });
+  if (categorySlug) params.set("categorySlug", categorySlug);
+  if (patientType) params.set("patientType", patientType);
   const res = await fetch(`/api/appointments/check-availability?${params.toString()}`, { signal });
   const data = await res.json();
-  return groupFullSlotsBySwissDate(data.fullSlots || []);
+  return groupFullSlotsBySwissDate(data.unavailableStarts || data.fullSlots || []);
 }
 
 export function getNextOpenSlots({
   dates,
   blockedSlotsByDate,
-  durationMinutes,
   generateTimeSlots,
-  slotConflicts,
   limit = 15,
 }: GetNextOpenSlotsParams): AvailableSlot[] {
   const slotsToShow: AvailableSlot[] = [];
 
   for (const date of dates) {
     const blockedSlots = blockedSlotsByDate[date] || [];
-    const openSlots = generateTimeSlots(date).filter(
-      (time) => !slotConflicts(time, durationMinutes, blockedSlots)
-    );
+    const openSlots = generateTimeSlots(date).filter((time) => !blockedSlots.includes(time));
 
     for (const time of openSlots) {
       slotsToShow.push({ date, time });

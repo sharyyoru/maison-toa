@@ -406,6 +406,7 @@ type CalendarAppointment = {
   location: string | null;
   temporary_text: string | null;
   machine_ids: string[];
+  linked_parent_appointment_id?: string | null;
   patient: AppointmentPatient | null;
   provider: {
     id: string;
@@ -1318,7 +1319,7 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -3214,7 +3215,7 @@ export default function CalendarPage() {
           const { data: fullApptData } = await supabaseClient
             .from("appointments")
             .select(
-              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
             )
             .eq('id', firstAppt.id)
             .single();
@@ -3233,7 +3234,7 @@ export default function CalendarPage() {
         const { data: refreshedData } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -3284,7 +3285,7 @@ export default function CalendarPage() {
             source: "manual",
           })
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .single();
 
@@ -3421,12 +3422,26 @@ export default function CalendarPage() {
     setEditCategory(categoryFromReason ?? "");
     setEditCategorySearch(categoryFromReason ?? "");
 
-    // Initialize provider (doctor) selection from the appointment's provider
-    const initialProviderId = appt.provider_id ?? "";
-    const initialProviderName =
-      appt.provider?.name?.trim() ||
-      getDoctorNameFromReason(appt.reason) ||
-      "";
+    // A linked appointment's provider_id is its calendar (for example Cabine 3),
+    // while the [Doctor:] tag identifies the clinician assigned to the booking.
+    // Keep those concepts separate so editing the doctor does not move the
+    // reservation to a different calendar.
+    const doctorNameFromReason = getDoctorNameFromReason(appt.reason);
+    const normalizeProviderName = (name: string) =>
+      normalizeString(name).replace(/^dr\.?\s+/, "");
+    const linkedDoctor = appt.linked_parent_appointment_id && doctorNameFromReason
+      ? providers.find(
+          (provider) =>
+            provider.name &&
+            normalizeProviderName(provider.name) === normalizeProviderName(doctorNameFromReason),
+        )
+      : undefined;
+    const initialProviderId = appt.linked_parent_appointment_id
+      ? linkedDoctor?.id ?? ""
+      : appt.provider_id ?? "";
+    const initialProviderName = appt.linked_parent_appointment_id
+      ? linkedDoctor?.name?.trim() || doctorNameFromReason || ""
+      : appt.provider?.name?.trim() || doctorNameFromReason || "";
     setEditProviderId(initialProviderId);
     setEditProviderSearch(initialProviderName);
 
@@ -4302,12 +4317,16 @@ export default function CalendarPage() {
           location: editLocation || null,
           reason: updatedReason,
           notes: editNotes.trim() || null,
-          provider_id: editProviderId || null,
+          // On mirrored reservations provider_id controls the calendar column,
+          // not the clinical doctor selected above.
+          provider_id: editingAppointment.linked_parent_appointment_id
+            ? editingAppointment.provider_id
+            : editProviderId || null,
           machine_ids: editMachineIds,
         })
         .eq("id", editingAppointment.id)
         .select(
-          "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
+          "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
         )
         .single();
 
@@ -4400,13 +4419,12 @@ export default function CalendarPage() {
         return;
       }
 
-      const { error } = await supabaseClient
-        .from("appointments")
-        .delete()
-        .eq("id", appointmentToDelete.id);
-
-      if (error) {
-        setEditError(error.message ?? "Failed to delete appointment.");
+      const deleteResponse = await fetch(`/api/appointments/${appointmentToDelete.id}`, {
+        method: "DELETE",
+      });
+      if (!deleteResponse.ok) {
+        const deleteData = await deleteResponse.json().catch(() => ({}));
+        setEditError(deleteData.error ?? "Failed to delete appointment.");
         setDeletingAppointment(false);
         return;
       }
@@ -5865,6 +5883,13 @@ export default function CalendarPage() {
                           ))}
                         </div>
                       )}
+                      {editingAppointment?.linked_parent_appointment_id && (
+                        <p className="mt-1 text-[10px] text-sky-700">
+                          {t("modal.calendarAssignment", {
+                            name: editingAppointment.provider?.name || t("sidebar.unnamedDoctor"),
+                          })}
+                        </p>
+                      )}
                     </div>
                     <div className="relative col-span-2">
                       <p className="text-[10px] text-slate-500 mb-1">{t("modal.fields.category")}</p>
@@ -6123,7 +6148,7 @@ export default function CalendarPage() {
               ) : null}
               
               {/* Delete confirmation */}
-              {showDeleteConfirm && (
+              {showDeleteConfirm && !editingAppointment?.linked_parent_appointment_id && (
                 <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
                   <p className="text-[11px] font-medium text-red-800 mb-2">
                     {t("modal.deleteConfirm")}
@@ -6153,17 +6178,19 @@ export default function CalendarPage() {
               
               <div className="mt-4 flex items-center justify-between">
                 {/* Delete button on left */}
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  disabled={savingEdit || deletingAppointment || showDeleteConfirm}
-                  className="inline-flex items-center gap-1 rounded-full border border-red-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-red-600 shadow-sm hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  {t("modal.delete")}
-                </button>
+                {editingAppointment?.linked_parent_appointment_id ? <span /> : (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={savingEdit || deletingAppointment || showDeleteConfirm}
+                    className="inline-flex items-center gap-1 rounded-full border border-red-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-red-600 shadow-sm hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    {t("modal.delete")}
+                  </button>
+                )}
                 
                 {/* Other buttons on right */}
                 <div className="flex items-center gap-2">

@@ -125,7 +125,11 @@ export async function POST(request: Request) {
 
     // Parse new date (ISO string from Swiss local time)
     const newStartDate = parseSwissDateTimeLocal(newAppointmentDate);
-    const newEndDate = new Date(newStartDate.getTime() + 60 * 60 * 1000); // 1 hour
+    const originalDurationMs = Math.max(
+      60_000,
+      new Date(appt.end_time).getTime() - new Date(appt.start_time).getTime(),
+    );
+    const newEndDate = new Date(newStartDate.getTime() + originalDurationMs);
 
     let doctorName = "";
     if (appt.provider_id) {
@@ -161,6 +165,43 @@ export async function POST(request: Request) {
         { error: "This time slot is no longer available. Please choose another time." },
         { status: 409 }
       );
+    }
+
+
+    const { data: linkedAppointment, error: linkedAppointmentError } = await supabase
+      .from("appointments")
+      .select("id, provider_id, start_time, end_time")
+      .eq("linked_parent_appointment_id", id)
+      .maybeSingle();
+    if (linkedAppointmentError) {
+      console.error("Failed to load mirrored appointment:", linkedAppointmentError);
+      return NextResponse.json({ error: "Failed to verify the additional calendar." }, { status: 500 });
+    }
+    if (linkedAppointment?.provider_id) {
+      const linkedDurationMs = Math.max(
+        60_000,
+        new Date(linkedAppointment.end_time).getTime() - new Date(linkedAppointment.start_time).getTime(),
+      );
+      const linkedEnd = new Date(newStartDate.getTime() + linkedDurationMs);
+      const { data: linkedConflicts, error: linkedConflictError } = await supabase
+        .from("appointments")
+        .select("id")
+        .eq("provider_id", linkedAppointment.provider_id)
+        .neq("id", linkedAppointment.id)
+        .lt("start_time", linkedEnd.toISOString())
+        .gt("end_time", newStartDate.toISOString())
+        .not("status", "in", "(cancelled,no_show)")
+        .limit(1);
+      if (linkedConflictError) {
+        console.error("Failed to verify mirrored calendar:", linkedConflictError);
+        return NextResponse.json({ error: "Failed to verify the additional calendar." }, { status: 500 });
+      }
+      if (linkedConflicts && linkedConflicts.length > 0) {
+        return NextResponse.json(
+          { error: "The additional calendar is no longer available. Please choose another time." },
+          { status: 409 },
+        );
+      }
     }
 
     // Update appointment times

@@ -81,7 +81,15 @@ export default function SelectDoctorPage() {
     setSelectedDoctorSlug(null);
 
     try {
-      const slots = await findMultipleEarliestSlots(doctors, treatment?.duration_minutes ?? 60, 15, 90, treatmentId);
+      const slots = await findMultipleEarliestSlots(
+        doctors,
+        treatment?.duration_minutes ?? 60,
+        15,
+        90,
+        treatmentId,
+        categorySlug,
+        "new",
+      );
       if (slots.length === 0) {
         setAutoSelectError(t("doctor.noEarliestAvailable"));
         return;

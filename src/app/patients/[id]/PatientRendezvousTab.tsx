@@ -241,6 +241,7 @@ export default function PatientRendezvousTab({
             "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, provider:providers(id, name)"
           )
           .eq("patient_id", patientId)
+          .is("linked_parent_appointment_id", null)
           .order("start_time", { ascending: false });
 
         if (!isMounted) return;
