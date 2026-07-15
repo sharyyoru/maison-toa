@@ -14,6 +14,7 @@ export async function GET(
     .from("appointments")
     .select("id, start_time, end_time, status, reason, title, location")
     .eq("patient_id", patientId)
+    .is("linked_parent_appointment_id", null)
     .eq("is_demo", false)
     .order("start_time", { ascending: true });
 

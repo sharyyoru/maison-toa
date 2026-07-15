@@ -613,6 +613,7 @@ export default function PatientActivityCard({
           .from("appointments")
           .select("id, patient_id, start_time, end_time, status, reason, location")
           .eq("patient_id", patientId)
+          .is("linked_parent_appointment_id", null)
           .order("start_time", { ascending: false });
 
         // Get the most recent appointment for the patient

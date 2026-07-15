@@ -102,6 +102,7 @@ export async function GET(request: NextRequest) {
     // Filter to only online bookings — either by source column (after migration)
     // or by the [Online Booking] marker in the reason (before migration back-fill)
     .or("source.eq.online_booking,reason.ilike.*[Online Booking]*")
+    .is("linked_parent_appointment_id", null)
     .order("start_time", { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
 

@@ -10,6 +10,7 @@ import {
 } from "@/lib/appointmentEmails";
 import { normalizePatientLanguage } from "@/lib/languagePreference";
 import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
+import { resolveBookingSecondaryCalendar } from "@/lib/bookingSecondaryCalendar";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -29,6 +30,8 @@ type BookingPayload = {
   language?: string;
   gender?: string;
   treatmentId?: string;
+  categorySlug?: string;
+  patientType?: "new" | "existing";
 };
 
 type TreatmentBookingDetails = {
@@ -138,6 +141,16 @@ async function findBookingDealStageId(supabase: SupabaseClient): Promise<string 
   return createdStage?.id ?? null;
 }
 
+function getRoundedHourWindow(date: Date) {
+  const roundedHour = new Date(date);
+  roundedHour.setUTCMinutes(date.getUTCMinutes() >= 30 ? 60 : 0, 0, 0);
+
+  return {
+    start: new Date(roundedHour.getTime() - 30 * 60 * 1000).toISOString(),
+    end: new Date(roundedHour.getTime() + 30 * 60 * 1000).toISOString(),
+  };
+}
+
 async function sendEmail(to: string, subject: string, html: string) {
   if (!isEmailConfigured()) {
     console.log("Resend not configured, skipping email send");
@@ -174,6 +187,8 @@ export async function POST(request: Request) {
       location,
       language: requestedLanguage = "en",
       treatmentId,
+      categorySlug,
+      patientType,
     } = body;
     let language = normalizePatientLanguage(requestedLanguage, "en");
 
@@ -258,10 +273,15 @@ export async function POST(request: Request) {
     const maxCapacity = MULTI_CAPACITY_DOCTORS.includes(doctorSlug) ? 3 : 1;
 
     // Look up treatment duration and category metadata; fall back to 60 min if not found
-    let durationMinutes = 60;
-    let categoryName: string | null = null;
+    const bookingContext = await resolveBookingSecondaryCalendar(supabase, {
+      treatmentId,
+      categorySlug,
+      patientType,
+    });
+    let durationMinutes = bookingContext.primaryDurationMinutes;
+    let categoryName: string | null = bookingContext.categoryName;
     let treatmentServiceId: string | null = null;
-    if (treatmentId) {
+    if (treatmentId && treatmentId !== "none") {
       const { data: treatmentData } = await supabase
         .from("booking_treatments")
         .select(`
@@ -316,6 +336,10 @@ export async function POST(request: Request) {
 
     // Check if time slot has capacity for this doctor using full overlap detection.
     const apptStart = appointmentDateObj;
+    const secondaryCalendar = bookingContext.secondaryCalendar;
+    if (secondaryCalendar?.providerId === providerId) {
+      durationMinutes = Math.max(durationMinutes, secondaryCalendar.durationMinutes);
+    }
     const apptEnd = new Date(appointmentDateObj.getTime() + durationMinutes * 60 * 1000);
 
     console.log(`[Booking] Checking availability for ${doctorName} (${doctorSlug}) at ${apptStart.toISOString()}`);
@@ -340,10 +364,9 @@ export async function POST(request: Request) {
       // Skip placeholder appointments
       if (apt.no_patient === true) return false;
       
-      // Check by provider_id first (most reliable)
-      if (providerId && apt.provider_id === providerId) {
-        return true;
-      }
+      // A persisted calendar assignment is authoritative. Only inspect the
+      // legacy reason tag when provider_id is missing.
+      if (providerId && apt.provider_id) return apt.provider_id === providerId;
       
       // Fallback: check the reason field for [Doctor: Name] pattern
       if (apt.reason) {
@@ -370,12 +393,37 @@ export async function POST(request: Request) {
 
     console.log(`[Booking] ALLOWED: ${doctorAppointments.length} < ${maxCapacity}`);
 
+    if (secondaryCalendar && secondaryCalendar.providerId !== providerId) {
+      const secondaryEnd = new Date(
+        appointmentDateObj.getTime() + secondaryCalendar.durationMinutes * 60 * 1000,
+      );
+      const { data: secondaryConflicts, error: secondaryConflictError } = await supabase
+        .from("appointments")
+        .select("id")
+        .eq("provider_id", secondaryCalendar.providerId)
+        .lt("start_time", secondaryEnd.toISOString())
+        .gt("end_time", appointmentDateObj.toISOString())
+        .not("status", "in", "(cancelled,no_show)")
+        .limit(1);
+
+      if (secondaryConflictError) {
+        console.error("[Booking] Secondary calendar check failed:", secondaryConflictError);
+        return NextResponse.json({ error: "Failed to verify the additional calendar." }, { status: 500 });
+      }
+      if (secondaryConflicts && secondaryConflicts.length > 0) {
+        return NextResponse.json(
+          { error: `${secondaryCalendar.providerName} is not available at this time. Please choose another slot.` },
+          { status: 409 },
+        );
+      }
+    }
+
     // ── Machine availability check ──
     // Look up if the treatment requires a machine:
     // 1. Direct machine_id on booking_treatments (preferred)
     // 2. Fallback: linked_service_id → service_machines
     let resolvedMachineId: string | null = null;
-    if (treatmentId) {
+    if (treatmentId && treatmentId !== "none") {
       const { data: treatmentRow } = await supabase
         .from("booking_treatments")
         .select("machine_id, linked_service_id")
@@ -528,7 +576,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: deal, error: dealError } = await supabase
+    const dealCreatedAt = new Date();
+    const { data: insertedDeal, error: dealError } = await supabase
       .from("deals")
       .insert({
         patient_id: patientId,
@@ -538,8 +587,9 @@ export async function POST(request: Request) {
         pipeline: "Online Booking",
         contact_label: "Online Booking",
         location: location || "Geneva",
+        created_at: dealCreatedAt.toISOString(),
         notes: [
-          `Auto-created from online appointment booking on ${new Date().toISOString()}.`,
+          `Auto-created from online appointment booking on ${dealCreatedAt.toISOString()}.`,
           `Treatment: ${service}`,
           `Doctor: ${doctorName}`,
           `Appointment: ${appointmentDateObj.toISOString()}`,
@@ -549,7 +599,42 @@ export async function POST(request: Request) {
       .select("id")
       .single();
 
-    if (dealError || !deal) {
+    let deal = insertedDeal;
+    let createdNewDeal = Boolean(insertedDeal && !dealError);
+
+    const isDuplicateBookingDeal =
+      dealError?.code === "23505" &&
+      `${dealError.message ?? ""} ${dealError.details ?? ""}`.includes(
+        "deals_patient_service_hour_unique",
+      );
+
+    if (isDuplicateBookingDeal) {
+      const duplicateWindow = getRoundedHourWindow(dealCreatedAt);
+      let duplicateDealQuery = supabase
+        .from("deals")
+        .select("id")
+        .eq("patient_id", patientId)
+        .gte("created_at", duplicateWindow.start)
+        .lt("created_at", duplicateWindow.end)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      duplicateDealQuery = treatmentServiceId
+        ? duplicateDealQuery.eq("service_id", treatmentServiceId)
+        : duplicateDealQuery.is("service_id", null);
+
+      const { data: existingDeals, error: existingDealError } = await duplicateDealQuery;
+      deal = existingDeals?.[0] ?? null;
+      createdNewDeal = false;
+
+      if (existingDealError) {
+        console.error("[Booking] Error finding duplicate booking deal:", existingDealError);
+      } else if (deal) {
+        console.log("[Booking] Reusing existing booking deal:", deal.id);
+      }
+    }
+
+    if (!deal) {
       console.error("[Booking] Error creating deal:", dealError);
       return NextResponse.json(
         { error: "Failed to create booking deal" },
@@ -557,28 +642,62 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create the appointment
-    const { data: appointment, error: appointmentError } = await supabase
-      .from("appointments")
-      .insert({
+    // Create the primary appointment and its optional linked calendar record in
+    // one statement so a secondary insert can never leave a partial booking.
+    const primaryAppointmentId = crypto.randomUUID();
+    const appointmentRows: Record<string, unknown>[] = [{
+      id: primaryAppointmentId,
+      patient_id: patientId,
+      deal_id: deal.id,
+      provider_id: providerId,
+      start_time: appointmentDateObj.toISOString(),
+      end_time: apptEnd.toISOString(),
+      reason,
+      notes: stripHtml(notes) || null,
+      location: location || "Geneva",
+      status: "scheduled",
+      source: "online_booking",
+      machine_ids: resolvedMachineId ? [resolvedMachineId] : [],
+      booking_category_id: bookingContext.categoryId,
+      booking_treatment_id: bookingContext.treatmentId,
+    }];
+
+    if (secondaryCalendar && secondaryCalendar.providerId !== providerId) {
+      const secondaryEnd = new Date(
+        appointmentDateObj.getTime() + secondaryCalendar.durationMinutes * 60 * 1000,
+      );
+      appointmentRows.push({
+        id: crypto.randomUUID(),
         patient_id: patientId,
-        deal_id: deal.id,
-        provider_id: providerId,
+        provider_id: secondaryCalendar.providerId,
         start_time: appointmentDateObj.toISOString(),
-        end_time: apptEnd.toISOString(),
-        reason,
+        end_time: secondaryEnd.toISOString(),
+        reason: `${reason} [Linked Calendar: ${secondaryCalendar.providerName}]`,
         notes: stripHtml(notes) || null,
         location: location || "Geneva",
         status: "scheduled",
         source: "online_booking",
-        machine_ids: resolvedMachineId ? [resolvedMachineId] : [],
-      })
-      .select("id")
-      .single();
+        machine_ids: [],
+        booking_category_id: bookingContext.categoryId,
+        booking_treatment_id: bookingContext.treatmentId,
+        linked_parent_appointment_id: primaryAppointmentId,
+      });
+    }
+
+    const { data: createdAppointments, error: appointmentError } = await supabase
+      .from("appointments")
+      .insert(appointmentRows)
+      .select("id, linked_parent_appointment_id");
+
+    const appointment = createdAppointments?.find(
+      (created) => created.id === primaryAppointmentId && !created.linked_parent_appointment_id,
+    );
 
     if (appointmentError || !appointment) {
       console.error("Error creating appointment:", appointmentError);
-      await supabase.from("deals").delete().eq("id", deal.id);
+      if (createdNewDeal) {
+        await supabase.from("deals").delete().eq("id", deal.id);
+      }
       return NextResponse.json(
         { error: "Failed to create appointment" },
         { status: 500 }

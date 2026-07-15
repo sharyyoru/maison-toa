@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getSwissDayOfWeek, getSwissDayRange, getSwissHourMinute } from "@/lib/swissTimezone";
 import { MULTI_CAPACITY_DOCTORS, nameToSlug } from "@/lib/doctorAvailability";
-import { parseSwissDate } from "@/lib/swissTimezone";
+import { createSwissDateTime, parseSwissDate } from "@/lib/swissTimezone";
 import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
 
 const supabase = createClient(
@@ -122,18 +122,25 @@ export async function GET(request: Request) {
   // Use overlap detection so multi-day blocking events (VACANCES/STOP) are caught
   // regardless of whether they started before this specific day.
   const { start, end } = getSwissDayRange(date);
-  const { data: existingAppointments } = await supabase
+  const { data: existingAppointments, error: existingAppointmentsError } = await supabase
     .from("appointments")
     .select("id, start_time, end_time, provider_id, reason, no_patient")
     .lt("start_time", end)
     .gt("end_time", start)
     .neq("status", "cancelled");
 
+  if (existingAppointmentsError) {
+    console.error("[Slots API] Failed to load doctor calendar:", existingAppointmentsError);
+    return NextResponse.json({ error: "Failed to verify calendar availability" }, { status: 500 });
+  }
+
   const maxCapacity = MULTI_CAPACITY_DOCTORS.includes(normalizedDoctorSlug) ? 3 : 1;
   const doctorSlugPattern = new RegExp(`\\[Doctor:\\s*${normalizedDoctorSlug.replace(/-/g, "[ -]?")}`, "i");
 
   const isThisDoctor = (apt: { provider_id: string | null; reason: string | null }) => {
-    if (providerId && apt.provider_id === providerId) return true;
+    // A persisted calendar assignment is authoritative. Only fall back to
+    // the reason tag for legacy appointments without a provider_id.
+    if (providerId && apt.provider_id) return apt.provider_id === providerId;
 
     const doctorMatch = apt.reason?.match(/\[Doctor:\s*(.+?)\s*\]/i);
     if (doctorMatch && normalizeDoctorSlug(doctorMatch[1]) === normalizedDoctorSlug) return true;
@@ -172,7 +179,78 @@ export async function GET(request: Request) {
   }
 
   const bookedSlots = [...bookedSlotSet];
-  const availableSlots = allSlots.filter(s => !bookedSlotSet.has(s));
+  let availableSlots = allSlots.filter(s => !bookedSlotSet.has(s));
+
+  // Self-service rescheduling uses excludeId. If the appointment owns a
+  // linked calendar record, filter the same candidate starts against that
+  // calendar while excluding the existing linked record itself.
+  if (excludeId) {
+    const { data: currentAppointment, error: currentAppointmentError } = await supabase
+      .from("appointments")
+      .select("id, start_time, end_time")
+      .eq("id", excludeId)
+      .maybeSingle();
+
+    if (currentAppointmentError || !currentAppointment) {
+      console.error("[Slots API] Failed to load rescheduled appointment:", currentAppointmentError);
+      return NextResponse.json({ error: "Failed to verify appointment availability" }, { status: 500 });
+    }
+
+    const primaryDurationMs = Math.max(
+      60_000,
+      new Date(currentAppointment.end_time).getTime() - new Date(currentAppointment.start_time).getTime(),
+    );
+
+    // A candidate is only valid when every 30-minute segment occupied by the
+    // doctor's full appointment duration still has capacity.
+    availableSlots = availableSlots.filter((time) => {
+      const [hour, minute] = time.split(":").map(Number);
+      const candidateStart = createSwissDateTime(date, hour, minute);
+      const candidateEnd = new Date(candidateStart.getTime() + primaryDurationMs);
+      return getOccupiedSwissSlots(candidateStart.toISOString(), candidateEnd.toISOString())
+        .every((slotKey) => !bookedSlotSet.has(slotKey));
+    });
+
+    const { data: linkedAppointment, error: linkedAppointmentError } = await supabase
+      .from("appointments")
+      .select("id, provider_id, start_time, end_time")
+      .eq("linked_parent_appointment_id", excludeId)
+      .maybeSingle();
+
+    if (linkedAppointmentError) {
+      console.error("[Slots API] Failed to load mirrored appointment:", linkedAppointmentError);
+      return NextResponse.json({ error: "Failed to verify additional calendar" }, { status: 500 });
+    }
+
+    if (linkedAppointment?.provider_id) {
+      const linkedDurationMs = Math.max(
+        60_000,
+        new Date(linkedAppointment.end_time).getTime() - new Date(linkedAppointment.start_time).getTime(),
+      );
+      const { data: linkedCalendarAppointments, error: linkedCalendarError } = await supabase
+        .from("appointments")
+        .select("id, start_time, end_time")
+        .eq("provider_id", linkedAppointment.provider_id)
+        .neq("id", linkedAppointment.id)
+        .lt("start_time", end)
+        .gt("end_time", start)
+        .not("status", "in", "(cancelled,no_show)");
+
+      if (linkedCalendarError) {
+        console.error("[Slots API] Failed to load mirrored calendar:", linkedCalendarError);
+        return NextResponse.json({ error: "Failed to verify additional calendar" }, { status: 500 });
+      }
+
+      availableSlots = availableSlots.filter((time) => {
+        const [hour, minute] = time.split(":").map(Number);
+        const candidateStart = createSwissDateTime(date, hour, minute);
+        const candidateEnd = new Date(candidateStart.getTime() + linkedDurationMs);
+        return !(linkedCalendarAppointments || []).some(
+          (appointment) => new Date(appointment.start_time) < candidateEnd && new Date(appointment.end_time) > candidateStart,
+        );
+      });
+    }
+  }
 
   return NextResponse.json({ availableSlots, bookedSlots });
 }
