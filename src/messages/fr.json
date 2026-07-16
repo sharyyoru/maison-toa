@@ -80,6 +80,7 @@
       "month": "Mois"
     },
     "cancelled": "Annulés",
+    "tableView": "Tableau",
     "searchPatient": "Rechercher un patient",
     "weekdayShort": {
       "mon": "Lun",
@@ -1930,6 +1931,49 @@
       "crm": "CRM",
       "medical": "Médical",
       "error": "Erreur inattendue lors de l'enregistrement de la priorité."
+    }
+  },
+  "appointmentsTable": {
+    "title": "Tous les rendez-vous",
+    "subtitle": "Consultez et filtrez tous les rendez-vous du calendrier.",
+    "calendarView": "Vue calendrier",
+    "loadError": "Impossible de charger les rendez-vous.",
+    "loading": "Chargement des rendez-vous...",
+    "empty": "Aucun rendez-vous ne correspond à ces filtres.",
+    "resultCount": "{count, plural, =0 {Aucun rendez-vous} =1 {1 rendez-vous} other {# rendez-vous}}",
+    "unknownPatient": "Patient inconnu",
+    "noPatient": "Sans patient",
+    "notSpecified": "Non renseigné",
+    "cancelled": "Annulé",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "page": "Page {page} sur {pages}",
+    "filters": {
+      "from": "Date du rendez-vous du",
+      "to": "Date du rendez-vous au",
+      "patient": "Patient",
+      "service": "Service",
+      "category": "Catégorie",
+      "status": "Statut",
+      "doctor": "Médecin",
+      "allServices": "Tous les services",
+      "allPatients": "Tous les patients",
+      "searchPatients": "Rechercher un patient...",
+      "searchServices": "Rechercher un service...",
+      "allCategories": "Toutes les catégories",
+      "allStatuses": "Tous les statuts",
+      "allDoctors": "Tous les médecins",
+      "clear": "Effacer tous les filtres"
+    },
+    "columns": {
+      "date": "Date du rendez-vous",
+      "patient": "Patient",
+      "service": "Service",
+      "category": "Catégorie",
+      "status": "Statut",
+      "doctor": "Médecin / calendrier",
+      "location": "Lieu",
+      "state": "État"
     }
   },
   "controllersPage": {
