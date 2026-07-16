@@ -1948,6 +1948,8 @@
     "previous": "Précédent",
     "next": "Suivant",
     "page": "Page {page} sur {pages}",
+    "sortAscending": "trié du plus ancien au plus récent ; activer pour inverser le tri",
+    "sortDescending": "trié du plus récent au plus ancien ; activer pour inverser le tri",
     "filters": {
       "from": "Date du rendez-vous du",
       "to": "Date du rendez-vous au",
