@@ -112,6 +112,7 @@ export default function AppointmentsTablePage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [doctorFilter, setDoctorFilter] = useState("");
+  const [dateSortDirection, setDateSortDirection] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -232,7 +233,7 @@ export default function AppointmentsTablePage() {
   );
 
   const filteredRows = useMemo(() => {
-    return normalizedRows.filter(
+    const matchingRows = normalizedRows.filter(
       (row) =>
         (!patientFilter || row.patientName === patientFilter) &&
         (serviceFilter.length === 0 || serviceFilter.some((service) => row.serviceNames.includes(service))) &&
@@ -240,9 +241,13 @@ export default function AppointmentsTablePage() {
         (!statusFilter || row.workflowStatus === statusFilter) &&
         (!doctorFilter || row.doctor === doctorFilter),
     );
-  }, [normalizedRows, patientFilter, serviceFilter, categoryFilter, statusFilter, doctorFilter]);
+    return matchingRows.sort((a, b) => {
+      const difference = new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
+      return dateSortDirection === "asc" ? difference : -difference;
+    });
+  }, [normalizedRows, patientFilter, serviceFilter, categoryFilter, statusFilter, doctorFilter, dateSortDirection]);
 
-  useEffect(() => setPage(1), [fromDate, toDate, patientFilter, serviceFilter, categoryFilter, statusFilter, doctorFilter]);
+  useEffect(() => setPage(1), [fromDate, toDate, patientFilter, serviceFilter, categoryFilter, statusFilter, doctorFilter, dateSortDirection]);
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const visibleRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -332,7 +337,22 @@ export default function AppointmentsTablePage() {
             <table className="min-w-full text-left text-[11px]">
               <thead className="border-b border-slate-200 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
-                  <TableHeader>{t("columns.date")}</TableHeader>
+                  <th
+                    aria-sort={dateSortDirection === "asc" ? "ascending" : "descending"}
+                    className="whitespace-nowrap px-4 py-3 font-medium"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setDateSortDirection((direction) => direction === "asc" ? "desc" : "asc")}
+                      aria-label={`${t("columns.date")}: ${t(dateSortDirection === "asc" ? "sortAscending" : "sortDescending")}`}
+                      className="inline-flex items-center gap-1.5 rounded text-left hover:text-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                    >
+                      <span>{t("columns.date")}</span>
+                      <svg className="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                        {dateSortDirection === "asc" ? <path d="m6 12 4-4 4 4" /> : <path d="m6 8 4 4 4-4" />}
+                      </svg>
+                    </button>
+                  </th>
                   <TableHeader>{t("columns.patient")}</TableHeader>
                   <TableHeader>{t("columns.service")}</TableHeader>
                   <TableHeader>{t("columns.category")}</TableHeader>

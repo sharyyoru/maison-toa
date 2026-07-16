@@ -1948,6 +1948,8 @@
     "previous": "Previous",
     "next": "Next",
     "page": "Page {page} of {pages}",
+    "sortAscending": "sorted earliest to latest; activate to sort latest to earliest",
+    "sortDescending": "sorted latest to earliest; activate to sort earliest to latest",
     "filters": {
       "from": "Appointment date from",
       "to": "Appointment date to",
