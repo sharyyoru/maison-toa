@@ -4429,8 +4429,15 @@ export default function CalendarPage() {
         return;
       }
 
-      // Remove from local state
-      setAppointments((prev) => prev.filter((a) => a.id !== appointmentToDelete.id));
+      const deleteData = await deleteResponse.json().catch(() => ({}));
+      const deletedAppointmentIds = new Set<string>(
+        Array.isArray(deleteData.deletedAppointmentIds)
+          ? deleteData.deletedAppointmentIds
+          : [appointmentToDelete.id],
+      );
+
+      // A primary appointment deletion cascades to its mirrored reservations.
+      setAppointments((prev) => prev.filter((a) => !deletedAppointmentIds.has(a.id)));
 
       setDeletingAppointment(false);
       setShowDeleteConfirm(false);
