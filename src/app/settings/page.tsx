@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { getCategoryColorPresentation } from "@/utils/categoryColor";
 import dynamic from "next/dynamic";
 
 const ProvidersBillingSettingsTab = dynamic(
@@ -1303,24 +1304,26 @@ function ServiceCategorySelect({
             <span className="h-3 w-3 shrink-0 rounded-sm border border-slate-200 bg-white" />
             <span className="truncate font-medium text-slate-800">No assigned category</span>
           </button>
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              type="button"
-              onClick={() => {
-                onChange(category.id);
-                setOpen(false);
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-sky-50 ${category.id === value ? "bg-sky-50" : ""}`}
-            >
-              {category.color ? (
-                <span className={`h-3 w-3 shrink-0 rounded-sm border border-slate-200 ${category.color}`} />
-              ) : (
-                <span className="h-3 w-3 shrink-0 rounded-sm border border-slate-200 bg-white" />
-              )}
-              <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{category.name}</span>
-            </button>
-          ))}
+          {categories.map((category) => {
+            const categoryColor = getCategoryColorPresentation(category.color, "bg-white");
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => {
+                  onChange(category.id);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-sky-50 ${category.id === value ? "bg-sky-50" : ""}`}
+              >
+                <span
+                  className={`h-3 w-3 shrink-0 rounded-sm border border-slate-200 ${categoryColor.className}`}
+                  style={categoryColor.style}
+                />
+                <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{category.name}</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

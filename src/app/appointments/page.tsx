@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getAppointmentNotes, getAppointmentTitle, getAppointmentDisplayName } from "@/lib/appointmentUtils";
+import { getCategoryColorPresentation } from "@/utils/categoryColor";
 import {
   formatSwissMonthYear,
   formatSwissYmd,
@@ -2374,6 +2375,12 @@ export default function CalendarPage() {
       return getCategoryColor(cat);
     },
     [dbCategoryColorByName],
+  );
+
+  const resolveCategoryColorPresentation = useCallback(
+    (category: string | null) =>
+      getCategoryColorPresentation(resolveCategoryColor(category), "bg-slate-100"),
+    [resolveCategoryColor],
   );
 
   const filteredCategoryOptions = useMemo(() => {
@@ -5099,7 +5106,8 @@ export default function CalendarPage() {
                               }}
                               className={`w-full rounded-md px-1 py-0.5 text-[10px] text-left ${getAppointmentStatusColorClasses(
                                 appt.status,
-                              )} ${resolveCategoryColor(category)}`}
+                              )} ${resolveCategoryColorPresentation(category).className}`}
+                              style={resolveCategoryColorPresentation(category).style}
                             >
                               <div className="flex items-center gap-1 truncate font-medium text-slate-800">
                                 {statusIcon && <span className="flex-shrink-0">{statusIcon}</span>}
@@ -5460,7 +5468,8 @@ export default function CalendarPage() {
                                               openEditModalForAppointment(appt);
                                             }
                                           }}
-                                          className={`w-full h-full rounded-md px-1 py-0.5 text-[10px] text-left shadow-sm overflow-hidden cursor-grab active:cursor-grabbing ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColor(category)} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
+                                          className={`w-full h-full rounded-md px-1 py-0.5 text-[10px] text-left shadow-sm overflow-hidden cursor-grab active:cursor-grabbing ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColorPresentation(category).className} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
+                                          style={resolveCategoryColorPresentation(category).style}
                                         >
                                           <div className="flex items-center gap-1 truncate font-medium text-slate-800">
                                             {dayStatusIcon && <span className="flex-shrink-0">{dayStatusIcon}</span>}
@@ -5929,7 +5938,10 @@ export default function CalendarPage() {
                               }}
                               className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50"
                             >
-                              <span className={`h-3 w-3 rounded-sm ${resolveCategoryColor(opt)}`} />
+                              <span
+                                className={`h-3 w-3 rounded-sm ${resolveCategoryColorPresentation(opt).className}`}
+                                style={resolveCategoryColorPresentation(opt).style}
+                              />
                               {opt}
                             </button>
                           ))}
@@ -7102,7 +7114,10 @@ export default function CalendarPage() {
                   <div className="relative">
                     <div className="flex items-center">
                       {appointmentCategory && (
-                        <span className={`absolute left-2 z-10 h-3 w-3 rounded-sm ${resolveCategoryColor(appointmentCategory)}`} />
+                        <span
+                          className={`absolute left-2 z-10 h-3 w-3 rounded-sm ${resolveCategoryColorPresentation(appointmentCategory).className}`}
+                          style={resolveCategoryColorPresentation(appointmentCategory).style}
+                        />
                       )}
                       <input
                         type="text"
@@ -7141,7 +7156,10 @@ export default function CalendarPage() {
                             }}
                             className={`flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-sky-50 ${appointmentCategory === opt ? "bg-sky-50 text-sky-700" : "text-slate-700"}`}
                           >
-                            <span className={`h-3 w-3 rounded-sm flex-shrink-0 ${resolveCategoryColor(opt)}`} />
+                            <span
+                              className={`h-3 w-3 rounded-sm flex-shrink-0 ${resolveCategoryColorPresentation(opt).className}`}
+                              style={resolveCategoryColorPresentation(opt).style}
+                            />
                             {opt}
                           </button>
                         ))}

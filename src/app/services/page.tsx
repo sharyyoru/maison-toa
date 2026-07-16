@@ -2,9 +2,14 @@
 
 import { useEffect, useState, FormEvent } from "react";
 import { useTranslations } from "next-intl";
+import { Sketch } from "@uiw/react-color";
 import { supabaseClient } from "@/lib/supabaseClient";
 import TardocGroupsTab from "@/components/TardocGroupsTab";
 import MedicationTemplatesTab from "@/components/MedicationTemplatesTab";
+import {
+  categoryColorToPickerHex,
+  getCategoryColorPresentation,
+} from "@/utils/categoryColor";
 
 type ServiceCategory = {
   id: string;
@@ -13,29 +18,6 @@ type ServiceCategory = {
   sort_order: number;
   color: string | null;
 };
-
-// Preset Tailwind color classes available for category badges.
-const CATEGORY_COLOR_PRESETS: { label: string; value: string }[] = [
-  { label: "Slate", value: "bg-slate-300/70" },
-  { label: "Gray", value: "bg-gray-300/70" },
-  { label: "Red", value: "bg-red-300/70" },
-  { label: "Orange", value: "bg-orange-300/70" },
-  { label: "Amber", value: "bg-amber-300/70" },
-  { label: "Yellow", value: "bg-yellow-300/70" },
-  { label: "Lime", value: "bg-lime-300/70" },
-  { label: "Green", value: "bg-green-300/70" },
-  { label: "Emerald", value: "bg-emerald-300/70" },
-  { label: "Teal", value: "bg-teal-300/70" },
-  { label: "Cyan", value: "bg-cyan-300/70" },
-  { label: "Sky", value: "bg-sky-300/70" },
-  { label: "Blue", value: "bg-blue-300/70" },
-  { label: "Indigo", value: "bg-indigo-300/70" },
-  { label: "Violet", value: "bg-violet-300/70" },
-  { label: "Purple", value: "bg-purple-300/70" },
-  { label: "Fuchsia", value: "bg-fuchsia-300/70" },
-  { label: "Pink", value: "bg-pink-300/70" },
-  { label: "Rose", value: "bg-rose-300/70" },
-];
 
 type Service = {
   id: string;
@@ -561,7 +543,9 @@ export default function ServicesPage() {
     setEditingCategoryId(category.id);
     setEditCategoryName(category.name);
     setEditCategoryDescription(category.description ?? "");
-    setEditCategoryColor(category.color ?? "");
+    setEditCategoryColor(
+      category.color ? categoryColorToPickerHex(category.color) : "",
+    );
   }
 
   function handleCancelEditCategory() {
@@ -1013,6 +997,7 @@ export default function ServicesPage() {
                     const isEditing = editingCategoryId === category.id;
                     const isSaving = savingCategoryId === category.id;
                     const isDeleting = deletingCategoryId === category.id;
+                    const categoryColor = getCategoryColorPresentation(category.color);
 
                     if (isEditing) {
                       return (
@@ -1040,24 +1025,26 @@ export default function ServicesPage() {
                               />
                               <div>
                                 <label className="block text-[11px] font-medium text-slate-700 mb-1">{t("color")}</label>
-                                <div className="flex flex-wrap items-center gap-1">
+                                <Sketch
+                                  color={categoryColorToPickerHex(editCategoryColor)}
+                                  onChange={(color) => setEditCategoryColor(color.hex)}
+                                  disableAlpha
+                                  style={{ width: "100%", maxWidth: 240 }}
+                                />
+                                <div className="mt-2 flex items-center gap-2">
                                   <button
                                     type="button"
                                     onClick={() => setEditCategoryColor("")}
                                     title={t("noColor")}
-                                    className={`h-5 w-5 rounded-sm border ${editCategoryColor === "" ? "border-emerald-500 ring-2 ring-emerald-200" : "border-slate-300"} bg-white flex items-center justify-center`}
+                                    className={`inline-flex items-center rounded-full border bg-white px-3 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 ${editCategoryColor === "" ? "border-emerald-500 ring-2 ring-emerald-200" : "border-slate-200"}`}
                                   >
-                                    <span className="text-[10px] text-slate-400">ø</span>
+                                    {t("noColor")}
                                   </button>
-                                  {CATEGORY_COLOR_PRESETS.map((preset) => (
-                                    <button
-                                      key={preset.value}
-                                      type="button"
-                                      onClick={() => setEditCategoryColor(preset.value)}
-                                      title={preset.label}
-                                      className={`h-5 w-5 rounded-sm border ${editCategoryColor === preset.value ? "border-emerald-500 ring-2 ring-emerald-200" : "border-slate-200"} ${preset.value}`}
-                                    />
-                                  ))}
+                                  {editCategoryColor ? (
+                                    <span className="font-mono text-[10px] text-slate-500">
+                                      {editCategoryColor.toUpperCase()}
+                                    </span>
+                                  ) : null}
                                 </div>
                               </div>
                             </div>
@@ -1104,7 +1091,8 @@ export default function ServicesPage() {
                           <div className="flex items-center gap-2 font-medium text-slate-900">
                             {category.color ? (
                               <span
-                                className={`inline-block h-3 w-3 rounded-sm border border-slate-200 ${category.color}`}
+                                className={`inline-block h-3 w-3 rounded-sm border border-slate-200 ${categoryColor.className}`}
+                                style={categoryColor.style}
                                 title="Category color"
                               />
                             ) : null}
@@ -1402,6 +1390,7 @@ export default function ServicesPage() {
 
                   {[...grouped, ...(orphans.length > 0 ? [{ category: { id: "__orphan__", name: "Uncategorised", color: null, sort_order: 9999, description: null }, services: orphans }] : [])].map(({ category, services: catServices }) => {
                     const isCollapsed = collapsedCategories.has(category.id);
+                    const categoryColor = getCategoryColorPresentation(category.color);
                     return (
                       <div key={category.id} className="rounded-lg border border-slate-200/80 bg-white/90 overflow-hidden">
                         {/* Category header */}
@@ -1426,7 +1415,12 @@ export default function ServicesPage() {
                             })}
                             className="flex flex-1 items-center gap-2 text-left"
                           >
-                            {category.color && <span className={`inline-block h-2.5 w-2.5 rounded-full ${category.color}`} />}
+                            {category.color && (
+                              <span
+                                className={`inline-block h-2.5 w-2.5 rounded-full ${categoryColor.className}`}
+                                style={categoryColor.style}
+                              />
+                            )}
                             <span className="flex-1 text-[11px] font-semibold text-slate-700">{category.name}</span>
                             <span className="text-[10px] text-slate-400">{catServices.length}</span>
                             <span className="mr-1 text-[10px] text-slate-400">{isCollapsed ? "▶" : "▼"}</span>
