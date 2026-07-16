@@ -62,19 +62,6 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const { data: existingAppointment } = await supabase
-      .from("appointments")
-      .select("linked_parent_appointment_id")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (existingAppointment?.linked_parent_appointment_id) {
-      return NextResponse.json(
-        { error: "Delete the primary appointment instead of its linked calendar reservation." },
-        { status: 409 },
-      );
-    }
-
     const { error } = await supabase.from("appointments").delete().eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true });

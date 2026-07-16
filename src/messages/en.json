@@ -167,6 +167,7 @@
       "yesDelete": "Yes, delete",
       "deleting": "Deleting...",
       "deleteConfirm": "Are you sure you want to delete this appointment? This action cannot be undone.",
+      "deleteMirroredConfirm": "Delete this mirrored calendar reservation? The original doctor appointment will be kept.",
       "conflict": "CONFLICT",
       "consultationFor": "Consultation for {name}"
     },
