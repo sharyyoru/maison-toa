@@ -167,6 +167,7 @@
       "yesDelete": "Oui, supprimer",
       "deleting": "Suppression...",
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce rendez-vous ? Cette action est irréversible.",
+      "deleteMirroredConfirm": "Supprimer cette réservation de calendrier miroir ? Le rendez-vous original du médecin sera conservé.",
       "conflict": "CONFLIT",
       "consultationFor": "Consultation pour {name}"
     },
