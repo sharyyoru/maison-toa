@@ -105,6 +105,8 @@ export default function AppointmentsTablePage() {
   const [services, setServices] = useState<ServiceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [fromDate, setFromDate] = useState(initialRange.from);
   const [toDate, setToDate] = useState(initialRange.to);
   const [patientFilter, setPatientFilter] = useState("");
@@ -269,6 +271,57 @@ export default function AppointmentsTablePage() {
     router.push(`/appointments?${params.toString()}`);
   }
 
+  async function exportToExcel() {
+    if (typeof window === "undefined" || exporting || filteredRows.length === 0) return;
+
+    setExporting(true);
+    setExportError(null);
+    try {
+      const XLSX = await import("xlsx");
+      const exportRows = filteredRows.map((row) => ({
+        [t("columns.date")]: formatSwissDate(row.start_time),
+        [t("export.time")]: formatSwissTimeRange(
+          new Date(row.start_time),
+          row.end_time ? new Date(row.end_time) : null,
+        ),
+        [t("columns.patient")]: row.patientName,
+        [t("columns.service")]: row.service,
+        [t("columns.category")]: row.category,
+        [t("columns.status")]: row.workflowStatus,
+        [t("columns.doctor")]: row.doctor,
+        [t("columns.location")]: row.location || t("notSpecified"),
+        [t("columns.state")]: row.status,
+        [t("export.appointmentId")]: row.id,
+      }));
+
+      const workbook = XLSX.utils.book_new();
+      const sheet = XLSX.utils.json_to_sheet(exportRows);
+      sheet["!cols"] = [
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 26 },
+        { wch: 38 },
+        { wch: 24 },
+        { wch: 30 },
+        { wch: 26 },
+        { wch: 22 },
+        { wch: 16 },
+        { wch: 38 },
+      ];
+      sheet["!autofilter"] = { ref: `A1:J${exportRows.length + 1}` };
+      XLSX.utils.book_append_sheet(workbook, sheet, t("export.sheetName"));
+
+      const rangeLabel = fromDate && toDate
+        ? `${fromDate}-to-${toDate}`
+        : formatSwissYmd(new Date());
+      XLSX.writeFile(workbook, `appointments-${rangeLabel}.xlsx`);
+    } catch (exportFailure) {
+      setExportError(exportFailure instanceof Error ? exportFailure.message : t("export.error"));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="w-full space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -317,11 +370,27 @@ export default function AppointmentsTablePage() {
           <FilterSelect label={t("filters.status")} allLabel={t("filters.allStatuses")} value={statusFilter} onChange={setStatusFilter} options={statusOptions} />
           <FilterSelect label={t("filters.doctor")} allLabel={t("filters.allDoctors")} value={doctorFilter} onChange={setDoctorFilter} options={doctorOptions} />
         </div>
-        <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-          <span className="text-xs text-slate-500">{t("resultCount", { count: filteredRows.length })}</span>
-          <button type="button" onClick={clearFilters} className="rounded-full border border-slate-200 px-3 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50">
-            {t("filters.clear")}
-          </button>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+          <div>
+            <span className="text-xs text-slate-500">{t("resultCount", { count: filteredRows.length })}</span>
+            {exportError && <p className="mt-1 text-[11px] text-red-600">{exportError}</p>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void exportToExcel()}
+              disabled={loading || exporting || filteredRows.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                <path d="M10 3v9m0 0 3-3m-3 3L7 9M4 15h12" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {exporting ? t("export.exporting") : t("export.excel")}
+            </button>
+            <button type="button" onClick={clearFilters} className="rounded-full border border-slate-200 px-3 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50">
+              {t("filters.clear")}
+            </button>
+          </div>
         </div>
       </section>
 

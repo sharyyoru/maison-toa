@@ -1950,6 +1950,14 @@
     "page": "Page {page} of {pages}",
     "sortAscending": "sorted earliest to latest; activate to sort latest to earliest",
     "sortDescending": "sorted latest to earliest; activate to sort earliest to latest",
+    "export": {
+      "excel": "Export to Excel",
+      "exporting": "Exporting...",
+      "error": "Failed to export appointments.",
+      "sheetName": "Appointments",
+      "time": "Appointment time",
+      "appointmentId": "Appointment ID"
+    },
     "filters": {
       "from": "Appointment date from",
       "to": "Appointment date to",

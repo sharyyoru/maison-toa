@@ -1950,6 +1950,14 @@
     "page": "Page {page} sur {pages}",
     "sortAscending": "trié du plus ancien au plus récent ; activer pour inverser le tri",
     "sortDescending": "trié du plus récent au plus ancien ; activer pour inverser le tri",
+    "export": {
+      "excel": "Exporter vers Excel",
+      "exporting": "Exportation...",
+      "error": "Impossible d'exporter les rendez-vous.",
+      "sheetName": "Rendez-vous",
+      "time": "Heure du rendez-vous",
+      "appointmentId": "ID du rendez-vous"
+    },
     "filters": {
       "from": "Date du rendez-vous du",
       "to": "Date du rendez-vous au",
