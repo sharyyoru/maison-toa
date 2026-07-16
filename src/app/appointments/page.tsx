@@ -5027,6 +5027,12 @@ export default function CalendarPage() {
               ) : null}
             </div>
             <Link
+              href="/appointments/table"
+              className="inline-flex items-center rounded-full border border-sky-200/80 bg-white px-3 py-1.5 text-xs font-medium text-sky-700 shadow-sm hover:bg-sky-50"
+            >
+              {t("tableView")}
+            </Link>
+            <Link
               href="/appointments/cancelled"
               className="inline-flex items-center rounded-full border border-rose-200/80 bg-white px-3 py-1.5 text-xs font-medium text-rose-600 shadow-sm hover:bg-rose-50"
             >
