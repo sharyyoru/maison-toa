@@ -1960,6 +1960,7 @@
       "allPatients": "Tous les patients",
       "searchPatients": "Rechercher un patient...",
       "searchServices": "Rechercher un service...",
+      "servicesSelected": "{count} services sélectionnés",
       "allCategories": "Toutes les catégories",
       "allStatuses": "Tous les statuts",
       "allDoctors": "Tous les médecins",

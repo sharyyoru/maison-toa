@@ -49,6 +49,7 @@ type ServiceRow = {
 type NormalizedAppointment = AppointmentRow & {
   patientName: string;
   service: string;
+  serviceNames: string[];
   category: string;
   workflowStatus: string;
   doctor: string;
@@ -107,7 +108,7 @@ export default function AppointmentsTablePage() {
   const [fromDate, setFromDate] = useState(initialRange.from);
   const [toDate, setToDate] = useState(initialRange.to);
   const [patientFilter, setPatientFilter] = useState("");
-  const [serviceFilter, setServiceFilter] = useState("");
+  const [serviceFilter, setServiceFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [doctorFilter, setDoctorFilter] = useState("");
@@ -147,7 +148,7 @@ export default function AppointmentsTablePage() {
             .select(
               "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, location, service_ids, patient:patients(id, first_name, last_name), provider:providers(id, name), booking_category:booking_categories(id, name), booking_treatment:booking_treatments(id, name)",
             )
-            .order("start_time", { ascending: false })
+            .order("start_time", { ascending: true })
             .range(offset, offset + FETCH_CHUNK_SIZE - 1);
 
           if (fromDate) query = query.gte("start_time", getSwissDayRange(fromDate).start);
@@ -189,8 +190,9 @@ export default function AppointmentsTablePage() {
       const structuredServices = (row.service_ids || [])
         .map((id) => serviceById.get(id)?.name)
         .filter((name): name is string => Boolean(name));
-      const service =
-        structuredServices.join(", ") || row.booking_treatment?.name || extractService(row.reason);
+      const fallbackService = row.booking_treatment?.name || extractService(row.reason);
+      const serviceNames = structuredServices.length > 0 ? structuredServices : [fallbackService];
+      const service = serviceNames.join(", ");
       const serviceCategory = (row.service_ids || [])
         .map((id) => serviceById.get(id)?.category?.name)
         .find((name): name is string => Boolean(name));
@@ -204,12 +206,12 @@ export default function AppointmentsTablePage() {
           ? t("noPatient")
           : t("unknownPatient");
 
-      return { ...row, patientName, service, category, workflowStatus, doctor };
+      return { ...row, patientName, service, serviceNames, category, workflowStatus, doctor };
     });
   }, [rows, serviceById, t]);
 
   const serviceOptions = useMemo(
-    () => uniqueSorted([...services.map((service) => service.name), ...normalizedRows.map((row) => row.service)]),
+    () => uniqueSorted([...services.map((service) => service.name), ...normalizedRows.flatMap((row) => row.serviceNames)]),
     [services, normalizedRows],
   );
   const patientOptions = useMemo(
@@ -233,7 +235,7 @@ export default function AppointmentsTablePage() {
     return normalizedRows.filter(
       (row) =>
         (!patientFilter || row.patientName === patientFilter) &&
-        (!serviceFilter || row.service === serviceFilter) &&
+        (serviceFilter.length === 0 || serviceFilter.some((service) => row.serviceNames.includes(service))) &&
         (!categoryFilter || row.category === categoryFilter) &&
         (!statusFilter || row.workflowStatus === statusFilter) &&
         (!doctorFilter || row.doctor === doctorFilter),
@@ -249,7 +251,7 @@ export default function AppointmentsTablePage() {
     setFromDate("");
     setToDate("");
     setPatientFilter("");
-    setServiceFilter("");
+    setServiceFilter([]);
     setCategoryFilter("");
     setStatusFilter("");
     setDoctorFilter("");
@@ -296,12 +298,13 @@ export default function AppointmentsTablePage() {
             onChange={setPatientFilter}
             options={patientOptions}
           />
-          <SearchableFilterSelect
+          <MultiSearchableFilterSelect
             listId="appointment-service-options"
             label={t("filters.service")}
             allLabel={t("filters.allServices")}
             searchPlaceholder={t("filters.searchServices")}
-            value={serviceFilter}
+            selectedLabel={(count) => t("filters.servicesSelected", { count })}
+            values={serviceFilter}
             onChange={setServiceFilter}
             options={serviceOptions}
           />
@@ -485,6 +488,121 @@ function SearchableFilterSelect({
                 {option}
               </button>
             ))}
+            {matchingOptions.length === 0 && (
+              <p className="px-3 py-3 text-xs font-normal text-slate-400">{searchPlaceholder}</p>
+            )}
+          </div>
+        )}
+      </div>
+    </label>
+  );
+}
+
+function MultiSearchableFilterSelect({
+  listId,
+  label,
+  allLabel,
+  searchPlaceholder,
+  selectedLabel,
+  values,
+  onChange,
+  options,
+}: {
+  listId: string;
+  label: string;
+  allLabel: string;
+  searchPlaceholder: string;
+  selectedLabel: (count: number) => string;
+  values: string[];
+  onChange: (values: string[]) => void;
+  options: string[];
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const matchingOptions = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase("fr");
+    if (!normalizedQuery) return options;
+    return options.filter((option) =>
+      option.toLocaleLowerCase("fr").includes(normalizedQuery),
+    );
+  }, [options, query]);
+
+  function toggleOption(option: string) {
+    onChange(
+      values.includes(option)
+        ? values.filter((value) => value !== option)
+        : [...values, option],
+    );
+  }
+
+  return (
+    <label className="relative space-y-1 text-[11px] font-medium text-slate-600">
+      <span>{label}</span>
+      <div className="relative">
+        <input
+          type="text"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          value={query}
+          placeholder={values.length > 0 ? selectedLabel(values.length) : searchPlaceholder}
+          onFocus={() => setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setOpen(false);
+          }}
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 pr-8 text-xs text-slate-800 placeholder:text-slate-500"
+        />
+        {(query || values.length > 0) && (
+          <button
+            type="button"
+            aria-label={allLabel}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              setQuery("");
+              onChange([]);
+            }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            ×
+          </button>
+        )}
+        {open && (
+          <div id={listId} role="listbox" aria-multiselectable="true" className="absolute left-0 right-0 z-30 mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+            <button
+              type="button"
+              role="option"
+              aria-selected={values.length === 0}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onChange([])}
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-sky-50 ${values.length === 0 ? "font-medium text-sky-700" : "text-slate-700"}`}
+            >
+              <input type="checkbox" readOnly checked={values.length === 0} className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600" />
+              {allLabel}
+            </button>
+            {matchingOptions.map((option) => {
+              const selected = values.includes(option);
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => toggleOption(option)}
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-sky-50 ${selected ? "bg-sky-50 font-medium text-sky-700" : "text-slate-700"}`}
+                >
+                  <input type="checkbox" readOnly checked={selected} className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600" />
+                  <span>{option}</span>
+                </button>
+              );
+            })}
             {matchingOptions.length === 0 && (
               <p className="px-3 py-3 text-xs font-normal text-slate-400">{searchPlaceholder}</p>
             )}
