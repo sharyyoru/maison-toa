@@ -30,7 +30,11 @@ type Service = {
   duration_minutes: number | null;
   vat_status: "voll" | "befreit" | null;
   vat_rate_pct: number | null;
+  mirror_calendar_provider_id: string | null;
+  mirror_duration_minutes: number | null;
 };
+
+type CalendarOption = { id: string; name: string };
 
 type ServiceGroup = {
   id: string;
@@ -59,6 +63,7 @@ export default function ServicesPage() {
   const t = useTranslations("services");
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [calendarOptions, setCalendarOptions] = useState<CalendarOption[]>([]);
   const [serviceGroups, setServiceGroups] = useState<ServiceGroup[]>([]);
   const [groupServices, setGroupServices] = useState<ServiceGroupService[]>([]);
 
@@ -129,6 +134,9 @@ export default function ServicesPage() {
   const [editServicePrice, setEditServicePrice] = useState("");
   const [editServiceDuration, setEditServiceDuration] = useState("");
   const [editServiceVatable, setEditServiceVatable] = useState(false);
+  const [editMirrorEnabled, setEditMirrorEnabled] = useState(false);
+  const [editMirrorCalendarId, setEditMirrorCalendarId] = useState("");
+  const [editMirrorDuration, setEditMirrorDuration] = useState("");
   const [editServiceCategoryId, setEditServiceCategoryId] = useState<string>(
     "",
   );
@@ -180,7 +188,7 @@ export default function ServicesPage() {
         const { data: serviceData, error: serviceError } = await supabaseClient
           .from("services")
           .select(
-            "id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct",
+            "id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct, mirror_calendar_provider_id, mirror_duration_minutes",
           )
           .order("created_at", { ascending: true });
 
@@ -212,6 +220,11 @@ export default function ServicesPage() {
           vat_rate_pct:
             row.vat_rate_pct !== null && row.vat_rate_pct !== undefined
               ? Number(row.vat_rate_pct)
+              : null,
+          mirror_calendar_provider_id: (row.mirror_calendar_provider_id as string | null) ?? null,
+          mirror_duration_minutes:
+            row.mirror_duration_minutes !== null && row.mirror_duration_minutes !== undefined
+              ? Number(row.mirror_duration_minutes)
               : null,
         }));
 
@@ -269,6 +282,26 @@ export default function ServicesPage() {
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCalendarOptions() {
+      const { data } = await supabaseClient
+        .from("providers")
+        .select("id, name")
+        .in("role", ["doctor", "nurse", "technician"])
+        .order("name", { ascending: true });
+      if (isMounted && data) {
+        setCalendarOptions(
+          data
+            .filter((row) => typeof row.name === "string" && row.name.trim())
+            .map((row) => ({ id: row.id as string, name: row.name as string })),
+        );
+      }
+    }
+    void loadCalendarOptions();
+    return () => { isMounted = false; };
   }, []);
 
   async function handleCreateCategory(event: FormEvent) {
@@ -365,7 +398,7 @@ export default function ServicesPage() {
           vat_rate_pct: newServiceVatable ? 8.1 : 0,
           is_active: true,
         })
-        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct")
+        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct, mirror_calendar_provider_id, mirror_duration_minutes")
         .single();
 
       if (error || !data) {
@@ -394,6 +427,8 @@ export default function ServicesPage() {
           created.vat_rate_pct !== null && created.vat_rate_pct !== undefined
             ? Number(created.vat_rate_pct)
             : null,
+        mirror_calendar_provider_id: null,
+        mirror_duration_minutes: null,
       };
 
       setServices((prev) => [...prev, newRow]);
@@ -657,6 +692,11 @@ export default function ServicesPage() {
         : "",
     );
     setEditServiceVatable(service.vat_status === "voll");
+    setEditMirrorEnabled(Boolean(service.mirror_calendar_provider_id));
+    setEditMirrorCalendarId(service.mirror_calendar_provider_id ?? "");
+    setEditMirrorDuration(
+      service.mirror_duration_minutes !== null ? String(service.mirror_duration_minutes) : "",
+    );
   }
 
   function handleCancelEditService() {
@@ -666,6 +706,9 @@ export default function ServicesPage() {
     setEditServiceCategoryId("");
     setEditServicePrice("");
     setEditServiceDuration("");
+    setEditMirrorEnabled(false);
+    setEditMirrorCalendarId("");
+    setEditMirrorDuration("");
     setServiceMessage(null);
   }
 
@@ -695,6 +738,16 @@ export default function ServicesPage() {
       durationValue = parsed;
     }
 
+    let mirrorDurationValue: number | null = null;
+    if (editMirrorEnabled) {
+      const parsed = Number(editMirrorDuration);
+      if (!editMirrorCalendarId || !Number.isInteger(parsed) || parsed < 1 || parsed > 480) {
+        setServiceMessage("Choose a mirrored calendar and a duration between 1 and 480 minutes.");
+        return;
+      }
+      mirrorDurationValue = parsed;
+    }
+
     try {
       setSavingServiceId(serviceId);
       setServiceMessage(null);
@@ -709,9 +762,11 @@ export default function ServicesPage() {
           duration_minutes: durationValue,
           vat_status: editServiceVatable ? "voll" : "befreit",
           vat_rate_pct: editServiceVatable ? 8.1 : 0,
+          mirror_calendar_provider_id: editMirrorEnabled ? editMirrorCalendarId : null,
+          mirror_duration_minutes: editMirrorEnabled ? mirrorDurationValue : null,
         })
         .eq("id", serviceId)
-        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct")
+        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct, mirror_calendar_provider_id, mirror_duration_minutes")
         .single();
 
       if (error || !data) {
@@ -740,6 +795,11 @@ export default function ServicesPage() {
           updated.vat_rate_pct !== null && updated.vat_rate_pct !== undefined
             ? Number(updated.vat_rate_pct)
             : null,
+        mirror_calendar_provider_id: (updated.mirror_calendar_provider_id as string | null) ?? null,
+        mirror_duration_minutes:
+          updated.mirror_duration_minutes !== null && updated.mirror_duration_minutes !== undefined
+            ? Number(updated.mirror_duration_minutes)
+            : null,
       };
 
       setServices((prev) =>
@@ -755,6 +815,9 @@ export default function ServicesPage() {
       setEditServiceCategoryId("");
       setEditServicePrice("");
       setEditServiceDuration("");
+      setEditMirrorEnabled(false);
+      setEditMirrorCalendarId("");
+      setEditMirrorDuration("");
     } catch {
       setServiceMessage("Failed to update service.");
     } finally {
@@ -1250,7 +1313,7 @@ export default function ServicesPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-700">
-                    Duration (min)
+                    Doctor calendar duration (min)
                   </label>
                   <input
                     type="number"
@@ -1468,9 +1531,51 @@ export default function ServicesPage() {
                                           <input type="number" min="0" step="0.05" value={editServicePrice} onChange={(e) => setEditServicePrice(e.target.value)} className="flex-1 rounded-r-lg border-0 bg-transparent px-2 py-1.5 text-right outline-none" placeholder="0.00" />
                                         </div>
                                         <div className="mt-1 flex w-full rounded-lg border border-slate-200 bg-white text-xs text-slate-900 shadow-sm focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-400">
-                                          <span className="inline-flex items-center px-2 text-[11px] text-slate-500">min</span>
+                                          <span className="inline-flex items-center px-2 text-[10px] text-slate-500">Doctor min</span>
                                           <input type="number" min="1" step="1" value={editServiceDuration} onChange={(e) => setEditServiceDuration(e.target.value)} className="flex-1 rounded-r-lg border-0 bg-transparent px-2 py-1.5 text-right outline-none" placeholder="duration" />
                                         </div>
+                                        <label className="mt-1 flex w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700">
+                                          <input
+                                            type="checkbox"
+                                            checked={editMirrorEnabled}
+                                            onChange={(e) => {
+                                              setEditMirrorEnabled(e.target.checked);
+                                              if (!e.target.checked) {
+                                                setEditMirrorCalendarId("");
+                                                setEditMirrorDuration("");
+                                              }
+                                            }}
+                                            className="h-3 w-3 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400"
+                                          />
+                                          <span className="font-medium">Mirror appointment</span>
+                                        </label>
+                                        {editMirrorEnabled && (
+                                          <div className="w-full space-y-1 rounded-lg border border-violet-100 bg-violet-50/60 p-2">
+                                            <select
+                                              value={editMirrorCalendarId}
+                                              onChange={(e) => setEditMirrorCalendarId(e.target.value)}
+                                              className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900"
+                                            >
+                                              <option value="">Select mirrored calendar</option>
+                                              {calendarOptions.map((calendar) => (
+                                                <option key={calendar.id} value={calendar.id}>{calendar.name}</option>
+                                              ))}
+                                            </select>
+                                            <div className="flex rounded-md border border-slate-200 bg-white">
+                                              <span className="inline-flex items-center px-2 text-[10px] text-slate-500">Mirrored min</span>
+                                              <input
+                                                type="number"
+                                                min="1"
+                                                max="480"
+                                                step="1"
+                                                value={editMirrorDuration}
+                                                onChange={(e) => setEditMirrorDuration(e.target.value)}
+                                                className="min-w-0 flex-1 rounded-r-md border-0 bg-transparent px-2 py-1 text-right text-[11px] outline-none"
+                                                placeholder="75"
+                                              />
+                                            </div>
+                                          </div>
+                                        )}
                                         <label className="mt-1 flex w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700">
                                           <input type="checkbox" checked={editServiceVatable} onChange={(e) => setEditServiceVatable(e.target.checked)} className="h-3 w-3 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400" />
                                           <span className="font-medium">VAT 8.1%</span>
@@ -1522,11 +1627,16 @@ export default function ServicesPage() {
                                       <span className="text-slate-300">—</span>
                                     )}
                                     {service.duration_minutes !== null && (
-                                      <span className="text-slate-400">{formatDuration(service.duration_minutes)}</span>
+                                      <span className="text-slate-400">Doctor {formatDuration(service.duration_minutes)}</span>
                                     )}
                                     {service.vat_status && (
                                       <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${service.vat_status === "voll" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-500"}`}>
                                         {service.vat_status === "voll" ? "VAT 8.1%" : "VAT free"}
+                                      </span>
+                                    )}
+                                    {service.mirror_calendar_provider_id && (
+                                      <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold text-violet-700">
+                                        Mirror {calendarOptions.find((calendar) => calendar.id === service.mirror_calendar_provider_id)?.name ?? "calendar"} · {service.mirror_duration_minutes} min
                                       </span>
                                     )}
 

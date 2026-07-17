@@ -3152,7 +3152,7 @@ export default function CalendarPage() {
       }
 
       // Use multi-doctor/multi-service API if multiple doctors or services selected
-      const useMultiAPI = repeatAppointment || selectedDoctorIds.length > 0 || selectedServiceIds.length > 0;
+      const useMultiAPI = repeatAppointment || selectedDoctorIds.length > 0 || selectedServiceIds.length > 0 || Boolean(selectedServiceId);
       
       if (useMultiAPI) {
         // Use new multi-appointment creation API
@@ -4313,9 +4313,10 @@ export default function CalendarPage() {
       if (editCategory && editCategory !== "No selection") updatedReason += ` [Category: ${editCategory}]`;
       if (editBookingStatus && editBookingStatus !== "Aucune sélection") updatedReason += ` [Status: ${editBookingStatus}]`;
 
-      const { data, error } = await supabaseClient
-        .from("appointments")
-        .update({
+      const response = await fetch(`/api/appointments/${editingAppointment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           patient_id: editNoPatient ? null : editPatientId,
           no_patient: editNoPatient,
           status: nextStatus,
@@ -4330,18 +4331,17 @@ export default function CalendarPage() {
             ? editingAppointment.provider_id
             : editProviderId || null,
           machine_ids: editMachineIds,
-        })
-        .eq("id", editingAppointment.id)
-        .select(
-          "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
-        )
-        .single();
+        }),
+      });
 
-      if (error || !data) {
-        setEditError(error?.message ?? "Failed to update appointment.");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        setEditError(errorData?.error ?? "Failed to update appointment.");
         setSavingEdit(false);
         return;
       }
+
+      const data = await response.json();
 
       const updated = data as unknown as CalendarAppointment;
       const previousEndTime = editingAppointment.end_time
@@ -4359,12 +4359,27 @@ export default function CalendarPage() {
 
       setAppointments((prev) => {
         if (updated.status === "cancelled") {
-          return prev.filter((appt) => appt.id !== updated.id);
+          return prev.filter(
+            (appt) => appt.id !== updated.id && appt.linked_parent_appointment_id !== updated.id,
+          );
         }
 
-        const next = prev.map((appt) =>
-          appt.id === updated.id ? updated : appt,
-        );
+        const next = prev.map((appt) => {
+          if (appt.id === updated.id) return updated;
+          if (appt.linked_parent_appointment_id === updated.id) {
+            const linkedStartMs = new Date(appt.start_time).getTime();
+            const linkedEndMs = appt.end_time ? new Date(appt.end_time).getTime() : linkedStartMs;
+            const linkedDuration = Math.max(0, linkedEndMs - linkedStartMs);
+            return {
+              ...appt,
+              start_time: updated.start_time,
+              end_time: new Date(new Date(updated.start_time).getTime() + linkedDuration).toISOString(),
+              status: updated.status,
+              location: updated.location,
+            };
+          }
+          return appt;
+        });
         next.sort((a, b) => {
           const aTime = new Date(a.start_time).getTime();
           const bTime = new Date(b.start_time).getTime();

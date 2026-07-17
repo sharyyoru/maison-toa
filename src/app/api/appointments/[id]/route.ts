@@ -15,7 +15,10 @@ export async function PATCH(
     const body = await request.json();
 
     // Only allow updating specific fields
-    const allowedFields = ["end_time", "start_time", "status", "reason", "notes", "location", "provider_id"];
+    const allowedFields = [
+      "end_time", "start_time", "status", "reason", "title", "notes", "location",
+      "provider_id", "patient_id", "no_patient", "machine_ids",
+    ];
     const updateData: Record<string, unknown> = {};
     
     for (const field of allowedFields) {
@@ -30,12 +33,100 @@ export async function PATCH(
         { status: 400 }
       );
     }
+
+    const { data: currentAppointment, error: currentError } = await supabase
+      .from("appointments")
+      .select("id, provider_id, start_time, end_time, status, linked_parent_appointment_id")
+      .eq("id", id)
+      .single();
+
+    if (currentError || !currentAppointment) {
+      return NextResponse.json({ error: currentError?.message ?? "Appointment not found" }, { status: 404 });
+    }
+
+    const proposedStatus = typeof updateData.status === "string" ? updateData.status : currentAppointment.status;
+    const proposedStart = new Date(
+      typeof updateData.start_time === "string" ? updateData.start_time : currentAppointment.start_time,
+    );
+    const proposedEnd = new Date(
+      typeof updateData.end_time === "string" ? updateData.end_time : currentAppointment.end_time,
+    );
+
+    if (
+      (updateData.start_time !== undefined || updateData.end_time !== undefined) &&
+      proposedStatus !== "cancelled" && proposedStatus !== "no_show"
+    ) {
+      const reservations: Array<{
+        id: string;
+        provider_id: string | null;
+        start_time: string;
+        end_time: string;
+      }> = [];
+
+      if (currentAppointment.linked_parent_appointment_id) {
+        reservations.push({
+          id: currentAppointment.id,
+          provider_id: currentAppointment.provider_id,
+          start_time: proposedStart.toISOString(),
+          end_time: proposedEnd.toISOString(),
+        });
+      } else {
+        const { data: linkedAppointments, error: linkedError } = await supabase
+          .from("appointments")
+          .select("id, provider_id, start_time, end_time")
+          .eq("linked_parent_appointment_id", id);
+        if (linkedError) {
+          return NextResponse.json({ error: linkedError.message }, { status: 500 });
+        }
+        for (const linked of linkedAppointments || []) {
+          const durationMs = new Date(linked.end_time).getTime() - new Date(linked.start_time).getTime();
+          reservations.push({
+            ...linked,
+            start_time: proposedStart.toISOString(),
+            end_time: new Date(proposedStart.getTime() + durationMs).toISOString(),
+          });
+        }
+      }
+
+      for (const reservation of reservations) {
+        if (!reservation.provider_id) continue;
+        const proposedProviderId = typeof updateData.provider_id === "string"
+          ? updateData.provider_id
+          : currentAppointment.provider_id;
+        if (!currentAppointment.linked_parent_appointment_id && proposedProviderId === reservation.provider_id) {
+          return NextResponse.json(
+            { error: "The mirrored calendar must be different from the selected doctor calendar." },
+            { status: 409 },
+          );
+        }
+        const { data: conflicts, error: conflictError } = await supabase
+          .from("appointments")
+          .select("id")
+          .eq("provider_id", reservation.provider_id)
+          .lt("start_time", reservation.end_time)
+          .gt("end_time", reservation.start_time)
+          .not("status", "in", "(cancelled,no_show)")
+          .neq("id", id)
+          .neq("id", reservation.id)
+          .limit(1);
+
+        if (conflictError) {
+          return NextResponse.json({ error: "Failed to verify the mirrored calendar." }, { status: 500 });
+        }
+        if (conflicts && conflicts.length > 0) {
+          return NextResponse.json(
+            { error: "The mirrored calendar is not available at the requested time." },
+            { status: 409 },
+          );
+        }
+      }
+    }
     
     const { data, error } = await supabase
       .from("appointments")
       .update(updateData)
       .eq("id", id)
-      .select()
+      .select("id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)")
       .single();
     
     if (error) {
