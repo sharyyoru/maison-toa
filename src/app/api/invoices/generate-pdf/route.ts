@@ -394,6 +394,7 @@ export async function POST(request: NextRequest) {
         }
         return stripped;
       };
+      const rawProviderIban = billingEntityData?.iban || invoiceData.provider_iban || "";
       const provIban = sanitizeQrIban(billingEntityData?.iban) || sanitizeQrIban(invoiceData.provider_iban) || null;
       const FALLBACK_QR_IBAN = "CH0930788000050249289";
       const ibanForSumex = provIban || FALLBACK_QR_IBAN;
@@ -506,11 +507,20 @@ export async function POST(request: NextRequest) {
         pdfGenAttrs = GenerationAttribute.ExcludeESRInPrint;
       }
 
-      // Combine accountant-visible invoice notes with any payment status remark
+      // Combine accountant-visible invoice notes with any payment status remark.
+      // When no valid QR-IBAN exists, show the provider's regular IBAN so the
+      // patient can still pay by bank transfer (the QR/ESR slip remains hidden).
       const invoiceNotes = (invoiceData.notes || "").trim();
-      const combinedRemark = invoiceNotes && paymentRemark
+      let combinedRemark = invoiceNotes && paymentRemark
         ? `${invoiceNotes}\n${paymentRemark}`
         : invoiceNotes || paymentRemark || undefined;
+
+      if (!provIban && !isFullyPaid && rawProviderIban) {
+        const ibanNote = `Virement / Überweisung: ${rawProviderIban}`;
+        combinedRemark = combinedRemark
+          ? `${combinedRemark}\n${ibanNote}`
+          : ibanNote;
+      }
 
       const tiersMode1 = mapSumexTiers(effectiveTiersMode);
       // amountPrepaid is only allowed in Tiers Garant (TG) — error [926] if sent for TP/TS
@@ -731,6 +741,7 @@ export async function POST(request: NextRequest) {
         }
         return stripped;
       };
+      const rawProviderIban2 = billingEntityData?.iban || invoiceData.provider_iban || "";
       const provIbanSumex = sanitizeQrIban2(billingEntityData?.iban) || sanitizeQrIban2(invoiceData.provider_iban) || null;
       const FALLBACK_QR_IBAN = "CH0930788000050249289";
       const ibanForSumex2 = provIbanSumex || FALLBACK_QR_IBAN;
@@ -805,11 +816,20 @@ export async function POST(request: NextRequest) {
         pdfGenAttrs2 = GenerationAttribute.ExcludeESRInPrint;
       }
 
-      // Combine accountant-visible invoice notes with any payment status remark
+      // Combine accountant-visible invoice notes with any payment status remark.
+      // When no valid QR-IBAN exists, show the provider's regular IBAN so the
+      // patient can still pay by bank transfer (the QR/ESR slip remains hidden).
       const invoiceNotes2 = (invoiceData.notes || "").trim();
-      const combinedRemark2 = invoiceNotes2 && paymentRemark2
+      let combinedRemark2 = invoiceNotes2 && paymentRemark2
         ? `${invoiceNotes2}\n${paymentRemark2}`
         : invoiceNotes2 || paymentRemark2 || undefined;
+
+      if (!provIbanSumex && !isFullyPaid2 && rawProviderIban2) {
+        const ibanNote2 = `Virement / Überweisung: ${rawProviderIban2}`;
+        combinedRemark2 = combinedRemark2
+          ? `${combinedRemark2}\n${ibanNote2}`
+          : ibanNote2;
+      }
 
       const tiersMode2 = mapSumexTiers("TG");
       // amountPrepaid only allowed in TG — keep consistent even though this path is always TG
