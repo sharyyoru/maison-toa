@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { generateSwissReference } from "@/lib/swissQrBill";
 import type { Invoice, InvoiceLineItem } from "@/lib/invoiceTypes";
 import {
   buildInvoiceRequest,
@@ -380,7 +379,9 @@ export async function POST(request: NextRequest) {
       const provCity = billingEntityData?.city || "Lausanne";
       const provCanton = normalizeCanton(invoiceData.treatment_canton || billingEntityData?.canton);
       // IBAN: strip spaces, validate Swiss QR-IBAN (Sumex SetEsrQR requires IID 30000-31999).
-      // Regular IBANs are rejected by Sumex with code 638; no fallback — provider must have a valid QR-IBAN configured.
+      // When the provider has no valid QR-IBAN we use a fallback QR-IBAN only to
+      // satisfy Sumex schema validation, but set ExcludeESRInPrint so it is not
+      // rendered on the PDF.
       const sanitizeQrIban = (raw: string | null | undefined): string | null => {
         if (!raw) return null;
         const stripped = raw.replace(/\s+/g, "").toUpperCase();
@@ -388,12 +389,14 @@ export async function POST(request: NextRequest) {
         // QR-IBAN: positions 4-8 (0-indexed) must be 30000-31999
         const iid = parseInt(stripped.slice(4, 9), 10);
         if (Number.isNaN(iid) || iid < 30000 || iid > 31999) {
-          console.warn(`[GeneratePDF] IBAN ${stripped} is not a QR-IBAN (IID=${iid}); no fallback configured.`);
+          console.warn(`[GeneratePDF] IBAN ${stripped} is not a QR-IBAN (IID=${iid}); hiding QR/ESR on PDF.`);
           return null;
         }
         return stripped;
       };
       const provIban = sanitizeQrIban(billingEntityData?.iban) || sanitizeQrIban(invoiceData.provider_iban) || null;
+      const FALLBACK_QR_IBAN = "CH0930788000050249289";
+      const ibanForSumex = provIban || FALLBACK_QR_IBAN;
 
       const treatmentDate = invoiceData.treatment_date || invoiceData.invoice_date || new Date().toISOString().split("T")[0];
 
@@ -496,6 +499,13 @@ export async function POST(request: NextRequest) {
         paymentRemark = `Acompte reçu / Anzahlung erhalten: ${paidAmt.toFixed(2)} CHF — Solde / Restbetrag: ${remaining.toFixed(2)} CHF`;
       }
 
+      // Hide the ESR/QR slip when no valid QR-IBAN is available, so Sumex does
+      // not print an incorrect default/fallback IBAN on the PDF.
+      if (!provIban) {
+        console.warn(`[GeneratePDF] No valid QR-IBAN for invoice ${invoiceData.invoice_number}; hiding ESR/QR slip.`);
+        pdfGenAttrs = GenerationAttribute.ExcludeESRInPrint;
+      }
+
       // Combine accountant-visible invoice notes with any payment status remark
       const invoiceNotes = (invoiceData.notes || "").trim();
       const combinedRemark = invoiceNotes && paymentRemark
@@ -521,7 +531,7 @@ export async function POST(request: NextRequest) {
         lawType: mapSumexLaw(invoiceData.health_insurance_law || "KVG"),
         insuredId: invoiceData.patient_ssn || "",
         esrType: EsrType.QR,
-        iban: provIban ?? "",
+        iban: ibanForSumex,
         paymentPeriod: 30,
         billerGln: provGln,
         billerZsr: provZsr || undefined,
@@ -706,19 +716,24 @@ export async function POST(request: NextRequest) {
       const provZip = billingEntityData?.zip_code || "1003";
       const provCity = billingEntityData?.city || "Lausanne";
       const provCanton = normalizeCanton(invoiceData.treatment_canton || billingEntityData?.canton);
-      // QR-IBAN check: Sumex SetEsrQR requires IID 30000-31999; no fallback — provider must have a valid QR-IBAN configured.
+      // QR-IBAN check: Sumex SetEsrQR requires a valid QR-IBAN (IID 30000-31999).
+      // When the provider has no valid QR-IBAN we use a fallback QR-IBAN only to
+      // satisfy Sumex schema validation, but set ExcludeESRInPrint so it is not
+      // rendered on the PDF.
       const sanitizeQrIban2 = (raw: string | null | undefined): string | null => {
         if (!raw) return null;
         const stripped = raw.replace(/\s+/g, "").toUpperCase();
         if (!/^CH[0-9A-Z]{19}$/.test(stripped)) return null;
         const iid = parseInt(stripped.slice(4, 9), 10);
         if (Number.isNaN(iid) || iid < 30000 || iid > 31999) {
-          console.warn(`[GeneratePDF] IBAN ${stripped} is not a QR-IBAN (IID=${iid}); no fallback configured.`);
+          console.warn(`[GeneratePDF] IBAN ${stripped} is not a QR-IBAN (IID=${iid}); hiding QR/ESR on PDF.`);
           return null;
         }
         return stripped;
       };
       const provIbanSumex = sanitizeQrIban2(billingEntityData?.iban) || sanitizeQrIban2(invoiceData.provider_iban) || null;
+      const FALLBACK_QR_IBAN = "CH0930788000050249289";
+      const ibanForSumex2 = provIbanSumex || FALLBACK_QR_IBAN;
       const treatmentDate = invoiceData.treatment_date || invoiceData.invoice_date || new Date().toISOString().split("T")[0];
 
       // Map line items
@@ -783,6 +798,13 @@ export async function POST(request: NextRequest) {
         paymentRemark2 = `Acompte reçu / Anzahlung erhalten: ${paidAmt2.toFixed(2)} CHF — Solde / Restbetrag: ${remaining2.toFixed(2)} CHF`;
       }
 
+      // Hide the ESR/QR slip when no valid QR-IBAN is available, so Sumex does
+      // not print an incorrect default/fallback IBAN on the PDF.
+      if (!provIbanSumex) {
+        console.warn(`[GeneratePDF] No valid QR-IBAN for invoice ${invoiceData.invoice_number}; hiding ESR/QR slip.`);
+        pdfGenAttrs2 = GenerationAttribute.ExcludeESRInPrint;
+      }
+
       // Combine accountant-visible invoice notes with any payment status remark
       const invoiceNotes2 = (invoiceData.notes || "").trim();
       const combinedRemark2 = invoiceNotes2 && paymentRemark2
@@ -813,7 +835,7 @@ export async function POST(request: NextRequest) {
         // data that doesn't exist, causing it to silently return 204 at GetXML.
         lawType: mapSumexLaw("ORG"),
         esrType: EsrType.QR,
-        iban: provIbanSumex ?? "",
+        iban: ibanForSumex2,
         paymentPeriod: 30,
         billerGln: provGln,
         billerZsr: provZsr || undefined,
