@@ -6,7 +6,7 @@ import InactivityLogout from "@/components/InactivityLogout";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 // Public routes that don't require authentication
-const PUBLIC_ROUTES = ["/login", "/book-appointment", "/intake", "/invoice", "/form", "/appointments/manage", "/register"];
+const PUBLIC_ROUTES = ["/login", "/book-appointment", "/b", "/intake", "/invoice", "/form", "/appointments/manage", "/register"];
 
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route + "/"));
