@@ -7,6 +7,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, formatSwissDateWithWeekday, getSwissDayRange, createSwissDateTime, SWISS_TIMEZONE } from "@/lib/swissTimezone";
 import { pushToDataLayer } from "@/components/GoogleTagManager";
+import { getBookingTrackingParams } from "@/lib/bookingTracking";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
@@ -542,6 +543,7 @@ function DoctorBookingContent() {
           patientType: "existing",
           treatmentId: treatmentId,
           language,
+          trackingParams: getBookingTrackingParams(),
         }),
       });
 

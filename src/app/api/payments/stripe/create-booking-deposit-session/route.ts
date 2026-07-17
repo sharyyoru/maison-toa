@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
       notes,
       location,
       language,
+      trackingParams,
     } = body;
 
     if (!treatmentId || !email || !appointmentDate) {
@@ -72,6 +73,7 @@ export async function POST(req: NextRequest) {
       notes: (notes || "").slice(0, 490),
       location: location || "",
       language: language || "fr",
+      tracking_params: JSON.stringify(trackingParams || {}),
     };
 
     const expiresAt = Math.floor(Date.now() / 1000) + 23 * 60 * 60;

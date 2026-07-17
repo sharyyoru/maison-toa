@@ -7,6 +7,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, formatSwissDateWithWeekday, getSwissDayRange, getSwissSlotString, createSwissDateTime } from "@/lib/swissTimezone";
 import { pushToDataLayer } from "@/components/GoogleTagManager";
+import { getBookingTrackingParams } from "@/lib/bookingTracking";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 const DOCTORS: Record<string, {
@@ -442,6 +443,7 @@ function DoctorBookingContent() {
           doctorEmail: doctor.email,
           notes,
           location: locationName,
+          trackingParams: getBookingTrackingParams(),
         }),
       });
 

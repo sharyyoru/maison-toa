@@ -29,6 +29,7 @@ type BookingPayload = {
   language?: string;
   gender?: string;
   treatmentId?: string;
+  trackingParams?: Record<string, string>;
 };
 
 type TreatmentBookingDetails = {
@@ -174,6 +175,7 @@ export async function POST(request: Request) {
       location,
       language: requestedLanguage = "en",
       treatmentId,
+      trackingParams,
     } = body;
     let language = normalizePatientLanguage(requestedLanguage, "en");
 
@@ -564,6 +566,8 @@ export async function POST(request: Request) {
         patient_id: patientId,
         deal_id: deal.id,
         provider_id: providerId,
+        booking_treatment_id: treatmentId || null,
+        service_ids: treatmentServiceId ? [treatmentServiceId] : [],
         start_time: appointmentDateObj.toISOString(),
         end_time: apptEnd.toISOString(),
         reason,
@@ -572,6 +576,7 @@ export async function POST(request: Request) {
         status: "scheduled",
         source: "online_booking",
         machine_ids: resolvedMachineId ? [resolvedMachineId] : [],
+        tracking_params: trackingParams || {},
       })
       .select("id")
       .single();

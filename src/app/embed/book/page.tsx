@@ -5,6 +5,7 @@ import Image from "next/image";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, formatSwissDateWithWeekday, getSwissDayRange, getSwissSlotString, createSwissDateTime } from "@/lib/swissTimezone";
 import { pushToDataLayer } from "@/components/GoogleTagManager";
+import { getBookingTrackingParams } from "@/lib/bookingTracking";
 
 // Clinic locations
 const CLINIC_LOCATIONS = [
@@ -370,6 +371,7 @@ export default function EmbedBookPage() {
           doctorEmail: doctor.email,
           notes,
           location: locationName,
+          trackingParams: getBookingTrackingParams(),
         }),
       });
 

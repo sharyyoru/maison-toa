@@ -202,6 +202,7 @@ export async function POST(req: NextRequest) {
             patientType: "new",
             treatmentId: m.treatment_id,
             language: m.language || "fr",
+            trackingParams: m.tracking_params ? JSON.parse(m.tracking_params) : {},
           }),
         });
 
