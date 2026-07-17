@@ -1088,6 +1088,7 @@ interface BookingTreatment {
   description: string;
   description_en: string | null;
   duration_minutes: number;
+  display_duration_minutes: number | null;
   order_index: number;
   enabled: boolean;
   prepayment_required: boolean;
@@ -1499,6 +1500,7 @@ function BookingCategoriesTab() {
       description: "",
       description_en: "",
       duration_minutes: 30,
+      display_duration_minutes: null,
       order_index: treatments.filter((t) => t.category_id === categoryId).length,
       enabled: true,
       prepayment_required: false,
@@ -1899,6 +1901,22 @@ function BookingCategoriesTab() {
                               type="number"
                               value={treat.duration_minutes}
                               onChange={(e) => updateTreatment(treat.id, "duration_minutes", parseInt(e.target.value) || 0)}
+                              className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                            />
+                          </div>
+                          <div className="md:col-span-1">
+                            <label className="block text-[10px] font-medium text-slate-500 mb-1">{t("displayDuration")}</label>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={treat.display_duration_minutes ?? ""}
+                              onChange={(e) => updateTreatment(
+                                treat.id,
+                                "display_duration_minutes",
+                                e.target.value === "" ? null : parseInt(e.target.value, 10),
+                              )}
+                              placeholder={String(treat.duration_minutes)}
                               className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
                             />
                           </div>

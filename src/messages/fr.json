@@ -1460,6 +1460,7 @@
       "noTreatments": "Aucun traitement",
       "treatmentName": "Nom du traitement",
       "treatmentNameEnglish": "Nom anglais du traitement",
+      "displayDuration": "Durée affichée",
       "duration": "Durée",
       "optionalDescription": "Description facultative",
       "saveTreatments": "Enregistrer les traitements",

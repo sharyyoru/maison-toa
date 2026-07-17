@@ -565,6 +565,7 @@
       "doctor": "Doctor",
       "location": "Location",
       "duration": "Duration",
+      "displayDuration": "Display duration",
       "status": "Status",
       "category": "Category",
       "bookingStatus": "Booking Status",
