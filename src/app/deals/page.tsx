@@ -80,6 +80,7 @@ export default function DealsPage() {
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [dragDealId, setDragDealId] = useState<string | null>(null);
   const [updatingDealId, setUpdatingDealId] = useState<string | null>(null);
+  const [deletingDealId, setDeletingDealId] = useState<string | null>(null);
   const [invoicedDealIds, setInvoicedDealIds] = useState<Set<string>>(new Set());
 
   const [contactOwnerFilter, setContactOwnerFilter] = useState<string>("");
@@ -489,6 +490,37 @@ export default function DealsPage() {
 
   const totalDeals = deals.length;
 
+  async function handleDeleteDeal(deal: DealRow) {
+    const dealLabel = deal.title || t("untitledDeal");
+    if (!window.confirm(t("deleteConfirm", { title: dealLabel }))) return;
+
+    setDeletingDealId(deal.id);
+    setError(null);
+
+    try {
+      const { error: deleteError } = await supabaseClient
+        .from("deals")
+        .delete()
+        .eq("id", deal.id);
+
+      if (deleteError) throw deleteError;
+
+      setDeals((currentDeals) =>
+        currentDeals.filter((currentDeal) => currentDeal.id !== deal.id),
+      );
+      setInvoicedDealIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        nextIds.delete(deal.id);
+        return nextIds;
+      });
+    } catch (deleteError) {
+      console.error("Failed to delete deal:", deleteError);
+      setError(t("deleteFailed"));
+    } finally {
+      setDeletingDealId(null);
+    }
+  }
+
   // Calculate metrics
   const metrics = useMemo(() => {
     // Total Deal Amount: sum of all deal values
@@ -798,6 +830,7 @@ export default function DealsPage() {
                           <th className="py-2 pr-3 font-medium">{t("columns.contactOwner")}</th>
                           <th className="py-2 pr-3 font-medium">{t("columns.dealOwner")}</th>
                           <th className="py-2 pr-3 font-medium">{t("columns.created")}</th>
+                          <th className="py-2 text-right font-medium">{t("columns.actions")}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -870,6 +903,37 @@ export default function DealsPage() {
                               </td>
                               <td className="py-2 pr-3 align-top text-slate-500">
                                 {createdLabel}
+                              </td>
+                              <td className="py-2 text-right align-top">
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleDeleteDeal(deal);
+                                  }}
+                                  disabled={deletingDealId === deal.id}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-100 bg-red-50 text-red-600 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                  title={t("deleteAction")}
+                                  aria-label={t("deleteAction")}
+                                >
+                                  {deletingDealId === deal.id ? (
+                                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-red-200 border-t-red-600" />
+                                  ) : (
+                                    <svg
+                                      className="h-3.5 w-3.5"
+                                      viewBox="0 0 20 20"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="1.6"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <path d="M4 6h12" />
+                                      <path d="M8 6V4h4v2" />
+                                      <path d="M6 6v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" />
+                                    </svg>
+                                  )}
+                                </button>
                               </td>
                             </tr>
                           );
@@ -1044,9 +1108,42 @@ export default function DealsPage() {
                                   }
                                   className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] text-slate-800 shadow-sm transition hover:border-sky-300 hover:shadow-md"
                                 >
-                                  <p className="text-[11px] font-semibold text-sky-700">
-                                    {deal.title || t("untitledDeal")}
-                                  </p>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <p className="text-[11px] font-semibold text-sky-700">
+                                      {deal.title || t("untitledDeal")}
+                                    </p>
+                                    <button
+                                      type="button"
+                                      draggable={false}
+                                      onPointerDown={(event) => event.stopPropagation()}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        void handleDeleteDeal(deal);
+                                      }}
+                                      disabled={deletingDealId === deal.id}
+                                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                      title={t("deleteAction")}
+                                      aria-label={t("deleteAction")}
+                                    >
+                                      {deletingDealId === deal.id ? (
+                                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-red-200 border-t-red-600" />
+                                      ) : (
+                                        <svg
+                                          className="h-3.5 w-3.5"
+                                          viewBox="0 0 20 20"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="1.6"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        >
+                                          <path d="M4 6h12" />
+                                          <path d="M8 6V4h4v2" />
+                                          <path d="M6 6v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" />
+                                        </svg>
+                                      )}
+                                    </button>
+                                  </div>
                                   <p className="mt-0.5 text-[12px] font-semibold text-emerald-700">
                                     {t("card.patient")} {patientName}
                                   </p>

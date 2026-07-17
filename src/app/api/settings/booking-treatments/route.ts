@@ -73,6 +73,38 @@ export async function PUT(request: Request) {
       );
     }
 
+    const configuredProviderIds = [...new Set(
+      treatments
+        .filter((t: { secondary_calendar_mode?: string }) => t.secondary_calendar_mode === "custom")
+        .map((t: { secondary_calendar_provider_id?: string | null }) => t.secondary_calendar_provider_id)
+        .filter((id: string | null | undefined): id is string => Boolean(id)),
+    )];
+    if (configuredProviderIds.length > 0) {
+      const { data: providers } = await supabaseAdmin
+        .from("providers")
+        .select("id")
+        .in("id", configuredProviderIds)
+        .in("role", ["doctor", "nurse", "technician"]);
+      if (providers?.length !== configuredProviderIds.length) {
+        return NextResponse.json({ error: "One or more secondary calendars are invalid." }, { status: 400 });
+      }
+    }
+
+    const invalidRule = treatments.some((t: {
+      secondary_calendar_mode?: string;
+      secondary_calendar_provider_id?: string | null;
+      secondary_calendar_duration_minutes?: number | null;
+    }) => {
+      const mode = t.secondary_calendar_mode || "inherit";
+      if (!["inherit", "disabled", "custom"].includes(mode)) return true;
+      if (mode !== "custom") return false;
+      const duration = Number(t.secondary_calendar_duration_minutes);
+      return !t.secondary_calendar_provider_id || !Number.isInteger(duration) || duration < 1 || duration > 480;
+    });
+    if (invalidRule) {
+      return NextResponse.json({ error: "Custom secondary calendar rules require a calendar and 1-480 whole minutes." }, { status: 400 });
+    }
+
     // Get existing treatment IDs
     const { data: existingTreatments } = await supabaseAdmin
       .from("booking_treatments")
@@ -117,6 +149,11 @@ export async function PUT(request: Request) {
           linked_service_id: t.linked_service_id || null,
           service_category_id: t.service_category_id || null,
           display_price: t.display_price ?? null,
+          secondary_calendar_mode: t.secondary_calendar_mode || "inherit",
+          secondary_calendar_provider_id:
+            t.secondary_calendar_mode === "custom" ? t.secondary_calendar_provider_id || null : null,
+          secondary_calendar_duration_minutes:
+            t.secondary_calendar_mode === "custom" ? Number(t.secondary_calendar_duration_minutes) : null,
         }))
       );
 
@@ -177,6 +214,7 @@ export async function POST(request: Request) {
         order_index: order_index || 0,
         enabled: enabled ?? true,
         service_category_id: service_category_id || null,
+        secondary_calendar_mode: "inherit",
       })
       .select()
       .single();

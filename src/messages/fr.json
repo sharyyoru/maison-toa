@@ -80,6 +80,7 @@
       "month": "Mois"
     },
     "cancelled": "Annulés",
+    "tableView": "Tableau",
     "searchPatient": "Rechercher un patient",
     "weekdayShort": {
       "mon": "Lun",
@@ -104,6 +105,7 @@
       "searchTime": "Rechercher une heure...",
       "searchService": "Rechercher un service...",
       "searchDoctor": "Rechercher un médecin...",
+      "calendarAssignment": "Calendrier : {name} (conservé lors du changement de médecin)",
       "searchCategory": "Rechercher une catégorie...",
       "searchStatus": "Rechercher un statut...",
       "searchLocation": "Rechercher un lieu...",
@@ -166,6 +168,7 @@
       "yesDelete": "Oui, supprimer",
       "deleting": "Suppression...",
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce rendez-vous ? Cette action est irréversible.",
+      "deleteMirroredConfirm": "Supprimer cette réservation de calendrier miroir ? Le rendez-vous original du médecin sera conservé.",
       "conflict": "CONFLIT",
       "consultationFor": "Consultation pour {name}"
     },
@@ -1244,12 +1247,16 @@
       "patient": "Patient",
       "contactOwner": "Propriétaire du contact",
       "dealOwner": "Propriétaire de l'affaire",
-      "created": "Créée"
+      "created": "Créée",
+      "actions": "Actions"
     },
     "unknownStage": "Inconnue",
     "unknownPatient": "Patient inconnu",
     "untitledDeal": "Affaire sans titre",
     "notSet": "Non défini",
+    "deleteAction": "Supprimer l'affaire",
+    "deleteConfirm": "Supprimer \"{title}\" ? Les rendez-vous liés seront conservés. Cette action est irréversible.",
+    "deleteFailed": "Échec de la suppression de l'affaire.",
     "showingRange": "Affichage de {from} à {to} sur {total} affaires",
     "dragHint": "Faites glisser les affaires entre les étapes pour mettre à jour leur statut.",
     "emptyStage": "Aucune affaire à cette étape.",
@@ -1924,6 +1931,60 @@
       "crm": "CRM",
       "medical": "Médical",
       "error": "Erreur inattendue lors de l'enregistrement de la priorité."
+    }
+  },
+  "appointmentsTable": {
+    "title": "Tous les rendez-vous",
+    "subtitle": "Consultez et filtrez tous les rendez-vous du calendrier.",
+    "calendarView": "Vue calendrier",
+    "loadError": "Impossible de charger les rendez-vous.",
+    "loading": "Chargement des rendez-vous...",
+    "empty": "Aucun rendez-vous ne correspond à ces filtres.",
+    "resultCount": "{count, plural, =0 {Aucun rendez-vous} =1 {1 rendez-vous} other {# rendez-vous}}",
+    "unknownPatient": "Patient inconnu",
+    "noPatient": "Sans patient",
+    "notSpecified": "Non renseigné",
+    "cancelled": "Annulé",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "page": "Page {page} sur {pages}",
+    "sortAscending": "trié du plus ancien au plus récent ; activer pour inverser le tri",
+    "sortDescending": "trié du plus récent au plus ancien ; activer pour inverser le tri",
+    "export": {
+      "excel": "Exporter vers Excel",
+      "exporting": "Exportation...",
+      "error": "Impossible d'exporter les rendez-vous.",
+      "sheetName": "Rendez-vous",
+      "time": "Heure du rendez-vous",
+      "appointmentId": "ID du rendez-vous"
+    },
+    "filters": {
+      "from": "Date du rendez-vous du",
+      "to": "Date du rendez-vous au",
+      "patient": "Patient",
+      "service": "Service",
+      "category": "Catégorie",
+      "status": "Statut",
+      "doctor": "Médecin",
+      "allServices": "Tous les services",
+      "allPatients": "Tous les patients",
+      "searchPatients": "Rechercher un patient...",
+      "searchServices": "Rechercher un service...",
+      "servicesSelected": "{count} services sélectionnés",
+      "allCategories": "Toutes les catégories",
+      "allStatuses": "Tous les statuts",
+      "allDoctors": "Tous les médecins",
+      "clear": "Effacer tous les filtres"
+    },
+    "columns": {
+      "date": "Date du rendez-vous",
+      "patient": "Patient",
+      "service": "Service",
+      "category": "Catégorie",
+      "status": "Statut",
+      "doctor": "Médecin / calendrier",
+      "location": "Lieu",
+      "state": "État"
     }
   },
   "controllersPage": {

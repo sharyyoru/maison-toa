@@ -13,7 +13,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    
+
     // Only allow updating specific fields
     const allowedFields = ["end_time", "start_time", "status", "reason", "notes", "location", "provider_id"];
     const updateData: Record<string, unknown> = {};
@@ -53,6 +53,37 @@ export async function PATCH(
       { error: "Internal server error" },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    const { data: linkedAppointments, error: linkedAppointmentsError } = await supabase
+      .from("appointments")
+      .select("id")
+      .eq("linked_parent_appointment_id", id);
+
+    if (linkedAppointmentsError) {
+      return NextResponse.json({ error: linkedAppointmentsError.message }, { status: 500 });
+    }
+
+    const { error } = await supabase.from("appointments").delete().eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({
+      success: true,
+      deletedAppointmentIds: [
+        id,
+        ...(linkedAppointments ?? []).map((appointment) => appointment.id),
+      ],
+    });
+  } catch (err) {
+    console.error("Error in DELETE /api/appointments/[id]:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 

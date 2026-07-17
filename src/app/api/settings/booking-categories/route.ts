@@ -54,6 +54,44 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "categories must be an array" }, { status: 400 });
     }
 
+    const configuredProviderIds = [...new Set(
+      categories
+        .map((category: { secondary_calendar_provider_id?: string | null }) => category.secondary_calendar_provider_id)
+        .filter((id: string | null | undefined): id is string => Boolean(id)),
+    )];
+    if (configuredProviderIds.length > 0) {
+      const { data: providers } = await supabaseAdmin
+        .from("providers")
+        .select("id")
+        .in("id", configuredProviderIds)
+        .in("role", ["doctor", "nurse", "technician"]);
+      if (providers?.length !== configuredProviderIds.length) {
+        return NextResponse.json({ error: "One or more secondary calendars are invalid." }, { status: 400 });
+      }
+    }
+
+    const invalidRule = categories.some((category: {
+      secondary_calendar_provider_id?: string | null;
+      secondary_calendar_duration_minutes?: number | null;
+    }) => {
+      const providerId = category.secondary_calendar_provider_id || null;
+      const duration = Number(category.secondary_calendar_duration_minutes);
+      return providerId
+        ? !Number.isInteger(duration) || duration < 1 || duration > 480
+        : Boolean(category.secondary_calendar_duration_minutes);
+    });
+    if (invalidRule) {
+      return NextResponse.json({ error: "Secondary calendar duration must be a whole number from 1 to 480." }, { status: 400 });
+    }
+
+    const invalidBookingDuration = categories.some((category: { booking_duration_minutes?: number | null }) => {
+      const duration = Number(category.booking_duration_minutes ?? 60);
+      return !Number.isInteger(duration) || duration < 1 || duration > 480;
+    });
+    if (invalidBookingDuration) {
+      return NextResponse.json({ error: "Booking duration must be a whole number from 1 to 480." }, { status: 400 });
+    }
+
     // Get existing category IDs
     const { data: existing } = await supabaseAdmin
       .from("booking_categories")
@@ -96,6 +134,9 @@ export async function PUT(request: NextRequest) {
         slug: string;
         enabled: boolean;
         skip_treatment?: boolean;
+        booking_duration_minutes?: number | null;
+        secondary_calendar_provider_id?: string | null;
+        secondary_calendar_duration_minutes?: number | null;
       }) => ({
         id: c.id,
         name: c.name,
@@ -105,6 +146,11 @@ export async function PUT(request: NextRequest) {
         slug: c.slug,
         enabled: c.enabled !== undefined ? c.enabled : true,
         skip_treatment: c.skip_treatment !== undefined ? c.skip_treatment : false,
+        booking_duration_minutes: Number(c.booking_duration_minutes ?? 60),
+        secondary_calendar_provider_id: c.secondary_calendar_provider_id || null,
+        secondary_calendar_duration_minutes: c.secondary_calendar_provider_id
+          ? Number(c.secondary_calendar_duration_minutes)
+          : null,
         updated_at: new Date().toISOString(),
       }));
 

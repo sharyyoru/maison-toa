@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { getCategoryColorPresentation } from "@/utils/categoryColor";
 import dynamic from "next/dynamic";
 
 const ProvidersBillingSettingsTab = dynamic(
@@ -1074,6 +1075,9 @@ interface BookingCategory {
   slug: string;
   enabled: boolean;
   skip_treatment: boolean;
+  booking_duration_minutes: number;
+  secondary_calendar_provider_id: string | null;
+  secondary_calendar_duration_minutes: number | null;
 }
 
 interface BookingTreatment {
@@ -1090,6 +1094,9 @@ interface BookingTreatment {
   linked_service_id: string | null;
   service_category_id: string | null;
   display_price: number | null;
+  secondary_calendar_mode: "inherit" | "disabled" | "custom";
+  secondary_calendar_provider_id: string | null;
+  secondary_calendar_duration_minutes: number | null;
 }
 
 interface ServiceCategoryOption {
@@ -1297,24 +1304,26 @@ function ServiceCategorySelect({
             <span className="h-3 w-3 shrink-0 rounded-sm border border-slate-200 bg-white" />
             <span className="truncate font-medium text-slate-800">No assigned category</span>
           </button>
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              type="button"
-              onClick={() => {
-                onChange(category.id);
-                setOpen(false);
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-sky-50 ${category.id === value ? "bg-sky-50" : ""}`}
-            >
-              {category.color ? (
-                <span className={`h-3 w-3 shrink-0 rounded-sm border border-slate-200 ${category.color}`} />
-              ) : (
-                <span className="h-3 w-3 shrink-0 rounded-sm border border-slate-200 bg-white" />
-              )}
-              <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{category.name}</span>
-            </button>
-          ))}
+          {categories.map((category) => {
+            const categoryColor = getCategoryColorPresentation(category.color, "bg-white");
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => {
+                  onChange(category.id);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-sky-50 ${category.id === value ? "bg-sky-50" : ""}`}
+              >
+                <span
+                  className={`h-3 w-3 shrink-0 rounded-sm border border-slate-200 ${categoryColor.className}`}
+                  style={categoryColor.style}
+                />
+                <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{category.name}</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1372,14 +1381,18 @@ function BookingCategoriesTab() {
   const saveCategories = async () => {
     setSaving(true);
     try {
-      await fetch("/api/settings/booking-categories", {
+      const res = await fetch("/api/settings/booking-categories", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ categories }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save categories");
+      }
       alert(t("categoriesSaved"));
     } catch (error) {
-      alert(t("categoriesSaveFailed"));
+      alert(error instanceof Error ? error.message : t("categoriesSaveFailed"));
     } finally {
       setSaving(false);
     }
@@ -1388,14 +1401,18 @@ function BookingCategoriesTab() {
   const saveTreatments = async () => {
     setSaving(true);
     try {
-      await fetch("/api/settings/booking-treatments", {
+      const res = await fetch("/api/settings/booking-treatments", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ treatments }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save treatments");
+      }
       alert(t("treatmentsSaved"));
     } catch (error) {
-      alert(t("treatmentsSaveFailed"));
+      alert(error instanceof Error ? error.message : t("treatmentsSaveFailed"));
     } finally {
       setSaving(false);
     }
@@ -1455,12 +1472,15 @@ function BookingCategoriesTab() {
       slug: "",
       enabled: true,
       skip_treatment: false,
+      booking_duration_minutes: 60,
+      secondary_calendar_provider_id: null,
+      secondary_calendar_duration_minutes: null,
     };
     setCategories([...categories, newCategory]);
   };
 
   const updateCategory = (id: string, field: keyof BookingCategory, value: any) => {
-    setCategories(categories.map((cat) => (cat.id === id ? { ...cat, [field]: value } : cat)));
+    setCategories((current) => current.map((cat) => (cat.id === id ? { ...cat, [field]: value } : cat)));
   };
 
   const deleteCategory = (id: string) => {
@@ -1485,12 +1505,15 @@ function BookingCategoriesTab() {
       linked_service_id: null,
       service_category_id: null,
       display_price: null,
+      secondary_calendar_mode: "inherit",
+      secondary_calendar_provider_id: null,
+      secondary_calendar_duration_minutes: null,
     };
     setTreatments([...treatments, newTreatment]);
   };
 
   const updateTreatment = (id: string, field: keyof BookingTreatment, value: any) => {
-    setTreatments(treatments.map((t) => (t.id === id ? { ...t, [field]: value } : t)));
+    setTreatments((current) => current.map((t) => (t.id === id ? { ...t, [field]: value } : t)));
   };
 
   const deleteTreatment = (id: string) => {
@@ -1655,6 +1678,47 @@ function BookingCategoriesTab() {
                         </div>
                       </div>
                     </div>
+                    <div className="mt-3 rounded-lg border border-violet-100 bg-violet-50/50 p-3">
+                      <p className="mb-2 text-xs font-medium text-violet-800">Additional calendar reservation</p>
+                      <div className="flex flex-wrap items-end gap-3">
+                        <label className="text-[10px] font-medium text-slate-500">
+                          Calendar
+                          <select
+                            value={cat.secondary_calendar_provider_id || ""}
+                            onChange={(e) => {
+                              const providerId = e.target.value || null;
+                              updateCategory(cat.id, "secondary_calendar_provider_id", providerId);
+                              if (!providerId) updateCategory(cat.id, "secondary_calendar_duration_minutes", null);
+                            }}
+                            className="mt-1 block min-w-52 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+                          >
+                            <option value="">None</option>
+                            {calendarProviders.map((provider) => (
+                              <option key={provider.id} value={provider.id}>{provider.name}</option>
+                            ))}
+                          </select>
+                        </label>
+                        {cat.secondary_calendar_provider_id && (
+                          <label className="text-[10px] font-medium text-slate-500">
+                            Duration (minutes)
+                            <input
+                              type="number"
+                              min={1}
+                              max={480}
+                              step={1}
+                              value={cat.secondary_calendar_duration_minutes ?? ""}
+                              onChange={(e) => updateCategory(
+                                cat.id,
+                                "secondary_calendar_duration_minutes",
+                                e.target.value === "" ? null : Number(e.target.value),
+                              )}
+                              className="mt-1 block w-32 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+                            />
+                          </label>
+                        )}
+                      </div>
+                      <p className="mt-2 text-[10px] text-slate-500">Used by skipped-treatment bookings and inherited by treatments unless overridden.</p>
+                    </div>
                     <div className="mt-3 flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <label className="flex items-center gap-2 text-xs text-slate-600">
@@ -1675,6 +1739,25 @@ function BookingCategoriesTab() {
                           />
                           {t("skipTreatment")}
                         </label>
+                        {cat.skip_treatment && (
+                          <label className="flex items-center gap-2 text-xs text-slate-600">
+                            <span>Primary duration</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={480}
+                              step={1}
+                              value={cat.booking_duration_minutes}
+                              onChange={(e) => updateCategory(
+                                cat.id,
+                                "booking_duration_minutes",
+                                Number(e.target.value),
+                              )}
+                              className="w-20 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
+                            />
+                            <span>min</span>
+                          </label>
+                        )}
                         <span className="text-xs text-slate-400">
                           {t("treatmentsCount", { count: treatments.filter((tr) => tr.category_id === cat.id).length })}
                         </span>
@@ -1883,6 +1966,63 @@ function BookingCategoriesTab() {
                               onChange={(id) => updateTreatment(treat.id, "linked_service_id", id)}
                             />
                           )}
+                        </div>
+                        <div className="mt-3 rounded-lg border border-violet-100 bg-violet-50/50 p-3">
+                          <p className="mb-2 text-xs font-medium text-violet-800">Additional calendar reservation</p>
+                          <div className="flex flex-wrap items-end gap-3">
+                            <label className="text-[10px] font-medium text-slate-500">
+                              Rule
+                              <select
+                                value={treat.secondary_calendar_mode}
+                                onChange={(e) => {
+                                  const mode = e.target.value as BookingTreatment["secondary_calendar_mode"];
+                                  updateTreatment(treat.id, "secondary_calendar_mode", mode);
+                                  if (mode !== "custom") {
+                                    updateTreatment(treat.id, "secondary_calendar_provider_id", null);
+                                    updateTreatment(treat.id, "secondary_calendar_duration_minutes", null);
+                                  }
+                                }}
+                                className="mt-1 block min-w-44 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+                              >
+                                <option value="inherit">Inherit category</option>
+                                <option value="disabled">No additional calendar</option>
+                                <option value="custom">Custom calendar</option>
+                              </select>
+                            </label>
+                            {treat.secondary_calendar_mode === "custom" && (
+                              <>
+                                <label className="text-[10px] font-medium text-slate-500">
+                                  Calendar
+                                  <select
+                                    value={treat.secondary_calendar_provider_id || ""}
+                                    onChange={(e) => updateTreatment(treat.id, "secondary_calendar_provider_id", e.target.value || null)}
+                                    className="mt-1 block min-w-52 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+                                  >
+                                    <option value="">Select calendar</option>
+                                    {calendarProviders.map((provider) => (
+                                      <option key={provider.id} value={provider.id}>{provider.name}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="text-[10px] font-medium text-slate-500">
+                                  Duration (minutes)
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={480}
+                                    step={1}
+                                    value={treat.secondary_calendar_duration_minutes ?? ""}
+                                    onChange={(e) => updateTreatment(
+                                      treat.id,
+                                      "secondary_calendar_duration_minutes",
+                                      e.target.value === "" ? null : Number(e.target.value),
+                                    )}
+                                    className="mt-1 block w-32 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+                                  />
+                                </label>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))

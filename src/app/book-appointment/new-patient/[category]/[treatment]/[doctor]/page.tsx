@@ -137,21 +137,6 @@ function parseLocalDate(dateStr: string): Date {
   return parseSwissDate(dateStr);
 }
 
-// Returns true if a slot at `time` (HH:MM) with `durationMinutes` would overlap any booked slot.
-// bookedSlots are HH:MM strings of occupied 30-min blocks.
-function slotConflicts(time: string, durationMinutes: number, bookedSlots: string[]): boolean {
-  const [h, m] = time.split(":").map(Number);
-  const startMins = h * 60 + m;
-  const endMins = startMins + durationMinutes;
-  for (const booked of bookedSlots) {
-    const [bh, bm] = booked.split(":").map(Number);
-    const bookedStart = bh * 60 + bm;
-    const bookedEnd = bookedStart + 30;
-    if (startMins < bookedEnd && endMins > bookedStart) return true;
-  }
-  return false;
-}
-
 type DayAvailability = Record<number, { start: string; end: string }>;
 function generateTimeSlots(doctorSlug: string, locationId: string, dateStr: string, dbAvail?: DayAvailability | null): string[] {
   const date = parseLocalDate(dateStr);
@@ -443,6 +428,8 @@ function DoctorBookingContent() {
             doctorName: doctor.name,
             doctorSlug,
             treatmentId,
+            categorySlug,
+            patientType: "new",
             signal: abortController.signal,
           });
 
@@ -451,9 +438,7 @@ function DoctorBookingContent() {
           const slotsToShow = getNextOpenSlots({
             dates: filteredDates,
             blockedSlotsByDate,
-            durationMinutes: treatment?.duration_minutes ?? 60,
             generateTimeSlots: (date) => generateTimeSlots(doctorSlug, locationId, date, dbAvailability),
-            slotConflicts,
           });
 
           setAvailabilityWindow({
@@ -487,7 +472,7 @@ function DoctorBookingContent() {
         abortController.abort();
       };
     }
-  }, [locationId, doctorSlug, dbAvailability, dbAvailabilityLoaded, doctorLoading, doctor, blockedDates, blockedDatesLoaded, treatment, treatmentId]);
+  }, [locationId, doctorSlug, dbAvailability, dbAvailabilityLoaded, doctorLoading, doctor, blockedDates, blockedDatesLoaded, treatment, treatmentId, categorySlug]);
 
   useEffect(() => {
     if (selectedDate && locationId && doctor) {
@@ -536,6 +521,8 @@ function DoctorBookingContent() {
           doctorName,
           doctorSlug,
           treatmentId,
+          categorySlug,
+          patientType: "new",
         });
         blockedSlots = blockedSlotsByDate[date] || [];
       }
@@ -543,14 +530,13 @@ function DoctorBookingContent() {
       setBookedSlots(blockedSlots);
       
       const currentSlots = generateTimeSlots(doctorSlug, locationId || "", date, dbAvailability);
-      const duration = treatment?.duration_minutes ?? 60;
-      const openSlots = currentSlots.filter(time => !slotConflicts(time, duration, blockedSlots));
+      const openSlots = currentSlots.filter(time => !blockedSlots.includes(time));
       if (forceRefresh) {
         setNextAvailableSlots((slots) =>
           slots.filter(
             (slot) =>
               slot.date !== date ||
-              !slotConflicts(slot.time, duration, blockedSlots)
+              !blockedSlots.includes(slot.time)
           )
         );
       }
@@ -675,6 +661,7 @@ function DoctorBookingContent() {
           location: locationLabel,
           patientType: "new",
           treatmentId: treatmentId,
+          categorySlug,
           language,
           trackingParams: getBookingTrackingParams(),
         }),
@@ -1077,8 +1064,7 @@ function DoctorBookingContent() {
                 </div>
 
                 {selectedDate && availableSlots.length > 0 && (() => {
-                  const duration = treatment?.duration_minutes ?? 60;
-                  const openSlots = availableSlots.filter(time => !slotConflicts(time, duration, bookedSlots));
+                  const openSlots = availableSlots.filter(time => !bookedSlots.includes(time));
                   
                   if (openSlots.length === 0) {
                     return (
