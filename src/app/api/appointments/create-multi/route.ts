@@ -109,15 +109,30 @@ export async function POST(request: Request) {
     
     // Fetch service names if services are provided, or use custom text
     let serviceText = '';
+    let selectedServices: Array<{
+      id: string;
+      name: string;
+      mirror_calendar_provider_id: string | null;
+      mirror_duration_minutes: number | null;
+    }> = [];
     if (serviceIds && serviceIds.length > 0) {
       const { data: services } = await supabase
         .from('services')
-        .select('id, name')
+        .select('id, name, mirror_calendar_provider_id, mirror_duration_minutes')
         .in('id', serviceIds);
+
+      selectedServices = (services || []).map((service) => ({
+        id: service.id,
+        name: service.name,
+        mirror_calendar_provider_id: service.mirror_calendar_provider_id,
+        mirror_duration_minutes: service.mirror_duration_minutes === null
+          ? null
+          : Number(service.mirror_duration_minutes),
+      }));
       
       serviceText = serviceIds
         .map((serviceId: string) => {
-          const service = services?.find((s) => s.id === serviceId);
+          const service = selectedServices.find((s) => s.id === serviceId);
           const quantity = serviceQuantities?.[serviceId] || 1;
           const serviceName = service?.name || 'Unknown service';
           return quantity > 1 ? `${serviceName} (×${quantity})` : serviceName;
@@ -133,6 +148,68 @@ export async function POST(request: Request) {
       .from('providers')
       .select('id, name')
       .in('id', providerIds);
+
+    const mirroredService = serviceIds?.length === 1
+      ? selectedServices.find((service) => service.id === serviceIds[0])
+      : null;
+    const mirrorProviderId = mirroredService?.mirror_calendar_provider_id ?? null;
+    const mirrorDurationMinutes = mirroredService?.mirror_duration_minutes ?? null;
+    let mirrorProviderName: string | null = null;
+
+    if (mirrorProviderId && mirrorDurationMinutes) {
+      if (providerIds.includes(mirrorProviderId)) {
+        return NextResponse.json(
+          { error: 'The mirrored calendar must be different from the selected doctor calendar.' },
+          { status: 400 },
+        );
+      }
+
+      const { data: mirrorProvider, error: mirrorProviderError } = await supabase
+        .from('providers')
+        .select('id, name')
+        .eq('id', mirrorProviderId)
+        .maybeSingle();
+
+      if (mirrorProviderError || !mirrorProvider) {
+        return NextResponse.json({ error: 'The configured mirrored calendar is unavailable.' }, { status: 400 });
+      }
+      mirrorProviderName = mirrorProvider.name;
+
+      const earliestMirrorStart = appointmentTimes.reduce(
+        (earliest, occurrence) => occurrence.startTime < earliest ? occurrence.startTime : earliest,
+        appointmentTimes[0].startTime,
+      );
+      const latestMirrorEnd = appointmentTimes.reduce((latest, occurrence) => {
+        const end = new Date(new Date(occurrence.startTime).getTime() + mirrorDurationMinutes * 60 * 1000).toISOString();
+        return end > latest ? end : latest;
+      }, new Date(new Date(appointmentTimes[0].startTime).getTime() + mirrorDurationMinutes * 60 * 1000).toISOString());
+
+      const { data: possibleConflicts, error: mirrorConflictError } = await supabase
+        .from('appointments')
+        .select('id, start_time, end_time')
+        .eq('provider_id', mirrorProviderId)
+        .lt('start_time', latestMirrorEnd)
+        .gt('end_time', earliestMirrorStart)
+        .not('status', 'in', '(cancelled,no_show)');
+
+      if (mirrorConflictError) {
+        return NextResponse.json({ error: 'Failed to verify the mirrored calendar.' }, { status: 500 });
+      }
+
+      const hasMirrorConflict = (possibleConflicts || []).some((existing) =>
+        appointmentTimes.some((occurrence) => {
+          const mirrorEnd = new Date(new Date(occurrence.startTime).getTime() + mirrorDurationMinutes * 60 * 1000);
+          return new Date(existing.start_time) < mirrorEnd && new Date(existing.end_time) > new Date(occurrence.startTime);
+        }),
+      );
+
+      if (hasMirrorConflict) {
+        return NextResponse.json(
+          { error: `${mirrorProviderName} is not available for the configured mirrored appointment.` },
+          { status: 409 },
+        );
+      }
+    }
 
     const { data: patient } = !noPatient && patientId
       ? await supabase
@@ -181,44 +258,63 @@ export async function POST(request: Request) {
       }
     }
 
-    // Create separate appointment rows for each doctor and each requested occurrence.
-    const appointmentRows = appointmentTimes.flatMap((appointmentTime) => providerIds.map((providerId: string) => {
-      const provider = providers?.find((p) => p.id === providerId);
-      const doctorName = provider?.name || 'Unknown';
-      
-      // Build reason field with service and doctor info for THIS specific doctor
-      let reason = serviceText || 'Appointment';
-      reason += ` [Doctor: ${doctorName}]`;
-      
-      if (category) {
-        reason += ` [Category: ${category}]`;
+    // Create each logical occurrence and at most one linked mirror for it.
+    const appointmentRows: Record<string, unknown>[] = [];
+    for (const appointmentTime of appointmentTimes) {
+      let anchorAppointmentId: string | null = null;
+      let anchorReason = serviceText || 'Appointment';
+      for (const providerId of providerIds as string[]) {
+        const appointmentId = crypto.randomUUID();
+        if (!anchorAppointmentId) anchorAppointmentId = appointmentId;
+        const provider = providers?.find((p) => p.id === providerId);
+        const doctorName = provider?.name || 'Unknown';
+        let reason = `${serviceText || 'Appointment'} [Doctor: ${doctorName}]`;
+        if (category) reason += ` [Category: ${category}]`;
+        if (notes) reason += ` [Notes: ${notes.replace(/[<>]/g, '')}]`;
+        if (channel) reason += ` [Status: ${channel}]`;
+        if (appointmentId === anchorAppointmentId) anchorReason = reason;
+
+        appointmentRows.push({
+          id: appointmentId,
+          patient_id: noPatient ? null : patientId,
+          no_patient: Boolean(noPatient),
+          provider_id: providerId,
+          appointment_group_id: providerIds.length > 1 ? appointmentGroupId : null,
+          start_time: appointmentTime.startTime,
+          end_time: appointmentTime.endTime,
+          status: status || 'scheduled',
+          reason,
+          notes: notes ? notes.replace(/[<>]/g, '') : null,
+          location: location || null,
+          source: 'manual',
+          ...(serviceIds && serviceIds.length > 0 ? { service_ids: serviceIds } : {}),
+          ...(machineIds && machineIds.length > 0 ? { machine_ids: machineIds } : {}),
+        });
       }
-      
-      if (notes) {
-        // Sanitize notes
-        const sanitizedNotes = notes.replace(/[<>]/g, '');
-        reason += ` [Notes: ${sanitizedNotes}]`;
+
+      if (anchorAppointmentId && mirrorProviderId && mirrorDurationMinutes && mirrorProviderName) {
+        const mirrorEnd = new Date(
+          new Date(appointmentTime.startTime).getTime() + mirrorDurationMinutes * 60 * 1000,
+        );
+        appointmentRows.push({
+          id: crypto.randomUUID(),
+          patient_id: noPatient ? null : patientId,
+          no_patient: Boolean(noPatient),
+          provider_id: mirrorProviderId,
+          appointment_group_id: providerIds.length > 1 ? appointmentGroupId : null,
+          start_time: appointmentTime.startTime,
+          end_time: mirrorEnd.toISOString(),
+          status: status || 'scheduled',
+          reason: `${anchorReason} [Linked Calendar: ${mirrorProviderName}]`,
+          notes: notes ? notes.replace(/[<>]/g, '') : null,
+          location: location || null,
+          source: 'manual',
+          service_ids: serviceIds,
+          machine_ids: [],
+          linked_parent_appointment_id: anchorAppointmentId,
+        });
       }
-      
-      if (channel) {
-        reason += ` [Status: ${channel}]`;
-      }
-      
-      return {
-        patient_id: noPatient ? null : patientId,
-        no_patient: Boolean(noPatient),
-        provider_id: providerId,
-        appointment_group_id: providerIds.length > 1 ? appointmentGroupId : null,
-        start_time: appointmentTime.startTime,
-        end_time: appointmentTime.endTime,
-        status: status || 'scheduled',
-        reason,
-        location: location || null,
-        source: 'manual',
-        ...(serviceIds && serviceIds.length > 0 ? { service_ids: serviceIds } : {}),
-        ...(machineIds && machineIds.length > 0 ? { machine_ids: machineIds } : {}),
-      };
-    }));
+    }
     
     // Insert all appointments in a single transaction
     const { data: createdAppointments, error } = await supabase
