@@ -652,7 +652,9 @@ export async function POST(request: Request) {
       patient_id: patientId,
       deal_id: deal.id,
       provider_id: providerId,
-      start_time: appointmentDateObj.toISOString(),
+      // The internal calendar spans the hidden pre-appointment buffer. Patient
+      // communications continue to use appointmentDateObj (the selected time).
+      start_time: apptStart.toISOString(),
       end_time: apptEnd.toISOString(),
       reason,
       notes: stripHtml(notes) || null,
@@ -663,7 +665,10 @@ export async function POST(request: Request) {
       service_ids: treatmentServiceId ? [treatmentServiceId] : [],
       booking_category_id: bookingContext.categoryId,
       booking_treatment_id: bookingContext.treatmentId,
-      tracking_params: trackingParams || {},
+      tracking_params: {
+        ...(trackingParams || {}),
+        patient_appointment_start: appointmentDateObj.toISOString(),
+      },
     }];
 
     if (secondaryCalendar && secondaryCalendar.providerId !== providerId) {
