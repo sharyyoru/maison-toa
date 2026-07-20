@@ -668,6 +668,9 @@ export async function POST(request: Request) {
       tracking_params: {
         ...(trackingParams || {}),
         patient_appointment_start: appointmentDateObj.toISOString(),
+        appointment_duration_minutes: String(durationMinutes),
+        buffer_before_minutes: String(bookingContext.bufferBeforeMinutes),
+        buffer_after_minutes: String(bookingContext.bufferAfterMinutes),
       },
     }];
 
