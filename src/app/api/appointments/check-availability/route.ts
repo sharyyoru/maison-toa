@@ -292,9 +292,10 @@ export async function GET(request: NextRequest) {
     }
 
     for (const slotStart of allSlots) {
-      const primaryEnd = new Date(slotStart.getTime() + primaryDurationMinutes * 60 * 1000);
+      const primaryStart = new Date(slotStart.getTime() - bookingContext.bufferBeforeMinutes * 60 * 1000);
+      const primaryEnd = new Date(slotStart.getTime() + (primaryDurationMinutes + bookingContext.bufferAfterMinutes) * 60 * 1000);
       const primaryBlocked = occupiedIntervals.some(
-        (interval) => interval.start < primaryEnd && interval.end > slotStart,
+        (interval) => interval.start < primaryEnd && interval.end > primaryStart,
       );
       const secondaryEnd = new Date(
         slotStart.getTime() + (secondaryCalendar?.durationMinutes || 0) * 60 * 1000,

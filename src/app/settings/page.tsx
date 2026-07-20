@@ -1089,6 +1089,8 @@ interface BookingTreatment {
   description_en: string | null;
   duration_minutes: number;
   display_duration_minutes: number | null;
+  buffer_before_minutes: number;
+  buffer_after_minutes: number;
   order_index: number;
   enabled: boolean;
   prepayment_required: boolean;
@@ -1501,6 +1503,8 @@ function BookingCategoriesTab() {
       description_en: "",
       duration_minutes: 30,
       display_duration_minutes: null,
+      buffer_before_minutes: 0,
+      buffer_after_minutes: 0,
       order_index: treatments.filter((t) => t.category_id === categoryId).length,
       enabled: true,
       prepayment_required: false,
@@ -1984,6 +1988,28 @@ function BookingCategoriesTab() {
                               onChange={(id) => updateTreatment(treat.id, "linked_service_id", id)}
                             />
                           )}
+                        </div>
+                        <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50/60 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-semibold text-sky-800">Hidden buffer time (not visible to patients) <span className="ml-1 rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] text-violet-700">NEW</span></p>
+                              <p className="text-[10px] text-slate-500">This time is blocked in the appointments calendar but excluded from the duration shown online.</p>
+                            </div>
+                            <div className="rounded-lg border border-sky-100 bg-white/70 px-3 py-2 text-[10px] text-slate-600">
+                              Patient duration: <strong>{treat.display_duration_minutes ?? treat.duration_minutes} min</strong><br />
+                              Total calendar time: <strong>{treat.duration_minutes + (treat.buffer_before_minutes || 0) + (treat.buffer_after_minutes || 0)} min</strong>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-6">
+                            {([['buffer_before_minutes', 'Add hidden time before the appointment'], ['buffer_after_minutes', 'Add hidden time after the appointment']] as const).map(([field, label]) => (
+                              <label key={field} className="flex items-center gap-2 text-xs text-slate-700">
+                                <input type="checkbox" checked={(treat[field] || 0) > 0} onChange={(e) => updateTreatment(treat.id, field, e.target.checked ? 15 : 0)} className="rounded text-sky-500" />
+                                {label}
+                                <input type="number" min={0} max={480} step={5} disabled={(treat[field] || 0) === 0} value={treat[field] || 0} onChange={(e) => updateTreatment(treat.id, field, Math.max(0, Number(e.target.value)))} className="w-20 rounded-lg border border-slate-200 bg-white px-2 py-1 disabled:bg-slate-100" />
+                                <span className="text-slate-500">min</span>
+                              </label>
+                            ))}
+                          </div>
                         </div>
                         <div className="mt-3 rounded-lg border border-violet-100 bg-violet-50/50 p-3">
                           <p className="mb-2 text-xs font-medium text-violet-800">Additional calendar reservation</p>

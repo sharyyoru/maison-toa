@@ -5,6 +5,8 @@ export type BookingSecondaryCalendarContext = {
   categoryName: string | null;
   treatmentId: string | null;
   primaryDurationMinutes: number;
+  bufferBeforeMinutes: number;
+  bufferAfterMinutes: number;
   secondaryCalendar: {
     providerId: string;
     providerName: string;
@@ -33,6 +35,8 @@ export async function resolveBookingSecondaryCalendar(
   let category: CategoryRow | null = null;
   let resolvedTreatmentId: string | null = null;
   let primaryDurationMinutes = 60;
+  let bufferBeforeMinutes = 0;
+  let bufferAfterMinutes = 0;
   let targetProviderId: string | null = null;
   let targetDurationMinutes: number | null = null;
 
@@ -43,6 +47,8 @@ export async function resolveBookingSecondaryCalendar(
         id,
         category_id,
         duration_minutes,
+        buffer_before_minutes,
+        buffer_after_minutes,
         secondary_calendar_mode,
         secondary_calendar_provider_id,
         secondary_calendar_duration_minutes,
@@ -60,6 +66,8 @@ export async function resolveBookingSecondaryCalendar(
     if (treatment) {
       resolvedTreatmentId = treatment.id;
       primaryDurationMinutes = treatment.duration_minutes || 60;
+      bufferBeforeMinutes = treatment.buffer_before_minutes || 0;
+      bufferAfterMinutes = treatment.buffer_after_minutes || 0;
       category = (Array.isArray(treatment.booking_categories)
         ? treatment.booking_categories[0]
         : treatment.booking_categories) as CategoryRow | null;
@@ -109,6 +117,8 @@ export async function resolveBookingSecondaryCalendar(
     categoryName: category?.name ?? null,
     treatmentId: resolvedTreatmentId,
     primaryDurationMinutes,
+    bufferBeforeMinutes,
+    bufferAfterMinutes,
     secondaryCalendar,
   };
 }

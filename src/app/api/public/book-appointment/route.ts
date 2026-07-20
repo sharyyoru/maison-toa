@@ -337,12 +337,12 @@ export async function POST(request: Request) {
     }
 
     // Check if time slot has capacity for this doctor using full overlap detection.
-    const apptStart = appointmentDateObj;
+    const apptStart = new Date(appointmentDateObj.getTime() - bookingContext.bufferBeforeMinutes * 60 * 1000);
     const secondaryCalendar = bookingContext.secondaryCalendar;
     if (secondaryCalendar?.providerId === providerId) {
       durationMinutes = Math.max(durationMinutes, secondaryCalendar.durationMinutes);
     }
-    const apptEnd = new Date(appointmentDateObj.getTime() + durationMinutes * 60 * 1000);
+    const apptEnd = new Date(appointmentDateObj.getTime() + (durationMinutes + bookingContext.bufferAfterMinutes) * 60 * 1000);
 
     console.log(`[Booking] Checking availability for ${doctorName} (${doctorSlug}) at ${apptStart.toISOString()}`);
     console.log(`[Booking] Max capacity for this doctor: ${maxCapacity}`);
