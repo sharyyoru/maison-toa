@@ -5,6 +5,7 @@ import {
   getSwissSlotString,
   getSwissToday,
 } from "@/lib/swissTimezone";
+import { fitsWithinDailyAvailability, type BookingWindow } from "@/lib/exactBookingAvailability";
 
 export interface EarliestBookingDoctor {
   slug: string;
@@ -22,41 +23,6 @@ type DoctorAvailabilityResult = {
   availability: DayAvailability;
   hasDatabaseSchedule: boolean;
 };
-
-function slotConflicts(time: string, durationMinutes: number, bookedSlots: string[]): boolean {
-  const [h, m] = time.split(":").map(Number);
-  const startMins = h * 60 + m;
-  const endMins = startMins + durationMinutes;
-
-  return bookedSlots.some((booked) => {
-    const [bh, bm] = booked.split(":").map(Number);
-    const bookedStart = bh * 60 + bm;
-    const bookedEnd = bookedStart + 30;
-    return startMins < bookedEnd && endMins > bookedStart;
-  });
-}
-
-function generateTimeSlots(dayOfWeek: number, availability?: { start: string; end: string }): string[] {
-  if (!availability) return [];
-
-  const slots: string[] = [];
-  const [startHour, startMin] = availability.start.split(":").map(Number);
-  const [endHour, endMin] = availability.end.split(":").map(Number);
-
-  let currentHour = startHour;
-  let currentMin = startMin;
-
-  while (currentHour < endHour || (currentHour === endHour && currentMin < endMin)) {
-    slots.push(`${currentHour.toString().padStart(2, "0")}:${currentMin.toString().padStart(2, "0")}`);
-    currentMin += 30;
-    if (currentMin >= 60) {
-      currentMin = 0;
-      currentHour += 1;
-    }
-  }
-
-  return slots;
-}
 
 async function getDoctorAvailability(doctor: EarliestBookingDoctor): Promise<DoctorAvailabilityResult> {
   try {
@@ -112,7 +78,8 @@ async function getFirstOpenSlot(
   const rangeEnd = new Date(endDate);
   rangeEnd.setHours(23, 59, 59, 999);
   
-  const allBookedSlots: Map<string, string[]> = new Map(); // dateString -> bookedSlots[]
+  const availableStarts: Map<string, string[]> = new Map();
+  let bookingWindow: BookingWindow = { durationMinutes, bufferBeforeMinutes: 0, bufferAfterMinutes: 0 };
   
   try {
     const treatmentParam = treatmentId && treatmentId !== "none" ? `&treatmentId=${treatmentId}` : "";
@@ -121,17 +88,13 @@ async function getFirstOpenSlot(
     );
     const data = await res.json();
     
-    // Group fullSlots by date
-    if (data.fullSlots && Array.isArray(data.fullSlots)) {
-      data.fullSlots.forEach((isoTime: string) => {
+    bookingWindow = data.bookingWindow || bookingWindow;
+    if (data.availableStarts && Array.isArray(data.availableStarts)) {
+      data.availableStarts.forEach((isoTime: string) => {
         const slotDate = new Date(isoTime);
         const dateStr = formatSwissYmd(slotDate);
         const timeStr = getSwissSlotString(slotDate);
-        
-        if (!allBookedSlots.has(dateStr)) {
-          allBookedSlots.set(dateStr, []);
-        }
-        allBookedSlots.get(dateStr)!.push(timeStr);
+        availableStarts.set(dateStr, [...(availableStarts.get(dateStr) || []), timeStr]);
       });
     }
   } catch (error) {
@@ -145,13 +108,12 @@ async function getFirstOpenSlot(
     date.setDate(today.getDate() + dayOffset);
 
     const dayOfWeek = getSwissDayOfWeek(date);
-    const slots = generateTimeSlots(dayOfWeek, availability[dayOfWeek]);
-    if (slots.length === 0) continue;
-
     const dateString = formatSwissYmd(date);
-    const bookedSlots = allBookedSlots.get(dateString) || [];
-    
-    const openSlot = slots.find((slot) => !slotConflicts(slot, durationMinutes, bookedSlots));
+    const dayAvailability = availability[dayOfWeek];
+    if (!dayAvailability) continue;
+    const openSlot = (availableStarts.get(dateString) || [])
+      .filter((slot) => fitsWithinDailyAvailability(slot, dayAvailability, bookingWindow))
+      .sort((a, b) => a.localeCompare(b))[0];
 
     if (openSlot) {
       return { doctor, date: dateString, time: openSlot };
@@ -241,7 +203,8 @@ async function getMultipleOpenSlots(
   const rangeEnd = new Date(endDate);
   rangeEnd.setHours(23, 59, 59, 999);
   
-  const allBookedSlots: Map<string, string[]> = new Map();
+  const availableStarts: Map<string, string[]> = new Map();
+  let bookingWindow: BookingWindow = { durationMinutes, bufferBeforeMinutes: 0, bufferAfterMinutes: 0 };
   
   try {
     const treatmentParam = treatmentId && treatmentId !== "none" ? `&treatmentId=${treatmentId}` : "";
@@ -252,17 +215,13 @@ async function getMultipleOpenSlots(
     );
     const data = await res.json();
     
-    const unavailableStarts = data.unavailableStarts || data.fullSlots;
-    if (unavailableStarts && Array.isArray(unavailableStarts)) {
-      unavailableStarts.forEach((isoTime: string) => {
+    bookingWindow = data.bookingWindow || bookingWindow;
+    if (data.availableStarts && Array.isArray(data.availableStarts)) {
+      data.availableStarts.forEach((isoTime: string) => {
         const slotDate = new Date(isoTime);
         const dateStr = formatSwissYmd(slotDate);
         const timeStr = getSwissSlotString(slotDate);
-        
-        if (!allBookedSlots.has(dateStr)) {
-          allBookedSlots.set(dateStr, []);
-        }
-        allBookedSlots.get(dateStr)!.push(timeStr);
+        availableStarts.set(dateStr, [...(availableStarts.get(dateStr) || []), timeStr]);
       });
     }
   } catch (error) {
@@ -276,17 +235,15 @@ async function getMultipleOpenSlots(
     date.setDate(today.getDate() + dayOffset);
 
     const dayOfWeek = getSwissDayOfWeek(date);
-    const slots = generateTimeSlots(dayOfWeek, availability[dayOfWeek]);
-    if (slots.length === 0) continue;
-
     const dateString = formatSwissYmd(date);
-    const bookedSlots = allBookedSlots.get(dateString) || [];
-    
+    const dayAvailability = availability[dayOfWeek];
+    if (!dayAvailability) continue;
+    const slots = [...new Set(availableStarts.get(dateString) || [])]
+      .filter((slot) => fitsWithinDailyAvailability(slot, dayAvailability, bookingWindow))
+      .sort((a, b) => a.localeCompare(b));
     for (const slot of slots) {
-      if (!bookedSlots.includes(slot)) {
-        results.push({ doctor, date: dateString, time: slot });
-        if (results.length >= count) break;
-      }
+      results.push({ doctor, date: dateString, time: slot });
+      if (results.length >= count) break;
     }
   }
 

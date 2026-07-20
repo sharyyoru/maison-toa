@@ -12,7 +12,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
 import { getLocalizedBookingName } from "@/lib/bookingLocalization";
-import { fetchAvailabilityWindow, getNextOpenSlots, type BlockedSlotsByDate, type AvailableSlot } from "@/lib/bookingAvailability";
+import { fetchAvailabilityWindow, getNextOpenSlots, type AvailabilityWindowResult, type AvailableSlot } from "@/lib/bookingAvailability";
 
 interface DoctorInfo {
   name: string;
@@ -268,7 +268,7 @@ function DoctorBookingContent() {
   const [availableDatesSet, setAvailableDatesSet] = useState<Set<string>>(new Set());
   const [nearestAvailableDate, setNearestAvailableDate] = useState<string | null>(null);
   const [nextAvailableSlots, setNextAvailableSlots] = useState<AvailableSlot[]>([]);
-  const [availabilityWindow, setAvailabilityWindow] = useState<{ startDate: string; endDate: string; blockedSlotsByDate: BlockedSlotsByDate } | null>(null);
+  const [availabilityWindow, setAvailabilityWindow] = useState<{ startDate: string; endDate: string; result: AvailabilityWindowResult } | null>(null);
   const [isLoadingDates, setIsLoadingDates] = useState(true);
   const [selectedTime, setSelectedTime] = useState("");
   const [notes, setNotes] = useState("");
@@ -422,7 +422,7 @@ function DoctorBookingContent() {
         try {
           const firstRange = getSwissDayRange(filteredDates[0]);
           const lastRange = getSwissDayRange(filteredDates[filteredDates.length - 1]);
-          const blockedSlotsByDate = await fetchAvailabilityWindow({
+          const availabilityResult = await fetchAvailabilityWindow({
             start: firstRange.start,
             end: lastRange.end,
             doctorName: doctor.name,
@@ -437,14 +437,21 @@ function DoctorBookingContent() {
 
           const slotsToShow = getNextOpenSlots({
             dates: filteredDates,
-            blockedSlotsByDate,
+            availabilityWindow: availabilityResult,
             generateTimeSlots: (date) => generateTimeSlots(doctorSlug, locationId, date, dbAvailability),
+            getDayAvailability: (date) => {
+              const day = getSwissDayOfWeek(parseLocalDate(date));
+              return dbAvailability
+                ? dbAvailability[day]
+                : (DOCTOR_AVAILABILITY[doctorSlug]?.[locationId]?.[day]
+                  ?? ALL_WEEK_SLOTS[day as keyof typeof ALL_WEEK_SLOTS]);
+            },
           });
 
           setAvailabilityWindow({
             startDate: filteredDates[0],
             endDate: filteredDates[filteredDates.length - 1],
-            blockedSlotsByDate,
+            result: availabilityResult,
           });
           setNextAvailableSlots(slotsToShow);
           if (slotsToShow.length > 0) {
@@ -512,10 +519,10 @@ function DoctorBookingContent() {
         !!availabilityWindow &&
         date >= availabilityWindow.startDate &&
         date <= availabilityWindow.endDate;
-      let blockedSlots = isDateInCachedWindow ? (availabilityWindow.blockedSlotsByDate[date] || []) : null;
-      if (!blockedSlots) {
+      let availabilityResult = isDateInCachedWindow ? availabilityWindow.result : null;
+      if (!availabilityResult) {
         const { start, end } = getSwissDayRange(date);
-        const blockedSlotsByDate = await fetchAvailabilityWindow({
+        availabilityResult = await fetchAvailabilityWindow({
           start,
           end,
           doctorName,
@@ -524,13 +531,24 @@ function DoctorBookingContent() {
           categorySlug,
           patientType: "new",
         });
-        blockedSlots = blockedSlotsByDate[date] || [];
       }
       if (requestSeq !== selectedDateRequestSeq.current) return;
+      const blockedSlots = availabilityResult.unavailableByDate[date] || [];
       setBookedSlots(blockedSlots);
-      
-      const currentSlots = generateTimeSlots(doctorSlug, locationId || "", date, dbAvailability);
-      const openSlots = currentSlots.filter(time => !blockedSlots.includes(time));
+      const openSlots = getNextOpenSlots({
+        dates: [date],
+        availabilityWindow: availabilityResult,
+        generateTimeSlots: (slotDate) => generateTimeSlots(doctorSlug, locationId || "", slotDate, dbAvailability),
+        getDayAvailability: (slotDate) => {
+          const day = getSwissDayOfWeek(parseLocalDate(slotDate));
+          return dbAvailability
+            ? dbAvailability[day]
+            : (DOCTOR_AVAILABILITY[doctorSlug]?.[locationId || ""]?.[day]
+              ?? ALL_WEEK_SLOTS[day as keyof typeof ALL_WEEK_SLOTS]);
+        },
+        limit: Number.MAX_SAFE_INTEGER,
+      }).map((slot) => slot.time);
+      setAvailableSlots(openSlots);
       if (forceRefresh) {
         setNextAvailableSlots((slots) =>
           slots.filter(

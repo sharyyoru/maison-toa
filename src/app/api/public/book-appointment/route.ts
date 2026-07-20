@@ -11,6 +11,7 @@ import {
 import { normalizePatientLanguage } from "@/lib/languagePreference";
 import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
 import { resolveBookingSecondaryCalendar } from "@/lib/bookingSecondaryCalendar";
+import { hasCapacityConflict, intervalOverlaps, type BookingInterval } from "@/lib/exactBookingAvailability";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -384,11 +385,29 @@ export async function POST(request: Request) {
     console.log(`[Booking] Found ${doctorAppointments.length} overlapping appointments for ${doctorName}`);
     console.log(`[Booking] Appointments:`, doctorAppointments.map(a => ({ id: a.id, provider_id: a.provider_id, reason: a.reason?.substring(0, 50) })));
 
-    // Only block if provider has reached maximum capacity
-    if (doctorAppointments.length >= maxCapacity) {
-      console.log(`[Booking] REJECTED: ${doctorAppointments.length} >= ${maxCapacity}`);
+    const doctorIntervals: BookingInterval[] = doctorAppointments.map((appointment) => ({
+      start: new Date(appointment.start_time),
+      end: new Date(appointment.end_time),
+      groupId: appointment.id,
+    }));
+    const blockingIntervals: BookingInterval[] = (existingAppointments || [])
+      .filter((appointment) => appointment.no_patient === true && (() => {
+        if (providerId && appointment.provider_id) return appointment.provider_id === providerId;
+        const match = appointment.reason?.match(/\[Doctor:\s*(.+?)\s*\]/i);
+        return !!(match && match[1].toLowerCase().includes(doctorNameClean.toLowerCase()));
+      })())
+      .map((appointment) => ({
+        start: new Date(appointment.start_time),
+        end: new Date(appointment.end_time),
+        groupId: appointment.id,
+      }));
+    const doctorAtCapacity = hasCapacityConflict(apptStart, apptEnd, doctorIntervals, maxCapacity);
+    const doctorBlocked = blockingIntervals.some((interval) => intervalOverlaps(apptStart, apptEnd, interval));
+
+    if (doctorAtCapacity || doctorBlocked) {
+      console.log(`[Booking] REJECTED: doctor calendar unavailable`);
       return NextResponse.json(
-        { error: `This time slot is fully booked (${doctorAppointments.length}/${maxCapacity}). Please choose another time.` },
+        { error: "This time slot is no longer available. Please choose another time." },
         { status: 409 }
       );
     }
@@ -444,16 +463,20 @@ export async function POST(request: Request) {
         if (machine) {
           const { data: machineAppts } = await supabase
             .from("appointments")
-            .select("id, appointment_group_id")
+            .select("id, appointment_group_id, start_time, end_time")
             .contains("machine_ids", [resolvedMachineId])
             .lt("start_time", apptEnd.toISOString())
             .gt("end_time", apptStart.toISOString())
             .not("status", "in", "(cancelled,no_show)");
 
           if (machineAppts) {
-            const uniqueUses = new Set(machineAppts.map((a) => a.appointment_group_id || a.id));
-            if (uniqueUses.size >= machine.max_concurrent) {
-              console.log(`[Booking] REJECTED: Machine ${machine.name} at capacity (${uniqueUses.size}/${machine.max_concurrent})`);
+            const machineIntervals: BookingInterval[] = machineAppts.map((appointment) => ({
+              start: new Date(appointment.start_time),
+              end: new Date(appointment.end_time),
+              groupId: appointment.appointment_group_id || appointment.id,
+            }));
+            if (hasCapacityConflict(apptStart, apptEnd, machineIntervals, machine.max_concurrent)) {
+              console.log(`[Booking] REJECTED: Machine ${machine.name} at capacity`);
               return NextResponse.json(
                 { error: `The ${machine.name} is not available at this time. Please choose another slot.` },
                 { status: 409 }
@@ -477,16 +500,20 @@ export async function POST(request: Request) {
           // Count overlapping appointments using this machine (dedup by group)
           const { data: machineAppts } = await supabase
             .from("appointments")
-            .select("id, appointment_group_id")
+            .select("id, appointment_group_id, start_time, end_time")
             .contains("machine_ids", [resolvedMachineId])
             .lt("start_time", apptEnd.toISOString())
             .gt("end_time", apptStart.toISOString())
             .not("status", "in", "(cancelled,no_show)");
 
           if (machineAppts) {
-            const uniqueUses = new Set(machineAppts.map((a) => a.appointment_group_id || a.id));
-            if (uniqueUses.size >= maxConcurrent) {
-              console.log(`[Booking] REJECTED: Machine ${machine?.name} at capacity (${uniqueUses.size}/${maxConcurrent})`);
+            const machineIntervals: BookingInterval[] = machineAppts.map((appointment) => ({
+              start: new Date(appointment.start_time),
+              end: new Date(appointment.end_time),
+              groupId: appointment.appointment_group_id || appointment.id,
+            }));
+            if (hasCapacityConflict(apptStart, apptEnd, machineIntervals, maxConcurrent)) {
+              console.log(`[Booking] REJECTED: Machine ${machine?.name} at capacity`);
               return NextResponse.json(
                 { error: `The ${machine?.name || "required machine"} is not available at this time. Please choose another slot.` },
                 { status: 409 }

@@ -9,6 +9,7 @@ import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, forma
 import { pushToDataLayer } from "@/components/GoogleTagManager";
 import { getBookingTrackingParams } from "@/lib/bookingTracking";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { fitsWithinDailyAvailability } from "@/lib/exactBookingAvailability";
 
 const DOCTORS: Record<string, {
   name: string;
@@ -377,15 +378,22 @@ function DoctorBookingContent() {
       } else {
         setBookedSlots([]);
       }
+
+      const day = getSwissDayOfWeek(parseLocalDate(date));
+      const dayAvailability = dbAvailability
+        ? dbAvailability[day]
+        : DOCTOR_AVAILABILITY[slug]?.[locationId]?.[day];
+      const exactSlots = (data.availableStarts || [])
+        .map((isoTime: string) => getSwissSlotString(new Date(isoTime)))
+        .filter((time: string) => dayAvailability && fitsWithinDailyAvailability(
+          time,
+          dayAvailability,
+          data.bookingWindow || { durationMinutes: 60, bufferBeforeMinutes: 0, bufferAfterMinutes: 0 },
+        ));
+      setAvailableSlots([...new Set<string>(exactSlots)].sort((a, b) => a.localeCompare(b)));
+      if (exactSlots.length > 0) setSelectedTime(exactSlots.sort((a: string, b: string) => a.localeCompare(b))[0]);
       
-      // Auto-select the first available slot that isn't booked
-      const currentSlots = generateTimeSlots(slug, locationId || "", date, dbAvailability);
-      const openSlots = currentSlots.filter(time => !blockedSlots.includes(time));
-      if (openSlots.length > 0) {
-        setSelectedTime(openSlots[0]);
-      } else {
-        setSelectedTime("");
-      }
+      if (exactSlots.length === 0) setSelectedTime("");
     } catch (err) {
       console.error("Error checking availability:", err);
     }
