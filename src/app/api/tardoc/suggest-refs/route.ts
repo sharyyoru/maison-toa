@@ -136,12 +136,17 @@ export async function POST(request: NextRequest) {
       // Step 2: walk priors most-recent-first, looking for `code` in each
       // prior's SearchAdditionalService list.
       let matched: { ref: string; base: string } | null = null;
-      for (let j = i - 1; j >= 0 && !matched; j--) {
-        const prior = codes[j];
-        if (!prior || prior === code) continue;
-        const map = await getAdditionalsFor(prior);
+      const candidateIndexes = [
+        ...Array.from({ length: i }, (_, index) => i - index - 1),
+        ...Array.from({ length: codes.length - i - 1 }, (_, index) => i + index + 1),
+      ];
+      for (const candidateIndex of candidateIndexes) {
+        if (matched) break;
+        const candidate = codes[candidateIndex];
+        if (!candidate || candidate === code) continue;
+        const map = await getAdditionalsFor(candidate);
         if (map.has(code)) {
-          matched = { ref: map.get(code) || prior, base: prior };
+          matched = { ref: map.get(code) || candidate, base: candidate };
         }
       }
       if (matched) {

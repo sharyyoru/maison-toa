@@ -866,6 +866,57 @@ export default function InvoicesPage() {
     }
   }
 
+  async function handleBulkSendDueReminders() {
+    const rows = Array.from(selected)
+      .map(id => invoices.find(row => row.id === id))
+      .filter((row): row is InvoiceRow => Boolean(row));
+    const ready = rows.flatMap(row => {
+      const level = nextReminderLevel(row);
+      const eligible = !row.is_complimentary && row.status !== "PAID" && row.status !== "CANCELLED" && Boolean(patientEmail(row.patient_id));
+      return level && eligible ? [{ row, level }] : [];
+    });
+
+    if (ready.length === 0) {
+      alert("None of the selected invoices have a due reminder and a patient email address.");
+      return;
+    }
+
+    const skipped = rows.length - ready.length;
+    if (!confirm(`Send the next due reminder by email for ${ready.length} invoice(s)?${skipped > 0 ? ` ${skipped} selected invoice(s) will be skipped because they are not due, are paid/cancelled/complimentary, or have no patient email.` : ""}`)) return;
+
+    setBulkAction("reminder");
+    let sent = 0;
+    const failures: string[] = [];
+
+    for (const { row, level } of ready) {
+      try {
+        const pdfResponse = await fetch("/api/invoices/generate-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ invoiceId: row.id, invoiceType: "reminder", reminderLevel: level }),
+        });
+        if (!pdfResponse.ok) throw new Error("PDF generation failed");
+
+        const emailResponse = await fetch("/api/invoices/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ invoiceId: row.id, recipientEmail: patientEmail(row.patient_id), documentType: "reminder" }),
+        });
+        if (!emailResponse.ok) throw new Error("Email delivery failed");
+
+        await markReminderSent(row, level);
+        sent++;
+      } catch (error) {
+        console.error(`Bulk reminder failed for ${row.invoice_number}:`, error);
+        failures.push(row.invoice_number);
+      }
+    }
+
+    setBulkAction(null);
+    setSelected(new Set());
+    alert(`Sent ${sent} reminder(s).${skipped > 0 ? ` Skipped ${skipped}.` : ""}${failures.length > 0 ? ` Failed: ${failures.join(", ")}.` : ""}`);
+  }
+
   function handleReminderMediadata(row: InvoiceRow, level: 1 | 2 | 3) {
     setReminderPopupRow(null);
     setInsuranceTarget(row);
@@ -1181,6 +1232,12 @@ export default function InvoicesPage() {
       </div>
 
       {/* Bulk action bar */}
+      {selected.size === 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-[11px] text-amber-800">
+          <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          Select invoice(s) with the checkboxes to enable <span className="font-semibold">Bulk Send Due Reminders</span> and other bulk actions.
+        </div>
+      )}
       {selected.size > 0 && (
         <div className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-xs">
           <span className="font-semibold text-sky-800">{selected.size} selected</span>
@@ -1192,6 +1249,10 @@ export default function InvoicesPage() {
           <button type="button" onClick={handleBulkSendEmail} disabled={!!bulkAction} className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition-colors">
             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
             {bulkAction === "email" ? "Sending..." : "Bulk Send Email"}
+          </button>
+          <button type="button" onClick={handleBulkSendDueReminders} disabled={!!bulkAction} className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 transition-colors" title="Email the next due reminder for each eligible selected invoice">
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            {bulkAction === "reminder" ? "Sending reminders..." : "Bulk Send Due Reminders"}
           </button>
           <div className="h-4 w-px bg-sky-200" />
           <button type="button" onClick={handleBulkInsuranceOpen} disabled={!!bulkAction || bulkInsSending} className="inline-flex items-center gap-1 rounded-md border border-teal-200 bg-white px-2.5 py-1 text-[10px] font-medium text-teal-700 hover:bg-teal-50 disabled:opacity-50 transition-colors">

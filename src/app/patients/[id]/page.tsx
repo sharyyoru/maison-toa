@@ -100,6 +100,7 @@ async function hasSocialPhotoConsent(patientId: string): Promise<boolean> {
 }
 
 type InvoiceStatus = "OPEN" | "PAID" | "CANCELLED" | "OVERPAID" | "PARTIAL_LOSS" | "PARTIAL_PAID";
+type InvoiceListFilter = "all" | InvoiceStatus | "complimentary";
 
 type InvoiceSummary = {
   totalAmount: number;
@@ -347,6 +348,28 @@ export default async function PatientPage({
   }
 
   const patientFileName = formatPatientFileName(patient.first_name, patient.last_name);
+  const rawInvoiceStatusFilter = (() => {
+    const value = resolvedSearchParams?.invoice_status;
+    if (typeof value === "string") return value;
+    if (Array.isArray(value) && value.length > 0) return value[0];
+    return undefined;
+  })();
+  const invoiceStatusFilter: InvoiceListFilter =
+    rawInvoiceStatusFilter === "OPEN" ||
+    rawInvoiceStatusFilter === "PAID" ||
+    rawInvoiceStatusFilter === "CANCELLED" ||
+    rawInvoiceStatusFilter === "OVERPAID" ||
+    rawInvoiceStatusFilter === "PARTIAL_LOSS" ||
+    rawInvoiceStatusFilter === "PARTIAL_PAID" ||
+    rawInvoiceStatusFilter === "complimentary"
+      ? rawInvoiceStatusFilter
+      : "all";
+  const invoiceFilterHref = (filter: InvoiceListFilter) => {
+    const params = new URLSearchParams({ m_tab: "invoice" });
+    if (paymentMethodFilter) params.set("payment_method", paymentMethodFilter);
+    if (filter !== "all") params.set("invoice_status", filter);
+    return `/patients/${patient.id}?${params.toString()}`;
+  };
 
   return (
     <div className="space-y-6">
@@ -630,89 +653,49 @@ export default async function PatientPage({
               </div>
 
               <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-                <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
-                  <p className="text-[11px] font-medium text-slate-500">
-                    {tPatient("invoice.totalAmount")}
-                  </p>
-                  <p className="mt-1 text-base font-semibold text-slate-900">
-                    {invoiceSummary.totalAmount.toFixed(2)} CHF
-                  </p>
-                </div>
-                <div className="rounded-lg border border-emerald-100 bg-emerald-50/80 p-3">
+                <Link href={invoiceFilterHref("all")} className={`rounded-lg border border-slate-100 bg-slate-50/80 p-3 transition hover:border-slate-300 hover:shadow-sm ${invoiceStatusFilter === "all" ? "ring-2 ring-sky-400" : ""}`}>
+                  <p className="text-[11px] font-medium text-slate-500">{tPatient("invoice.totalAmount")}</p>
+                  <p className="mt-1 text-base font-semibold text-slate-900">{invoiceSummary.totalAmount.toFixed(2)} CHF</p>
+                </Link>
+                <Link href={invoiceFilterHref("PAID")} className={`rounded-lg border border-emerald-100 bg-emerald-50/80 p-3 transition hover:border-emerald-300 hover:shadow-sm ${invoiceStatusFilter === "PAID" ? "ring-2 ring-emerald-400" : ""}`}>
                   <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-medium text-emerald-600">
-                      {tPatient("invoice.totalPaid")}
-                    </p>
-                    {invoiceSummary.countByStatus.PAID > 0 && (
-                      <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">
-                        {invoiceSummary.countByStatus.PAID}
-                      </span>
-                    )}
+                    <p className="text-[11px] font-medium text-emerald-600">{tPatient("invoice.totalPaid")}</p>
+                    {invoiceSummary.countByStatus.PAID > 0 && <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">{invoiceSummary.countByStatus.PAID}</span>}
                   </div>
-                  <p className="mt-1 text-base font-semibold text-emerald-700">
-                    {invoiceSummary.totalPaid.toFixed(2)} CHF
-                  </p>
-                </div>
-                <div className="rounded-lg border border-red-100 bg-red-50/80 p-3">
+                  <p className="mt-1 text-base font-semibold text-emerald-700">{invoiceSummary.totalPaid.toFixed(2)} CHF</p>
+                </Link>
+                <Link href={invoiceFilterHref("OPEN")} className={`rounded-lg border border-red-100 bg-red-50/80 p-3 transition hover:border-red-300 hover:shadow-sm ${invoiceStatusFilter === "OPEN" ? "ring-2 ring-red-400" : ""}`}>
                   <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-medium text-red-600">
-                      {tPatient("invoice.totalUnpaid")}
-                    </p>
-                    {invoiceSummary.countByStatus.OPEN > 0 && (
-                      <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-semibold text-red-700">
-                        {invoiceSummary.countByStatus.OPEN}
-                      </span>
-                    )}
+                    <p className="text-[11px] font-medium text-red-600">{tPatient("invoice.totalUnpaid")}</p>
+                    {invoiceSummary.countByStatus.OPEN > 0 && <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-semibold text-red-700">{invoiceSummary.countByStatus.OPEN}</span>}
                   </div>
-                  <p className="mt-1 text-base font-semibold text-red-700">
-                    {invoiceSummary.totalUnpaid.toFixed(2)} CHF
-                  </p>
-                </div>
-                <div className="rounded-lg border border-amber-100 bg-amber-50/80 p-3">
+                  <p className="mt-1 text-base font-semibold text-red-700">{invoiceSummary.totalUnpaid.toFixed(2)} CHF</p>
+                </Link>
+                <Link href={invoiceFilterHref("PARTIAL_PAID")} className={`rounded-lg border border-amber-100 bg-amber-50/80 p-3 transition hover:border-amber-300 hover:shadow-sm ${invoiceStatusFilter === "PARTIAL_PAID" ? "ring-2 ring-amber-400" : ""}`}>
                   <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-medium text-amber-600">
-                      {tPatient("invoice.partialPaid")}
-                    </p>
-                    {invoiceSummary.countByStatus.PARTIAL_PAID > 0 && (
-                      <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">
-                        {invoiceSummary.countByStatus.PARTIAL_PAID}
-                      </span>
-                    )}
+                    <p className="text-[11px] font-medium text-amber-600">{tPatient("invoice.partialPaid")}</p>
+                    {invoiceSummary.countByStatus.PARTIAL_PAID > 0 && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">{invoiceSummary.countByStatus.PARTIAL_PAID}</span>}
                   </div>
-                  <p className="mt-1 text-base font-semibold text-amber-700">
-                    {invoiceSummary.totalPartialPaid.toFixed(2)} CHF
-                  </p>
-                </div>
-                <div className="rounded-lg border border-orange-100 bg-orange-50/80 p-3">
+                  <p className="mt-1 text-base font-semibold text-amber-700">{invoiceSummary.totalPartialPaid.toFixed(2)} CHF</p>
+                </Link>
+                <Link href={invoiceFilterHref("PARTIAL_LOSS")} className={`rounded-lg border border-orange-100 bg-orange-50/80 p-3 transition hover:border-orange-300 hover:shadow-sm ${invoiceStatusFilter === "PARTIAL_LOSS" ? "ring-2 ring-orange-400" : ""}`}>
                   <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-medium text-orange-600">
-                      {tPatient("invoice.partialLoss")}
-                    </p>
-                    {invoiceSummary.countByStatus.PARTIAL_LOSS > 0 && (
-                      <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-semibold text-orange-700">
-                        {invoiceSummary.countByStatus.PARTIAL_LOSS}
-                      </span>
-                    )}
+                    <p className="text-[11px] font-medium text-orange-600">{tPatient("invoice.partialLoss")}</p>
+                    {invoiceSummary.countByStatus.PARTIAL_LOSS > 0 && <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-semibold text-orange-700">{invoiceSummary.countByStatus.PARTIAL_LOSS}</span>}
                   </div>
-                  <p className="mt-1 text-base font-semibold text-orange-700">
-                    {invoiceSummary.totalPartialLoss.toFixed(2)} CHF
-                  </p>
-                </div>
-                <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
-                  <p className="text-[11px] font-medium text-slate-500">
-                    {tPatient("invoice.complimentary")}
-                  </p>
-                  <p className="mt-1 text-base font-semibold text-slate-900">
-                    {invoiceSummary.totalComplimentary.toFixed(2)} CHF
-                  </p>
-                </div>
+                  <p className="mt-1 text-base font-semibold text-orange-700">{invoiceSummary.totalPartialLoss.toFixed(2)} CHF</p>
+                </Link>
+                <Link href={invoiceFilterHref("complimentary")} className={`rounded-lg border border-slate-100 bg-slate-50/80 p-3 transition hover:border-slate-300 hover:shadow-sm ${invoiceStatusFilter === "complimentary" ? "ring-2 ring-slate-400" : ""}`}>
+                  <p className="text-[11px] font-medium text-slate-500">{tPatient("invoice.complimentary")}</p>
+                  <p className="mt-1 text-base font-semibold text-slate-900">{invoiceSummary.totalComplimentary.toFixed(2)} CHF</p>
+                </Link>
               </div>
             </div>
 
             <div className="flex justify-end mb-2">
             </div>
 
-            <MedicalConsultationsCard patientId={patient.id} recordTypeFilter="invoice" patientFirstName={patient.first_name} patientLastName={patient.last_name} patientEmail={(patient as any).email ?? null} />
+            <MedicalConsultationsCard patientId={patient.id} recordTypeFilter="invoice" invoiceStatusFilter={invoiceStatusFilter} patientFirstName={patient.first_name} patientLastName={patient.last_name} patientEmail={(patient as any).email ?? null} />
           </>
         ) : null}
 

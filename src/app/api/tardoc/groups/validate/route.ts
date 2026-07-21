@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import {
   validateServices,
-  searchByCode,
   type ValidationServiceInput,
 } from "@/lib/sumexTardoc";
+import { autofillGroupRefs } from "@/lib/groupRefAutofill";
 import { CANTON_TAX_POINT_VALUES, type SwissCanton } from "@/lib/tardoc";
 
 export const runtime = "nodejs";
@@ -46,6 +46,8 @@ export async function POST(request: NextRequest) {
       tp_tt: number;
       external_factor_mt: number;
       external_factor_tt: number;
+      tariff_type?: string;
+      sort_order: number;
     }>;
     let canton: string;
     let lawType: string;
@@ -73,7 +75,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "No items in group" }, { status: 400 });
       }
 
-      items = dbItems.map((i: any) => ({
+      items = dbItems.map((i: any, index: number) => ({
         tardoc_code: i.tardoc_code,
         quantity: i.quantity ?? 1,
         ref_code: i.ref_code || undefined,
@@ -83,12 +85,13 @@ export async function POST(request: NextRequest) {
         external_factor_mt: i.external_factor_mt ?? 1,
         external_factor_tt: i.external_factor_tt ?? 1,
         tariff_type: i.tariff_type ?? "007",
+        sort_order: index,
       }));
       canton = group.canton || "VD";
       lawType = group.law_type || "KVG";
       tpvOverride = group.tax_point_value != null ? Number(group.tax_point_value) : null;
     } else if (adHocItems && adHocItems.length > 0) {
-      items = adHocItems.map((i) => ({
+      items = adHocItems.map((i, index) => ({
         tardoc_code: i.tardoc_code,
         quantity: i.quantity ?? 1,
         ref_code: i.ref_code || undefined,
@@ -97,6 +100,7 @@ export async function POST(request: NextRequest) {
         tp_tt: i.tp_tt ?? 0,
         external_factor_mt: i.external_factor_mt ?? 1,
         external_factor_tt: i.external_factor_tt ?? 1,
+        sort_order: index,
       }));
       canton = adHocCanton || "VD";
       lawType = adHocLaw || "KVG";
@@ -124,8 +128,7 @@ export async function POST(request: NextRequest) {
         (i as any).tariff_type !== "402" &&
         !i.tardoc_code.startsWith("mat:") &&
         !i.tardoc_code.startsWith("acf:") &&
-        !i.tardoc_code.startsWith("tma:") &&
-        !i.tardoc_code.startsWith("AR."),
+        !i.tardoc_code.startsWith("tma:"),
       );
 
     if (validateableItems.length === 0) {
@@ -143,19 +146,18 @@ export async function POST(request: NextRequest) {
 
     // Auto-resolve ref_code from catalog masterCode when ref_code is empty.
     // This prevents 422 errors when slave/detail codes are submitted without their master.
-    const resolvedItems = await Promise.all(
-      validateableItems.map(async (item) => {
-        if (item.ref_code) return item; // already set — don't override
-        try {
-          const { services } = await searchByCode(item.tardoc_code, false);
-          const record = services[0];
-          if (record?.masterCode) {
-            return { ...item, ref_code: record.masterCode };
-          }
-        } catch { /* non-fatal: proceed without ref_code */ }
-        return item;
-      }),
+    const autofill = await autofillGroupRefs(
+      validateableItems.map((item) => ({
+        tardoc_code: item.tardoc_code,
+        ref_code: item.ref_code || null,
+        sort_order: item.sort_order,
+      })),
     );
+    const refsByOrder = new Map(autofill.items.map((item) => [item.sort_order, item.ref_code]));
+    const resolvedItems = validateableItems.map((item) => ({
+      ...item,
+      ref_code: refsByOrder.get(item.sort_order) || item.ref_code,
+    }));
 
     // Sort so master codes precede their slaves in the Sumex IValidate session.
     // Items without a ref_code (masters) sort before items whose ref_code matches a code already in the list.

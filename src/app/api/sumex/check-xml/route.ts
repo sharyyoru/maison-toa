@@ -22,6 +22,7 @@ const FALLBACK_QR_IBAN = null;
 
 // MediData intermediate (clearing house) GLN — required in XML transport <via>
 const MEDIDATA_INTERMEDIATE_GLN = "7601001304307";
+const TG_NO_TRANSMISSION_GLN = "2000000000008";
 
 
 /** Strip spaces from IBAN and check it looks like a valid Swiss IBAN (CH + 19 digits) */
@@ -44,11 +45,16 @@ function sanitizeIban(raw: string | null | undefined): string | null {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const insurerWasProvided = Object.prototype.hasOwnProperty.call(body, "insurerGln");
     const {
       invoiceId,
       // Legacy compat: also accept consultationId as alias
       consultationId,
       patientId: bodyPatientId,
+      billingType: bodyBillingType,
+      insurerGln: bodyInsurerGln,
+      insurerName: bodyInsurerName,
+      insurerAddress: bodyInsurerAddress,
       skipValidation = false,
     } = body;
 
@@ -185,6 +191,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const billingType = bodyBillingType || invoice.billing_type || "TG";
+    if (billingType === "TG" && insurerWasProvided) {
+      insurerGln = typeof bodyInsurerGln === "string" ? bodyInsurerGln.trim() : "";
+      insurerName = insurerGln && typeof bodyInsurerName === "string" ? bodyInsurerName : "";
+      insurerStreet = insurerGln && typeof bodyInsurerAddress?.street === "string" ? bodyInsurerAddress.street : "";
+      insurerZip = insurerGln && typeof bodyInsurerAddress?.zip === "string" ? bodyInsurerAddress.zip : "";
+      insurerCity = insurerGln && typeof bodyInsurerAddress?.city === "string" ? bodyInsurerAddress.city : "";
+      receiverGln = insurerGln;
+    }
+
     // ── Resolve provider fields with fallbacks ──
     // GLN must be exactly 13 digits
     const pickValidGln = (...candidates: (string | null | undefined)[]) => {
@@ -288,7 +304,7 @@ export async function POST(request: NextRequest) {
       placeType: PlaceType.Practice,
       requestType: RequestType.Invoice,
       requestSubtype: RequestSubtype.Normal,
-      tiersMode: mapSumexTiers(invoice.billing_type || "TG"),
+      tiersMode: mapSumexTiers(billingType),
       vatNumber: billingEntity?.vatuid || "",
       invoiceId: invoice.invoice_number || `INV-${resolvedInvoiceId.slice(0, 8)}`,
       invoiceDate: invoice.invoice_date || new Date().toISOString().split("T")[0],
@@ -365,7 +381,7 @@ export async function POST(request: NextRequest) {
           phone: patient.phone || "",
         };
       })(),
-      printCopyToGuarantor: mapSumexTiers(invoice.billing_type || "TG") === 1 ? YesNo.Yes : undefined,
+      printCopyToGuarantor: mapSumexTiers(billingType) === 1 ? YesNo.Yes : undefined,
       treatmentCanton: invoice.treatment_canton || provCanton,
       treatmentDateBegin: treatmentDate,
       treatmentDateEnd: invoice.treatment_date_end?.split("T")[0] || treatmentDate,
@@ -376,7 +392,7 @@ export async function POST(request: NextRequest) {
       softwareId: 0,
       transportFrom: senderGln || provGln,
       transportViaGln: MEDIDATA_INTERMEDIATE_GLN,
-      transportTo: receiverGln || insurerGln || provGln,
+      transportTo: billingType === "TG" ? TG_NO_TRANSMISSION_GLN : receiverGln || insurerGln || provGln,
       qualDignities:
         (staffEntity?.qual_dignities && (staffEntity.qual_dignities as string[]).length > 0)
           ? staffEntity.qual_dignities as string[]

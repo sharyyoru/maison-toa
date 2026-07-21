@@ -242,14 +242,16 @@ export async function autofillGroupRefs(
     }
     // Walk earlier TARDOC items most-recent-first
     let matched: { ref: string; base: string } | null = null;
-    for (let j = i - 1; j >= 0 && !matched; j--) {
-      const prior = items[j];
-      if (prior === item) continue;
-      const priorBare = bareCode(prior.tardoc_code);
-      if (priorBare.type !== "tardoc") continue;
-      if (priorBare.code === code) continue;
-      const map = await getTardocAdditionals(priorBare.code);
-      if (map.has(code)) matched = { ref: map.get(code) || priorBare.code, base: priorBare.code };
+    const candidateIndexes = [
+      ...Array.from({ length: i }, (_, index) => i - index - 1),
+      ...Array.from({ length: items.length - i - 1 }, (_, index) => i + index + 1),
+    ];
+    for (const candidateIndex of candidateIndexes) {
+      if (matched) break;
+      const candidateBare = bareCode(items[candidateIndex].tardoc_code);
+      if (candidateBare.type !== "tardoc" || candidateBare.code === code) continue;
+      const map = await getTardocAdditionals(candidateBare.code);
+      if (map.has(code)) matched = { ref: map.get(code) || candidateBare.code, base: candidateBare.code };
     }
     if (matched) {
       out.push({

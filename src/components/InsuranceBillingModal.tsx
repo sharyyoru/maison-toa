@@ -10,6 +10,7 @@ import {
   type MediDataInvoiceStatus,
 } from "@/lib/medidata";
 import MedidataInsurerSearch, { type MedidataParticipant } from "@/components/MedidataInsurerSearch";
+import Icd10CodeInput from "@/components/Icd10CodeInput";
 
 type LineItem = {
   id: string;
@@ -394,8 +395,8 @@ export default function InsuranceBillingModal({
   };
 
   const handleSubmit = async () => {
-    if (!selectedInsurerGln) {
-      setError("Please select an insurance company");
+    if (billingType === "TP" && !selectedInsurerGln) {
+      setError("Please select an insurance company for Tiers Payant billing");
       return;
     }
 
@@ -761,7 +762,10 @@ export default function InsuranceBillingModal({
 
             {/* Insurance Selection */}
             <div className="rounded-xl border border-slate-200 p-4">
-              <h3 className="mb-3 text-xs font-medium text-slate-700">Insurance Details</h3>
+              <h3 className="mb-3 text-xs font-medium text-slate-700">Insurance Details {billingType === "TP" ? <span className="text-red-600">(required)</span> : <span className="font-normal text-slate-400">(optional for Tiers Garant)</span>}</h3>
+              {billingType === "TG" && (
+                <p className="mb-3 text-[11px] text-slate-500">For Tiers Garant, this invoice is sent to the patient through MediData. Leave the insurer field empty to omit insurance details from the submission.</p>
+              )}
               <div className="space-y-3">
                 {/* Multiple insurances selector */}
                 {patientInsurances.length > 1 && (
@@ -961,12 +965,12 @@ export default function InsuranceBillingModal({
                 ICD-10 Diagnosis Codes (optional)
               </label>
               <div className="flex gap-2">
-                <input
-                  type="text"
+                <Icd10CodeInput
+                  id="insurance-diagnosis-code"
                   value={diagnosisInput}
-                  onChange={(e) => setDiagnosisInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddDiagnosis()}
-                  placeholder="e.g., L70.0"
+                  onChange={setDiagnosisInput}
+                  onAdd={handleAddDiagnosis}
+                  placeholder="Search a diagnosis or enter an ICD-10 code"
                   className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                 />
                 <button

@@ -81,6 +81,7 @@ const TG_NO_TRANSMISSION_GLN = "2000000000008";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const insurerWasProvided = Object.prototype.hasOwnProperty.call(body, "insurerGln");
     const {
       invoiceId,
       consultationId, // legacy fallback
@@ -473,9 +474,20 @@ export async function POST(request: NextRequest) {
     // Calculate totals
     const subtotal = services.reduce((sum, s) => sum + s.total, 0);
     const total = invoiceRecord?.total_amount || consultationData?.invoice_total_amount || subtotal;
-    const resolvedInsurerGln = insurerGln || invoiceRecord?.insurance_gln || insuranceData?.gln || '7601003000016';
+    const isTiersGarant = billingType === "TG";
+    const submittedInsurerGln = insurerGln?.trim() || "";
+    const storedInsurerGln = invoiceRecord?.insurance_gln || insuranceData?.gln || "";
+    const resolvedInsurerGln = isTiersGarant && insurerWasProvided
+      ? submittedInsurerGln
+      : submittedInsurerGln || storedInsurerGln;
+    if (!isTiersGarant && !resolvedInsurerGln) {
+      return NextResponse.json(
+        { error: "An insurance company is required for Tiers Payant billing" },
+        { status: 400 },
+      );
+    }
     const resolvedReceiverGln = swissInsurer?.receiver_gln || resolvedInsurerGln;
-    const resolvedInsurerName = insurerName || invoiceRecord?.insurance_name || insuranceData?.provider_name || 'Unknown Insurer';
+    const resolvedInsurerName = insurerName || invoiceRecord?.insurance_name || insuranceData?.provider_name || "";
 
     // Build Sumex1 input — Sumex1 server is the ONLY XML generation path
     const sumexServices: SumexServiceInput[] = services.map(s => {
@@ -614,9 +626,9 @@ export async function POST(request: NextRequest) {
       insuranceGln: resolvedInsurerGln,
       insuranceAddress: resolvedInsurerGln ? {
         companyName: swissInsurer?.name || resolvedInsurerName,
-        street: swissInsurer?.address_street || "N/A",
-        zip: swissInsurer?.address_postal_code || "0000",
-        city: swissInsurer?.address_city || "N/A",
+        street: swissInsurer?.address_street || bodyInsurerAddress?.street || "N/A",
+        zip: swissInsurer?.address_postal_code || bodyInsurerAddress?.zip || "0000",
+        city: swissInsurer?.address_city || bodyInsurerAddress?.city || "N/A",
         stateCode: swissInsurer?.address_canton || canton,
       } : undefined,
       patientSex: mapSumexSex(patientData.gender || "male"),
@@ -790,7 +802,7 @@ export async function POST(request: NextRequest) {
       .insert({
         invoice_id: resolvedInvoiceId,
         patient_id: patientData.id,
-        insurer_id: insuranceData?.insurer_id || null,
+        insurer_id: resolvedInsurerGln ? insuranceData?.insurer_id || null : null,
         invoice_number: invoiceNumber,
         invoice_date: invoiceDate,
         invoice_amount: total,
@@ -811,6 +823,11 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await supabaseAdmin
+      .from("invoices")
+      .update({ medidata_submission_id: submission.id })
+      .eq("id", resolvedInvoiceId);
 
     // Record initial status in history
     await supabaseAdmin.from("medidata_submission_history").insert({
@@ -938,6 +955,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      submissionId: submission.id,
       submission: {
         id: submission.id,
         invoiceNumber,

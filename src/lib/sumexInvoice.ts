@@ -1366,11 +1366,13 @@ export async function buildInvoiceRequest(
                 const isValidRef = existingRef && !existingRef.startsWith("AA.") && allNonSurchargeByCode[existingRef];
                 if (!isValidRef) {
                   // Find companion treatment in full tardocServices list
+                  const companionPrefixes = code === "AR.00.0030"
+                    ? ["MK."]
+                    : ["MK.", "TK.", "RG.", "SK.", "KK."];
                   const companion = tardocServices.find(s =>
                     !isSurcharge(s) &&
                     s.code &&
-                    !s.code.startsWith("AR.") &&
-                    !s.code.startsWith("AA.") &&
+                    companionPrefixes.some(prefix => s.code!.startsWith(prefix)) &&
                     s !== base
                   );
                   base.referenceCode = companion?.code || "";

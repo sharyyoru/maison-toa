@@ -27,6 +27,7 @@ import {
   type SwissCanton,
 } from "@/lib/tardoc";
 import InsuranceBillingModal from "@/components/InsuranceBillingModal";
+import Icd10CodeInput from "@/components/Icd10CodeInput";
 import InvoiceStatusBadge from "@/components/InvoiceStatusBadge";
 import { useInsuranceSubmissionNotifications } from "@/components/InsuranceSubmissionNotificationsContext";
 import TardocAccordionTree from "@/components/TardocAccordionTree";
@@ -1587,12 +1588,14 @@ function CollaborativeUnlockedNoteEditor({
 export default function MedicalConsultationsCard({
   patientId,
   recordTypeFilter,
+  invoiceStatusFilter,
   patientFirstName,
   patientLastName,
   patientEmail,
 }: {
   patientId: string;
   recordTypeFilter?: ConsultationRecordType;
+  invoiceStatusFilter?: "all" | InvoiceStatus | "complimentary";
   patientFirstName?: string;
   patientLastName?: string;
   patientEmail?: string | null;
@@ -1711,6 +1714,13 @@ export default function MedicalConsultationsCard({
   const [invoiceNotes, setInvoiceNotes] = useState("");
   const [invoiceDiagnosisCodes, setInvoiceDiagnosisCodes] = useState<string[]>([]);
   const [invoiceDiagnosisInput, setInvoiceDiagnosisInput] = useState("");
+  const addInvoiceDiagnosisCode = () => {
+    const code = invoiceDiagnosisInput.trim().toUpperCase();
+    if (code && !invoiceDiagnosisCodes.includes(code)) {
+      setInvoiceDiagnosisCodes([...invoiceDiagnosisCodes, code]);
+    }
+    setInvoiceDiagnosisInput("");
+  };
   const [tardocSearchQuery, setTardocSearchQuery] = useState("");
   const [tardocSearchResults, setTardocSearchResults] = useState<any[]>([]);
   const [tardocSearchLoading, setTardocSearchLoading] = useState(false);
@@ -2399,6 +2409,15 @@ export default function MedicalConsultationsCard({
         if (row.record_type === "invoice") return false;
       }
 
+      if (recordTypeFilter === "invoice" && invoiceStatusFilter && invoiceStatusFilter !== "all") {
+        if (invoiceStatusFilter === "complimentary") {
+          if (!row.invoice_is_complimentary) return false;
+        } else {
+          const status = row.invoice_status || (row.invoice_is_paid ? "PAID" : "OPEN");
+          if (status !== invoiceStatusFilter) return false;
+        }
+      }
+
       if (fromDate && scheduled < fromDate) return false;
       if (toDate) {
         const toInclusive = new Date(toDate);
@@ -2412,7 +2431,7 @@ export default function MedicalConsultationsCard({
     return filtered
       .slice()
       .sort((a, b) => compareConsultationRows(a, b, sortOrder));
-  }, [consultations, dateFrom, dateTo, sortOrder, recordTypeFilter]);
+  }, [consultations, dateFrom, dateTo, sortOrder, recordTypeFilter, invoiceStatusFilter]);
 
   const unlockedDraftConsultations = useMemo(
     () =>
@@ -6347,9 +6366,13 @@ export default function MedicalConsultationsCard({
                   type="button"
                   onClick={async () => {
                     if (consultationSaving) return;
+                    if (recordTypeFilter === "invoice") {
+                      openOtherRecordForm();
+                      return;
+                    }
                     await createCollaborativeConsultationNote();
                   }}
-                  title="Create consultation note"
+                  title={recordTypeFilter === "invoice" ? "Create invoice" : "Create consultation note"}
                   className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sky-700 shadow-sm hover:bg-sky-100 hover:text-sky-800"
                 >
                   <svg
@@ -8837,20 +8860,12 @@ export default function MedicalConsultationsCard({
                         )}
                       </label>
                       <div className="flex gap-2">
-                        <input
-                          type="text"
+                        <Icd10CodeInput
+                          id="patient-invoice-diagnosis-code"
                           value={invoiceDiagnosisInput}
-                          onChange={(e) => setInvoiceDiagnosisInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key !== "Enter") return;
-                            e.preventDefault();
-                            const code = invoiceDiagnosisInput.trim().toUpperCase();
-                            if (code && !invoiceDiagnosisCodes.includes(code)) {
-                              setInvoiceDiagnosisCodes([...invoiceDiagnosisCodes, code]);
-                            }
-                            setInvoiceDiagnosisInput("");
-                          }}
-                          placeholder={isInsuranceInvoice ? "ex. Z00.0 puis Entrée (requis)" : "ex. L91.0 puis Entrée"}
+                          onChange={setInvoiceDiagnosisInput}
+                          onAdd={addInvoiceDiagnosisCode}
+                          placeholder={isInsuranceInvoice ? "Rechercher un diagnostic ou saisir un code ICD-10" : "Rechercher un diagnostic ou saisir un code ICD-10"}
                           className={`flex-1 rounded-lg border px-2 py-1.5 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-1 ${
                             isInsuranceInvoice && invoiceDiagnosisCodes.length === 0
                               ? "border-red-300 bg-red-50/30 focus:border-red-400 focus:ring-red-300"
@@ -8859,13 +8874,7 @@ export default function MedicalConsultationsCard({
                         />
                         <button
                           type="button"
-                          onClick={() => {
-                            const code = invoiceDiagnosisInput.trim().toUpperCase();
-                            if (code && !invoiceDiagnosisCodes.includes(code)) {
-                              setInvoiceDiagnosisCodes([...invoiceDiagnosisCodes, code]);
-                            }
-                            setInvoiceDiagnosisInput("");
-                          }}
+                          onClick={addInvoiceDiagnosisCode}
                           className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-200"
                         >
                           Ajouter
