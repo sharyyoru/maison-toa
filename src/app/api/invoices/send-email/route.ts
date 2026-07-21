@@ -85,26 +85,26 @@ export async function POST(request: NextRequest) {
     const isReceipt = documentType === "receipt" || isPaid;
     let subject = `Invoice ${invoice.invoice_number} — ${providerName}`;
     if (isReceipt) subject = `Receipt ${invoice.invoice_number} — ${providerName}`;
-    else if (isReminder) subject = `Payment Reminder — Invoice ${invoice.invoice_number} — ${providerName}`;
+    else if (isReminder) subject = `Rappel de paiement — Facture ${invoice.invoice_number} — ${providerName}`;
     else if (isPartial) subject = `Invoice ${invoice.invoice_number} (Partial Payment) — ${providerName}`;
 
-    const docLabel = isReceipt ? "Payment Receipt" : isReminder ? "Payment Reminder" : "Invoice";
+    const docLabel = isReceipt ? "Payment Receipt" : isReminder ? "Rappel de paiement" : "Invoice";
     const bodyHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2 style="color: #1e293b; font-size: 18px; margin-bottom: 16px;">${docLabel} ${invoice.invoice_number}</h2>
-        <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear ${patientName},</p>
+        <p style="color: #475569; font-size: 14px; line-height: 1.6;">${isReminder ? "Bonjour Madame / Monsieur" : `Dear ${patientName}`},</p>
         <p style="color: #475569; font-size: 14px; line-height: 1.6;">
           ${isReceipt
             ? `Please find attached the receipt for your fully paid invoice of <strong>CHF ${totalAmt.toFixed(2)}</strong>.`
             : isReminder
-              ? `Please find attached a payment reminder for invoice <strong>${invoice.invoice_number}</strong> of <strong>CHF ${totalAmt.toFixed(2)}</strong>. Please arrange payment at your earliest convenience.`
+              ? `Veuillez trouver ci-joint un rappel de paiement concernant la facture <strong>${invoice.invoice_number}</strong> d'un montant de <strong>CHF ${totalAmt.toFixed(2)}</strong>.<br/><br/>Nous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.`
               : isPartial
                 ? `Please find attached your invoice. Amount paid so far: <strong>CHF ${paidAmt.toFixed(2)}</strong>. Remaining balance: <strong>CHF ${(totalAmt - paidAmt).toFixed(2)}</strong>.`
                 : `Please find attached your invoice for <strong>CHF ${totalAmt.toFixed(2)}</strong>.`
           }
         </p>
-        <p style="color: #475569; font-size: 14px; line-height: 1.6;">Thank you for your trust.</p>
-        <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">Kind regards,<br/>${providerName}</p>
+        <p style="color: #475569; font-size: 14px; line-height: 1.6;">${isReminder ? "Nous vous remercions de votre confiance." : "Thank you for your trust."}</p>
+        <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">${isReminder ? "Meilleures salutations" : "Kind regards"},<br/>${providerName}</p>
       </div>
     `;
 
