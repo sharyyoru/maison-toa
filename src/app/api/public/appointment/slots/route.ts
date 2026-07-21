@@ -4,6 +4,7 @@ import { getSwissDayOfWeek, getSwissDayRange, getSwissHourMinute } from "@/lib/s
 import { MULTI_CAPACITY_DOCTORS, nameToSlug } from "@/lib/doctorAvailability";
 import { createSwissDateTime, parseSwissDate } from "@/lib/swissTimezone";
 import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
+import { hasCapacityConflict, intervalOverlaps, type BookingInterval } from "@/lib/exactBookingAvailability";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -155,6 +156,23 @@ export async function GET(request: Request) {
     apt => apt.no_patient && isThisDoctor(apt)
   );
 
+  let scheduleStartMinutes = 0;
+  let scheduleEndMinutes = 24 * 60;
+  if (excludeId && allSlots.length > 0) {
+    const [firstHour, firstMinute] = allSlots[0].split(":").map(Number);
+    const [lastHour, lastMinute] = allSlots[allSlots.length - 1].split(":").map(Number);
+    scheduleStartMinutes = firstHour * 60 + firstMinute;
+    scheduleEndMinutes = lastHour * 60 + lastMinute + 30;
+    for (const appointment of [...patientApts, ...blockingApts]) {
+      const { hour, minute } = getSwissHourMinute(new Date(appointment.end_time));
+      const endMinutes = hour * 60 + minute;
+      if (endMinutes >= scheduleStartMinutes && endMinutes < scheduleEndMinutes) {
+        allSlots.push(`${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`);
+      }
+    }
+    allSlots = [...new Set(allSlots)].sort((a, b) => a.localeCompare(b));
+  }
+
   // Count bookings per Swiss-time slot key using getSwissHourMinute so the
   // comparison is always in Swiss time (no UTC offset confusion).
   const slotCounts: Record<string, number> = {};
@@ -201,14 +219,25 @@ export async function GET(request: Request) {
       new Date(currentAppointment.end_time).getTime() - new Date(currentAppointment.start_time).getTime(),
     );
 
-    // A candidate is only valid when every 30-minute segment occupied by the
-    // doctor's full appointment duration still has capacity.
+    const patientIntervals: BookingInterval[] = patientApts.map((appointment) => ({
+      start: new Date(appointment.start_time),
+      end: new Date(appointment.end_time),
+      groupId: appointment.id,
+    }));
+    const blockingIntervals: BookingInterval[] = blockingApts.map((appointment) => ({
+      start: new Date(appointment.start_time),
+      end: new Date(appointment.end_time),
+      groupId: appointment.id,
+    }));
     availableSlots = availableSlots.filter((time) => {
       const [hour, minute] = time.split(":").map(Number);
+      const candidateMinutes = hour * 60 + minute;
+      if (candidateMinutes < scheduleStartMinutes
+        || candidateMinutes + primaryDurationMs / 60_000 > scheduleEndMinutes) return false;
       const candidateStart = createSwissDateTime(date, hour, minute);
       const candidateEnd = new Date(candidateStart.getTime() + primaryDurationMs);
-      return getOccupiedSwissSlots(candidateStart.toISOString(), candidateEnd.toISOString())
-        .every((slotKey) => !bookedSlotSet.has(slotKey));
+      return !hasCapacityConflict(candidateStart, candidateEnd, patientIntervals, maxCapacity)
+        && !blockingIntervals.some((interval) => intervalOverlaps(candidateStart, candidateEnd, interval));
     });
 
     const { data: linkedAppointment, error: linkedAppointmentError } = await supabase

@@ -1,7 +1,13 @@
 import { getSwissSlotString, formatSwissYmd } from "@/lib/swissTimezone";
+import { mergeAvailableTimes, type BookingWindow } from "@/lib/exactBookingAvailability";
 
 export type BlockedSlotsByDate = Record<string, string[]>;
 export type AvailableSlot = { date: string; time: string };
+export type AvailabilityWindowResult = {
+  unavailableByDate: BlockedSlotsByDate;
+  exactAvailableByDate: BlockedSlotsByDate;
+  bookingWindow: BookingWindow;
+};
 
 type FetchAvailabilityParams = {
   start: string;
@@ -16,8 +22,9 @@ type FetchAvailabilityParams = {
 
 type GetNextOpenSlotsParams = {
   dates: string[];
-  blockedSlotsByDate: BlockedSlotsByDate;
+  availabilityWindow: AvailabilityWindowResult;
   generateTimeSlots: (date: string) => string[];
+  getDayAvailability: (date: string) => { start: string; end: string } | undefined;
   limit?: number;
 };
 
@@ -40,7 +47,7 @@ export async function fetchAvailabilityWindow({
   categorySlug,
   patientType,
   signal,
-}: FetchAvailabilityParams): Promise<BlockedSlotsByDate> {
+}: FetchAvailabilityParams): Promise<AvailabilityWindowResult> {
   const params = new URLSearchParams({
     start,
     end,
@@ -51,21 +58,39 @@ export async function fetchAvailabilityWindow({
   if (categorySlug) params.set("categorySlug", categorySlug);
   if (patientType) params.set("patientType", patientType);
   const res = await fetch(`/api/appointments/check-availability?${params.toString()}`, { signal });
+  if (!res.ok) throw new Error("Failed to load appointment availability");
   const data = await res.json();
-  return groupFullSlotsBySwissDate(data.unavailableStarts || data.fullSlots || []);
+  return {
+    unavailableByDate: groupFullSlotsBySwissDate(data.unavailableStarts || data.fullSlots || []),
+    exactAvailableByDate: groupFullSlotsBySwissDate(data.availableStarts || []),
+    bookingWindow: data.bookingWindow || {
+      durationMinutes: 60,
+      bufferBeforeMinutes: 0,
+      bufferAfterMinutes: 0,
+    },
+  };
 }
 
 export function getNextOpenSlots({
   dates,
-  blockedSlotsByDate,
+  availabilityWindow,
   generateTimeSlots,
+  getDayAvailability,
   limit = 15,
 }: GetNextOpenSlotsParams): AvailableSlot[] {
   const slotsToShow: AvailableSlot[] = [];
 
   for (const date of dates) {
-    const blockedSlots = blockedSlotsByDate[date] || [];
-    const openSlots = generateTimeSlots(date).filter((time) => !blockedSlots.includes(time));
+    const dayAvailability = getDayAvailability(date);
+    if (!dayAvailability) continue;
+    const blockedSlots = availabilityWindow.unavailableByDate[date] || [];
+    const gridSlots = generateTimeSlots(date).filter((time) => !blockedSlots.includes(time));
+    const openSlots = mergeAvailableTimes(
+      gridSlots,
+      availabilityWindow.exactAvailableByDate[date] || [],
+      dayAvailability,
+      availabilityWindow.bookingWindow,
+    );
 
     for (const time of openSlots) {
       slotsToShow.push({ date, time });
