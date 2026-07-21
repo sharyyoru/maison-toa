@@ -7448,6 +7448,9 @@ export default function MedicalConsultationsCard({
                             payment_method: paymentMethod,
                             appointment_id: invoiceApptLinkEnabled && invoiceAppointmentId ? invoiceAppointmentId : null,
                             notes: invoiceNotes.trim() || null,
+                            diagnosis_codes: invoiceDiagnosisCodes.length > 0
+                              ? invoiceDiagnosisCodes.map((c) => ({ code: c, type: "ICD" }))
+                              : null,
                         };
 
                         // Add TARDOC-specific invoice fields
@@ -7460,9 +7463,6 @@ export default function MedicalConsultationsCard({
                           if (invoiceLawType === "UVG" && invoiceAccidentDate) {
                             invoicePayload.accident_date = invoiceAccidentDate;
                           }
-                          invoicePayload.diagnosis_codes = invoiceDiagnosisCodes.length > 0
-                            ? invoiceDiagnosisCodes.map((c) => ({ code: c, type: "ICD" }))
-                            : undefined;
                         }
 
                         // Add ACF/TARDOC-specific invoice fields (when ACF or TARDOC lines present)
@@ -7475,9 +7475,6 @@ export default function MedicalConsultationsCard({
                           if (invoiceLawType === "UVG" && invoiceAccidentDate) {
                             invoicePayload.accident_date = invoiceAccidentDate;
                           }
-                          invoicePayload.diagnosis_codes = invoiceDiagnosisCodes.length > 0
-                            ? invoiceDiagnosisCodes.map((c) => ({ code: c, type: "ICD" }))
-                            : undefined;
                         }
 
                         // Build line items payload (shared between insert and update)

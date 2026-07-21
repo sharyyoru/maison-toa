@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { resolveInsuranceDiagnosisCodes } from "@/lib/insuranceDiagnosisCodes";
 import { createClient } from "@supabase/supabase-js";
 
 async function getUserId(request: NextRequest): Promise<string | null> {
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     // Resolve invoice number and patient id
     const { data: invoice, error: invErr } = await supabaseAdmin
       .from("invoices")
-      .select("id, invoice_number, patient_id")
+      .select("id, invoice_number, patient_id, diagnosis_codes")
       .eq("id", invoiceId)
       .single();
 
@@ -39,6 +40,12 @@ export async function POST(request: NextRequest) {
     }
 
     const resolvedPatientId = patientId || invoice.patient_id;
+    if (resolveInsuranceDiagnosisCodes(invoice.diagnosis_codes).length === 0) {
+      return NextResponse.json(
+        { error: "Invoice requires at least one valid ICD-10 diagnosis code before insurance submission" },
+        { status: 422 },
+      );
+    }
 
     // Dedupe: if a pending or processing job exists for this invoice, return it
     const { data: existingJobs } = await supabaseAdmin

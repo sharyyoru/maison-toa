@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { resolveInsuranceDiagnosisCodes } from "@/lib/insuranceDiagnosisCodes";
 import {
   buildInvoiceRequest,
   mapLawType as mapSumexLaw,
@@ -284,17 +285,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Diagnosis codes from invoice ──
-    // Filter to valid ICD codes only (must be at least 2 chars, e.g. "Z42.1")
-    const diagCodes: string[] = Array.isArray(invoice.diagnosis_codes)
-      ? invoice.diagnosis_codes
-          .filter((d: any) => d.type === "ICD" || typeof d === "string")
-          .map((d: any) => (typeof d === "string" ? d : d.code))
-          .filter((c: string) => c && c.length >= 2)
-      : [];
-    const sumexDiagnoses: SumexDiagnosis[] = diagCodes.map(code => ({
+    const diagCodes = resolveInsuranceDiagnosisCodes(invoice.diagnosis_codes);
+    if (diagCodes.length === 0) {
+      return NextResponse.json(
+        { error: "Invoice requires at least one valid ICD-10 diagnosis code before insurance submission" },
+        { status: 422 },
+      );
+    }
+    const sumexDiagnoses: SumexDiagnosis[] = diagCodes.map((code) => ({
       type: DiagnosisType.ICD,
-      code: String(code),
+      code,
     }));
 
     // ── Build Sumex1 input ──

@@ -10,7 +10,6 @@ import {
   type MediDataInvoiceStatus,
 } from "@/lib/medidata";
 import MedidataInsurerSearch, { type MedidataParticipant } from "@/components/MedidataInsurerSearch";
-import Icd10CodeInput from "@/components/Icd10CodeInput";
 
 type LineItem = {
   id: string;
@@ -78,8 +77,6 @@ export default function InsuranceBillingModal({
   const [billingType, setBillingType] = useState<BillingType>("TG");
   const [lawType, setLawType] = useState<SwissLawType>("KVG");
   const [reminderLevel, setReminderLevel] = useState<number>(0);
-  const [diagnosisCodes, setDiagnosisCodes] = useState<string[]>([]);
-  const [diagnosisInput, setDiagnosisInput] = useState("");
   const [treatmentReason, setTreatmentReason] = useState("disease");
   const [selectedInsurerGln, setSelectedInsurerGln] = useState("");
   const [selectedInsurerName, setSelectedInsurerName] = useState("");
@@ -294,10 +291,10 @@ export default function InsuranceBillingModal({
           prefilledRef.current = true;
         }
 
-        // Also load invoice-level data (treatment_reason, diagnosis_codes, billing_type, etc.)
+        // Also load invoice-level billing data.
         const { data: inv } = await supabaseClient
           .from("invoices")
-          .select("billing_type, health_insurance_law, treatment_reason, diagnosis_codes, reminder_level, accident_date")
+          .select("billing_type, health_insurance_law, treatment_reason, reminder_level, accident_date")
           .eq("id", consultationId)
           .maybeSingle();
 
@@ -309,10 +306,6 @@ export default function InsuranceBillingModal({
           if (typeof initialReminderLevel === 'number') setReminderLevel(initialReminderLevel);
           else if (typeof inv.reminder_level === 'number') setReminderLevel(inv.reminder_level);
           if (inv.accident_date) setAccidentDate(inv.accident_date);
-          if (inv.diagnosis_codes && Array.isArray(inv.diagnosis_codes)) {
-            const codes = inv.diagnosis_codes.map((d: any) => d.code).filter(Boolean);
-            if (codes.length > 0) setDiagnosisCodes(codes);
-          }
         }
       }
 
@@ -337,18 +330,6 @@ export default function InsuranceBillingModal({
   const lineItemsTotal = lineItems.reduce((sum, li) => sum + (li.total_price || 0), 0);
   const displayTotal = lineItems.length > 0 ? lineItemsTotal : (invoiceAmount || 0);
 
-  const handleAddDiagnosis = () => {
-    const code = diagnosisInput.trim().toUpperCase();
-    if (code && !diagnosisCodes.includes(code)) {
-      setDiagnosisCodes([...diagnosisCodes, code]);
-      setDiagnosisInput("");
-    }
-  };
-
-  const handleRemoveDiagnosis = (code: string) => {
-    setDiagnosisCodes(diagnosisCodes.filter((c) => c !== code));
-  };
-
   const handleCheckXml = async () => {
     setIsCheckingXml(true);
     setXmlError(null);
@@ -364,7 +345,6 @@ export default function InsuranceBillingModal({
           billingType,
           lawType,
           reminderLevel,
-          diagnosisCodes,
           treatmentReason: lawType === 'UVG' ? 'accident' : treatmentReason,
           insurerGln: selectedInsurerGln,
           insurerName: selectedInsurerName,
@@ -423,7 +403,6 @@ export default function InsuranceBillingModal({
           billingType,
           lawType,
           reminderLevel,
-          diagnosisCodes,
           treatmentReason: lawType === 'UVG' ? 'accident' : treatmentReason,
           insurerGln: selectedInsurerGln,
           insurerName: selectedInsurerName,
@@ -455,7 +434,6 @@ export default function InsuranceBillingModal({
           insurance_gln: selectedInsurerGln,
           insurance_name: selectedInsurerName,
           patient_ssn: avsNumber || null,
-          diagnosis_codes: diagnosisCodes.map((c) => ({ code: c, type: "ICD" })),
           medical_case_number: caseNumber || null,
           accident_date: lawType === 'UVG' && accidentDate ? accidentDate : null,
         })
@@ -955,49 +933,6 @@ export default function InsuranceBillingModal({
                 <div className="py-3 text-center text-xs text-slate-400">
                   No line items found for this invoice.
                   {invoiceAmount ? ` Invoice amount: CHF ${invoiceAmount.toFixed(2)}` : ""}
-                </div>
-              )}
-            </div>
-
-            {/* Diagnosis Codes */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-600">
-                ICD-10 Diagnosis Codes (optional)
-              </label>
-              <div className="flex gap-2">
-                <Icd10CodeInput
-                  id="insurance-diagnosis-code"
-                  value={diagnosisInput}
-                  onChange={setDiagnosisInput}
-                  onAdd={handleAddDiagnosis}
-                  placeholder="Search a diagnosis or enter an ICD-10 code"
-                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddDiagnosis}
-                  className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200"
-                >
-                  Add
-                </button>
-              </div>
-              {diagnosisCodes.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {diagnosisCodes.map((code) => (
-                    <span
-                      key={code}
-                      className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs"
-                    >
-                      {code}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveDiagnosis(code)}
-                        className="text-slate-400 hover:text-slate-600"
-                      >
-                        &times;
-                      </button>
-                    </span>
-                  ))}
                 </div>
               )}
             </div>

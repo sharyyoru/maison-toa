@@ -1,6 +1,7 @@
 // v2 — AR.* zero-TT fix, correct TARDOC dignity codes
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { resolveInsuranceDiagnosisCodes } from "@/lib/insuranceDiagnosisCodes";
 
 export const maxDuration = 300;
 
@@ -89,7 +90,6 @@ export async function POST(request: NextRequest) {
       billingType: bodyBillingType = 'TP',
       lawType: bodyLawType = 'KVG',
       reminderLevel = 0,
-      diagnosisCodes = [],
       treatmentReason = 'disease',
       insurerGln,
       insurerName,
@@ -109,7 +109,6 @@ export async function POST(request: NextRequest) {
       billingType?: string;
       lawType?: string;
       reminderLevel?: number;
-      diagnosisCodes?: string[];
       treatmentReason?: string;
       insurerGln?: string;
       insurerName?: string;
@@ -529,20 +528,14 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    // Fallback: extract ICD codes from ACF line items' ref_code if none provided
-    let resolvedDiagCodes: string[] = (diagnosisCodes || []).filter((c: string) => c && c.length >= 2);
-    if (resolvedDiagCodes.length === 0 && services.some((s: any) => s.tariffType === "005")) {
-      const acfRefCodes = [...new Set(
-        services
-          .filter((s: any) => s.tariffType === "005" && s.refCode && s.refCode.length >= 2)
-          .map((s: any) => s.refCode as string)
-      )];
-      if (acfRefCodes.length > 0) {
-        console.log(`[SendInvoice] No diagnosis codes provided, extracted from ACF ref_codes: ${acfRefCodes.join(", ")}`);
-        resolvedDiagCodes = acfRefCodes;
-      }
+    const resolvedDiagCodes = resolveInsuranceDiagnosisCodes(invoiceRecord?.diagnosis_codes);
+    if (resolvedDiagCodes.length === 0) {
+      return NextResponse.json(
+        { error: "Invoice requires at least one valid ICD-10 diagnosis code before insurance submission" },
+        { status: 422 },
+      );
     }
-    const sumexDiagnoses: SumexDiagnosis[] = resolvedDiagCodes.map((code: string) => ({
+    const sumexDiagnoses: SumexDiagnosis[] = resolvedDiagCodes.map((code) => ({
       type: DiagnosisType.ICD,
       code,
     }));
