@@ -13,6 +13,7 @@ import { formatSwissTime, formatSwissDateTime, SWISS_TIMEZONE } from "@/lib/swis
 import { useTranslations } from "next-intl";
 import dynamic from 'next/dynamic';
 import { useDocumentPreviewTabs } from "./DocumentPreviewTabsWrapper";
+import { decodeStorageFileName, encodeStorageFileName } from "@/utils/storageFileName";
 
 // Dynamic import for docx-preview (client-side only)
 const DocxPreview = dynamic(() => import('@/components/DocxPreview'), {
@@ -903,7 +904,7 @@ export default function PatientDocumentsTab({
 
   function handleStartRename(item: ListedItem) {
     setRenamingFile(item);
-    setNewFileName(item.name);
+    setNewFileName(decodeStorageFileName(item.name));
   }
 
   async function handleRename(event: React.FormEvent) {
@@ -911,7 +912,7 @@ export default function PatientDocumentsTab({
     if (!renamingFile || !newFileName.trim() || renaming) return;
 
     const trimmedName = newFileName.trim();
-    if (trimmedName === renamingFile.name) {
+    if (trimmedName === decodeStorageFileName(renamingFile.name)) {
       setRenamingFile(null);
       return;
     }
@@ -921,7 +922,7 @@ export default function PatientDocumentsTab({
       setError(null);
 
       const oldPath = [patientId, renamingFile.path].filter(Boolean).join("/");
-      const newPath = [patientId, currentPrefix, trimmedName].filter(Boolean).join("/");
+      const newPath = [patientId, currentPrefix, encodeStorageFileName(trimmedName)].filter(Boolean).join("/");
 
       // Download the file
       const { data: fileData, error: downloadError } = await supabaseClient.storage
@@ -1303,7 +1304,7 @@ export default function PatientDocumentsTab({
                               <path d="M3 5a2 2 0 0 1 2-2h3l2 2h5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5Z" />
                             </svg>
                           </span>
-                          <span className="truncate font-medium text-slate-700">{item.name}</span>
+                          <span className="truncate font-medium text-slate-700">{decodeStorageFileName(item.name)}</span>
                         </button>
                       );
                     }
@@ -1370,7 +1371,7 @@ export default function PatientDocumentsTab({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <p className="truncate text-[12px] font-medium text-slate-800">
-                              {item.name}
+                              {decodeStorageFileName(item.name)}
                             </p>
                             {item.source === "patient-docs" && (
                               <span className="flex-shrink-0 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-700" title="Imported from legacy storage">
@@ -1632,7 +1633,7 @@ export default function PatientDocumentsTab({
               <span>{t("preview")}</span>
               {selectedFile && selectedFile.kind === "file" ? (
                 <span className="truncate text-[10px] text-slate-400">
-                  {selectedFile.name}
+                  {decodeStorageFileName(selectedFile.name)}
                 </span>
               ) : null}
             </div>
@@ -1794,10 +1795,10 @@ export default function PatientDocumentsTab({
       {editingDocx && (
         <DocxPreviewEditor
           documentBlob={editingDocx.blob}
-          documentTitle={editingDocx.item.name}
+          documentTitle={decodeStorageFileName(editingDocx.item.name)}
           patientId={patientId}
           documentId={editingDocx.item.id || editingDocx.item.name}
-          fileName={editingDocx.item.path}
+          fileName={decodeStorageFileName(editingDocx.item.path)}
           onSave={async (blob, newFileName) => {
             const originalFileName = editingDocx.item.path;
             const targetFileName = newFileName?.trim() || originalFileName;
@@ -1811,6 +1812,7 @@ export default function PatientDocumentsTab({
             formData.append("file", blob, targetFileName);
             formData.append("bucket", BUCKET_NAME);
             formData.append("path", fullPath);
+            formData.append("displayFileName", targetFileName);
             if (oldPath) formData.append("oldPath", oldPath);
             if (editingDocx.item.id) formData.append("documentId", editingDocx.item.id);
 
@@ -1824,14 +1826,15 @@ export default function PatientDocumentsTab({
               throw new Error(result.error || "Failed to save edited document");
             }
 
+            const storedFileName = result.fileName || originalFileName;
             setEditingDocx((prev) =>
               prev
                 ? {
                     ...prev,
                     item: {
                       ...prev.item,
-                      path: targetFileName,
-                      name: targetFileName.replace(/\.docx$/i, ""),
+                      path: storedFileName,
+                      name: storedFileName,
                     },
                   }
                 : null

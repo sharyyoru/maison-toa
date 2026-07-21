@@ -1,20 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { encodeStorageFileName } from "@/utils/storageFileName";
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as Blob;
     const bucket = formData.get("bucket") as string || "patient-documents";
-    const path = formData.get("path") as string;
+    const requestedPath = formData.get("path") as string;
+    const displayFileName = (formData.get("displayFileName") as string | null)?.trim();
     const documentId = formData.get("documentId") as string;
     const oldPath = formData.get("oldPath") as string;
 
-    if (!file || !path) {
+    if (!file || !requestedPath) {
       return NextResponse.json(
         { error: "File and path are required" },
         { status: 400 }
       );
+    }
+
+    const pathParts = requestedPath.split("/");
+    const requestedFileName = pathParts.pop() || "";
+    const storedFileName = encodeStorageFileName(requestedFileName);
+    const path = [...pathParts, storedFileName].join("/");
+
+    if (!storedFileName) {
+      return NextResponse.json({ error: "A valid filename is required" }, { status: 400 });
     }
 
     const isRename = !!oldPath && oldPath !== path;
@@ -68,7 +79,7 @@ export async function POST(request: NextRequest) {
     // Update the document record if a document ID was provided
     if (documentId) {
       const fileName = path.split('/').pop();
-      const title = fileName?.replace(/\.docx$/i, '');
+      const title = (displayFileName || requestedFileName).replace(/\.docx$/i, '');
       const { error: updateError } = await supabaseAdmin
         .from("patient_documents")
         .update({
@@ -85,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     console.log("Upload successful:", path);
 
-    return NextResponse.json({ success: true, path });
+    return NextResponse.json({ success: true, path, fileName: storedFileName });
   } catch (error) {
     console.error("Error uploading document:", error);
     return NextResponse.json(
