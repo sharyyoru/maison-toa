@@ -3,6 +3,7 @@
 import { useState, createContext, useContext, useCallback, ReactNode } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { decodeStorageFileName } from "@/utils/storageFileName";
 
 // Dynamic imports for preview components
 const DocxPreview = dynamic(() => import("@/components/DocxPreview"), {
@@ -79,7 +80,11 @@ export default function DocumentPreviewTabsWrapper({
 
   const addTab = useCallback((tab: Omit<DocumentPreviewTab, "id">) => {
     const id = `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const newTab: DocumentPreviewTab = { ...tab, id };
+    const newTab: DocumentPreviewTab = {
+      ...tab,
+      name: decodeStorageFileName(tab.name),
+      id,
+    };
     
     setOpenTabs((prev) => {
       // Check if a tab with the same URL already exists

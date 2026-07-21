@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import dynamic from 'next/dynamic';
+import { decodeStorageFileName } from "@/utils/storageFileName";
 
 // Dynamic import for docx-preview (client-side only)
 const DocxPreviewEditor = dynamic(
@@ -204,9 +205,11 @@ export default function DocumentTemplatesPanel({
 
     try {
       const originalFileName = currentDocument.file_path || `${currentDocument.id}.docx`;
-      const targetFileName = newFileName?.trim() || originalFileName;
+      const targetFileName = newFileName?.trim() || decodeStorageFileName(originalFileName);
       const uploadPath = `${patientId}/${targetFileName}`;
-      const oldPath = targetFileName !== originalFileName ? `${patientId}/${originalFileName}` : undefined;
+      const oldPath = targetFileName !== decodeStorageFileName(originalFileName)
+        ? `${patientId}/${originalFileName}`
+        : undefined;
       console.log('Saving document to path:', uploadPath);
 
       // Upload modified blob via API endpoint
@@ -214,6 +217,7 @@ export default function DocumentTemplatesPanel({
       formData.append('file', blob);
       formData.append('bucket', 'patient-documents');
       formData.append('path', uploadPath);
+      formData.append('displayFileName', targetFileName);
       if (oldPath) formData.append('oldPath', oldPath);
       formData.append('documentId', currentDocument.id);
 
@@ -227,12 +231,15 @@ export default function DocumentTemplatesPanel({
         throw new Error(errorData.error || 'Upload failed');
       }
 
-      if (targetFileName !== originalFileName) {
+      const uploadData = await uploadResponse.json();
+      const storedFileName = uploadData.fileName || originalFileName;
+
+      if (storedFileName !== originalFileName || targetFileName !== decodeStorageFileName(originalFileName)) {
         setCurrentDocument((prev) =>
           prev
             ? {
                 ...prev,
-                file_path: targetFileName,
+                file_path: storedFileName,
                 title: targetFileName.replace(/\.docx$/i, ''),
               }
             : null
@@ -313,7 +320,7 @@ export default function DocumentTemplatesPanel({
         patientId={patientId}
         documentId={currentDocument.id}
         patientData={patientData}
-        fileName={currentDocument.file_path}
+        fileName={currentDocument.file_path ? decodeStorageFileName(currentDocument.file_path) : undefined}
         onSave={handleSaveDocument}
         onClose={() => {
           setShowEditor(false);
