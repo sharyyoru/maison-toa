@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
 import { sendEmail, isEmailConfigured } from "@/lib/email";
 import { generatePatientConfirmationEmail } from "@/lib/appointmentEmails";
+import { formatDepositPaymentMethod, generateDepositConfirmationEmail } from "@/lib/depositConfirmationEmail";
 import { brandedEmail } from "@/utils/emailTemplate";
 import Stripe from "stripe";
 
@@ -10,6 +11,46 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+async function sendDepositConfirmation({
+  patientId,
+  amount,
+  paidAt,
+  paymentMethodType,
+}: {
+  patientId: string | null;
+  amount: number;
+  paidAt: Date;
+  paymentMethodType: string | null | undefined;
+}) {
+  if (!patientId || !isEmailConfigured()) return;
+
+  const { data: patient } = await supabase
+    .from("patients")
+    .select("first_name, last_name, email, language_preference")
+    .eq("id", patientId)
+    .single();
+
+  if (!patient?.email) return;
+
+  const language = patient.language_preference === "fr" ? "fr" : "en";
+  const { subject, html } = generateDepositConfirmationEmail({
+    patientName: [patient.first_name, patient.last_name].filter(Boolean).join(" "),
+    amount,
+    paidAt,
+    paymentMethod: formatDepositPaymentMethod(paymentMethodType, language),
+    language,
+  });
+  const result = await sendEmail({
+    to: patient.email,
+    subject,
+    html,
+    tags: [{ name: "type", value: "deposit_confirmation" }],
+  });
+
+  if (!result.success) throw new Error(result.error || "Email provider did not accept the deposit confirmation");
+  console.log(`[Stripe Webhook] Deposit confirmation email sent to ${patient.email}`);
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -78,7 +119,18 @@ export async function POST(req: NextRequest) {
 
         console.log(`[Stripe Webhook] Invoice deposit ${invoice_id} marked PAID — CHF ${paidAmount}`);
 
-        // Send deposit-payment confirmation email to the patient
+        try {
+          await sendDepositConfirmation({
+            patientId: inv?.patient_id || null,
+            amount: paidAmount,
+            paidAt: new Date(event.created * 1000),
+            paymentMethodType: session.payment_method_types?.[0],
+          });
+        } catch (emailErr) {
+          console.error("[Stripe Webhook] Failed to send deposit confirmation email:", emailErr);
+        }
+
+        // Send appointment confirmation email to the patient
         try {
           const { data: inv } = await supabase
             .from("invoices")
@@ -177,6 +229,19 @@ export async function POST(req: NextRequest) {
         }, { onConflict: "stripe_payment_intent_id" });
 
         console.log(`[Stripe Webhook] Invoice ${invoice_id} marked PAID — CHF ${paidAmount}`);
+
+        if (isDepositInvoice) {
+          try {
+            await sendDepositConfirmation({
+              patientId: inv?.patient_id || null,
+              amount: paidAmount,
+              paidAt: new Date(event.created * 1000),
+              paymentMethodType: session.payment_method_types?.[0],
+            });
+          } catch (emailErr) {
+            console.error("[Stripe Webhook] Failed to send deposit confirmation email:", emailErr);
+          }
+        }
 
       } else if (type === "booking_deposit") {
         const m = session.metadata!;
@@ -307,6 +372,17 @@ export async function POST(req: NextRequest) {
             status: "succeeded",
             metadata: { type: "booking_deposit", treatment: m.treatment_name, session_id: session.id },
           }, { onConflict: "stripe_payment_intent_id" });
+
+          try {
+            await sendDepositConfirmation({
+              patientId,
+              amount: depositAmount,
+              paidAt: new Date(event.created * 1000),
+              paymentMethodType: session.payment_method_types?.[0],
+            });
+          } catch (emailErr) {
+            console.error("[Stripe Webhook] Failed to send deposit confirmation email:", emailErr);
+          }
         }
 
         console.log(`[Stripe Webhook] Booking deposit processed — ${m.first_name} ${m.last_name}, CHF ${depositAmount} deposit for ${m.treatment_name}`);
