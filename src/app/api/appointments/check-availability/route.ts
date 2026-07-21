@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
 import { resolveBookingSecondaryCalendar } from "@/lib/bookingSecondaryCalendar";
+import {
+  addReleaseBoundary,
+  generateThirtyMinuteStarts,
+  hasCapacityConflict,
+  intervalOverlaps,
+  type BookingInterval,
+} from "@/lib/exactBookingAvailability";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -133,19 +140,20 @@ export async function GET(request: NextRequest) {
     // Generate all 30-minute slots for the requested time range
     const rangeStart = new Date(start);
     const rangeEnd = new Date(end);
-    const allSlots: Date[] = [];
-
-    let currentSlot = new Date(rangeStart);
-    // Round to nearest 30 minutes
-    currentSlot.setMinutes(Math.floor(currentSlot.getMinutes() / 30) * 30, 0, 0);
-
-    while (currentSlot < rangeEnd) {
-      allSlots.push(new Date(currentSlot));
-      currentSlot = new Date(currentSlot.getTime() + 30 * 60 * 1000);
-    }
+    const allSlots = generateThirtyMinuteStarts(rangeStart, rangeEnd);
 
     // Get the max capacity for this doctor
     const maxCapacity = getMaxCapacity(doctorSlug);
+    const patientIntervals: BookingInterval[] = patientAppointments.map((appointment) => ({
+      start: new Date(appointment.start_time),
+      end: new Date(appointment.end_time),
+      groupId: appointment.id,
+    }));
+    const blockingIntervals: BookingInterval[] = blockingAppointments.map((appointment) => ({
+      start: new Date(appointment.start_time),
+      end: new Date(appointment.end_time),
+      groupId: appointment.id,
+    }));
 
     // For each 30-minute slot determine if it's unavailable:
     // 1. Patient appointments that START within the window count toward capacity
@@ -182,6 +190,8 @@ export async function GET(request: NextRequest) {
     });
 
     // ── Machine availability: mark slots as full if machine is at capacity ──
+    let machineIntervals: BookingInterval[] = [];
+    let machineMax = 1;
     if (treatmentId && treatmentId !== "none") {
       console.log(`[CheckAvailability] Checking machine for treatmentId=${treatmentId}`);
       
@@ -197,7 +207,6 @@ export async function GET(request: NextRequest) {
       console.log(`[CheckAvailability] Treatment found: ${JSON.stringify(treatmentRow)}`);
 
       let machineId: string | null = null;
-      let machineMax = 1;
       let machineName = "";
 
       // First check direct machine_id on booking_treatments
@@ -246,6 +255,11 @@ export async function GET(request: NextRequest) {
           console.log(`[CheckAvailability] Machine query error: ${machineError.message}`);
         }
         if (machineAppts && machineAppts.length > 0) {
+          machineIntervals = machineAppts.map((appointment) => ({
+            start: new Date(appointment.start_time),
+            end: new Date(appointment.end_time),
+            groupId: appointment.appointment_group_id || appointment.id,
+          }));
           console.log(`[CheckAvailability] Machine appointments: ${JSON.stringify(machineAppts)}`);
           
           let slotsBlockedByMachine = 0;
@@ -269,12 +283,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const unavailableStarts = new Set<string>();
-    const occupiedIntervals = [...new Set(fullSlots)].map((iso) => {
-      const intervalStart = new Date(iso);
-      return { start: intervalStart, end: new Date(intervalStart.getTime() + 30 * 60 * 1000) };
-    });
-
     let secondaryAppointments: Array<{ start_time: string; end_time: string }> = [];
     if (secondaryCalendar && secondaryCalendar.providerId !== providerId) {
       const { data: resourceAppointments, error: resourceError } = await supabase
@@ -291,18 +299,46 @@ export async function GET(request: NextRequest) {
       secondaryAppointments = resourceAppointments || [];
     }
 
-    for (const slotStart of allSlots) {
-      const primaryEnd = new Date(slotStart.getTime() + primaryDurationMinutes * 60 * 1000);
-      const primaryBlocked = occupiedIntervals.some(
-        (interval) => interval.start < primaryEnd && interval.end > slotStart,
+    const secondaryIntervals: BookingInterval[] = secondaryAppointments.map((appointment, index) => ({
+      start: new Date(appointment.start_time),
+      end: new Date(appointment.end_time),
+      groupId: `secondary-${index}`,
+    }));
+    const candidateMap = new Map<number, Date>(allSlots.map((slot) => [slot.getTime(), slot]));
+    [...patientIntervals, ...blockingIntervals, ...machineIntervals].forEach((interval) => {
+      addReleaseBoundary(
+        candidateMap,
+        interval.end,
+        bookingContext.bufferBeforeMinutes,
+        rangeStart,
+        rangeEnd,
       );
+    });
+    secondaryIntervals.forEach((interval) => {
+      addReleaseBoundary(candidateMap, interval.end, 0, rangeStart, rangeEnd);
+    });
+
+    const unavailableStarts = new Set<string>();
+    const availableStarts: string[] = [];
+    const candidates = [...candidateMap.values()].sort((a, b) => a.getTime() - b.getTime());
+    for (const slotStart of candidates) {
+      const primaryStart = new Date(slotStart.getTime() - bookingContext.bufferBeforeMinutes * 60 * 1000);
+      const primaryEnd = new Date(slotStart.getTime() + (primaryDurationMinutes + bookingContext.bufferAfterMinutes) * 60 * 1000);
+      const primaryBlocked = hasCapacityConflict(primaryStart, primaryEnd, patientIntervals, maxCapacity)
+        || blockingIntervals.some((interval) => intervalOverlaps(primaryStart, primaryEnd, interval));
+      const machineBlocked = machineIntervals.length > 0
+        && hasCapacityConflict(primaryStart, primaryEnd, machineIntervals, machineMax);
       const secondaryEnd = new Date(
         slotStart.getTime() + (secondaryCalendar?.durationMinutes || 0) * 60 * 1000,
       );
-      const secondaryBlocked = secondaryAppointments.some(
-        (appointment) => new Date(appointment.start_time) < secondaryEnd && new Date(appointment.end_time) > slotStart,
+      const secondaryBlocked = secondaryIntervals.some(
+        (interval) => intervalOverlaps(slotStart, secondaryEnd, interval),
       );
-      if (primaryBlocked || secondaryBlocked) unavailableStarts.add(slotStart.toISOString());
+      if (primaryBlocked || machineBlocked || secondaryBlocked) {
+        unavailableStarts.add(slotStart.toISOString());
+      } else {
+        availableStarts.push(slotStart.toISOString());
+      }
     }
 
     return NextResponse.json({
@@ -310,6 +346,12 @@ export async function GET(request: NextRequest) {
       slotCounts,
       fullSlots: [...new Set(fullSlots)],
       unavailableStarts: [...unavailableStarts],
+      availableStarts,
+      bookingWindow: {
+        durationMinutes: primaryDurationMinutes,
+        bufferBeforeMinutes: bookingContext.bufferBeforeMinutes,
+        bufferAfterMinutes: bookingContext.bufferAfterMinutes,
+      },
       maxConcurrent: maxCapacity
     });
   } catch (error) {

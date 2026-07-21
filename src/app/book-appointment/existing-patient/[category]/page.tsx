@@ -19,6 +19,7 @@ interface Treatment {
   description?: string | null;
   description_en?: string | null;
   duration_minutes: number;
+  display_duration_minutes?: number | null;
   order_index: number;
   enabled: boolean;
   display_price?: number | null;
@@ -172,7 +173,7 @@ export default function ExistingPatientTreatmentsPage() {
                                   <ServiceDescriptionReadMore
                                     description={description}
                                     serviceName={getLocalizedBookingName(treatment, language)}
-                                    duration={formatDuration(treatment.duration_minutes)}
+                                    duration={formatDuration(treatment.display_duration_minutes ?? treatment.duration_minutes)}
                                     price={treatment.display_price != null ? `CHF ${treatment.display_price}` : undefined}
                                     readMoreLabel={t("common.readMore")}
                                     descriptionLabel={t("common.description")}
@@ -184,7 +185,7 @@ export default function ExistingPatientTreatmentsPage() {
                                 <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
                                   <div className="flex items-center gap-3">
                                     <span className="text-sm text-slate-500">
-                                      {formatDuration(treatment.duration_minutes)}
+                                      {formatDuration(treatment.display_duration_minutes ?? treatment.duration_minutes)}
                                     </span>
                                     {treatment.display_price != null && (
                                       <span className="text-sm font-medium text-slate-700">

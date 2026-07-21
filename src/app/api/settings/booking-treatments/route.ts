@@ -105,6 +105,25 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Custom secondary calendar rules require a calendar and 1-480 whole minutes." }, { status: 400 });
     }
 
+    const invalidDisplayDuration = treatments.some((t: { display_duration_minutes?: number | string | null }) => {
+      if (t.display_duration_minutes == null || t.display_duration_minutes === "") return false;
+      const duration = Number(t.display_duration_minutes);
+      return !Number.isInteger(duration) || duration < 1 || duration > 480;
+    });
+    if (invalidDisplayDuration) {
+      return NextResponse.json({ error: "Display duration must be empty or 1-480 whole minutes." }, { status: 400 });
+    }
+
+    const invalidBuffer = treatments.some((t: any) =>
+      [t.buffer_before_minutes ?? 0, t.buffer_after_minutes ?? 0].some((value) => {
+        const minutes = Number(value);
+        return !Number.isInteger(minutes) || minutes < 0 || minutes > 480;
+      })
+    );
+    if (invalidBuffer) {
+      return NextResponse.json({ error: "Hidden buffer times must be 0-480 whole minutes." }, { status: 400 });
+    }
+
     // Get existing treatment IDs
     const { data: existingTreatments } = await supabaseAdmin
       .from("booking_treatments")
@@ -143,6 +162,12 @@ export async function PUT(request: Request) {
           name: t.name,
           description: t.description || null,
           duration_minutes: t.duration_minutes,
+          display_duration_minutes:
+            t.display_duration_minutes == null || t.display_duration_minutes === ""
+              ? null
+              : Number(t.display_duration_minutes),
+          buffer_before_minutes: Number(t.buffer_before_minutes ?? 0),
+          buffer_after_minutes: Number(t.buffer_after_minutes ?? 0),
           order_index: t.order_index,
           enabled: t.enabled,
           prepayment_required: t.prepayment_required ?? false,
@@ -195,7 +220,7 @@ export async function PUT(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { category_id, name, description, duration_minutes, order_index, enabled, service_category_id } = body;
+    const { category_id, name, description, duration_minutes, display_duration_minutes, buffer_before_minutes, buffer_after_minutes, order_index, enabled, service_category_id } = body;
 
     if (!category_id || !name) {
       return NextResponse.json(
@@ -211,6 +236,9 @@ export async function POST(request: Request) {
         name,
         description: description || null,
         duration_minutes: duration_minutes || 30,
+        display_duration_minutes: display_duration_minutes || null,
+        buffer_before_minutes: Number(buffer_before_minutes ?? 0),
+        buffer_after_minutes: Number(buffer_after_minutes ?? 0),
         order_index: order_index || 0,
         enabled: enabled ?? true,
         service_category_id: service_category_id || null,

@@ -6,6 +6,7 @@ import { supabaseClient } from "@/lib/supabaseClient";
 import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, formatSwissDateWithWeekday, getSwissDayRange, getSwissSlotString, createSwissDateTime } from "@/lib/swissTimezone";
 import { pushToDataLayer } from "@/components/GoogleTagManager";
 import { getBookingTrackingParams } from "@/lib/bookingTracking";
+import { fitsWithinDailyAvailability } from "@/lib/exactBookingAvailability";
 
 // Clinic locations
 const CLINIC_LOCATIONS = [
@@ -327,8 +328,18 @@ export default function EmbedBookPage() {
         setBookedSlots([]);
       }
 
-      const currentSlots = generateTimeSlots(selectedDoctor, selectedLocation, date, dbAvailability);
-      const openSlots = currentSlots.filter(time => !blockedSlots.includes(time));
+      const day = getSwissDayOfWeek(parseLocalDate(date));
+      const dayAvailability = dbAvailability
+        ? dbAvailability[day]
+        : DOCTOR_AVAILABILITY[selectedDoctor]?.[selectedLocation]?.[day];
+      const openSlots = [...new Set<string>((data.availableStarts || [])
+        .map((isoTime: string) => getSwissSlotString(new Date(isoTime)))
+        .filter((time: string) => dayAvailability && fitsWithinDailyAvailability(
+          time,
+          dayAvailability,
+          data.bookingWindow || { durationMinutes: 60, bufferBeforeMinutes: 0, bufferAfterMinutes: 0 },
+        )))].sort((a, b) => a.localeCompare(b));
+      setAvailableSlots(openSlots);
       if (openSlots.length > 0) {
         setSelectedTime(openSlots[0]);
       }

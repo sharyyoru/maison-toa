@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
 
             const { data: appt } = await supabase
               .from("appointments")
-              .select("start_time, end_time, reason, location")
+              .select("start_time, end_time, reason, location, tracking_params")
               .eq("id", inv.appointment_id)
               .single();
 
@@ -104,7 +104,10 @@ export async function POST(req: NextRequest) {
               const doctorMatch = (appt.reason || "").match(/\[Doctor:\s*(.+?)\s*\]/i);
               const doctorName = doctorMatch?.[1] || "Maison Tóā";
               const serviceName = (appt.reason || "").split(" [Doctor:")[0].trim() || inv.title || "Consultation";
-              const appointmentDate = new Date(appt.start_time);
+              const trackingParams = appt.tracking_params as Record<string, string> | null;
+              const appointmentDate = new Date(
+                trackingParams?.patient_appointment_start || appt.start_time,
+              );
 
               const html = generatePatientConfirmationEmail(
                 patient.last_name || "",

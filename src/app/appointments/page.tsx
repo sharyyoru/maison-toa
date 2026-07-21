@@ -408,6 +408,7 @@ type CalendarAppointment = {
   temporary_text: string | null;
   machine_ids: string[];
   linked_parent_appointment_id?: string | null;
+  tracking_params?: Record<string, string> | null;
   patient: AppointmentPatient | null;
   provider: {
     id: string;
@@ -1320,7 +1321,7 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -3222,7 +3223,7 @@ export default function CalendarPage() {
           const { data: fullApptData } = await supabaseClient
             .from("appointments")
             .select(
-              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
             )
             .eq('id', firstAppt.id)
             .single();
@@ -3241,7 +3242,7 @@ export default function CalendarPage() {
         const { data: refreshedData } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -3292,7 +3293,7 @@ export default function CalendarPage() {
             source: "manual",
           })
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .single();
 
@@ -5464,6 +5465,21 @@ export default function CalendarPage() {
                                       ? Math.round((end.getTime() - start.getTime()) / 60000) 
                                       : null;
                                     const durationLabel = durationMins ? `${String(Math.floor(durationMins / 60)).padStart(2, "0")}:${String(durationMins % 60).padStart(2, "0")}h` : "";
+                                    const patientStart = appt.tracking_params?.patient_appointment_start
+                                      ? new Date(appt.tracking_params.patient_appointment_start)
+                                      : null;
+                                    const inferredBeforeMinutes = patientStart && !Number.isNaN(patientStart.getTime())
+                                      ? Math.max(0, Math.round((patientStart.getTime() - start.getTime()) / 60000))
+                                      : 0;
+                                    const bufferBeforeMinutes = Number(appt.tracking_params?.buffer_before_minutes ?? inferredBeforeMinutes) || 0;
+                                    const bufferAfterMinutes = Number(appt.tracking_params?.buffer_after_minutes ?? 0) || 0;
+                                    const bufferTotalMinutes = durationMins || 0;
+                                    const bufferBeforePercent = bufferTotalMinutes > 0
+                                      ? Math.min(100, (bufferBeforeMinutes / bufferTotalMinutes) * 100)
+                                      : 0;
+                                    const bufferAfterPercent = bufferTotalMinutes > 0
+                                      ? Math.min(100 - bufferBeforePercent, (bufferAfterMinutes / bufferTotalMinutes) * 100)
+                                      : 0;
 
                                     // Determine if tooltip should appear on left (for right-side items)
                                     const isRightSide = colIdx >= doctorColumns.length / 2;
@@ -5496,10 +5512,24 @@ export default function CalendarPage() {
                                               openEditModalForAppointment(appt);
                                             }
                                           }}
-                                          className={`w-full h-full rounded-md px-1 py-0.5 text-[10px] text-left shadow-sm overflow-hidden cursor-grab active:cursor-grabbing ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColorPresentation(category).className} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
+                                          className={`relative w-full h-full rounded-md px-1 py-0.5 text-[10px] text-left shadow-sm overflow-hidden cursor-grab active:cursor-grabbing ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColorPresentation(category).className} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
                                           style={resolveCategoryColorPresentation(category).style}
                                         >
-                                          <div className="flex items-center gap-1 truncate font-medium text-slate-800">
+                                          {bufferBeforePercent > 0 && (
+                                            <span
+                                              aria-hidden="true"
+                                              className="pointer-events-none absolute inset-x-0 top-0 z-0 bg-white/60"
+                                              style={{ height: `${bufferBeforePercent}%` }}
+                                            />
+                                          )}
+                                          {bufferAfterPercent > 0 && (
+                                            <span
+                                              aria-hidden="true"
+                                              className="pointer-events-none absolute inset-x-0 bottom-0 z-0 bg-white/60"
+                                              style={{ height: `${bufferAfterPercent}%` }}
+                                            />
+                                          )}
+                                          <div className="relative z-10 flex items-center gap-1 truncate font-medium text-slate-800">
                                             {dayStatusIcon && <span className="flex-shrink-0">{dayStatusIcon}</span>}
                                             {appt.patient?.is_vip ? (
                                               <span
@@ -5520,12 +5550,12 @@ export default function CalendarPage() {
                                             ) : null}
                                             <span className="truncate">{patientName || serviceLabel}</span>
                                           </div>
-                                          <div className="truncate text-[9px] text-slate-600">
+                                          <div className="relative z-10 truncate text-[9px] text-slate-600">
                                             {timeLabel} {serviceLabel ? `• ${serviceLabel}` : ""}
                                             {appt.machine_ids && appt.machine_ids.length > 0 && (() => { const m = machines.find((x) => x.id === appt.machine_ids[0]); return m ? <span className="ml-1 text-[8px] text-violet-600" title={appt.machine_ids.map((id) => machines.find((x) => x.id === id)?.name).filter(Boolean).join(", ")}>⚙</span> : null; })()}
                                           </div>
                                           {notes && (
-                                            <div className="truncate text-[9px] text-slate-500 italic">
+                                            <div className="relative z-10 truncate text-[9px] text-slate-500 italic">
                                               {notes}
                                             </div>
                                           )}
