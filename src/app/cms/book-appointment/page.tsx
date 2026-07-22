@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { PageBuilder } from "@/components/PageBuilder";
+import CustomLandingPageEditor from "@/components/CustomLandingPageEditor";
 import { 
   PageConfig, 
   BookingPageId,
@@ -26,7 +27,7 @@ import Link from "next/link";
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type Language = "en" | "fr";
-type EditorMode = "visual" | "text";
+type EditorMode = "visual" | "text" | "custom";
 
 const DEFAULT_TRANSLATIONS: Record<Language, Record<string, string>> = {
   en: {
@@ -289,10 +290,10 @@ export default function BookAppointmentCMSPage() {
   const [contentSaving, setContentSaving] = useState(false);
   const [previewKey, setPreviewKey] = useState<string | null>(null);
 
-  const showToast = (msg: string, ok = true) => {
+  const showToast = useCallback((msg: string, ok = true) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3000);
-  };
+  }, []);
 
   const fetchContent = useCallback(async () => {
     try {
@@ -394,6 +395,26 @@ export default function BookAppointmentCMSPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   
+  if (editorMode === "custom") {
+    return (
+      <>
+        {toast && (
+          <div
+            className={`fixed top-20 right-4 z-[200] px-4 py-3 rounded-xl shadow-lg text-sm font-medium ${
+              toast.ok ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+            }`}
+          >
+            {toast.msg}
+          </div>
+        )}
+        <CustomLandingPageEditor
+          onExit={() => setEditorMode("visual")}
+          showToast={showToast}
+        />
+      </>
+    );
+  }
+
   // Show visual page builder
   if (editorMode === "visual") {
     if (!pageConfigLoaded) {
@@ -490,6 +511,15 @@ export default function BookAppointmentCMSPage() {
                 <Code className="w-4 h-4" />
                 Text Editor
               </button>
+              {selectedPageId === "landing" && (
+                <button
+                  onClick={() => setEditorMode("custom")}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all text-slate-500 hover:text-slate-900"
+                >
+                  <Code className="w-4 h-4" />
+                  Custom Page
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -557,6 +587,13 @@ export default function BookAppointmentCMSPage() {
               >
                 <Code className="w-4 h-4" />
                 Text Editor
+              </button>
+              <button
+                onClick={() => setEditorMode("custom")}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all text-slate-500 hover:text-slate-900"
+              >
+                <Code className="w-4 h-4" />
+                Custom Page
               </button>
             </div>
           </div>

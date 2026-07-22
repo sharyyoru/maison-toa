@@ -5,14 +5,38 @@ import { SectionRenderer } from "@/components/PageBuilder";
 import type { PageConfig } from "@/components/PageBuilder/types";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
+import {
+  buildCustomPageDocument,
+  type CustomLandingPageSettings,
+} from "@/lib/customLandingPage";
 
 export default function BookAppointmentContent({
   initialConfig,
+  customPageSettings,
 }: {
   initialConfig: PageConfig;
+  customPageSettings: CustomLandingPageSettings;
 }) {
   const { language, t } = useLanguage();
   const pageConfig = useBookingPageConfig("landing", initialConfig);
+  const customPage = customPageSettings.published[language];
+
+  if (customPageSettings.activeMode === "custom" && customPage) {
+    return (
+      <main className="relative min-h-screen bg-white">
+        <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-20">
+          <LanguageToggle />
+        </div>
+        <iframe
+          key={language}
+          title={`Maison Tōa booking landing page (${language.toUpperCase()})`}
+          className="block w-full min-h-screen border-0"
+          sandbox="allow-top-navigation-by-user-activation"
+          srcDoc={buildCustomPageDocument(customPage.html, customPage.css)}
+        />
+      </main>
+    );
+  }
 
   return (
     <main
