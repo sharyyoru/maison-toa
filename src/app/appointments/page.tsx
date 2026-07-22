@@ -2350,8 +2350,11 @@ export default function CalendarPage() {
   // Filtered options for smart search dropdowns
   const filteredServiceOptions = useMemo(() => {
     const search = serviceSearch.trim().toLowerCase();
-    if (!search) return serviceOptions;
-    return serviceOptions.filter((opt) => opt.name.toLowerCase().includes(search));
+    const servicesWithDuration = serviceOptions.filter(
+      (opt) => opt.duration_minutes !== null && opt.duration_minutes > 0,
+    );
+    if (!search) return servicesWithDuration;
+    return servicesWithDuration.filter((opt) => opt.name.toLowerCase().includes(search));
   }, [serviceOptions, serviceSearch]);
 
   const filteredStatusOptions = useMemo(() => {
