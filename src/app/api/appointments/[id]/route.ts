@@ -36,7 +36,7 @@ export async function PATCH(
 
     const { data: currentAppointment, error: currentError } = await supabase
       .from("appointments")
-      .select("id, provider_id, start_time, end_time, status, linked_parent_appointment_id")
+      .select("id, provider_id, start_time, end_time, status, linked_parent_appointment_id, tracking_params")
       .eq("id", id)
       .single();
 
@@ -80,10 +80,12 @@ export async function PATCH(
         }
         for (const linked of linkedAppointments || []) {
           const durationMs = new Date(linked.end_time).getTime() - new Date(linked.start_time).getTime();
+          const startDeltaMs = proposedStart.getTime() - new Date(currentAppointment.start_time).getTime();
+          const linkedStart = new Date(new Date(linked.start_time).getTime() + startDeltaMs);
           reservations.push({
             ...linked,
-            start_time: proposedStart.toISOString(),
-            end_time: new Date(proposedStart.getTime() + durationMs).toISOString(),
+            start_time: linkedStart.toISOString(),
+            end_time: new Date(linkedStart.getTime() + durationMs).toISOString(),
           });
         }
       }
@@ -118,6 +120,20 @@ export async function PATCH(
             { error: "The mirrored calendar is not available at the requested time." },
             { status: 409 },
           );
+        }
+      }
+    }
+
+    if (updateData.start_time !== undefined && !currentAppointment.linked_parent_appointment_id) {
+      const trackingParams = (currentAppointment.tracking_params || {}) as Record<string, string>;
+      if (trackingParams.patient_appointment_start) {
+        const currentPatientStart = new Date(trackingParams.patient_appointment_start);
+        if (!Number.isNaN(currentPatientStart.getTime())) {
+          const startDeltaMs = proposedStart.getTime() - new Date(currentAppointment.start_time).getTime();
+          updateData.tracking_params = {
+            ...trackingParams,
+            patient_appointment_start: new Date(currentPatientStart.getTime() + startDeltaMs).toISOString(),
+          };
         }
       }
     }

@@ -73,11 +73,13 @@ export async function PUT(request: NextRequest) {
     const invalidRule = categories.some((category: {
       secondary_calendar_provider_id?: string | null;
       secondary_calendar_duration_minutes?: number | null;
+      secondary_calendar_position?: string | null;
     }) => {
       const providerId = category.secondary_calendar_provider_id || null;
       const duration = Number(category.secondary_calendar_duration_minutes);
+      const position = category.secondary_calendar_position || "start";
       return providerId
-        ? !Number.isInteger(duration) || duration < 1 || duration > 480
+        ? !Number.isInteger(duration) || duration < 1 || duration > 480 || !["start", "end"].includes(position)
         : Boolean(category.secondary_calendar_duration_minutes);
     });
     if (invalidRule) {
@@ -90,6 +92,32 @@ export async function PUT(request: NextRequest) {
     });
     if (invalidBookingDuration) {
       return NextResponse.json({ error: "Booking duration must be a whole number from 1 to 480." }, { status: 400 });
+    }
+
+    const endCategories = categories.filter((category: any) =>
+      category.secondary_calendar_provider_id && (category.secondary_calendar_position || "start") === "end"
+    );
+    if (endCategories.length > 0) {
+      const { data: inheritingTreatments, error: treatmentError } = await supabaseAdmin
+        .from("booking_treatments")
+        .select("category_id, duration_minutes, secondary_calendar_mode")
+        .in("category_id", endCategories.map((category: any) => category.id));
+      if (treatmentError) {
+        return NextResponse.json({ error: treatmentError.message }, { status: 500 });
+      }
+      const invalidEndCategory = endCategories.some((category: any) => {
+        const reservationDuration = Number(category.secondary_calendar_duration_minutes);
+        const requiredDurations = [
+          ...(category.skip_treatment ? [Number(category.booking_duration_minutes ?? 60)] : []),
+          ...(inheritingTreatments || [])
+          .filter((treatment: any) => treatment.category_id === category.id && treatment.secondary_calendar_mode !== "custom" && treatment.secondary_calendar_mode !== "disabled")
+          .map((treatment: any) => Number(treatment.duration_minutes)),
+        ];
+        return requiredDurations.some((duration) => reservationDuration < duration);
+      });
+      if (invalidEndCategory) {
+        return NextResponse.json({ error: "An end-positioned reservation must be at least as long as every inherited doctor treatment." }, { status: 400 });
+      }
     }
 
     // Get existing category IDs
@@ -137,6 +165,7 @@ export async function PUT(request: NextRequest) {
         booking_duration_minutes?: number | null;
         secondary_calendar_provider_id?: string | null;
         secondary_calendar_duration_minutes?: number | null;
+        secondary_calendar_position?: string | null;
       }) => ({
         id: c.id,
         name: c.name,
@@ -151,6 +180,7 @@ export async function PUT(request: NextRequest) {
         secondary_calendar_duration_minutes: c.secondary_calendar_provider_id
           ? Number(c.secondary_calendar_duration_minutes)
           : null,
+        secondary_calendar_position: c.secondary_calendar_position || "start",
         updated_at: new Date().toISOString(),
       }));
 

@@ -727,8 +727,12 @@ async function sendAppointmentConfirmationEmail(
   if (!patientEmail) return;
 
   try {
-    const start = new Date(appointment.start_time);
-    const end = appointment.end_time ? new Date(appointment.end_time) : null;
+    const trackedPatientStart = appointment.tracking_params?.patient_appointment_start;
+    const start = new Date(trackedPatientStart || appointment.start_time);
+    const trackedDurationMinutes = Number(appointment.tracking_params?.appointment_duration_minutes);
+    const end = Number.isFinite(trackedDurationMinutes) && trackedDurationMinutes > 0
+      ? new Date(start.getTime() + trackedDurationMinutes * 60_000)
+      : appointment.end_time ? new Date(appointment.end_time) : null;
 
     const dateLabel = formatSwissDate(start);
     const timeLabel = formatTimeRangeLabel(start, end);
@@ -756,7 +760,7 @@ async function sendAppointmentConfirmationEmail(
           patientFirstName: appointment.patient?.first_name ?? "",
           patientLastName: appointment.patient?.last_name ?? "",
           doctorName,
-          appointmentDate: appointment.start_time,
+          appointmentDate: start.toISOString(),
           service: serviceLabel || "Consultation",
           location,
           language: appointment.patient?.language_preference || "fr",
@@ -798,7 +802,8 @@ async function sendAppointmentConfirmationEmail(
 }
 
 async function syncPendingAppointmentReminder(appointment: CalendarAppointment): Promise<void> {
-  const reminderDate = new Date(new Date(appointment.start_time).getTime() - 24 * 60 * 60 * 1000);
+  const patientStart = appointment.tracking_params?.patient_appointment_start || appointment.start_time;
+  const reminderDate = new Date(new Date(patientStart).getTime() - 24 * 60 * 60 * 1000);
 
   const { data: existingReminder } = await supabaseClient
     .from("scheduled_emails")
@@ -2045,7 +2050,11 @@ export default function CalendarPage() {
             providers,
             startTime: startLocal.toISOString(),
             endTime: endLocal.toISOString(),
-            excludeAppointmentId: editingAppointment?.id
+            excludeAppointmentId: editingAppointment?.id,
+            serviceIds: selectedServiceIds.length > 0
+              ? selectedServiceIds
+              : selectedServiceId ? [selectedServiceId] : [],
+            machineIds: selectedMachineIds,
           })
         });
         
@@ -2072,7 +2081,7 @@ export default function CalendarPage() {
     }, 500); // 500ms debounce
     
     return () => clearTimeout(timeoutId);
-  }, [selectedDoctorIds, draftDate, draftTime, consultationDuration, editingAppointment?.id]);
+  }, [selectedDoctorIds, selectedServiceIds, selectedServiceId, selectedMachineIds, draftDate, draftTime, consultationDuration, editingAppointment?.id]);
   
   // Close doctor dropdown when clicking outside
   useEffect(() => {
@@ -3206,7 +3215,7 @@ export default function CalendarPage() {
         // Focus calendar on the booked date
         if (createdAppointments.length > 0) {
           const firstAppt = createdAppointments[0];
-          const insertedStart = new Date(firstAppt.start_time);
+          const insertedStart = new Date(firstAppt.tracking_params?.patient_appointment_start || firstAppt.start_time);
           if (!Number.isNaN(insertedStart.getTime())) {
             setSelectedDate(insertedStart);
             setRangeEndDate(null);
@@ -4371,10 +4380,12 @@ export default function CalendarPage() {
             const linkedStartMs = new Date(appt.start_time).getTime();
             const linkedEndMs = appt.end_time ? new Date(appt.end_time).getTime() : linkedStartMs;
             const linkedDuration = Math.max(0, linkedEndMs - linkedStartMs);
+            const parentStartDelta = new Date(updated.start_time).getTime() - new Date(editingAppointment.start_time).getTime();
+            const shiftedLinkedStart = linkedStartMs + parentStartDelta;
             return {
               ...appt,
-              start_time: updated.start_time,
-              end_time: new Date(new Date(updated.start_time).getTime() + linkedDuration).toISOString(),
+              start_time: new Date(shiftedLinkedStart).toISOString(),
+              end_time: new Date(shiftedLinkedStart + linkedDuration).toISOString(),
               status: updated.status,
               location: updated.location,
             };

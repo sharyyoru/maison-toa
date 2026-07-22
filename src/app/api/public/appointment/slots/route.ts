@@ -205,7 +205,7 @@ export async function GET(request: Request) {
   if (excludeId) {
     const { data: currentAppointment, error: currentAppointmentError } = await supabase
       .from("appointments")
-      .select("id, start_time, end_time")
+      .select("id, start_time, end_time, tracking_params")
       .eq("id", excludeId)
       .maybeSingle();
 
@@ -218,6 +218,11 @@ export async function GET(request: Request) {
       60_000,
       new Date(currentAppointment.end_time).getTime() - new Date(currentAppointment.start_time).getTime(),
     );
+    const currentTrackingParams = (currentAppointment.tracking_params || {}) as Record<string, string>;
+    const currentPatientStart = currentTrackingParams.patient_appointment_start
+      ? new Date(currentTrackingParams.patient_appointment_start)
+      : new Date(currentAppointment.start_time);
+    const doctorOffsetMs = new Date(currentAppointment.start_time).getTime() - currentPatientStart.getTime();
 
     const patientIntervals: BookingInterval[] = patientApts.map((appointment) => ({
       start: new Date(appointment.start_time),
@@ -229,12 +234,16 @@ export async function GET(request: Request) {
       end: new Date(appointment.end_time),
       groupId: appointment.id,
     }));
-    availableSlots = availableSlots.filter((time) => {
+    // The coarse 30-minute filter assumes the doctor starts at the patient
+    // time. Rebuild from all slots and apply exact shifted intervals below.
+    availableSlots = allSlots.filter((time) => {
       const [hour, minute] = time.split(":").map(Number);
       const candidateMinutes = hour * 60 + minute;
-      if (candidateMinutes < scheduleStartMinutes
-        || candidateMinutes + primaryDurationMs / 60_000 > scheduleEndMinutes) return false;
-      const candidateStart = createSwissDateTime(date, hour, minute);
+      const doctorOffsetMinutes = doctorOffsetMs / 60_000;
+      if (candidateMinutes + doctorOffsetMinutes < scheduleStartMinutes
+        || candidateMinutes + doctorOffsetMinutes + primaryDurationMs / 60_000 > scheduleEndMinutes) return false;
+      const patientStart = createSwissDateTime(date, hour, minute);
+      const candidateStart = new Date(patientStart.getTime() + doctorOffsetMs);
       const candidateEnd = new Date(candidateStart.getTime() + primaryDurationMs);
       return !hasCapacityConflict(candidateStart, candidateEnd, patientIntervals, maxCapacity)
         && !blockingIntervals.some((interval) => intervalOverlaps(candidateStart, candidateEnd, interval));
@@ -256,6 +265,7 @@ export async function GET(request: Request) {
         60_000,
         new Date(linkedAppointment.end_time).getTime() - new Date(linkedAppointment.start_time).getTime(),
       );
+      const linkedOffsetMs = new Date(linkedAppointment.start_time).getTime() - currentPatientStart.getTime();
       const { data: linkedCalendarAppointments, error: linkedCalendarError } = await supabase
         .from("appointments")
         .select("id, start_time, end_time")
@@ -272,7 +282,8 @@ export async function GET(request: Request) {
 
       availableSlots = availableSlots.filter((time) => {
         const [hour, minute] = time.split(":").map(Number);
-        const candidateStart = createSwissDateTime(date, hour, minute);
+        const patientStart = createSwissDateTime(date, hour, minute);
+        const candidateStart = new Date(patientStart.getTime() + linkedOffsetMs);
         const candidateEnd = new Date(candidateStart.getTime() + linkedDurationMs);
         return !(linkedCalendarAppointments || []).some(
           (appointment) => new Date(appointment.start_time) < candidateEnd && new Date(appointment.end_time) > candidateStart,

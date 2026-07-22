@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getBookingCalendarIntervals } from '@/lib/bookingCalendarIntervals';
 
 function formatPatientFileName(firstName?: string | null, lastName?: string | null) {
   const first = (firstName ?? '').trim();
@@ -10,7 +11,7 @@ function formatPatientFileName(firstName?: string | null, lastName?: string | nu
 
 export async function POST(request: Request) {
   try {
-    const { providers, providerIds, startTime, endTime, excludeAppointmentId, machineIds } = await request.json();
+    const { providers, providerIds, startTime, endTime, excludeAppointmentId, machineIds, serviceIds } = await request.json();
     
     // Support both old format (providerIds) and new format (providers array)
     const providersArray = providers || (providerIds || []).map((id: string) => ({ id, name: '' }));
@@ -52,6 +53,27 @@ export async function POST(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
+
+    let conflictStart = startDate;
+    let conflictEnd = endDate;
+    if (Array.isArray(serviceIds) && serviceIds.length === 1) {
+      const { data: service } = await supabase
+        .from('services')
+        .select('mirror_calendar_provider_id, mirror_duration_minutes, mirror_position')
+        .eq('id', serviceIds[0])
+        .maybeSingle();
+      if (service?.mirror_calendar_provider_id && service.mirror_duration_minutes) {
+        const durationMinutes = (endDate.getTime() - startDate.getTime()) / 60_000;
+        const intervals = getBookingCalendarIntervals({
+          bookingStart: startDate,
+          primaryDurationMinutes: durationMinutes,
+          secondaryDurationMinutes: Number(service.mirror_duration_minutes),
+          secondaryPosition: service.mirror_position === 'end' ? 'end' : 'start',
+        });
+        conflictStart = intervals.doctorCalendarStart;
+        conflictEnd = intervals.doctorCalendarEnd;
+      }
+    }
     
     // Check conflicts for each provider in parallel
     const conflicts = await Promise.all(
@@ -96,8 +118,8 @@ export async function POST(request: Request) {
             patient:patients(first_name, last_name)
           `)
           .not('status', 'in', '(cancelled,no_show)')
-          .lt('start_time', endTime)
-          .gt('end_time', startTime);
+          .lt('start_time', conflictEnd.toISOString())
+          .gt('end_time', conflictStart.toISOString());
         
         // Exclude current appointment if editing
         if (excludeAppointmentId) {
@@ -190,8 +212,8 @@ export async function POST(request: Request) {
             .from("appointments")
             .select("id, appointment_group_id")
             .contains("machine_ids", [mid])
-            .lt("start_time", endTime)
-            .gt("end_time", startTime)
+            .lt("start_time", conflictEnd.toISOString())
+            .gt("end_time", conflictStart.toISOString())
             .not("status", "in", "(cancelled,no_show)");
 
           if (excludeAppointmentId) {

@@ -1078,6 +1078,7 @@ interface BookingCategory {
   booking_duration_minutes: number;
   secondary_calendar_provider_id: string | null;
   secondary_calendar_duration_minutes: number | null;
+  secondary_calendar_position: "start" | "end";
 }
 
 interface BookingTreatment {
@@ -1100,6 +1101,7 @@ interface BookingTreatment {
   secondary_calendar_mode: "inherit" | "disabled" | "custom";
   secondary_calendar_provider_id: string | null;
   secondary_calendar_duration_minutes: number | null;
+  secondary_calendar_position: "start" | "end" | null;
 }
 
 interface ServiceCategoryOption {
@@ -1478,6 +1480,7 @@ function BookingCategoriesTab() {
       booking_duration_minutes: 60,
       secondary_calendar_provider_id: null,
       secondary_calendar_duration_minutes: null,
+      secondary_calendar_position: "start",
     };
     setCategories([...categories, newCategory]);
   };
@@ -1514,6 +1517,7 @@ function BookingCategoriesTab() {
       secondary_calendar_mode: "inherit",
       secondary_calendar_provider_id: null,
       secondary_calendar_duration_minutes: null,
+      secondary_calendar_position: null,
     };
     setTreatments([...treatments, newTreatment]);
   };
@@ -1705,6 +1709,7 @@ function BookingCategoriesTab() {
                           </select>
                         </label>
                         {cat.secondary_calendar_provider_id && (
+                          <>
                           <label className="text-[10px] font-medium text-slate-500">
                             Duration (minutes)
                             <input
@@ -1721,6 +1726,18 @@ function BookingCategoriesTab() {
                               className="mt-1 block w-32 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
                             />
                           </label>
+                          <label className="text-[10px] font-medium text-slate-500">
+                            Doctor time
+                            <select
+                              value={cat.secondary_calendar_position || "start"}
+                              onChange={(e) => updateCategory(cat.id, "secondary_calendar_position", e.target.value as "start" | "end")}
+                              className="mt-1 block min-w-48 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+                            >
+                              <option value="start">Beginning of reservation</option>
+                              <option value="end">End of reservation</option>
+                            </select>
+                          </label>
+                          </>
                         )}
                       </div>
                       <p className="mt-2 text-[10px] text-slate-500">Used by skipped-treatment bookings and inherited by treatments unless overridden.</p>
@@ -2024,6 +2041,9 @@ function BookingCategoriesTab() {
                                   if (mode !== "custom") {
                                     updateTreatment(treat.id, "secondary_calendar_provider_id", null);
                                     updateTreatment(treat.id, "secondary_calendar_duration_minutes", null);
+                                    updateTreatment(treat.id, "secondary_calendar_position", null);
+                                  } else if (!treat.secondary_calendar_position) {
+                                    updateTreatment(treat.id, "secondary_calendar_position", "start");
                                   }
                                 }}
                                 className="mt-1 block min-w-44 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
@@ -2063,6 +2083,17 @@ function BookingCategoriesTab() {
                                     )}
                                     className="mt-1 block w-32 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
                                   />
+                                </label>
+                                <label className="text-[10px] font-medium text-slate-500">
+                                  Doctor time
+                                  <select
+                                    value={treat.secondary_calendar_position || "start"}
+                                    onChange={(e) => updateTreatment(treat.id, "secondary_calendar_position", e.target.value as "start" | "end")}
+                                    className="mt-1 block min-w-48 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+                                  >
+                                    <option value="start">Beginning of reservation</option>
+                                    <option value="end">End of reservation</option>
+                                  </select>
                                 </label>
                               </>
                             )}

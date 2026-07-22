@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
 import { resolveBookingSecondaryCalendar } from "@/lib/bookingSecondaryCalendar";
+import { getBookingCalendarIntervals } from "@/lib/bookingCalendarIntervals";
 import {
   addReleaseBoundary,
   generateThirtyMinuteStarts,
@@ -87,9 +88,10 @@ export async function GET(request: NextRequest) {
       patientType,
     });
     const secondaryCalendar = bookingContext.secondaryCalendar;
-    const primaryDurationMinutes = secondaryCalendar?.providerId === providerId
-      ? Math.max(bookingContext.primaryDurationMinutes, secondaryCalendar.durationMinutes)
-      : bookingContext.primaryDurationMinutes;
+    const primaryDurationMinutes = bookingContext.primaryDurationMinutes;
+    const doctorStartOffsetMinutes = secondaryCalendar?.position === "end"
+      ? secondaryCalendar.durationMinutes - primaryDurationMinutes
+      : 0;
 
     // Fetch appointments that OVERLAP the date range (not just those starting within it).
     // This correctly catches multi-day blocking events (VACANCES, STOP) that started
@@ -309,7 +311,7 @@ export async function GET(request: NextRequest) {
       addReleaseBoundary(
         candidateMap,
         interval.end,
-        bookingContext.bufferBeforeMinutes,
+        bookingContext.bufferBeforeMinutes - doctorStartOffsetMinutes,
         rangeStart,
         rangeEnd,
       );
@@ -322,17 +324,28 @@ export async function GET(request: NextRequest) {
     const availableStarts: string[] = [];
     const candidates = [...candidateMap.values()].sort((a, b) => a.getTime() - b.getTime());
     for (const slotStart of candidates) {
-      const primaryStart = new Date(slotStart.getTime() - bookingContext.bufferBeforeMinutes * 60 * 1000);
-      const primaryEnd = new Date(slotStart.getTime() + (primaryDurationMinutes + bookingContext.bufferAfterMinutes) * 60 * 1000);
+      const intervals = getBookingCalendarIntervals({
+        bookingStart: slotStart,
+        primaryDurationMinutes,
+        bufferBeforeMinutes: bookingContext.bufferBeforeMinutes,
+        bufferAfterMinutes: bookingContext.bufferAfterMinutes,
+        secondaryDurationMinutes: secondaryCalendar?.durationMinutes,
+        secondaryPosition: secondaryCalendar?.position,
+      });
+      const sameCalendar = secondaryCalendar?.providerId === providerId;
+      const primaryStart = sameCalendar && intervals.secondaryCalendarStart
+        ? new Date(Math.min(intervals.doctorCalendarStart.getTime(), intervals.secondaryCalendarStart.getTime()))
+        : intervals.doctorCalendarStart;
+      const primaryEnd = sameCalendar && intervals.secondaryCalendarEnd
+        ? new Date(Math.max(intervals.doctorCalendarEnd.getTime(), intervals.secondaryCalendarEnd.getTime()))
+        : intervals.doctorCalendarEnd;
       const primaryBlocked = hasCapacityConflict(primaryStart, primaryEnd, patientIntervals, maxCapacity)
         || blockingIntervals.some((interval) => intervalOverlaps(primaryStart, primaryEnd, interval));
       const machineBlocked = machineIntervals.length > 0
         && hasCapacityConflict(primaryStart, primaryEnd, machineIntervals, machineMax);
-      const secondaryEnd = new Date(
-        slotStart.getTime() + (secondaryCalendar?.durationMinutes || 0) * 60 * 1000,
-      );
       const secondaryBlocked = secondaryIntervals.some(
-        (interval) => intervalOverlaps(slotStart, secondaryEnd, interval),
+        (interval) => !!intervals.secondaryCalendarStart && !!intervals.secondaryCalendarEnd
+          && intervalOverlaps(intervals.secondaryCalendarStart, intervals.secondaryCalendarEnd, interval),
       );
       if (primaryBlocked || machineBlocked || secondaryBlocked) {
         unavailableStarts.add(slotStart.toISOString());
@@ -351,6 +364,7 @@ export async function GET(request: NextRequest) {
         durationMinutes: primaryDurationMinutes,
         bufferBeforeMinutes: bookingContext.bufferBeforeMinutes,
         bufferAfterMinutes: bookingContext.bufferAfterMinutes,
+        startOffsetMinutes: doctorStartOffsetMinutes,
       },
       maxConcurrent: maxCapacity
     });

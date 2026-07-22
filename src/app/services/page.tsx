@@ -32,6 +32,7 @@ type Service = {
   vat_rate_pct: number | null;
   mirror_calendar_provider_id: string | null;
   mirror_duration_minutes: number | null;
+  mirror_position: "start" | "end";
 };
 
 type CalendarOption = { id: string; name: string };
@@ -137,6 +138,7 @@ export default function ServicesPage() {
   const [editMirrorEnabled, setEditMirrorEnabled] = useState(false);
   const [editMirrorCalendarId, setEditMirrorCalendarId] = useState("");
   const [editMirrorDuration, setEditMirrorDuration] = useState("");
+  const [editMirrorPosition, setEditMirrorPosition] = useState<"start" | "end">("start");
   const [editServiceCategoryId, setEditServiceCategoryId] = useState<string>(
     "",
   );
@@ -188,7 +190,7 @@ export default function ServicesPage() {
         const { data: serviceData, error: serviceError } = await supabaseClient
           .from("services")
           .select(
-            "id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct, mirror_calendar_provider_id, mirror_duration_minutes",
+            "id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct, mirror_calendar_provider_id, mirror_duration_minutes, mirror_position",
           )
           .order("created_at", { ascending: true });
 
@@ -226,6 +228,7 @@ export default function ServicesPage() {
             row.mirror_duration_minutes !== null && row.mirror_duration_minutes !== undefined
               ? Number(row.mirror_duration_minutes)
               : null,
+          mirror_position: row.mirror_position === "end" ? "end" : "start",
         }));
 
         setServices(serviceRows as Service[]);
@@ -398,7 +401,7 @@ export default function ServicesPage() {
           vat_rate_pct: newServiceVatable ? 8.1 : 0,
           is_active: true,
         })
-        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct, mirror_calendar_provider_id, mirror_duration_minutes")
+        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct, mirror_calendar_provider_id, mirror_duration_minutes, mirror_position")
         .single();
 
       if (error || !data) {
@@ -429,6 +432,7 @@ export default function ServicesPage() {
             : null,
         mirror_calendar_provider_id: null,
         mirror_duration_minutes: null,
+        mirror_position: "start",
       };
 
       setServices((prev) => [...prev, newRow]);
@@ -697,6 +701,7 @@ export default function ServicesPage() {
     setEditMirrorDuration(
       service.mirror_duration_minutes !== null ? String(service.mirror_duration_minutes) : "",
     );
+    setEditMirrorPosition(service.mirror_position || "start");
   }
 
   function handleCancelEditService() {
@@ -709,6 +714,7 @@ export default function ServicesPage() {
     setEditMirrorEnabled(false);
     setEditMirrorCalendarId("");
     setEditMirrorDuration("");
+    setEditMirrorPosition("start");
     setServiceMessage(null);
   }
 
@@ -746,6 +752,10 @@ export default function ServicesPage() {
         return;
       }
       mirrorDurationValue = parsed;
+      if (editMirrorPosition === "end" && durationValue !== null && parsed < durationValue) {
+        setServiceMessage("For End placement, mirrored minutes must be at least as long as doctor minutes.");
+        return;
+      }
     }
 
     try {
@@ -764,9 +774,10 @@ export default function ServicesPage() {
           vat_rate_pct: editServiceVatable ? 8.1 : 0,
           mirror_calendar_provider_id: editMirrorEnabled ? editMirrorCalendarId : null,
           mirror_duration_minutes: editMirrorEnabled ? mirrorDurationValue : null,
+          mirror_position: editMirrorEnabled ? editMirrorPosition : "start",
         })
         .eq("id", serviceId)
-        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct, mirror_calendar_provider_id, mirror_duration_minutes")
+        .select("id, category_id, name, code, description, is_active, base_price, duration_minutes, vat_status, vat_rate_pct, mirror_calendar_provider_id, mirror_duration_minutes, mirror_position")
         .single();
 
       if (error || !data) {
@@ -800,6 +811,7 @@ export default function ServicesPage() {
           updated.mirror_duration_minutes !== null && updated.mirror_duration_minutes !== undefined
             ? Number(updated.mirror_duration_minutes)
             : null,
+        mirror_position: updated.mirror_position === "end" ? "end" : "start",
       };
 
       setServices((prev) =>
@@ -818,6 +830,7 @@ export default function ServicesPage() {
       setEditMirrorEnabled(false);
       setEditMirrorCalendarId("");
       setEditMirrorDuration("");
+      setEditMirrorPosition("start");
     } catch {
       setServiceMessage("Failed to update service.");
     } finally {
@@ -1574,6 +1587,14 @@ export default function ServicesPage() {
                                                 placeholder="75"
                                               />
                                             </div>
+                                            <select
+                                              value={editMirrorPosition}
+                                              onChange={(e) => setEditMirrorPosition(e.target.value as "start" | "end")}
+                                              className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900"
+                                            >
+                                              <option value="start">Doctor at beginning</option>
+                                              <option value="end">Doctor at end</option>
+                                            </select>
                                           </div>
                                         )}
                                         <label className="mt-1 flex w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700">
@@ -1636,7 +1657,7 @@ export default function ServicesPage() {
                                     )}
                                     {service.mirror_calendar_provider_id && (
                                       <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold text-violet-700">
-                                        Mirror {calendarOptions.find((calendar) => calendar.id === service.mirror_calendar_provider_id)?.name ?? "calendar"} · {service.mirror_duration_minutes} min
+                                        Mirror {calendarOptions.find((calendar) => calendar.id === service.mirror_calendar_provider_id)?.name ?? "calendar"} · {service.mirror_duration_minutes} min · Doctor {service.mirror_position === "end" ? "end" : "start"}
                                       </span>
                                     )}
 

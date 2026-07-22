@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     // Fetch appointment
     const { data: appt, error: apptError } = await supabase
       .from("appointments")
-      .select("id, start_time, end_time, status, reason, location, patient_id, provider_id")
+      .select("id, start_time, end_time, status, reason, location, patient_id, provider_id, tracking_params")
       .eq("id", id)
       .single();
 
@@ -124,7 +124,13 @@ export async function POST(request: Request) {
     const language = parseLangFromReason(appt.reason ?? null);
 
     // Parse new date (ISO string from Swiss local time)
-    const newStartDate = parseSwissDateTimeLocal(newAppointmentDate);
+    const newPatientStartDate = parseSwissDateTimeLocal(newAppointmentDate);
+    const trackingParams = (appt.tracking_params || {}) as Record<string, string>;
+    const currentPatientStart = trackingParams.patient_appointment_start
+      ? new Date(trackingParams.patient_appointment_start)
+      : new Date(appt.start_time);
+    const doctorOffsetMs = new Date(appt.start_time).getTime() - currentPatientStart.getTime();
+    const newStartDate = new Date(newPatientStartDate.getTime() + doctorOffsetMs);
     const originalDurationMs = Math.max(
       60_000,
       new Date(appt.end_time).getTime() - new Date(appt.start_time).getTime(),
@@ -182,14 +188,16 @@ export async function POST(request: Request) {
         60_000,
         new Date(linkedAppointment.end_time).getTime() - new Date(linkedAppointment.start_time).getTime(),
       );
-      const linkedEnd = new Date(newStartDate.getTime() + linkedDurationMs);
+      const bookingDeltaMs = newPatientStartDate.getTime() - currentPatientStart.getTime();
+      const linkedStart = new Date(new Date(linkedAppointment.start_time).getTime() + bookingDeltaMs);
+      const linkedEnd = new Date(linkedStart.getTime() + linkedDurationMs);
       const { data: linkedConflicts, error: linkedConflictError } = await supabase
         .from("appointments")
         .select("id")
         .eq("provider_id", linkedAppointment.provider_id)
         .neq("id", linkedAppointment.id)
         .lt("start_time", linkedEnd.toISOString())
-        .gt("end_time", newStartDate.toISOString())
+        .gt("end_time", linkedStart.toISOString())
         .not("status", "in", "(cancelled,no_show)")
         .limit(1);
       if (linkedConflictError) {
@@ -210,6 +218,10 @@ export async function POST(request: Request) {
       .update({
         start_time: newStartDate.toISOString(),
         end_time: newEndDate.toISOString(),
+        tracking_params: {
+          ...trackingParams,
+          patient_appointment_start: newPatientStartDate.toISOString(),
+        },
       })
       .eq("id", id);
 
@@ -231,7 +243,7 @@ export async function POST(request: Request) {
           patient.last_name ?? "",
           patient.gender ?? null,
           doctorName,
-          newStartDate,
+          newPatientStartDate,
           cleanAppointmentReason(appt.reason),
           language,
           id
@@ -251,7 +263,7 @@ export async function POST(request: Request) {
         ? `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim()
         : "Unknown patient";
       const service = cleanAppointmentReason(appt.reason) || "-";
-      const newDateStr = newStartDate.toLocaleString("en-GB", {
+      const newDateStr = newPatientStartDate.toLocaleString("en-GB", {
         timeZone: "Europe/Zurich", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
       });
       await sendEmail(
@@ -273,8 +285,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       message: "Appointment rescheduled",
-      newDate: formatSwissDateWithWeekday(newStartDate),
-      newTime: newStartDate.toLocaleTimeString("fr-FR", {
+      newDate: formatSwissDateWithWeekday(newPatientStartDate),
+      newTime: newPatientStartDate.toLocaleTimeString("fr-FR", {
         hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/Zurich",
       }),
     });

@@ -8,6 +8,7 @@ export type BookingWindow = {
   durationMinutes: number;
   bufferBeforeMinutes: number;
   bufferAfterMinutes: number;
+  startOffsetMinutes?: number;
 };
 
 const THIRTY_MINUTES_MS = 30 * 60 * 1000;
@@ -85,8 +86,9 @@ export function fitsWithinDailyAvailability(
     return hour * 60 + minute;
   };
   const selected = toMinutes(time);
-  return selected - window.bufferBeforeMinutes >= toMinutes(availability.start)
-    && selected + window.durationMinutes + window.bufferAfterMinutes <= toMinutes(availability.end);
+  const startOffsetMinutes = window.startOffsetMinutes || 0;
+  return selected + startOffsetMinutes - window.bufferBeforeMinutes >= toMinutes(availability.start)
+    && selected + startOffsetMinutes + window.durationMinutes + window.bufferAfterMinutes <= toMinutes(availability.end);
 }
 
 export function mergeAvailableTimes(
