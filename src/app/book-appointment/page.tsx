@@ -1,56 +1,35 @@
-"use client";
+import { DEFAULT_BOOKING_PAGES } from "@/components/PageBuilder/types";
+import type { PageConfig } from "@/components/PageBuilder/types";
+import { mergePageConfig } from "@/lib/bookingPageConfig";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import BookAppointmentContent from "./BookAppointmentContent";
 
-import { LanguageToggle } from "@/components/LanguageToggle";
-import { SectionRenderer } from "@/components/PageBuilder";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
+export const dynamic = "force-dynamic";
 
-export default function BookAppointmentPage() {
-  const { language, t } = useLanguage();
-  const pageConfig = useBookingPageConfig("landing");
+async function getLandingPageConfig(): Promise<PageConfig> {
+  const defaultConfig = DEFAULT_BOOKING_PAGES.landing;
 
-  return (
-    <main
-      className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100"
-      style={{ backgroundColor: pageConfig.settings.backgroundColor }}
-    >
-      {/* Hero Section */}
-      <div className="relative overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-slate-200 rounded-full opacity-50 blur-3xl" />
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-slate-200 rounded-full opacity-50 blur-3xl" />
-        </div>
+  const { data, error } = await supabaseAdmin
+    .from("site_settings")
+    .select("key,value")
+    .in("key", ["booking_pages_config", "booking_page_config"]);
 
-        <div className="relative max-w-6xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
-          {/* Language Toggle - Top Right */}
-          <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-10">
-            <LanguageToggle />
-          </div>
+  if (error) {
+    console.error("Failed to load booking landing page config:", error.message);
+    return defaultConfig;
+  }
 
-          {/* Logo Header */}
-          {/* Welcome Message */}
-          {/* CTA Button */}
+  const settings = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
+  const savedConfig =
+    settings.booking_pages_config?.landing ?? settings.booking_page_config;
 
-          {pageConfig.sections.map((section) => (
-            <SectionRenderer
-              key={section.id}
-              section={section}
-              language={language}
-            />
-          ))}
+  return savedConfig?.sections && Array.isArray(savedConfig.sections)
+    ? mergePageConfig(defaultConfig, savedConfig)
+    : defaultConfig;
+}
 
-        </div>
-      </div>
+export default async function BookAppointmentPage() {
+  const initialConfig = await getLandingPageConfig();
 
-      {/* Footer */}
-      <footer className="bg-slate-900 text-white py-8 mt-16">
-        <div className="max-w-6xl mx-auto px-4 text-center">
-          <p className="text-slate-400 text-sm">
-            {t("common.footer").replace("{year}", new Date().getFullYear().toString())}
-          </p>
-        </div>
-      </footer>
-    </main>
-  );
+  return <BookAppointmentContent initialConfig={initialConfig} />;
 }

@@ -3,26 +3,16 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_BOOKING_PAGES } from "@/components/PageBuilder/types";
 import type { BookingPageId, PageConfig } from "@/components/PageBuilder/types";
+import { mergePageConfig } from "@/lib/bookingPageConfig";
 
-function mergePageConfig(defaultConfig: PageConfig, savedConfig: Partial<PageConfig>): PageConfig {
-  return {
-    ...defaultConfig,
-    ...savedConfig,
-    settings: {
-      ...defaultConfig.settings,
-      ...savedConfig.settings,
-    },
-  };
-}
-
-export function useBookingPageConfig(pageId: BookingPageId) {
+export function useBookingPageConfig(pageId: BookingPageId, initialConfig?: PageConfig) {
   const defaultConfig = DEFAULT_BOOKING_PAGES[pageId];
-  const [pageConfig, setPageConfig] = useState<PageConfig>(defaultConfig);
+  const [pageConfig, setPageConfig] = useState<PageConfig>(initialConfig ?? defaultConfig);
 
   useEffect(() => {
     let isMounted = true;
 
-    setPageConfig(defaultConfig);
+    setPageConfig(initialConfig ?? defaultConfig);
 
     fetch("/api/settings/content-translations", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
@@ -39,7 +29,7 @@ export function useBookingPageConfig(pageId: BookingPageId) {
     return () => {
       isMounted = false;
     };
-  }, [defaultConfig, pageId]);
+  }, [defaultConfig, initialConfig, pageId]);
 
   return pageConfig;
 }
