@@ -94,15 +94,41 @@ export async function PUT(request: Request) {
       secondary_calendar_mode?: string;
       secondary_calendar_provider_id?: string | null;
       secondary_calendar_duration_minutes?: number | null;
+      secondary_calendar_position?: string | null;
     }) => {
       const mode = t.secondary_calendar_mode || "inherit";
       if (!["inherit", "disabled", "custom"].includes(mode)) return true;
       if (mode !== "custom") return false;
       const duration = Number(t.secondary_calendar_duration_minutes);
-      return !t.secondary_calendar_provider_id || !Number.isInteger(duration) || duration < 1 || duration > 480;
+      const position = t.secondary_calendar_position || "start";
+      return !t.secondary_calendar_provider_id || !Number.isInteger(duration) || duration < 1 || duration > 480
+        || !["start", "end"].includes(position)
+        || (position === "end" && duration < Number((t as any).duration_minutes));
     });
     if (invalidRule) {
-      return NextResponse.json({ error: "Custom secondary calendar rules require a calendar and 1-480 whole minutes." }, { status: 400 });
+      return NextResponse.json({ error: "Custom additional-calendar rules require a valid calendar, placement, and duration; End must fit the doctor treatment." }, { status: 400 });
+    }
+
+    const inheritedCategoryIds = [...new Set(treatments
+      .filter((t: any) => (t.secondary_calendar_mode || "inherit") === "inherit")
+      .map((t: any) => t.category_id))];
+    if (inheritedCategoryIds.length > 0) {
+      const { data: inheritedCategories, error: categoryError } = await supabaseAdmin
+        .from("booking_categories")
+        .select("id, secondary_calendar_provider_id, secondary_calendar_duration_minutes, secondary_calendar_position")
+        .in("id", inheritedCategoryIds);
+      if (categoryError) return NextResponse.json({ error: categoryError.message }, { status: 500 });
+      const categoryById = new Map((inheritedCategories || []).map((category: any) => [category.id, category]));
+      const invalidInheritedEnd = treatments.some((t: any) => {
+        if ((t.secondary_calendar_mode || "inherit") !== "inherit") return false;
+        const category: any = categoryById.get(t.category_id);
+        return category?.secondary_calendar_provider_id
+          && category.secondary_calendar_position === "end"
+          && Number(category.secondary_calendar_duration_minutes) < Number(t.duration_minutes);
+      });
+      if (invalidInheritedEnd) {
+        return NextResponse.json({ error: "An inherited end-positioned reservation is shorter than one or more doctor treatments." }, { status: 400 });
+      }
     }
 
     const invalidDisplayDuration = treatments.some((t: { display_duration_minutes?: number | string | null }) => {
@@ -179,6 +205,8 @@ export async function PUT(request: Request) {
             t.secondary_calendar_mode === "custom" ? t.secondary_calendar_provider_id || null : null,
           secondary_calendar_duration_minutes:
             t.secondary_calendar_mode === "custom" ? Number(t.secondary_calendar_duration_minutes) : null,
+          secondary_calendar_position:
+            t.secondary_calendar_mode === "custom" ? t.secondary_calendar_position || "start" : null,
         }))
       );
 

@@ -11,6 +11,7 @@ import {
 import { normalizePatientLanguage } from "@/lib/languagePreference";
 import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
 import { resolveBookingSecondaryCalendar } from "@/lib/bookingSecondaryCalendar";
+import { getBookingCalendarIntervals } from "@/lib/bookingCalendarIntervals";
 import { hasCapacityConflict, intervalOverlaps, type BookingInterval } from "@/lib/exactBookingAvailability";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -338,12 +339,28 @@ export async function POST(request: Request) {
     }
 
     // Check if time slot has capacity for this doctor using full overlap detection.
-    const apptStart = new Date(appointmentDateObj.getTime() - bookingContext.bufferBeforeMinutes * 60 * 1000);
     const secondaryCalendar = bookingContext.secondaryCalendar;
-    if (secondaryCalendar?.providerId === providerId) {
-      durationMinutes = Math.max(durationMinutes, secondaryCalendar.durationMinutes);
+    if (secondaryCalendar?.position === "end" && secondaryCalendar.durationMinutes < durationMinutes) {
+      return NextResponse.json(
+        { error: "The configured additional calendar is shorter than the doctor appointment." },
+        { status: 400 },
+      );
     }
-    const apptEnd = new Date(appointmentDateObj.getTime() + (durationMinutes + bookingContext.bufferAfterMinutes) * 60 * 1000);
+    const calendarIntervals = getBookingCalendarIntervals({
+      bookingStart: appointmentDateObj,
+      primaryDurationMinutes: durationMinutes,
+      bufferBeforeMinutes: bookingContext.bufferBeforeMinutes,
+      bufferAfterMinutes: bookingContext.bufferAfterMinutes,
+      secondaryDurationMinutes: secondaryCalendar?.durationMinutes,
+      secondaryPosition: secondaryCalendar?.position,
+    });
+    const sameCalendar = secondaryCalendar?.providerId === providerId;
+    const apptStart = sameCalendar && calendarIntervals.secondaryCalendarStart
+      ? new Date(Math.min(calendarIntervals.doctorCalendarStart.getTime(), calendarIntervals.secondaryCalendarStart.getTime()))
+      : calendarIntervals.doctorCalendarStart;
+    const apptEnd = sameCalendar && calendarIntervals.secondaryCalendarEnd
+      ? new Date(Math.max(calendarIntervals.doctorCalendarEnd.getTime(), calendarIntervals.secondaryCalendarEnd.getTime()))
+      : calendarIntervals.doctorCalendarEnd;
 
     console.log(`[Booking] Checking availability for ${doctorName} (${doctorSlug}) at ${apptStart.toISOString()}`);
     console.log(`[Booking] Max capacity for this doctor: ${maxCapacity}`);
@@ -415,15 +432,14 @@ export async function POST(request: Request) {
     console.log(`[Booking] ALLOWED: ${doctorAppointments.length} < ${maxCapacity}`);
 
     if (secondaryCalendar && secondaryCalendar.providerId !== providerId) {
-      const secondaryEnd = new Date(
-        appointmentDateObj.getTime() + secondaryCalendar.durationMinutes * 60 * 1000,
-      );
+      const secondaryStart = calendarIntervals.secondaryCalendarStart!;
+      const secondaryEnd = calendarIntervals.secondaryCalendarEnd!;
       const { data: secondaryConflicts, error: secondaryConflictError } = await supabase
         .from("appointments")
         .select("id")
         .eq("provider_id", secondaryCalendar.providerId)
         .lt("start_time", secondaryEnd.toISOString())
-        .gt("end_time", appointmentDateObj.toISOString())
+        .gt("end_time", secondaryStart.toISOString())
         .not("status", "in", "(cancelled,no_show)")
         .limit(1);
 
@@ -698,19 +714,19 @@ export async function POST(request: Request) {
         appointment_duration_minutes: String(durationMinutes),
         buffer_before_minutes: String(bookingContext.bufferBeforeMinutes),
         buffer_after_minutes: String(bookingContext.bufferAfterMinutes),
+        doctor_calendar_position: secondaryCalendar?.position || "start",
       },
     }];
 
     if (secondaryCalendar && secondaryCalendar.providerId !== providerId) {
-      const secondaryEnd = new Date(
-        appointmentDateObj.getTime() + secondaryCalendar.durationMinutes * 60 * 1000,
-      );
+      const secondaryStart = calendarIntervals.secondaryCalendarStart!;
+      const secondaryEnd = calendarIntervals.secondaryCalendarEnd!;
       appointmentRows.push({
         id: crypto.randomUUID(),
         patient_id: patientId,
         deal_id: deal.id,
         provider_id: secondaryCalendar.providerId,
-        start_time: appointmentDateObj.toISOString(),
+        start_time: secondaryStart.toISOString(),
         end_time: secondaryEnd.toISOString(),
         reason: `${reason} [Linked Calendar: ${secondaryCalendar.providerName}]`,
         notes: stripHtml(notes) || null,
@@ -722,7 +738,11 @@ export async function POST(request: Request) {
         booking_category_id: bookingContext.categoryId,
         booking_treatment_id: bookingContext.treatmentId,
         linked_parent_appointment_id: primaryAppointmentId,
-        tracking_params: trackingParams || {},
+        tracking_params: {
+          ...(trackingParams || {}),
+          patient_appointment_start: appointmentDateObj.toISOString(),
+          doctor_calendar_position: secondaryCalendar.position,
+        },
       });
     }
 

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SecondaryCalendarPosition } from "@/lib/bookingCalendarIntervals";
 
 export type BookingSecondaryCalendarContext = {
   categoryId: string | null;
@@ -11,6 +12,7 @@ export type BookingSecondaryCalendarContext = {
     providerId: string;
     providerName: string;
     durationMinutes: number;
+    position: SecondaryCalendarPosition;
   } | null;
 };
 
@@ -26,6 +28,7 @@ type CategoryRow = {
   booking_duration_minutes?: number | null;
   secondary_calendar_provider_id: string | null;
   secondary_calendar_duration_minutes: number | null;
+  secondary_calendar_position: SecondaryCalendarPosition;
 };
 
 export async function resolveBookingSecondaryCalendar(
@@ -39,6 +42,7 @@ export async function resolveBookingSecondaryCalendar(
   let bufferAfterMinutes = 0;
   let targetProviderId: string | null = null;
   let targetDurationMinutes: number | null = null;
+  let targetPosition: SecondaryCalendarPosition = "start";
 
   if (treatmentId && treatmentId !== "none") {
     const { data: treatment } = await supabase
@@ -52,12 +56,14 @@ export async function resolveBookingSecondaryCalendar(
         secondary_calendar_mode,
         secondary_calendar_provider_id,
         secondary_calendar_duration_minutes,
+        secondary_calendar_position,
         booking_categories:category_id(
           id,
           name,
           booking_duration_minutes,
           secondary_calendar_provider_id,
-          secondary_calendar_duration_minutes
+          secondary_calendar_duration_minutes,
+          secondary_calendar_position
         )
       `)
       .eq("id", treatmentId)
@@ -75,9 +81,11 @@ export async function resolveBookingSecondaryCalendar(
       if (treatment.secondary_calendar_mode === "custom") {
         targetProviderId = treatment.secondary_calendar_provider_id;
         targetDurationMinutes = treatment.secondary_calendar_duration_minutes;
+        targetPosition = treatment.secondary_calendar_position || "start";
       } else if (treatment.secondary_calendar_mode !== "disabled") {
         targetProviderId = category?.secondary_calendar_provider_id ?? null;
         targetDurationMinutes = category?.secondary_calendar_duration_minutes ?? null;
+        targetPosition = category?.secondary_calendar_position || "start";
       }
     }
   }
@@ -85,7 +93,7 @@ export async function resolveBookingSecondaryCalendar(
   if (!category && categorySlug) {
     let categoryQuery = supabase
       .from("booking_categories")
-      .select("id, name, booking_duration_minutes, secondary_calendar_provider_id, secondary_calendar_duration_minutes")
+      .select("id, name, booking_duration_minutes, secondary_calendar_provider_id, secondary_calendar_duration_minutes, secondary_calendar_position")
       .eq("slug", categorySlug);
     if (patientType) categoryQuery = categoryQuery.eq("patient_type", patientType);
     const { data } = await categoryQuery.limit(1).maybeSingle();
@@ -93,6 +101,7 @@ export async function resolveBookingSecondaryCalendar(
     primaryDurationMinutes = category?.booking_duration_minutes || 60;
     targetProviderId = category?.secondary_calendar_provider_id ?? null;
     targetDurationMinutes = category?.secondary_calendar_duration_minutes ?? null;
+    targetPosition = category?.secondary_calendar_position || "start";
   }
 
   let secondaryCalendar: BookingSecondaryCalendarContext["secondaryCalendar"] = null;
@@ -108,6 +117,7 @@ export async function resolveBookingSecondaryCalendar(
         providerId: provider.id,
         providerName: provider.name,
         durationMinutes: targetDurationMinutes,
+        position: targetPosition,
       };
     }
   }

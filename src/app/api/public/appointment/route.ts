@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   const { data: appt, error } = await supabase
     .from("appointments")
-    .select("id, start_time, end_time, status, reason, location, patient_id, provider_id")
+    .select("id, start_time, end_time, status, reason, location, patient_id, provider_id, tracking_params")
     .eq("id", id)
     .single();
 
@@ -55,7 +55,11 @@ export async function GET(request: Request) {
     }
   }
 
-  const startDate = new Date(appt.start_time);
+  const trackingParams = (appt.tracking_params || {}) as Record<string, string>;
+  const trackedPatientStart = trackingParams.patient_appointment_start;
+  const startDate = trackedPatientStart && !Number.isNaN(new Date(trackedPatientStart).getTime())
+    ? new Date(trackedPatientStart)
+    : new Date(appt.start_time);
   const { hour, minute } = getSwissHourMinute(startDate);
   const rawDate = formatSwissYmd(startDate);
   const rawTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;

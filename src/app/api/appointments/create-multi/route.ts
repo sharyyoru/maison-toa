@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generatePatientReminderEmail } from '@/lib/appointmentEmails';
 import { normalizePatientLanguage } from '@/lib/languagePreference';
+import { getBookingCalendarIntervals, type SecondaryCalendarPosition } from '@/lib/bookingCalendarIntervals';
 
 export async function POST(request: Request) {
   try {
@@ -114,11 +115,12 @@ export async function POST(request: Request) {
       name: string;
       mirror_calendar_provider_id: string | null;
       mirror_duration_minutes: number | null;
+      mirror_position: SecondaryCalendarPosition;
     }> = [];
     if (serviceIds && serviceIds.length > 0) {
       const { data: services } = await supabase
         .from('services')
-        .select('id, name, mirror_calendar_provider_id, mirror_duration_minutes')
+        .select('id, name, mirror_calendar_provider_id, mirror_duration_minutes, mirror_position')
         .in('id', serviceIds);
 
       selectedServices = (services || []).map((service) => ({
@@ -128,6 +130,7 @@ export async function POST(request: Request) {
         mirror_duration_minutes: service.mirror_duration_minutes === null
           ? null
           : Number(service.mirror_duration_minutes),
+        mirror_position: service.mirror_position === 'end' ? 'end' : 'start',
       }));
       
       serviceText = serviceIds
@@ -154,9 +157,31 @@ export async function POST(request: Request) {
       : null;
     const mirrorProviderId = mirroredService?.mirror_calendar_provider_id ?? null;
     const mirrorDurationMinutes = mirroredService?.mirror_duration_minutes ?? null;
+    const mirrorPosition = mirroredService?.mirror_position ?? 'start';
     let mirrorProviderName: string | null = null;
 
+    const getIntervals = (occurrence: { startTime: string; endTime: string }) => {
+      const bookingStart = new Date(occurrence.startTime);
+      const doctorDurationMinutes = (new Date(occurrence.endTime).getTime() - bookingStart.getTime()) / 60_000;
+      return getBookingCalendarIntervals({
+        bookingStart,
+        primaryDurationMinutes: doctorDurationMinutes,
+        secondaryDurationMinutes: mirrorDurationMinutes,
+        secondaryPosition: mirrorPosition,
+      });
+    };
+
     if (mirrorProviderId && mirrorDurationMinutes) {
+      const mirrorTooShort = mirrorPosition === 'end' && appointmentTimes.some((occurrence) => {
+        const doctorDurationMinutes = (new Date(occurrence.endTime).getTime() - new Date(occurrence.startTime).getTime()) / 60_000;
+        return mirrorDurationMinutes < doctorDurationMinutes;
+      });
+      if (mirrorTooShort) {
+        return NextResponse.json(
+          { error: 'For End placement, the mirrored appointment must be at least as long as the doctor appointment.' },
+          { status: 400 },
+        );
+      }
       if (providerIds.includes(mirrorProviderId)) {
         return NextResponse.json(
           { error: 'The mirrored calendar must be different from the selected doctor calendar.' },
@@ -222,30 +247,34 @@ export async function POST(request: Request) {
     // Check for overlapping appointments for each provider (future bookings only)
     // Skip this check for internal calendar bookings (allowOverlap = true)
     if (!allowOverlap) {
-      const earliestStart = appointmentTimes.reduce((earliest, appointmentTime) => {
-        return new Date(appointmentTime.startTime) < new Date(earliest.startTime)
-          ? appointmentTime
-          : earliest;
-      }, appointmentTimes[0]);
-      const latestEnd = appointmentTimes.reduce((latest, appointmentTime) => {
-        return new Date(appointmentTime.endTime) > new Date(latest.endTime)
-          ? appointmentTime
-          : latest;
-      }, appointmentTimes[0]);
+      const doctorIntervals = appointmentTimes.map((appointmentTime) => ({
+        appointmentTime,
+        intervals: getIntervals(appointmentTime),
+      }));
+      const earliestStart = doctorIntervals.reduce((earliest, occurrence) =>
+        occurrence.intervals.doctorCalendarStart < earliest ? occurrence.intervals.doctorCalendarStart : earliest,
+      doctorIntervals[0].intervals.doctorCalendarStart);
+      const latestEnd = doctorIntervals.reduce((latest, occurrence) =>
+        occurrence.intervals.doctorCalendarEnd > latest ? occurrence.intervals.doctorCalendarEnd : latest,
+      doctorIntervals[0].intervals.doctorCalendarEnd);
 
-      if (new Date(earliestStart.startTime) <= new Date()) {
+      if (earliestStart <= new Date()) {
         // Existing behavior only checks future bookings. Skip past ranges.
       } else {
       const { data: overlapping } = await supabase
         .from('appointments')
-        .select('id, provider_id, reason')
-        .lt('start_time', latestEnd.endTime)
-        .gt('end_time', earliestStart.startTime)
+        .select('id, provider_id, reason, start_time, end_time')
+        .lt('start_time', latestEnd.toISOString())
+        .gt('end_time', earliestStart.toISOString())
         .not('status', 'in', '(cancelled,no_show)')
         .in('provider_id', providerIds);
 
-      if (overlapping && overlapping.length > 0) {
-        const conflictingProviderIds = new Set(overlapping.map((a: { provider_id: string }) => a.provider_id));
+      const exactOverlaps = (overlapping || []).filter((existing) => doctorIntervals.some(({ intervals }) =>
+        new Date(existing.start_time) < intervals.doctorCalendarEnd
+          && new Date(existing.end_time) > intervals.doctorCalendarStart
+      ));
+      if (exactOverlaps.length > 0) {
+        const conflictingProviderIds = new Set(exactOverlaps.map((a: { provider_id: string }) => a.provider_id));
         const conflictingNames = (providers || [])
           .filter((p: { id: string }) => conflictingProviderIds.has(p.id))
           .map((p: { name: string }) => p.name)
@@ -261,6 +290,10 @@ export async function POST(request: Request) {
     // Create each logical occurrence and at most one linked mirror for it.
     const appointmentRows: Record<string, unknown>[] = [];
     for (const appointmentTime of appointmentTimes) {
+      const intervals = getIntervals(appointmentTime);
+      const doctorDurationMinutes = Math.round(
+        (new Date(appointmentTime.endTime).getTime() - new Date(appointmentTime.startTime).getTime()) / 60_000,
+      );
       let anchorAppointmentId: string | null = null;
       let anchorReason = serviceText || 'Appointment';
       for (const providerId of providerIds as string[]) {
@@ -280,8 +313,8 @@ export async function POST(request: Request) {
           no_patient: Boolean(noPatient),
           provider_id: providerId,
           appointment_group_id: providerIds.length > 1 ? appointmentGroupId : null,
-          start_time: appointmentTime.startTime,
-          end_time: appointmentTime.endTime,
+          start_time: intervals.doctorCalendarStart.toISOString(),
+          end_time: intervals.doctorCalendarEnd.toISOString(),
           status: status || 'scheduled',
           reason,
           notes: notes ? notes.replace(/[<>]/g, '') : null,
@@ -289,20 +322,24 @@ export async function POST(request: Request) {
           source: 'manual',
           ...(serviceIds && serviceIds.length > 0 ? { service_ids: serviceIds } : {}),
           ...(machineIds && machineIds.length > 0 ? { machine_ids: machineIds } : {}),
+          tracking_params: {
+            patient_appointment_start: appointmentTime.startTime,
+            appointment_duration_minutes: String(doctorDurationMinutes),
+            doctor_calendar_position: mirrorPosition,
+          },
         });
       }
 
       if (anchorAppointmentId && mirrorProviderId && mirrorDurationMinutes && mirrorProviderName) {
-        const mirrorEnd = new Date(
-          new Date(appointmentTime.startTime).getTime() + mirrorDurationMinutes * 60 * 1000,
-        );
+        const mirrorStart = intervals.secondaryCalendarStart!;
+        const mirrorEnd = intervals.secondaryCalendarEnd!;
         appointmentRows.push({
           id: crypto.randomUUID(),
           patient_id: noPatient ? null : patientId,
           no_patient: Boolean(noPatient),
           provider_id: mirrorProviderId,
           appointment_group_id: providerIds.length > 1 ? appointmentGroupId : null,
-          start_time: appointmentTime.startTime,
+          start_time: mirrorStart.toISOString(),
           end_time: mirrorEnd.toISOString(),
           status: status || 'scheduled',
           reason: `${anchorReason} [Linked Calendar: ${mirrorProviderName}]`,
@@ -312,6 +349,11 @@ export async function POST(request: Request) {
           service_ids: serviceIds,
           machine_ids: [],
           linked_parent_appointment_id: anchorAppointmentId,
+          tracking_params: {
+            patient_appointment_start: appointmentTime.startTime,
+            appointment_duration_minutes: String(doctorDurationMinutes),
+            doctor_calendar_position: mirrorPosition,
+          },
         });
       }
     }
@@ -336,7 +378,8 @@ export async function POST(request: Request) {
       const patientLastName = patient.last_name || patient.first_name || 'Patient';
       const reminderRows = createdAppointments
         .map((appointment) => {
-          const appointmentDate = new Date(appointment.start_time);
+          const trackingParams = (appointment.tracking_params || {}) as Record<string, string>;
+          const appointmentDate = new Date(trackingParams.patient_appointment_start || appointment.start_time);
           if (Number.isNaN(appointmentDate.getTime())) return null;
 
           const reminderDate = new Date(appointmentDate);
