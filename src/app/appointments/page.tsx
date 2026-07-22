@@ -418,6 +418,15 @@ type CalendarAppointment = {
 
 type CalendarView = "month" | "day" | "range";
 
+function getLogicalPatientAppointmentStart(appointment: {
+  start_time: string;
+  tracking_params?: Record<string, string> | null;
+}): string {
+  const trackedStart = appointment.tracking_params?.patient_appointment_start;
+  const parsed = new Date(trackedStart || appointment.start_time);
+  return Number.isNaN(parsed.getTime()) ? appointment.start_time : parsed.toISOString();
+}
+
 const DAY_VIEW_START_MINUTES = 6 * 60;
 const DAY_VIEW_END_MINUTES = 20 * 60; // 8 PM
 const DAY_VIEW_SLOT_MINUTES = 15;
@@ -1427,10 +1436,9 @@ export default function CalendarPage() {
       try {
         const { data, error } = await supabaseClient
           .from("appointments")
-          .select("patient_id, start_time")
+          .select("patient_id, start_time, tracking_params")
           .in("patient_id", patientIds)
-          .neq("status", "cancelled")
-          .order("start_time", { ascending: true });
+          .neq("status", "cancelled");
         if (cancelled) return;
         if (error || !data) {
           setFirstAppointmentByPatient({});
@@ -1441,7 +1449,11 @@ export default function CalendarPage() {
           const pid = row.patient_id as string | null;
           const st = row.start_time as string | null;
           if (!pid || !st) continue;
-          if (!map[pid]) map[pid] = st; // first occurrence wins (ordered asc)
+          const logicalStart = getLogicalPatientAppointmentStart({
+            start_time: st,
+            tracking_params: (row.tracking_params as Record<string, string> | null) ?? null,
+          });
+          if (!map[pid] || new Date(logicalStart) < new Date(map[pid])) map[pid] = logicalStart;
         }
         setFirstAppointmentByPatient(map);
       } catch {
@@ -5160,7 +5172,7 @@ export default function CalendarPage() {
                                   </span>
                                 ) : null}
                                 {appt.patient_id &&
-                                firstAppointmentByPatient[appt.patient_id] === appt.start_time ? (
+                                firstAppointmentByPatient[appt.patient_id] === getLogicalPatientAppointmentStart(appt) ? (
                                   <span
                                     title={t("badges.newPatientTooltip")}
                                     className="flex-shrink-0 rounded-full bg-emerald-500/90 px-1.5 text-[8px] font-bold leading-tight text-white"
@@ -5551,7 +5563,7 @@ export default function CalendarPage() {
                                               </span>
                                             ) : null}
                                             {appt.patient_id &&
-                                            firstAppointmentByPatient[appt.patient_id] === appt.start_time ? (
+                                            firstAppointmentByPatient[appt.patient_id] === getLogicalPatientAppointmentStart(appt) ? (
                                               <span
                                                 title={t("badges.newPatientTooltip")}
                                                 className="flex-shrink-0 rounded-full bg-emerald-500/90 px-1.5 text-[8px] font-bold leading-tight text-white"
