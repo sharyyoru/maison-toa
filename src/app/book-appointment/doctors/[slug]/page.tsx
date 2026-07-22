@@ -830,13 +830,13 @@ function DoctorBookingContent() {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Additional Notes</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Treatment Area(s)</label>
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={3}
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 outline-none transition-all resize-none"
-                    placeholder="Any specific concerns or requests..."
+                    placeholder="Please indicate the area(s) you would like to treat."
                   />
                 </div>
 
