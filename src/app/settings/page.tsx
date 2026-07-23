@@ -1098,6 +1098,8 @@ interface BookingTreatment {
   linked_service_id: string | null;
   service_category_id: string | null;
   display_price: number | null;
+  price_prefix: string | null;
+  price_prefix_en: string | null;
   secondary_calendar_mode: "inherit" | "disabled" | "custom";
   secondary_calendar_provider_id: string | null;
   secondary_calendar_duration_minutes: number | null;
@@ -1514,6 +1516,8 @@ function BookingCategoriesTab() {
       linked_service_id: null,
       service_category_id: null,
       display_price: null,
+      price_prefix: null,
+      price_prefix_en: null,
       secondary_calendar_mode: "inherit",
       secondary_calendar_provider_id: null,
       secondary_calendar_duration_minutes: null,
@@ -1977,6 +1981,26 @@ function BookingCategoriesTab() {
                         </div>
                         {/* Prepayment row */}
                         <div className="mt-3 flex flex-wrap items-center gap-4">
+                          <label className="flex items-center gap-2 text-xs text-slate-500">
+                            <span>Price prefix (FR):</span>
+                            <input
+                              type="text"
+                              placeholder="Dès"
+                              value={treat.price_prefix ?? ""}
+                              onChange={(e) => updateTreatment(treat.id, "price_prefix", e.target.value || null)}
+                              className="w-20 px-2 py-1 text-xs border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                            />
+                          </label>
+                          <label className="flex items-center gap-2 text-xs text-slate-500">
+                            <span>Price prefix (EN):</span>
+                            <input
+                              type="text"
+                              placeholder="From"
+                              value={treat.price_prefix_en ?? ""}
+                              onChange={(e) => updateTreatment(treat.id, "price_prefix_en", e.target.value || null)}
+                              className="w-20 px-2 py-1 text-xs border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                            />
+                          </label>
                           <label className="flex items-center gap-2 text-xs text-slate-500">
                             <span>Display price (CHF):</span>
                             <input

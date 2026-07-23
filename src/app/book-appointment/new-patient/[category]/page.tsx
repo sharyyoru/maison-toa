@@ -23,6 +23,8 @@ interface Treatment {
   order_index: number;
   enabled: boolean;
   display_price?: number | null;
+  price_prefix?: string | null;
+  price_prefix_en?: string | null;
 }
 
 interface Category {
@@ -174,7 +176,7 @@ export default function NewPatientTreatmentsPage() {
                                     description={description}
                                     serviceName={getLocalizedBookingName(treatment, language)}
                                     duration={formatDuration(treatment.display_duration_minutes ?? treatment.duration_minutes)}
-                                    price={treatment.display_price != null ? `CHF ${treatment.display_price}` : undefined}
+                                    price={treatment.display_price != null ? `${(language === "fr" ? treatment.price_prefix : treatment.price_prefix_en)?.trim() ? `${(language === "fr" ? treatment.price_prefix : treatment.price_prefix_en)?.trim()} ` : ""}CHF ${treatment.display_price}` : undefined}
                                     readMoreLabel={t("common.readMore")}
                                     descriptionLabel={t("common.description")}
                                     closeLabel={t("common.close")}
@@ -189,7 +191,7 @@ export default function NewPatientTreatmentsPage() {
                                     </span>
                                     {treatment.display_price != null && (
                                       <span className="text-sm font-medium text-slate-700">
-                                        CHF {treatment.display_price}
+                                        {(language === "fr" ? treatment.price_prefix : treatment.price_prefix_en)?.trim() && `${(language === "fr" ? treatment.price_prefix : treatment.price_prefix_en)?.trim()} `}CHF {treatment.display_price}
                                       </span>
                                     )}
                                   </div>

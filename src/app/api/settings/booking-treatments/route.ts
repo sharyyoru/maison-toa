@@ -200,6 +200,8 @@ export async function PUT(request: Request) {
           linked_service_id: t.linked_service_id || null,
           service_category_id: t.service_category_id || null,
           display_price: t.display_price ?? null,
+          price_prefix: t.price_prefix?.trim() || null,
+          price_prefix_en: t.price_prefix_en?.trim() || null,
           secondary_calendar_mode: t.secondary_calendar_mode || "inherit",
           secondary_calendar_provider_id:
             t.secondary_calendar_mode === "custom" ? t.secondary_calendar_provider_id || null : null,
