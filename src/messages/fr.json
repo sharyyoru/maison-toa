@@ -201,6 +201,9 @@
       "bookingPages": "Pages de réservation",
       "otherCalendars": "Autres calendriers",
       "showOnlyCalendar": "Afficher uniquement {name}",
+      "calendarActions": "Plus d’actions pour {name}",
+      "editCalendar": "Modifier le calendrier",
+      "deleteCalendar": "Supprimer le calendrier",
       "comingSoon": "Bientôt disponible"
     },
     "errors": {

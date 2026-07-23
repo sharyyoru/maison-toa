@@ -201,6 +201,9 @@
       "bookingPages": "Booking pages",
       "otherCalendars": "Other calendars",
       "showOnlyCalendar": "Show only {name}",
+      "calendarActions": "More actions for {name}",
+      "editCalendar": "Edit calendar",
+      "deleteCalendar": "Delete calendar",
       "comingSoon": "Coming soon"
     },
     "errors": {
