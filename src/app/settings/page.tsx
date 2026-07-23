@@ -1351,7 +1351,9 @@ function BookingCategoriesTab() {
   const [activeSubTab, setActiveSubTab] = useState<"new" | "existing">("new");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedTreatmentId, setSelectedTreatmentId] = useState<string | null>(null);
-  const [view, setView] = useState<"categories" | "treatments" | "doctors" | "doctor-assignments" | "category-doctor-assignments" | "machines" | "links">("categories");
+  const [view, setView] = useState<"categories" | "treatments" | "ordering" | "doctors" | "doctor-assignments" | "category-doctor-assignments" | "machines" | "links">("categories");
+  const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null);
+  const [draggedTreatmentId, setDraggedTreatmentId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -1536,6 +1538,67 @@ function BookingCategoriesTab() {
     }
   };
 
+  const reorderCategory = (targetId: string) => {
+    if (!draggedCategoryId || draggedCategoryId === targetId) return;
+    setCategories((current) => {
+      const ordered = current.filter((category) => category.patient_type === activeSubTab)
+        .sort((a, b) => a.order_index - b.order_index);
+      const fromIndex = ordered.findIndex((category) => category.id === draggedCategoryId);
+      const toIndex = ordered.findIndex((category) => category.id === targetId);
+      if (fromIndex < 0 || toIndex < 0) return current;
+      const [moved] = ordered.splice(fromIndex, 1);
+      ordered.splice(toIndex, 0, moved);
+      const orderById = new Map(ordered.map((category, index) => [category.id, index]));
+      return current.map((category) =>
+        orderById.has(category.id) ? { ...category, order_index: orderById.get(category.id)! } : category
+      );
+    });
+    setDraggedCategoryId(null);
+  };
+
+  const reorderTreatment = (targetId: string, categoryId: string) => {
+    if (!draggedTreatmentId || draggedTreatmentId === targetId) return;
+    setTreatments((current) => {
+      const ordered = current.filter((treatment) => treatment.category_id === categoryId)
+        .sort((a, b) => a.order_index - b.order_index);
+      const fromIndex = ordered.findIndex((treatment) => treatment.id === draggedTreatmentId);
+      const toIndex = ordered.findIndex((treatment) => treatment.id === targetId);
+      if (fromIndex < 0 || toIndex < 0) return current;
+      const [moved] = ordered.splice(fromIndex, 1);
+      ordered.splice(toIndex, 0, moved);
+      const orderById = new Map(ordered.map((treatment, index) => [treatment.id, index]));
+      return current.map((treatment) =>
+        orderById.has(treatment.id) ? { ...treatment, order_index: orderById.get(treatment.id)! } : treatment
+      );
+    });
+    setDraggedTreatmentId(null);
+  };
+
+  const saveOrdering = async () => {
+    setSaving(true);
+    try {
+      for (const [url, body] of [
+        ["/api/settings/booking-categories", { categories }],
+        ["/api/settings/booking-treatments", { treatments }],
+      ] as const) {
+        const response = await fetch(url, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || t("orderingSaveFailed"));
+        }
+      }
+      alert(t("orderingSaved"));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : t("orderingSaveFailed"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const filteredCategories = categories
     .filter((cat) => cat.patient_type === activeSubTab)
     .sort((a, b) => a.order_index - b.order_index);
@@ -1568,6 +1631,14 @@ function BookingCategoriesTab() {
           }`}
         >
           {t("treatmentsBtn")}
+        </button>
+        <button
+          onClick={() => { setView("ordering"); setSelectedCategoryId(null); }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            view === "ordering" ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          {t("orderingBtn")}
         </button>
         <button
           onClick={() => { setView("doctors"); setSelectedCategoryId(null); setSelectedTreatmentId(null); }}
@@ -1824,6 +1895,116 @@ function BookingCategoriesTab() {
               className="px-5 py-2 bg-sky-500 text-white rounded-lg text-xs font-medium hover:bg-sky-600 disabled:opacity-50"
             >
               {saving ? tc("saving") : t("saveCategories")}
+            </button>
+          </div>
+        </>
+      ) : view === "ordering" ? (
+        <>
+          <div className="rounded-xl border border-slate-200 bg-white">
+            <div className="border-b border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-800">{t("orderingTitle")}</h3>
+              <p className="mt-1 text-xs text-slate-500">{t("orderingDescription")}</p>
+            </div>
+            <div className="space-y-3 p-4">
+              {filteredCategories.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400">{t("noCategories")}</div>
+              ) : filteredCategories.map((category) => {
+                const orderedTreatments = treatments
+                  .filter((treatment) => treatment.category_id === category.id)
+                  .sort((a, b) => a.order_index - b.order_index);
+                return (
+                  <div
+                    key={category.id}
+                    onDragOver={(event) => {
+                      if (draggedCategoryId) event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      reorderCategory(category.id);
+                    }}
+                    className={`rounded-xl border bg-slate-50 transition ${
+                      draggedCategoryId === category.id ? "border-sky-300 opacity-50" : "border-slate-200"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 p-3">
+                      <span
+                        draggable
+                        onDragStart={(event) => {
+                          setDraggedCategoryId(category.id);
+                          event.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragEnd={() => setDraggedCategoryId(null)}
+                        aria-label={t("dragCategory", { name: category.name || tc("untitled") })}
+                        title={t("dragToReorder")}
+                        className="select-none cursor-grab text-xl font-bold leading-none tracking-[-0.2em] text-slate-400 active:cursor-grabbing"
+                      >
+                        ⋮⋮
+                      </span>
+                      <span className="flex-1 text-sm font-semibold text-slate-800">
+                        {category.name || tc("untitled")}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        {t("treatmentsCount", { count: orderedTreatments.length })}
+                      </span>
+                    </div>
+                    {orderedTreatments.length > 0 && (
+                      <div className="space-y-2 border-t border-slate-200 bg-white p-3 pl-10">
+                        {orderedTreatments.map((treatment) => (
+                          <div
+                            key={treatment.id}
+                            onDragOver={(event) => {
+                              if (draggedTreatmentId) event.preventDefault();
+                            }}
+                            onDrop={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              reorderTreatment(treatment.id, category.id);
+                            }}
+                            className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition ${
+                              draggedTreatmentId === treatment.id
+                                ? "border-sky-300 bg-sky-50 opacity-50"
+                                : "border-slate-200 bg-white"
+                            }`}
+                          >
+                            <span
+                              draggable
+                              onDragStart={(event) => {
+                                event.stopPropagation();
+                                setDraggedTreatmentId(treatment.id);
+                                event.dataTransfer.effectAllowed = "move";
+                              }}
+                              onDragEnd={() => setDraggedTreatmentId(null)}
+                              aria-label={t("dragTreatment", { name: treatment.name || tc("untitled") })}
+                              title={t("dragToReorder")}
+                              className="select-none cursor-grab text-lg font-bold leading-none tracking-[-0.2em] text-slate-400 active:cursor-grabbing"
+                            >
+                              ⋮⋮
+                            </span>
+                            <span className="flex-1 text-sm text-slate-700">
+                              {treatment.name || tc("untitled")}
+                            </span>
+                            {!treatment.enabled && (
+                              <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
+                                {t("disabled")}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={saveOrdering}
+              disabled={saving}
+              className="px-5 py-2 bg-sky-500 text-white rounded-lg text-xs font-medium hover:bg-sky-600 disabled:opacity-50"
+            >
+              {saving ? tc("saving") : t("saveOrdering")}
             </button>
           </div>
         </>
