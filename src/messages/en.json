@@ -200,6 +200,7 @@
       "newCalendar": "+ New calendar",
       "bookingPages": "Booking pages",
       "otherCalendars": "Other calendars",
+      "showOnlyCalendar": "Show only {name}",
       "comingSoon": "Coming soon"
     },
     "errors": {
