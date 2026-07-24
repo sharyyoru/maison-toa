@@ -47,7 +47,7 @@ export default function PatientCockpitDetails({
   const t = useTranslations("patient.cockpit");
   const [openModal, setOpenModal] = useState<ModalType>(null);
   const [saving, setSaving] = useState(false);
-  const [copiedField, setCopiedField] = useState<"email" | "phone" | null>(null);
+  const [copiedField, setCopiedField] = useState<"email" | "phone" | "street" | null>(null);
 
   // Patient Details form state
   const [email, setEmail] = useState(patient.email ?? "");
@@ -77,7 +77,7 @@ export default function PatientCockpitDetails({
     setOpenModal(type);
   }
 
-  async function handleCopy(field: "email" | "phone", value: string) {
+  async function handleCopy(field: "email" | "phone" | "street", value: string) {
     try {
       await navigator.clipboard.writeText(value);
       setCopiedField(field);
@@ -89,7 +89,7 @@ export default function PatientCockpitDetails({
     }
   }
 
-  const copyButton = (field: "email" | "phone", value: string | null) => {
+  const copyButton = (field: "email" | "phone" | "street", value: string | null) => {
     if (!value) return null;
 
     const copied = copiedField === field;
@@ -192,6 +192,7 @@ export default function PatientCockpitDetails({
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("street")}</span>{" "}
               <span className="text-xs text-slate-900">{patient.street_address ?? t("na")}</span>
+              {copyButton("street", patient.street_address)}
             </p>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("zipCode")}</span>{" "}
