@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
-import { Pencil, X } from "lucide-react";
+import { Check, Copy, Pencil, X } from "lucide-react";
 
 type PatientData = {
   id: string;
@@ -23,6 +23,21 @@ type PatientData = {
 
 type ModalType = "details" | "address" | null;
 
+function formatSwissPhone(value: string | null) {
+  if (!value) return null;
+
+  let digits = value.replace(/\D/g, "");
+  if (digits.startsWith("0041") && digits.length === 13) {
+    digits = `0${digits.slice(4)}`;
+  } else if (digits.startsWith("41") && digits.length === 11) {
+    digits = `0${digits.slice(2)}`;
+  }
+
+  if (digits.length !== 10 || !digits.startsWith("0")) return value;
+
+  return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 8)} ${digits.slice(8)}`;
+}
+
 export default function PatientCockpitDetails({
   patient,
 }: {
@@ -32,6 +47,7 @@ export default function PatientCockpitDetails({
   const t = useTranslations("patient.cockpit");
   const [openModal, setOpenModal] = useState<ModalType>(null);
   const [saving, setSaving] = useState(false);
+  const [copiedField, setCopiedField] = useState<"email" | "phone" | null>(null);
 
   // Patient Details form state
   const [email, setEmail] = useState(patient.email ?? "");
@@ -44,6 +60,7 @@ export default function PatientCockpitDetails({
   const [postalCode, setPostalCode] = useState(patient.postal_code ?? "");
   const [town, setTown] = useState(patient.town ?? "");
   const [country, setCountry] = useState(patient.country ?? "");
+  const formattedPhone = formatSwissPhone(patient.phone);
 
   function handleOpen(type: ModalType) {
     if (type === "details") {
@@ -59,6 +76,36 @@ export default function PatientCockpitDetails({
     }
     setOpenModal(type);
   }
+
+  async function handleCopy(field: "email" | "phone", value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(field);
+      window.setTimeout(() => {
+        setCopiedField((current) => (current === field ? null : current));
+      }, 1500);
+    } catch {
+      setCopiedField(null);
+    }
+  }
+
+  const copyButton = (field: "email" | "phone", value: string | null) => {
+    if (!value) return null;
+
+    const copied = copiedField === field;
+
+    return (
+      <button
+        type="button"
+        onClick={() => handleCopy(field, value)}
+        className="ml-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+        aria-label={`Copy ${field}`}
+        title={copied ? "Copied" : `Copy ${field}`}
+      >
+        {copied ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+      </button>
+    );
+  };
 
   async function handleSave() {
     setSaving(true);
@@ -115,23 +162,25 @@ export default function PatientCockpitDetails({
             </h3>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("email")}</span>{" "}
-              <span className="text-slate-900">{patient.email ?? t("na")}</span>
+              <span className="text-xs text-slate-900">{patient.email ?? t("na")}</span>
+              {copyButton("email", patient.email)}
             </p>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("mobileNumber")}</span>{" "}
-              <span className="text-slate-900">{patient.phone ?? t("na")}</span>
+              <span className="text-xs text-slate-900">{formattedPhone ?? t("na")}</span>
+              {copyButton("phone", formattedPhone)}
             </p>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("civilStatus")}</span>{" "}
-              <span className="text-slate-900">{patient.marital_status ?? t("na")}</span>
+              <span className="text-xs text-slate-900">{patient.marital_status ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("gender")}</span>{" "}
-              <span className="text-slate-900">{patient.gender ?? t("na")}</span>
+              <span className="text-xs text-slate-900">{patient.gender ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("patientNumber")}</span>{" "}
-              <span className="text-slate-900">{patient.id}</span>
+              <span className="text-xs text-slate-900">{patient.id}</span>
             </p>
           </div>
 
@@ -142,19 +191,19 @@ export default function PatientCockpitDetails({
             </h3>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("street")}</span>{" "}
-              <span className="text-slate-900">{patient.street_address ?? t("na")}</span>
+              <span className="text-xs text-slate-900">{patient.street_address ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("zipCode")}</span>{" "}
-              <span className="text-slate-900">{patient.postal_code ?? t("na")}</span>
+              <span className="text-xs text-slate-900">{patient.postal_code ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("town")}</span>{" "}
-              <span className="text-slate-900">{patient.town ?? t("na")}</span>
+              <span className="text-xs text-slate-900">{patient.town ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("country")}</span>{" "}
-              <span className="text-slate-900">{
+              <span className="text-xs text-slate-900">{
                 ({ CH:"🇨🇭 Switzerland", DE:"🇩🇪 Germany", FR:"🇫🇷 France", AT:"🇦🇹 Austria", IT:"🇮🇹 Italy", LI:"🇱🇮 Liechtenstein", LU:"🇱🇺 Luxembourg", BE:"🇧🇪 Belgium", NL:"🇳🇱 Netherlands", ES:"🇪🇸 Spain", PT:"🇵🇹 Portugal", GB:"🇬🇧 United Kingdom", US:"🇺🇸 United States" } as Record<string,string>)[patient.country ?? ""] || patient.country || t("na")
               }</span>
             </p>
@@ -166,15 +215,15 @@ export default function PatientCockpitDetails({
             </h3>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("emergencyName")}</span>{" "}
-              <span className="text-slate-900">{patient.emergency_contact_name ?? t("na")}</span>
+              <span className="text-xs text-slate-900">{patient.emergency_contact_name ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("emergencyPhone")}</span>{" "}
-              <span className="text-slate-900">{patient.emergency_contact_phone ?? t("na")}</span>
+              <span className="text-xs text-slate-900">{patient.emergency_contact_phone ?? t("na")}</span>
             </p>
             <p className="text-slate-500">
               <span className="font-semibold text-slate-700">{t("emergencyRelation")}</span>{" "}
-              <span className="text-slate-900">{patient.emergency_contact_relation ?? t("na")}</span>
+              <span className="text-xs text-slate-900">{patient.emergency_contact_relation ?? t("na")}</span>
             </p>
           </div>
 
