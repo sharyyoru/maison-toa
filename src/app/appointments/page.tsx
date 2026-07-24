@@ -4558,7 +4558,13 @@ export default function CalendarPage() {
     setRangeEndDate(null);
     setIsDraggingRange(true);
     setView("day");
-    // Update visible month to match selected date so appointments are loaded
+  }
+
+  function syncVisibleMonthToMiniDate(date: Date) {
+    // Wait until the pointer interaction has finished before changing the
+    // mini-calendar grid. Re-rendering an adjacent month during mousedown can
+    // put a different date beneath the pointer and trigger mouseenter, turning
+    // a simple click into an unintended multi-week range selection.
     setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
   }
 
@@ -4737,6 +4743,7 @@ export default function CalendarPage() {
                     e.preventDefault(); // Prevent text selection during drag
                     handleMiniDayMouseDown(date);
                   }}
+                  onClick={() => syncVisibleMonthToMiniDate(date)}
                   onMouseEnter={() => handleMiniDayMouseEnter(date)}
                   onTouchStart={(e) => {
                     e.preventDefault();
@@ -4755,7 +4762,10 @@ export default function CalendarPage() {
                       }
                     }
                   }}
-                  onTouchEnd={() => setIsDraggingRange(false)}
+                  onTouchEnd={() => {
+                    setIsDraggingRange(false);
+                    syncVisibleMonthToMiniDate(date);
+                  }}
                   data-mini-date={ymd}
                   className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] ${
                     isCurrentMonth ? "text-slate-700" : "text-slate-400"
