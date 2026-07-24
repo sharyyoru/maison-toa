@@ -5244,7 +5244,7 @@ export default function CalendarPage() {
                                 event.stopPropagation();
                                 openEditModalForAppointment(appt);
                               }}
-                              className={`w-full rounded-md px-1 py-0.5 text-[10px] text-left ${getAppointmentStatusColorClasses(
+                              className={`w-full rounded-md px-1 py-0.5 text-[11px] text-left ${getAppointmentStatusColorClasses(
                                 appt.status,
                               )} ${resolveCategoryColorPresentation(category).className}`}
                               style={resolveCategoryColorPresentation(category).style}
@@ -5268,18 +5268,18 @@ export default function CalendarPage() {
                                     {t("badges.newPatient")}
                                   </span>
                                 ) : null}
-                                <span className="truncate">{patientName || serviceLabel}</span>
+                                <span className="truncate font-bold">{patientName || serviceLabel}</span>
                               </div>
-                              <div className="truncate text-[10px] text-slate-500">
+                              <div className="truncate text-[11px] font-medium text-slate-500">
                                 {timeLabel} {serviceLabel ? `• ${serviceLabel}` : ""}
                               </div>
                               {category && (
-                                <div className="truncate text-[9px] text-slate-400">
+                                <div className="truncate text-[10px] font-medium text-slate-400">
                                   {category}
                                 </div>
                               )}
                               {notes && (
-                                <div className="truncate text-[9px] text-slate-400 italic">
+                                <div className="truncate text-[10px] font-medium text-slate-400 italic">
                                   {notes}
                                 </div>
                               )}
@@ -5623,7 +5623,7 @@ export default function CalendarPage() {
                                               openEditModalForAppointment(appt);
                                             }
                                           }}
-                                          className={`relative w-full h-full rounded-md px-1 py-0.5 text-[10px] text-left shadow-sm overflow-hidden cursor-grab active:cursor-grabbing ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColorPresentation(category).className} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
+                                          className={`relative w-full h-full rounded-md px-1 py-0.5 text-[11px] text-left shadow-sm overflow-hidden cursor-grab active:cursor-grabbing ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColorPresentation(category).className} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
                                           style={resolveCategoryColorPresentation(category).style}
                                         >
                                           {bufferBeforePercent > 0 && (
@@ -5659,14 +5659,14 @@ export default function CalendarPage() {
                                                 {t("badges.newPatient")}
                                               </span>
                                             ) : null}
-                                            <span className="truncate">{patientName || serviceLabel}</span>
+                                            <span className="truncate font-bold">{patientName || serviceLabel}</span>
                                           </div>
-                                          <div className="relative z-10 truncate text-[9px] text-slate-600">
+                                          <div className="relative z-10 truncate text-[10px] font-medium text-slate-600">
                                             {timeLabel} {serviceLabel ? `• ${serviceLabel}` : ""}
                                             {appt.machine_ids && appt.machine_ids.length > 0 && (() => { const m = machines.find((x) => x.id === appt.machine_ids[0]); return m ? <span className="ml-1 text-[8px] text-violet-600" title={appt.machine_ids.map((id) => machines.find((x) => x.id === id)?.name).filter(Boolean).join(", ")}>⚙</span> : null; })()}
                                           </div>
                                           {notes && (
-                                            <div className="relative z-10 truncate text-[9px] text-slate-500 italic">
+                                            <div className="relative z-10 truncate text-[10px] font-medium text-slate-500 italic">
                                               {notes}
                                             </div>
                                           )}
@@ -5691,25 +5691,38 @@ export default function CalendarPage() {
                                           </div>
                                         </div>
                                         {/* Hover tooltip - position based on column location */}
-                                        <div className={`pointer-events-none absolute top-0 z-[100] hidden min-w-[280px] rounded-lg border border-slate-200 bg-white p-3 text-[11px] shadow-xl group-hover:block ${tooltipPositionClass}`}>
-                                          <div className="font-semibold text-slate-800 mb-1">
-                                            {formatYmd(date)} {timeLabel} {durationLabel && `(${durationLabel})`}
+                                        <div className={`pointer-events-none absolute top-0 z-[100] hidden min-w-[300px] max-w-[360px] rounded-xl border border-slate-200 bg-white p-3.5 text-xs leading-relaxed shadow-xl group-hover:block ${tooltipPositionClass}`}>
+                                          <div className="mb-2 flex items-center gap-2 border-b border-slate-100 pb-2 font-semibold text-slate-800">
+                                            <span>{formatYmd(date)} · {timeLabel}</span>
+                                            {durationLabel && (
+                                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                                                {durationLabel}
+                                              </span>
+                                            )}
                                           </div>
-                                          <div className="text-slate-700 font-medium">{patientName || "No Patient"}</div>
-                                          {serviceLabel && <div className="text-slate-600 mt-1">{serviceLabel}</div>}
-                                          {category && <div className="text-slate-500">Catégorie: {category}</div>}
+                                          <div className="text-[13px] font-bold text-slate-900">{patientName || "No Patient"}</div>
+                                          {serviceLabel && <div className="mt-1 font-semibold text-slate-700">{serviceLabel}</div>}
+                                          {category && (
+                                            <div className="text-slate-600">
+                                              <span className="font-semibold text-slate-500">Catégorie:</span> {category}
+                                            </div>
+                                          )}
                                           {patientPhone && (
-                                            <div className="text-slate-500 mt-1">
-                                              <span className="text-slate-400">privé:</span> {patientPhone}
+                                            <div className="mt-1 text-slate-600">
+                                              <span className="font-semibold text-slate-500">Privé:</span> {patientPhone}
                                             </div>
                                           )}
                                           {patientEmail && (
-                                            <div className="text-slate-500">
-                                              <span className="text-slate-400">privé:</span> {patientEmail}
+                                            <div className="break-all text-slate-600">
+                                              <span className="font-semibold text-slate-500">Privé:</span> {patientEmail}
                                             </div>
                                           )}
-                                          {appt.location && <div className="text-slate-500 mt-1">📍 {appt.location}</div>}
-                                          {notes && <div className="text-slate-600 mt-1 italic border-t border-slate-100 pt-1">📝 {notes}</div>}
+                                          {appt.location && <div className="mt-1 font-medium text-slate-600">📍 {appt.location}</div>}
+                                          {notes && (
+                                            <div className="mt-2 border-t border-slate-100 pt-2 font-medium italic text-slate-600">
+                                              📝 {notes}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     );
