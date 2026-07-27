@@ -14,6 +14,7 @@ import HeaderUser from "../HeaderUser";
 import HeaderEmailReportsButton from "../HeaderEmailReportsButton";
 import HeaderDealNotificationsButton from "../HeaderDealNotificationsButton";
 import HeaderInsuranceEmailButton from "../HeaderInsuranceEmailButton";
+import HeaderPromptButton from "../HeaderPromptButton";
 import { useTranslations } from "next-intl";
 
 export default function TopBar() {
@@ -109,6 +110,7 @@ export default function TopBar() {
         <HeaderDealNotificationsButton />
         <HeaderEmailReportsButton />
         <HeaderInsuranceEmailButton />
+        <HeaderPromptButton />
         <HeaderNotificationsButton />
         <HeaderCommentsButton />
         <HeaderWhatsAppButton />
