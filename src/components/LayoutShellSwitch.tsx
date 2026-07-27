@@ -42,17 +42,7 @@ export default function LayoutShellSwitch({
   }
 
   if (mode === "blizzard") {
-    // Avoid auth flash by not wrapping until auth state is known.
-    if (loading) {
-      return (
-        <div className="flex h-screen w-full items-center justify-center bg-[var(--blz-bg)]">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" />
-        </div>
-      );
-    }
-    if (!user) {
-      return <>{children}</>;
-    }
+    // DEBUG: bypass auth check to isolate whether auth or shell is the issue
     return <BlizzardShell>{children}</BlizzardShell>;
   }
 
