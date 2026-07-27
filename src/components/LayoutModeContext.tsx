@@ -31,7 +31,6 @@ function getUrlLayout(): LayoutMode | null {
 
 export function LayoutModeProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<LayoutMode>("blizzard");
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     // URL param takes highest precedence, then localStorage, then default blizzard.
@@ -39,7 +38,6 @@ export function LayoutModeProvider({ children }: { children: ReactNode }) {
     if (urlMode) {
       setModeState(urlMode);
       localStorage.setItem(STORAGE_KEY, urlMode);
-      setMounted(true);
       return;
     }
 
@@ -47,7 +45,6 @@ export function LayoutModeProvider({ children }: { children: ReactNode }) {
     if (isLayoutMode(stored)) {
       setModeState(stored);
     }
-    setMounted(true);
   }, []);
 
   const setMode = (newMode: LayoutMode) => {
@@ -58,10 +55,6 @@ export function LayoutModeProvider({ children }: { children: ReactNode }) {
   const toggleMode = () => {
     setMode(mode === "blizzard" ? "classic" : "blizzard");
   };
-
-  if (!mounted) {
-    return <>{children}</>;
-  }
 
   return (
     <LayoutModeContext.Provider value={{ mode, setMode, toggleMode }}>
