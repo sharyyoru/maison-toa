@@ -11,7 +11,6 @@ import HeaderCommentsButton from "../HeaderCommentsButton";
 import HeaderTasksButton from "../HeaderTasksButton";
 import HeaderWhatsAppButton from "../HeaderWhatsAppButton";
 import HeaderUser from "../HeaderUser";
-import GlobalPatientSearch from "../GlobalPatientSearch";
 import { useTranslations } from "next-intl";
 
 export default function TopBar() {
@@ -103,9 +102,6 @@ export default function TopBar() {
       </div>
 
       <div className="flex items-center gap-1">
-        <div className="hidden sm:block mr-2">
-          <GlobalPatientSearch />
-        </div>
         <HeaderTasksButton />
         <HeaderNotificationsButton />
         <HeaderCommentsButton />

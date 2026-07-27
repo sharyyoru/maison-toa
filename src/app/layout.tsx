@@ -13,6 +13,7 @@ import { InsuranceSubmissionNotificationsProvider } from "@/components/Insurance
 import { PatientTabsProvider } from "@/components/PatientTabsContext";
 import { LayoutModeProvider } from "@/components/LayoutModeContext";
 import { ThemeProvider } from "@/components/ThemeContext";
+import { ShellBackground } from "@/components/ShellVisibility";
 import LayoutShellSwitch from "@/components/LayoutShellSwitch";
 import ClassicShell from "@/components/ClassicShell";
 
@@ -65,32 +66,32 @@ export default async function RootLayout({
         className={`${manrope.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
       >
-        <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef2ff,_#e0f2fe_40%,_#fdf2ff_80%)] px-4 py-6 sm:px-6 lg:px-8">
-          <GlobalLoader />
-          <NextIntlClientProvider locale={locale} messages={messages}>
-            <AuthProvider>
-              <CommentsUnreadProvider>
-                <TasksNotificationsProvider>
-                  <EmailNotificationsProvider>
-                    <PDFJobNotificationsProvider>
-                      <InsuranceSubmissionNotificationsProvider>
-                        <PatientTabsProvider>
-                          <ThemeProvider>
-                            <LayoutModeProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <AuthProvider>
+            <CommentsUnreadProvider>
+              <TasksNotificationsProvider>
+                <EmailNotificationsProvider>
+                  <PDFJobNotificationsProvider>
+                    <InsuranceSubmissionNotificationsProvider>
+                      <PatientTabsProvider>
+                        <ThemeProvider>
+                          <LayoutModeProvider>
+                            <ShellBackground>
+                              <GlobalLoader />
                               <LayoutShellSwitch classicShell={<ClassicShell>{children}</ClassicShell>}>
                                 {children}
                               </LayoutShellSwitch>
-                            </LayoutModeProvider>
-                          </ThemeProvider>
-                        </PatientTabsProvider>
-                      </InsuranceSubmissionNotificationsProvider>
-                    </PDFJobNotificationsProvider>
-                  </EmailNotificationsProvider>
-                </TasksNotificationsProvider>
-              </CommentsUnreadProvider>
-            </AuthProvider>
-          </NextIntlClientProvider>
-        </div>
+                            </ShellBackground>
+                          </LayoutModeProvider>
+                        </ThemeProvider>
+                      </PatientTabsProvider>
+                    </InsuranceSubmissionNotificationsProvider>
+                  </PDFJobNotificationsProvider>
+                </EmailNotificationsProvider>
+              </TasksNotificationsProvider>
+            </CommentsUnreadProvider>
+          </AuthProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );
