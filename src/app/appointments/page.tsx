@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef, useCallback, useLayoutEffect } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -957,7 +957,6 @@ export default function CalendarPage() {
   const [view, setView] = useState<CalendarView>("day");
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [viewportHeight, setViewportHeight] = useState<string>("100vh");
   const [rangeEndDate, setRangeEndDate] = useState<Date | null>(null);
   const [isDraggingRange, setIsDraggingRange] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
@@ -992,25 +991,6 @@ export default function CalendarPage() {
     slotHeight: number;
     startMinutesOffset: number;
   } | null>(null);
-
-  // Fix iOS Safari's dynamic viewport height when browser chrome changes.
-  useLayoutEffect(() => {
-    function updateViewportHeight() {
-      const vh = window.visualViewport?.height || window.innerHeight;
-      setViewportHeight(`${vh}px`);
-    }
-
-    updateViewportHeight();
-    window.addEventListener("resize", updateViewportHeight);
-    window.addEventListener("orientationchange", updateViewportHeight);
-    window.visualViewport?.addEventListener("resize", updateViewportHeight);
-
-    return () => {
-      window.removeEventListener("resize", updateViewportHeight);
-      window.removeEventListener("orientationchange", updateViewportHeight);
-      window.visualViewport?.removeEventListener("resize", updateViewportHeight);
-    };
-  }, []);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
@@ -4661,10 +4641,8 @@ export default function CalendarPage() {
 
   return (
     <div
-      className="flex gap-4 px-0 pb-4 pt-2 sm:px-1 lg:px-2"
+      className="-mx-4 -my-4 flex h-full overflow-hidden gap-4 px-0 pb-4 pt-2 sm:-mx-6 sm:px-1 lg:-mx-8 lg:px-2"
       style={{
-        height: `calc(${viewportHeight} - 96px)`,
-        minHeight: "400px",
         WebkitOverflowScrolling: "touch",
       } as React.CSSProperties}
     >
@@ -5133,9 +5111,9 @@ export default function CalendarPage() {
       </aside>
 
       {/* Main month view */}
-      <div className="flex min-w-0 flex-1 flex-col space-y-4">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Calendar header controls */}
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-shrink-0 items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-lg font-semibold text-slate-900">{t("title")}</h1>
             <button
@@ -5304,7 +5282,7 @@ export default function CalendarPage() {
           </div>
         </div>
         {view === "month" ? (
-          <div className="flex-1 flex flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
             <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/80 text-[11px] font-medium uppercase tracking-wide text-slate-500 sticky top-0 z-10">
               {(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((key) => (
                 <div key={key} className="px-3 py-2">
@@ -5429,7 +5407,7 @@ export default function CalendarPage() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
+          <div className="flex-1 min-h-0 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
             <div className="flex flex-col h-full">
               {/* Sticky header row with doctor columns when multiple selected */}
               <div className="flex border-b border-slate-100 bg-slate-50/80 text-[11px] font-medium text-slate-500 sticky top-0 z-10">
