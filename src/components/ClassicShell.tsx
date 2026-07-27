@@ -14,6 +14,7 @@ import GlobalPatientSearch from "./GlobalPatientSearch";
 import CrmLanguageToggle from "./CrmLanguageToggle";
 import PatientTabBar from "./PatientTabBar";
 import SidebarLeadImportDropdown from "./SidebarLeadImportDropdown";
+import ClassicLayoutToggle from "./ClassicLayoutToggle";
 
 export default async function ClassicShell({ children }: { children: ReactNode }) {
   const tNav = await getTranslations("nav");
@@ -352,6 +353,7 @@ export default async function ClassicShell({ children }: { children: ReactNode }
                   <GlobalPatientSearch />
                   <div className="flex items-center gap-2 text-slate-500">
                     <CrmLanguageToggle />
+                    <ClassicLayoutToggle />
                     <HeaderTasksButton />
                     <HeaderNotificationsButton />
                     <HeaderPdfJobsButton />
