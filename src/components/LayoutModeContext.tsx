@@ -11,7 +11,7 @@ type LayoutModeContextType = {
 };
 
 const LayoutModeContext = createContext<LayoutModeContextType>({
-  mode: "classic",
+  mode: "blizzard",
   setMode: () => {},
   toggleMode: () => {},
 });
@@ -30,11 +30,11 @@ function getUrlLayout(): LayoutMode | null {
 }
 
 export function LayoutModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<LayoutMode>("classic");
+  const [mode, setModeState] = useState<LayoutMode>("blizzard");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // URL param takes highest precedence, then localStorage, then default classic.
+    // URL param takes highest precedence, then localStorage, then default blizzard.
     const urlMode = getUrlLayout();
     if (urlMode) {
       setModeState(urlMode);
