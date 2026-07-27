@@ -4616,10 +4616,21 @@ export default function CalendarPage() {
   }
 
   function handleMiniDayMouseDown(date: Date) {
-    setSelectedDate(date);
-    setRangeEndDate(null);
+    const base = swissDayAnchorFrom(date);
+    if (view === "range") {
+      const weekday = getSwissDayOfWeek(base);
+      const adjustedWeekday = weekday === 0 ? 6 : weekday - 1;
+      const start = addSwissDays(base, -adjustedWeekday);
+      const end = addSwissDays(start, 6);
+      setSelectedDate(start);
+      setRangeEndDate(end);
+      setVisibleMonth(swissMonthAnchor(start));
+    } else {
+      setSelectedDate(base);
+      setRangeEndDate(null);
+      setView("day");
+    }
     setIsDraggingRange(true);
-    setView("day");
   }
 
   function syncVisibleMonthToMiniDate(date: Date) {
@@ -4627,7 +4638,7 @@ export default function CalendarPage() {
     // mini-calendar grid. Re-rendering an adjacent month during mousedown can
     // put a different date beneath the pointer and trigger mouseenter, turning
     // a simple click into an unintended multi-week range selection.
-    setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    setVisibleMonth(swissMonthAnchor(date));
   }
 
   function handleMiniDayMouseEnter(date: Date) {
@@ -4642,7 +4653,7 @@ export default function CalendarPage() {
   }
 
   function handleMonthDayClick(date: Date) {
-    setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    setVisibleMonth(swissMonthAnchor(date));
     setSelectedDate(date);
     setRangeEndDate(null);
     setView("day");
