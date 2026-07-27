@@ -74,6 +74,10 @@
     "today": "Today",
     "previousMonth": "Previous month",
     "nextMonth": "Next month",
+    "previousDay": "Previous day",
+    "nextDay": "Next day",
+    "previousWeek": "Previous week",
+    "nextWeek": "Next week",
     "view": {
       "day": "Day",
       "week": "Week",

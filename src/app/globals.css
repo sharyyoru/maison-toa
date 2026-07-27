@@ -68,6 +68,10 @@ html { font-size: 17px; }
   border-color: var(--blz-border) !important;
 }
 
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
 /* General text overrides for dark mode content area */
 .dark .blz-content {
   color: var(--blz-text-primary);
