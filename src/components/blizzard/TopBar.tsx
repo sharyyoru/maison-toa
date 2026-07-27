@@ -13,6 +13,7 @@ import HeaderWhatsAppButton from "../HeaderWhatsAppButton";
 import HeaderUser from "../HeaderUser";
 import HeaderEmailReportsButton from "../HeaderEmailReportsButton";
 import HeaderDealNotificationsButton from "../HeaderDealNotificationsButton";
+import HeaderInsuranceEmailButton from "../HeaderInsuranceEmailButton";
 import { useTranslations } from "next-intl";
 
 export default function TopBar() {
@@ -107,6 +108,7 @@ export default function TopBar() {
         <HeaderTasksButton />
         <HeaderDealNotificationsButton />
         <HeaderEmailReportsButton />
+        <HeaderInsuranceEmailButton />
         <HeaderNotificationsButton />
         <HeaderCommentsButton />
         <HeaderWhatsAppButton />
