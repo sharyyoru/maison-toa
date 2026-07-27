@@ -2271,7 +2271,11 @@ export default function CalendarPage() {
       current.setDate(current.getDate() + 1);
     }
 
-    return dates;
+    // Week view is represented as a seven-day range. Keep Sunday out of the
+    // displayed columns without changing shorter, manually selected ranges.
+    return dates.length === 7
+      ? dates.filter((date) => date.getDay() !== 0)
+      : dates;
   }, [view, selectedDate, rangeEndDate]);
 
   const timeSlots = useMemo(() => {
@@ -4554,6 +4558,45 @@ export default function CalendarPage() {
   }
 
   function handleMiniDayMouseDown(date: Date) {
+    const isWeekView =
+      view === "range" &&
+      selectedDate !== null &&
+      rangeEndDate !== null &&
+      Math.abs(
+        Date.UTC(
+          rangeEndDate.getFullYear(),
+          rangeEndDate.getMonth(),
+          rangeEndDate.getDate(),
+        ) -
+          Date.UTC(
+            selectedDate.getFullYear(),
+            selectedDate.getMonth(),
+            selectedDate.getDate(),
+          ),
+      ) /
+        (24 * 60 * 60 * 1000) ===
+        6;
+
+    if (isWeekView) {
+      const weekStart = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        12, 0, 0,
+      );
+      const weekday = weekStart.getDay();
+      const daysSinceMonday = weekday === 0 ? 6 : weekday - 1;
+      weekStart.setDate(weekStart.getDate() - daysSinceMonday);
+
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+
+      setSelectedDate(weekStart);
+      setRangeEndDate(weekEnd);
+      setIsDraggingRange(false);
+      return;
+    }
+
     setSelectedDate(date);
     setRangeEndDate(null);
     setIsDraggingRange(true);
