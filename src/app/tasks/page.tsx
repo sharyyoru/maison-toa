@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import TaskEditModal from "@/components/TaskEditModal";
 import TaskCreateModal from "@/components/TaskCreateModal";
+import SmartTaskScannerModal from "@/components/SmartTaskScannerModal";
 import { useTasksNotifications } from "@/components/TasksNotificationsContext";
 
 type TaskStatus = "not_started" | "in_progress" | "completed";
@@ -83,6 +84,7 @@ export default function TasksPage() {
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
   const [searchQuery, setSearchQuery] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [updatingTaskIds, setUpdatingTaskIds] = useState<string[]>([]);
 
@@ -92,6 +94,9 @@ export default function TasksPage() {
 
   // Task create modal
   const [createTaskModalOpen, setCreateTaskModalOpen] = useState(false);
+
+  // Smart Task Scanner modal
+  const [smartScannerOpen, setSmartScannerOpen] = useState(false);
 
   // Admin user selector
   const [allUsers, setAllUsers] = useState<PlatformUser[]>([]);
@@ -164,7 +169,7 @@ export default function TasksPage() {
     return () => {
       isMounted = false;
     };
-  }, [selectedUserId]);
+  }, [selectedUserId, refreshKey]);
 
   // Load all users for admin selector
   useEffect(() => {
@@ -548,6 +553,19 @@ export default function TasksPage() {
               </span>
               <span>{t("createTask")}</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setSmartScannerOpen(true)}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+              </svg>
+              <span>Scan</span>
+            </button>
             <div className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50/80 p-0.5 text-[11px] text-slate-600">
               <button
                 type="button"
@@ -721,6 +739,16 @@ export default function TasksPage() {
                 : t
             )
           );
+        }}
+      />
+
+      {/* Smart Task Scanner Modal */}
+      <SmartTaskScannerModal
+        open={smartScannerOpen}
+        onClose={() => setSmartScannerOpen(false)}
+        onTasksCreated={() => {
+          setRefreshKey((k) => k + 1);
+          void refreshOpenTasksCount();
         }}
       />
     </div>

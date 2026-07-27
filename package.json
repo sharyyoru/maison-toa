@@ -36,6 +36,7 @@
     "docx-preview": "^0.3.7",
     "dotenv": "^17.2.3",
     "fabric": "^6.9.0",
+    "framer-motion": "^12.42.2",
     "fuse.js": "^7.5.0",
     "googleapis": "^170.1.0",
     "heic-convert": "^2.1.0",
