@@ -5,6 +5,7 @@ import CollapseSidebarOnMount from "@/components/CollapseSidebarOnMount";
 
 import EditPatientDetailsButton from "./EditPatientDetailsButton";
 import PatientModeToggle from "./PatientModeToggle";
+import AiCallButton from "./AiCallButton";
 import PatientDetailsTabs from "./PatientDetailsTabs";
 import PatientCrmPreferencesCard from "./PatientCrmPreferencesCard";
 import PatientActivityCard from "./PatientActivityCard";
@@ -436,6 +437,7 @@ export default async function PatientPage({
               <span>{tPatient("sendEmail")}</span>
             </Link>
             <EditPatientDetailsButton patientId={patient.id} />
+            <AiCallButton patientId={patient.id} patientName={patientFileName} />
             <Link
               href="/patients"
               className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
