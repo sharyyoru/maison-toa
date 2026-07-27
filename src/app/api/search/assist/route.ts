@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { generateContentWithFallback } from "@/lib/geminiWithFallback";
 
 const ROUTE_MAP = `
 System pages and routes:
@@ -23,6 +23,7 @@ System pages and routes:
 - Chat with Aliice: /chat
 - Client Onboarding: /client-onboarding
 - Settings: /settings
+- AI Knowledge Base: /prompt
 `;
 
 const SYSTEM_INSTRUCTION = `You are a knowledgeable assistant for an aesthetic clinic CRM called Aliice. You answer TWO types of questions:
@@ -77,18 +78,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
+    const result = await generateContentWithFallback({
+      apiKey,
       systemInstruction: SYSTEM_INSTRUCTION,
-    });
-
-    const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: query }] }],
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 1024,
       },
+      verbose: true,
     });
 
     const text = result.response.text();
@@ -108,8 +106,25 @@ export async function POST(request: Request) {
       type: parsed.type || "mixed",
     });
   } catch (err: any) {
+    const rawMessage = err?.message || "AI assist failed";
+    const isQuota =
+      rawMessage.includes("429") ||
+      rawMessage.toLowerCase().includes("quota") ||
+      rawMessage.toLowerCase().includes("resource exhausted");
+    if (isQuota) {
+      return NextResponse.json(
+        {
+          triggered: true,
+          answer:
+            "I'm temporarily unavailable because the AI quota is exhausted. Please try again in a few minutes.",
+          links: [],
+          type: "navigation",
+        },
+        { status: 200 }
+      );
+    }
     return NextResponse.json(
-      { error: err?.message || "AI assist failed" },
+      { error: rawMessage },
       { status: 500 }
     );
   }
