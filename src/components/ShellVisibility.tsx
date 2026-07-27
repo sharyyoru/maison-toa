@@ -36,7 +36,7 @@ export function ShellFrame({ children }: { children: ReactNode }) {
 
   if (pathname === "/appointments") {
     return (
-      <div className="min-h-[80vh] w-full overflow-x-hidden overflow-y-auto mx-[-1rem] sm:mx-[-1.5rem] lg:mx-[-2rem]">
+      <div className="h-[calc(100dvh-3rem)] w-full overflow-hidden mx-[-1rem] sm:mx-[-1.5rem] lg:mx-[-2rem]">
         {children}
       </div>
     );

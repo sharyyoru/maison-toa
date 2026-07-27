@@ -4630,7 +4630,7 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-96px)] gap-4 px-0 pb-4 pt-2 sm:px-1 lg:px-2">
+    <div className="flex h-full min-h-0 gap-4 px-0 pb-4 pt-2 sm:px-1 lg:px-2">
       {/* Left sidebar similar to Google Calendar */}
       <aside className="hidden w-64 flex-shrink-0 flex-col rounded-3xl border border-slate-200/80 bg-white/95 p-3 text-xs text-slate-700 shadow-[0_18px_40px_rgba(15,23,42,0.10)] md:flex">
         <div className="mb-3">

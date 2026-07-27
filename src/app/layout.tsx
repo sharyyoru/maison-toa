@@ -67,7 +67,7 @@ export default async function RootLayout({
           <InsuranceSubmissionNotificationsProvider>
           <PatientTabsProvider>
           <ShellFrame>
-          <div className="flex min-h-[80vh] flex-1 overflow-hidden">
+          <div className="flex h-full min-h-[80vh] flex-1 overflow-hidden">
             <input
               id="sidebar-toggle"
               type="checkbox"
@@ -539,9 +539,9 @@ export default async function RootLayout({
               </nav>
             </aside>
             </ShellSidebar>
-            <main className="flex-1 min-w-0 bg-slate-50/40">
+            <main className="min-h-0 flex-1 min-w-0 bg-slate-50/40">
               <RequireAuth>
-                <div className="flex h-full flex-col">
+                <div className="flex h-full min-h-0 flex-col">
                 <ShellHeader>
                   <header className="flex items-center justify-between border-b border-slate-100/80 bg-white/70 px-4 py-3 sm:px-6 lg:px-8 app-shell-header">
                     <div className="flex items-center gap-4">
@@ -587,7 +587,7 @@ export default async function RootLayout({
                 </header>
                 </ShellHeader>
                 <PatientTabBar />
-                <div className="flex-1 px-4 py-4 sm:px-6 lg:px-8">{children}</div>
+                <div className="min-h-0 flex-1 px-4 py-4 sm:px-6 lg:px-8">{children}</div>
               </div>
               </RequireAuth>
             </main>
