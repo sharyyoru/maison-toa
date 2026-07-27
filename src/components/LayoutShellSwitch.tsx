@@ -3,7 +3,6 @@
 import { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useLayoutMode } from "./LayoutModeContext";
-import { useAuth } from "./AuthContext";
 import BlizzardShell from "./blizzard/BlizzardShell";
 
 // Routes that should bypass both shells entirely (standalone pages)
@@ -35,14 +34,12 @@ export default function LayoutShellSwitch({
 }) {
   const pathname = usePathname();
   const { mode } = useLayoutMode();
-  const { user, loading } = useAuth();
 
   if (isStandaloneRoute(pathname)) {
     return <>{children}</>;
   }
 
   if (mode === "blizzard") {
-    // DEBUG: bypass auth check to isolate whether auth or shell is the issue
     return <BlizzardShell>{children}</BlizzardShell>;
   }
 
