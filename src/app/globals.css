@@ -13,6 +13,57 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Use class-based dark mode (`.dark` on <html>) instead of prefers-color-scheme */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Blizzard design tokens */
+:root {
+  --blz-bg: #ffffff;
+  --blz-surface: #f8fafc;
+  --blz-surface-elevated: #ffffff;
+  --blz-border: rgba(226, 232, 240, 0.8);
+  --blz-text-primary: #0f172a;
+  --blz-text-secondary: #475569;
+  --blz-text-muted: #94a3b8;
+  --blz-hover: rgba(15, 23, 42, 0.06);
+}
+
+.dark {
+  --blz-bg: #141820;
+  --blz-surface: #1a1f2e;
+  --blz-surface-elevated: #232938;
+  --blz-border: rgba(51, 65, 85, 0.4);
+  --blz-text-primary: #f1f5f9;
+  --blz-text-secondary: #94a3b8;
+  --blz-text-muted: #64748b;
+  --blz-hover: rgba(255, 255, 255, 0.08);
+}
+
+/* Dark mode overrides for classic shell content wrapped in .blz-content */
+.dark .blz-content [class*="bg-white"] {
+  background-color: var(--blz-surface-elevated) !important;
+}
+.dark .blz-content [class*="bg-slate-50"] {
+  background-color: var(--blz-surface) !important;
+}
+.dark .blz-content [class*="text-slate-900"],
+.dark .blz-content [class*="text-slate-800"],
+.dark .blz-content [class*="text-slate-700"] {
+  color: var(--blz-text-primary) !important;
+}
+.dark .blz-content [class*="text-slate-600"],
+.dark .blz-content [class*="text-slate-500"] {
+  color: var(--blz-text-secondary) !important;
+}
+.dark .blz-content [class*="text-slate-400"],
+.dark .blz-content [class*="text-slate-300"] {
+  color: var(--blz-text-muted) !important;
+}
+.dark .blz-content [class*="border-slate-100"],
+.dark .blz-content [class*="border-slate-200"] {
+  border-color: var(--blz-border) !important;
+}
+
 body {
   background: radial-gradient(circle at top, #eef2ff, #e0f2fe 40%, #fdf2ff 80%);
   color: var(--foreground);
