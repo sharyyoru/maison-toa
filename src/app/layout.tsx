@@ -8,6 +8,7 @@ import { AuthProvider } from "@/components/AuthContext";
 import { CommentsUnreadProvider } from "@/components/CommentsUnreadContext";
 import { TasksNotificationsProvider } from "@/components/TasksNotificationsContext";
 import { EmailNotificationsProvider } from "@/components/EmailNotificationsContext";
+import { DealNotificationsProvider } from "@/components/DealNotificationsContext";
 import { PDFJobNotificationsProvider } from "@/components/PDFJobNotificationsContext";
 import { InsuranceSubmissionNotificationsProvider } from "@/components/InsuranceSubmissionNotificationsContext";
 import { PatientTabsProvider } from "@/components/PatientTabsContext";
@@ -71,22 +72,24 @@ export default async function RootLayout({
             <CommentsUnreadProvider>
               <TasksNotificationsProvider>
                 <EmailNotificationsProvider>
-                  <PDFJobNotificationsProvider>
-                    <InsuranceSubmissionNotificationsProvider>
-                      <PatientTabsProvider>
-                        <ThemeProvider>
-                          <LayoutModeProvider>
-                            <ShellBackground>
-                              <GlobalLoader />
-                              <LayoutShellSwitch classicShell={<ClassicShell>{children}</ClassicShell>}>
-                                {children}
-                              </LayoutShellSwitch>
-                            </ShellBackground>
-                          </LayoutModeProvider>
-                        </ThemeProvider>
-                      </PatientTabsProvider>
-                    </InsuranceSubmissionNotificationsProvider>
-                  </PDFJobNotificationsProvider>
+                  <DealNotificationsProvider>
+                    <PDFJobNotificationsProvider>
+                      <InsuranceSubmissionNotificationsProvider>
+                        <PatientTabsProvider>
+                          <ThemeProvider>
+                            <LayoutModeProvider>
+                              <ShellBackground>
+                                <GlobalLoader />
+                                <LayoutShellSwitch classicShell={<ClassicShell>{children}</ClassicShell>}>
+                                  {children}
+                                </LayoutShellSwitch>
+                              </ShellBackground>
+                            </LayoutModeProvider>
+                          </ThemeProvider>
+                        </PatientTabsProvider>
+                      </InsuranceSubmissionNotificationsProvider>
+                    </PDFJobNotificationsProvider>
+                  </DealNotificationsProvider>
                 </EmailNotificationsProvider>
               </TasksNotificationsProvider>
             </CommentsUnreadProvider>

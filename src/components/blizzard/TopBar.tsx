@@ -11,6 +11,8 @@ import HeaderCommentsButton from "../HeaderCommentsButton";
 import HeaderTasksButton from "../HeaderTasksButton";
 import HeaderWhatsAppButton from "../HeaderWhatsAppButton";
 import HeaderUser from "../HeaderUser";
+import HeaderEmailReportsButton from "../HeaderEmailReportsButton";
+import HeaderDealNotificationsButton from "../HeaderDealNotificationsButton";
 import { useTranslations } from "next-intl";
 
 export default function TopBar() {
@@ -103,6 +105,8 @@ export default function TopBar() {
 
       <div className="flex items-center gap-1">
         <HeaderTasksButton />
+        <HeaderDealNotificationsButton />
+        <HeaderEmailReportsButton />
         <HeaderNotificationsButton />
         <HeaderCommentsButton />
         <HeaderWhatsAppButton />
