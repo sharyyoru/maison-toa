@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { formatSwissLocalPhoneDisplay } from "@/lib/phoneFormatter";
 import { Check, Copy, Pencil, X } from "lucide-react";
 
 type PatientData = {
@@ -22,21 +23,6 @@ type PatientData = {
 };
 
 type ModalType = "details" | "address" | null;
-
-function formatSwissPhone(value: string | null) {
-  if (!value) return null;
-
-  let digits = value.replace(/\D/g, "");
-  if (digits.startsWith("0041") && digits.length === 13) {
-    digits = `0${digits.slice(4)}`;
-  } else if (digits.startsWith("41") && digits.length === 11) {
-    digits = `0${digits.slice(2)}`;
-  }
-
-  if (digits.length !== 10 || !digits.startsWith("0")) return value;
-
-  return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 8)} ${digits.slice(8)}`;
-}
 
 export default function PatientCockpitDetails({
   patient,
@@ -60,7 +46,7 @@ export default function PatientCockpitDetails({
   const [postalCode, setPostalCode] = useState(patient.postal_code ?? "");
   const [town, setTown] = useState(patient.town ?? "");
   const [country, setCountry] = useState(patient.country ?? "");
-  const formattedPhone = formatSwissPhone(patient.phone);
+  const formattedPhone = formatSwissLocalPhoneDisplay(patient.phone);
 
   function handleOpen(type: ModalType) {
     if (type === "details") {

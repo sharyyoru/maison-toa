@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getAppointmentNotes, getAppointmentTitle, getAppointmentDisplayName } from "@/lib/appointmentUtils";
+import { formatSwissLocalPhoneDisplay } from "@/lib/phoneFormatter";
 import { getCategoryColorPresentation } from "@/utils/categoryColor";
 import {
   formatSwissMonthYear,
@@ -5613,7 +5614,7 @@ export default function CalendarPage() {
                                       appt.patient?.first_name,
                                       appt.patient?.last_name,
                                     );
-                                    const patientPhone = appt.patient?.phone ?? null;
+                                    const patientPhone = formatSwissLocalPhoneDisplay(appt.patient?.phone);
                                     const patientEmail = appt.patient?.email ?? null;
                                     const durationMins = end && !Number.isNaN(end.getTime()) 
                                       ? Math.round((end.getTime() - start.getTime()) / 60000) 
