@@ -334,7 +334,6 @@ export async function POST(req: NextRequest) {
               total_amount: depositAmount,
               paid_amount: depositAmount,
               status: "PAID",
-              deposit_status: "paid",
               paid_at: nowIso,
               stripe_payment_intent_id: paymentIntentId,
               payment_method: "online",
