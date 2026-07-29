@@ -1,9 +1,749 @@
 @import "tailwindcss";
 
+/* Use class-based dark mode (`.dark` on <html>) instead of prefers-color-scheme */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Hide all input/textarea placeholders when .hide-placeholders is on <html> */
+html.hide-placeholders input::placeholder,
+html.hide-placeholders textarea::placeholder {
+  color: transparent !important;
+}
+
+/* Global font-size bump (~+3pt via scaling from 16→17px) */
+html { font-size: 17px; }
+
+/* Skeleton shimmer animation for loading states */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(90deg, var(--blz-surface, #f1f5f9) 25%, var(--blz-surface-elevated, #e2e8f0) 50%, var(--blz-surface, #f1f5f9) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+.dark .skeleton-shimmer {
+  background: linear-gradient(90deg, #1a1f2e 25%, #232938 50%, #1a1f2e 75%);
+  background-size: 200% 100%;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --blz-bg: #ffffff;
+  --blz-surface: #f8fafc;
+  --blz-surface-elevated: #ffffff;
+  --blz-border: rgba(226, 232, 240, 0.8);
+  --blz-text-primary: #0f172a;
+  --blz-text-secondary: #475569;
+  --blz-text-muted: #94a3b8;
+  --blz-hover: rgba(15, 23, 42, 0.06);
   color-scheme: light;
+}
+
+.dark {
+  --background: #141820;
+  --foreground: #f1f5f9;
+  --blz-bg: #141820;
+  --blz-surface: #1a1f2e;
+  --blz-surface-elevated: #232938;
+  --blz-border: rgba(51, 65, 85, 0.4);
+  --blz-text-primary: #f1f5f9;
+  --blz-text-secondary: #94a3b8;
+  --blz-text-muted: #64748b;
+  --blz-hover: rgba(255, 255, 255, 0.08);
+  color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BLIZZARD DARK MODE - Global utility overrides
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Cards and panels in dark mode */
+.dark .blz-card,
+.dark [class*="rounded-xl"][class*="bg-white"],
+.dark [class*="rounded-xl"][class*="border-slate-200"] {
+  background-color: var(--blz-surface-elevated) !important;
+  border-color: var(--blz-border) !important;
+}
+
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* General text overrides for dark mode content area */
+.dark .blz-content {
+  color: var(--blz-text-primary);
+}
+
+.dark .blz-content h1,
+.dark .blz-content h2,
+.dark .blz-content h3,
+.dark .blz-content h4 {
+  color: var(--blz-text-primary);
+}
+
+.dark .blz-content p {
+  color: var(--blz-text-secondary);
+}
+
+/* Input fields in dark mode */
+.dark .blz-content input,
+.dark .blz-content select,
+.dark .blz-content textarea {
+  background-color: rgba(30, 41, 59, 0.6);
+  border-color: var(--blz-border);
+  color: var(--blz-text-primary);
+}
+
+.dark .blz-content input::placeholder,
+.dark .blz-content textarea::placeholder {
+  color: var(--blz-text-muted);
+}
+
+/* Tables in dark mode */
+.dark .blz-content table {
+  border-color: var(--blz-border);
+}
+
+.dark .blz-content th {
+  background-color: var(--blz-surface);
+  color: var(--blz-text-secondary);
+  border-color: var(--blz-border);
+}
+
+.dark .blz-content td {
+  border-color: var(--blz-border);
+  color: var(--blz-text-primary);
+}
+
+.dark .blz-content tr:hover td {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Header buttons in dark mode (notification bells, etc.) */
+.dark header button[class*="border-slate-200"][class*="bg-white"] {
+  background-color: transparent !important;
+  border-color: rgba(71, 85, 105, 0.4) !important;
+  color: #94a3b8 !important;
+}
+
+.dark header button[class*="border-slate-200"][class*="bg-white"]:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #e2e8f0 !important;
+}
+
+/* Dropdown panels in dark mode */
+.dark [class*="bg-white"][class*="rounded-xl"][class*="shadow-lg"] {
+  background-color: #232938 !important;
+  border-color: rgba(51, 65, 85, 0.6) !important;
+}
+
+.dark [class*="bg-white"][class*="rounded-xl"][class*="shadow-lg"] [class*="text-slate-900"] {
+  color: #f1f5f9 !important;
+}
+
+.dark [class*="bg-white"][class*="rounded-xl"][class*="shadow-lg"] [class*="text-slate-500"],
+.dark [class*="bg-white"][class*="rounded-xl"][class*="shadow-lg"] [class*="text-slate-600"] {
+  color: #94a3b8 !important;
+}
+
+.dark [class*="bg-white"][class*="rounded-xl"][class*="shadow-lg"] [class*="border-slate-100"],
+.dark [class*="bg-white"][class*="rounded-xl"][class*="shadow-lg"] [class*="border-slate-200"] {
+  border-color: rgba(51, 65, 85, 0.4) !important;
+}
+
+.dark [class*="bg-white"][class*="rounded-xl"][class*="shadow-lg"] [class*="hover:bg-slate-50"]:hover,
+.dark [class*="bg-white"][class*="rounded-xl"][class*="shadow-lg"] [class*="hover:bg-sky-50"]:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Agenda/Calendar dark mode */
+.dark .blz-content aside[class*="bg-white"][class*="rounded-3xl"] {
+  background-color: var(--blz-surface-elevated) !important;
+  border-color: var(--blz-border) !important;
+  color: var(--blz-text-secondary) !important;
+}
+
+.dark .blz-content [class*="border-slate-100"] {
+  border-color: rgba(51, 65, 85, 0.3) !important;
+}
+
+.dark .blz-content [class*="border-slate-200"] {
+  border-color: rgba(51, 65, 85, 0.4) !important;
+}
+
+.dark .blz-content [class*="bg-white"] {
+  background-color: var(--blz-surface-elevated) !important;
+}
+
+.dark .blz-content [class*="bg-slate-50"] {
+  background-color: var(--blz-surface) !important;
+}
+
+.dark .blz-content [class*="text-slate-900"],
+.dark .blz-content [class*="text-slate-800"],
+.dark .blz-content [class*="text-slate-700"] {
+  color: var(--blz-text-primary) !important;
+}
+
+.dark .blz-content [class*="text-slate-600"],
+.dark .blz-content [class*="text-slate-500"] {
+  color: var(--blz-text-secondary) !important;
+}
+
+.dark .blz-content [class*="text-slate-400"],
+.dark .blz-content [class*="text-slate-300"] {
+  color: var(--blz-text-muted) !important;
+}
+
+/* Accent background pills in dark mode — readable translucent fills */
+.dark .blz-content [class*="bg-sky-50"] {
+  background-color: rgba(14, 165, 233, 0.15) !important;
+}
+.dark .blz-content [class*="bg-emerald-50"] {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+}
+.dark .blz-content [class*="bg-rose-50"] {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+}
+.dark .blz-content [class*="bg-amber-50"] {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+}
+.dark .blz-content [class*="bg-violet-50"] {
+  background-color: rgba(139, 92, 246, 0.15) !important;
+}
+.dark .blz-content [class*="bg-slate-100"] {
+  background-color: rgba(51, 65, 85, 0.4) !important;
+}
+
+/* Accent text colors lightened for dark backgrounds */
+.dark .blz-content [class*="text-sky-700"] {
+  color: #38bdf8 !important;
+}
+.dark .blz-content [class*="text-emerald-700"] {
+  color: #34d399 !important;
+}
+.dark .blz-content [class*="text-rose-700"] {
+  color: #fb7185 !important;
+}
+.dark .blz-content [class*="text-amber-700"] {
+  color: #fbbf24 !important;
+}
+.dark .blz-content [class*="text-violet-700"] {
+  color: #a78bfa !important;
+}
+
+/* Financial summary cards — ensure text stays readable in dark mode */
+.dark .blz-content [class*="bg-blue-50"] {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+.dark .blz-content [class*="bg-red-50"] {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+}
+.dark .blz-content [class*="border-emerald-100"] [class*="text-emerald-"],
+.dark .blz-content [class*="border-amber-100"] [class*="text-amber-"],
+.dark .blz-content [class*="border-blue-100"] [class*="text-blue-"],
+.dark .blz-content [class*="border-red-100"] [class*="text-red-"] {
+  opacity: 1 !important;
+}
+.dark .blz-content [class*="bg-emerald-50"] [class*="text-slate-"],
+.dark .blz-content [class*="bg-amber-50"] [class*="text-slate-"],
+.dark .blz-content [class*="bg-blue-50"] [class*="text-slate-"],
+.dark .blz-content [class*="bg-red-50"] [class*="text-slate-"],
+.dark .blz-content [class*="bg-slate-50"] [class*="text-slate-900"],
+.dark .blz-content [class*="bg-slate-50"] [class*="text-slate-600"] {
+  color: #f1f5f9 !important;
+}
+.dark .blz-content [class*="text-emerald-600"] {
+  color: #6ee7b7 !important;
+}
+.dark .blz-content [class*="text-amber-600"] {
+  color: #fcd34d !important;
+}
+.dark .blz-content [class*="text-blue-600"] {
+  color: #93c5fd !important;
+}
+.dark .blz-content [class*="text-blue-700"] {
+  color: #60a5fa !important;
+}
+.dark .blz-content [class*="text-red-600"] {
+  color: #fca5a5 !important;
+}
+.dark .blz-content [class*="text-red-700"] {
+  color: #f87171 !important;
+}
+
+/* "In Progress" badge — amber bg with readable text */
+.dark .blz-content [class*="bg-amber-100"] {
+  background-color: rgba(245, 158, 11, 0.25) !important;
+}
+.dark .blz-content [class*="bg-amber-100"][class*="text-amber-700"],
+.dark .blz-content [class*="bg-amber-100"] [class*="text-amber-700"] {
+  color: #92400e !important;
+}
+
+/* Emerald badges (Completed) */
+.dark .blz-content [class*="bg-emerald-100"] {
+  background-color: rgba(16, 185, 129, 0.25) !important;
+}
+.dark .blz-content [class*="bg-emerald-100"][class*="text-emerald-700"],
+.dark .blz-content [class*="bg-emerald-100"] [class*="text-emerald-700"] {
+  color: #ffffff !important;
+}
+
+/* Kanban board — suppress white glow/shadow in dark mode */
+.dark .blz-content [class*="shadow-sm"][class*="rounded-xl"][class*="bg-white"] {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+  border-color: var(--blz-border) !important;
+}
+.dark .blz-content [class*="hover\:shadow-md"]:hover,
+.dark .blz-content [class*="hover\:border-sky-300"]:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  border-color: rgba(56, 189, 248, 0.4) !important;
+}
+
+/* Buttons/links with light backgrounds should keep dark text in dark mode */
+.dark .blz-content [class*="bg-white"] [class*="text-slate-"],
+.dark .blz-content [class*="bg-slate-50"] [class*="text-slate-"],
+.dark .blz-content [class*="bg-gradient-to-b"][class*="from-slate-"] [class*="text-slate-"],
+.dark .blz-content a[class*="bg-white"][class*="text-slate-"],
+.dark .blz-content button[class*="bg-white"][class*="text-slate-"],
+.dark .blz-content a[class*="bg-gradient"][class*="text-slate-"],
+.dark .blz-content button[class*="bg-gradient"][class*="text-slate-"],
+.dark .blz-content a[class*="bg-slate-50"][class*="text-slate-"],
+.dark .blz-content button[class*="bg-slate-50"][class*="text-slate-"] {
+  color: inherit !important;
+}
+
+/* Send an email button specifically needs black text on its light gradient background in dark mode */
+.dark .blz-content a.send-email-btn.send-email-btn,
+.dark .blz-content a.send-email-btn.send-email-btn [class*="text-slate-"] {
+  color: #000000 !important;
+}
+
+/* Appointment pill text — always dark on colored backgrounds */
+.appt-pill-text,
+.dark .appt-pill-text,
+.dark .blz-content .appt-pill-text.appt-pill-text,
+.dark .blz-content [class*="bg-white"] .appt-pill-text.appt-pill-text {
+  color: #000000 !important;
+}
+
+/* Health Background BMI card keeps a light background, so force dark text in dark mode */
+.dark .blz-content .health-bmi-card [class*="text-slate-"] {
+  color: #000000 !important;
+}
+
+/* Agenda drag-to-create highlight in dark mode */
+.dark .blz-content .agenda-drag-highlight {
+  background-color: rgba(56, 189, 248, 0.45) !important;
+}
+
+/* Modals and overlays in dark mode */
+.dark .blz-content [class*="fixed"][class*="bg-black"] {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+}
+
+.dark .blz-content [class*="fixed"] [class*="bg-white"][class*="rounded"] {
+  background-color: var(--blz-surface-elevated) !important;
+  border-color: var(--blz-border) !important;
+}
+
+/* Buttons in dark mode */
+.dark .blz-content button[class*="bg-white"][class*="border"] {
+  background-color: var(--blz-surface) !important;
+  border-color: var(--blz-border) !important;
+  color: var(--blz-text-primary) !important;
+}
+
+.dark .blz-content button[class*="bg-white"][class*="border"]:hover {
+  background-color: var(--blz-surface-elevated) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SCROLLBARS — Thin auto-hide (Linear/Notion style)
+   ═══════════════════════════════════════════════════════════════════════════ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+*:hover {
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+*:hover::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.4); }
+*:hover::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.6); }
+
+/* Dark mode scrollbar */
+.dark *:hover { scrollbar-color: rgba(71, 85, 105, 0.5) transparent; }
+.dark *:hover::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.5); }
+.dark *:hover::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.7); }
+
+.email-template-editor-shell > div,
+.email-template-editor-shell > div > div,
+.email-template-editor-shell iframe {
+  min-height: 0 !important;
+  height: 100% !important;
+  width: 100% !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MEDICAL JARVIS DESIGN SYSTEM - Ambient Clinical AI Interface
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Clinical Dark Mode Foundation */
+.jarvis-shell {
+  --jarvis-obsidian: #090E17;
+  --jarvis-deep-slate: #111827;
+  --jarvis-surface: rgba(17, 24, 39, 0.85);
+  --jarvis-surface-elevated: rgba(30, 41, 59, 0.9);
+  --jarvis-border: rgba(51, 65, 85, 0.5);
+
+  --jarvis-cyan: #22D3EE;
+  --jarvis-cyan-glow: rgba(34, 211, 238, 0.4);
+  --jarvis-emerald: #34D399;
+  --jarvis-emerald-glow: rgba(52, 211, 153, 0.4);
+  --jarvis-amber: #FBBF24;
+  --jarvis-ruby: #F87171;
+
+  --jarvis-text-primary: #F8FAFC;
+  --jarvis-text-secondary: #94A3B8;
+  --jarvis-text-muted: #64748B;
+
+  background: linear-gradient(145deg, var(--jarvis-obsidian) 0%, var(--jarvis-deep-slate) 100%);
+  color: var(--jarvis-text-primary);
+}
+
+/* Glassmorphism Surfaces */
+.jarvis-glass {
+  background: var(--jarvis-surface);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--jarvis-border);
+}
+
+.jarvis-glass-elevated {
+  background: var(--jarvis-surface-elevated);
+  backdrop-filter: blur(20px) saturate(200%);
+  -webkit-backdrop-filter: blur(20px) saturate(200%);
+  border: 1px solid rgba(71, 85, 105, 0.6);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE JARVIS PULSE - Ambient Audio Visualization
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.jarvis-pulse-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jarvis-pulse-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid var(--jarvis-cyan);
+  opacity: 0;
+  animation: jarvisPulseExpand 2s ease-out infinite;
+}
+
+.jarvis-pulse-ring:nth-child(1) { animation-delay: 0s; }
+.jarvis-pulse-ring:nth-child(2) { animation-delay: 0.4s; }
+.jarvis-pulse-ring:nth-child(3) { animation-delay: 0.8s; }
+
+@keyframes jarvisPulseExpand {
+  0% {
+    width: 60px;
+    height: 60px;
+    opacity: 0.8;
+    border-width: 3px;
+  }
+  100% {
+    width: 140px;
+    height: 140px;
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
+.jarvis-pulse-core {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--jarvis-cyan), #0891B2);
+  box-shadow:
+    0 0 40px var(--jarvis-cyan-glow),
+    0 0 80px rgba(34, 211, 238, 0.2),
+    inset 0 -4px 12px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.jarvis-pulse-core:hover {
+  transform: scale(1.05);
+  box-shadow:
+    0 0 60px var(--jarvis-cyan-glow),
+    0 0 100px rgba(34, 211, 238, 0.3),
+    inset 0 -4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.jarvis-pulse-core.listening {
+  animation: jarvisBreathing 1.5s ease-in-out infinite;
+}
+
+.jarvis-pulse-core.speaking {
+  background: radial-gradient(circle at 30% 30%, var(--jarvis-emerald), #059669);
+  box-shadow:
+    0 0 40px var(--jarvis-emerald-glow),
+    0 0 80px rgba(52, 211, 153, 0.2),
+    inset 0 -4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.jarvis-pulse-core.processing {
+  animation: jarvisProcessing 0.8s ease-in-out infinite;
+}
+
+.jarvis-pulse-core.idle {
+  background: radial-gradient(circle at 30% 30%, #475569, #334155);
+  box-shadow:
+    0 0 20px rgba(71, 85, 105, 0.4),
+    inset 0 -4px 12px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes jarvisBreathing {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes jarvisProcessing {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(0.95) rotate(3deg); }
+}
+
+/* Audio Wave Bars */
+.jarvis-wave-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 32px;
+}
+
+.jarvis-wave-bar {
+  width: 4px;
+  background: currentColor;
+  border-radius: 2px;
+  animation: jarvisWave 1s ease-in-out infinite;
+}
+
+.jarvis-wave-bar:nth-child(1) { animation-delay: 0s; height: 8px; }
+.jarvis-wave-bar:nth-child(2) { animation-delay: 0.1s; height: 16px; }
+.jarvis-wave-bar:nth-child(3) { animation-delay: 0.2s; height: 24px; }
+.jarvis-wave-bar:nth-child(4) { animation-delay: 0.3s; height: 16px; }
+.jarvis-wave-bar:nth-child(5) { animation-delay: 0.4s; height: 8px; }
+
+@keyframes jarvisWave {
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1.5); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CLINICAL DATA TABLES - High-Density Medical Display
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.clinical-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+.clinical-table th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(8px);
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--jarvis-text-secondary);
+  border-bottom: 1px solid var(--jarvis-border);
+}
+
+.clinical-table td {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+  color: var(--jarvis-text-primary);
+  vertical-align: middle;
+}
+
+.clinical-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.clinical-table tbody tr:hover {
+  background: rgba(34, 211, 238, 0.05);
+}
+
+.clinical-table tbody tr:active {
+  background: rgba(34, 211, 238, 0.1);
+}
+
+/* Status Pills */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.status-pill.scheduled { background: rgba(34, 211, 238, 0.15); color: var(--jarvis-cyan); }
+.status-pill.completed { background: rgba(52, 211, 153, 0.15); color: var(--jarvis-emerald); }
+.status-pill.pending { background: rgba(251, 191, 36, 0.15); color: var(--jarvis-amber); }
+.status-pill.cancelled { background: rgba(248, 113, 113, 0.15); color: var(--jarvis-ruby); }
+.status-pill.paid { background: rgba(52, 211, 153, 0.15); color: var(--jarvis-emerald); }
+.status-pill.overdue { background: rgba(248, 113, 113, 0.15); color: var(--jarvis-ruby); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONNECTION TELEMETRY INDICATOR
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.telemetry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.telemetry-badge .indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.telemetry-badge.connected {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--jarvis-emerald);
+}
+.telemetry-badge.connected .indicator {
+  background: var(--jarvis-emerald);
+  box-shadow: 0 0 8px var(--jarvis-emerald);
+  animation: telemetryPulse 2s ease-in-out infinite;
+}
+
+.telemetry-badge.processing {
+  background: rgba(34, 211, 238, 0.15);
+  color: var(--jarvis-cyan);
+}
+.telemetry-badge.processing .indicator {
+  background: var(--jarvis-cyan);
+  animation: telemetryBlink 0.5s ease-in-out infinite;
+}
+
+.telemetry-badge.speaking {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--jarvis-amber);
+}
+.telemetry-badge.speaking .indicator {
+  background: var(--jarvis-amber);
+  animation: telemetryPulse 1s ease-in-out infinite;
+}
+
+.telemetry-badge.idle {
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--jarvis-text-muted);
+}
+.telemetry-badge.idle .indicator {
+  background: var(--jarvis-text-muted);
+}
+
+@keyframes telemetryPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+@keyframes telemetryBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   APPX CLINICAL SCROLLBAR STYLING
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.jarvis-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(71, 85, 105, 0.6) transparent;
+}
+
+.jarvis-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.jarvis-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.jarvis-scroll::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.6);
+  border-radius: 3px;
+}
+
+.jarvis-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.8);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   QUICK ACTION CARDS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.jarvis-action-card {
+  background: var(--jarvis-surface);
+  border: 1px solid var(--jarvis-border);
+  border-radius: 12px;
+  padding: 0.875rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.jarvis-action-card:hover {
+  background: var(--jarvis-surface-elevated);
+  border-color: var(--jarvis-cyan);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.jarvis-action-card:active {
+  transform: translateY(0);
 }
 
 @theme inline {
@@ -18,6 +758,12 @@ body {
   color: var(--foreground);
   font-family: var(--font-manrope), system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
+}
+
+.dark body,
+html.dark body {
+  background: #141820;
+  color: #f1f5f9;
 }
 
 .power-button-bg {
@@ -116,7 +862,6 @@ textarea::placeholder {
 .kanban-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(100, 116, 139, 1) rgba(241, 245, 249, 1);
-  /* Force scrollbar to always show on WebKit browsers */
   overflow-x: scroll;
   -webkit-overflow-scrolling: touch;
 }
@@ -144,7 +889,6 @@ textarea::placeholder {
   border-color: rgba(51, 65, 85, 0.5);
 }
 
-/* Top scrollbar for better UX */
 .kanban-scroll-top {
   scrollbar-width: thin;
   scrollbar-color: rgba(100, 116, 139, 1) rgba(241, 245, 249, 1);
@@ -173,6 +917,30 @@ textarea::placeholder {
 .kanban-scroll-top::-webkit-scrollbar-thumb:hover {
   background: rgba(71, 85, 105, 1);
   border-color: rgba(51, 65, 85, 0.5);
+}
+
+/* Dark mode kanban scrollbars */
+.dark .kanban-scroll,
+.dark .kanban-scroll-top {
+  scrollbar-color: rgba(71, 85, 105, 0.9) rgba(30, 41, 59, 0.5);
+}
+
+.dark .kanban-scroll::-webkit-scrollbar-track,
+.dark .kanban-scroll-top::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.5);
+  border-color: rgba(51, 65, 85, 0.6);
+}
+
+.dark .kanban-scroll::-webkit-scrollbar-thumb,
+.dark .kanban-scroll-top::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.9);
+  border-color: rgba(51, 65, 85, 0.6);
+}
+
+.dark .kanban-scroll::-webkit-scrollbar-thumb:hover,
+.dark .kanban-scroll-top::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.95);
+  border-color: rgba(71, 85, 105, 0.8);
 }
 
 /* Calendar day view vertical scrollbar */

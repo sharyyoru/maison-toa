@@ -20,6 +20,7 @@ import {
   getSwissMonthRange,
   getSwissDayRange,
   createSwissDateTime,
+  getSwissDayOfWeek,
 } from "@/lib/swissTimezone";
 
 type AppointmentStatus =
@@ -546,6 +547,40 @@ function formatYmd(date: Date) {
   return formatSwissYmd(date);
 }
 
+// ── Swiss-time calendar helpers ─────────────────────────────────────────────
+// Calendar days are anchored at Swiss noon, keeping date selection and display
+// stable for users outside the Europe/Zurich timezone and across DST changes.
+const CALENDAR_DAY_MS = 24 * 60 * 60 * 1000;
+
+function swissDayAnchor(year: number, monthIndex: number, day: number): Date {
+  const normalized = new Date(year, monthIndex, day);
+  const ymd = `${normalized.getFullYear()}-${String(normalized.getMonth() + 1).padStart(2, "0")}-${String(normalized.getDate()).padStart(2, "0")}`;
+  return createSwissDateTime(ymd, 12, 0);
+}
+
+function swissYmdParts(date: Date): { year: number; monthIndex: number; day: number } {
+  const [year, month, day] = formatSwissYmd(date).split("-").map(Number);
+  return { year, monthIndex: month - 1, day };
+}
+
+function swissDayAnchorFrom(date: Date): Date {
+  const { year, monthIndex, day } = swissYmdParts(date);
+  return swissDayAnchor(year, monthIndex, day);
+}
+
+function swissTodayAnchor(): Date {
+  return swissDayAnchorFrom(new Date());
+}
+
+function swissMonthAnchor(date: Date, monthDelta = 0): Date {
+  const { year, monthIndex } = swissYmdParts(date);
+  return swissDayAnchor(year, monthIndex + monthDelta, 1);
+}
+
+function addSwissDays(date: Date, days: number): Date {
+  return swissDayAnchorFrom(new Date(date.getTime() + days * CALENDAR_DAY_MS));
+}
+
 function formatTimeRangeLabel(start: Date, end: Date | null): string {
   return formatSwissTimeRange(start, end, DAY_VIEW_SLOT_MINUTES);
 }
@@ -922,6 +957,7 @@ export default function CalendarPage() {
   }>>([]);
   const [view, setView] = useState<CalendarView>("day");
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rangeEndDate, setRangeEndDate] = useState<Date | null>(null);
   const [isDraggingRange, setIsDraggingRange] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
@@ -956,7 +992,7 @@ export default function CalendarPage() {
     slotHeight: number;
     startMinutesOffset: number;
   } | null>(null);
-  
+
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDate, setDraftDate] = useState("");
@@ -2218,37 +2254,22 @@ export default function CalendarPage() {
 
   const gridDates = useMemo(() => {
     const dates: Date[] = [];
-    const firstDayOfWeek = 1; // Monday
-    const firstOfMonth = new Date(
-      visibleMonth.getFullYear(),
-      visibleMonth.getMonth(),
-      1,
-      12, 0, 0 // Set to noon to avoid timezone boundary issues
-    );
-    const startWeekday = firstOfMonth.getDay();
+    const firstDayOfWeek = 1; // Monday (Swiss / European convention)
+    const { year, monthIndex } = swissYmdParts(visibleMonth);
+    const firstOfMonth = swissDayAnchor(year, monthIndex, 1);
+    const startWeekday = getSwissDayOfWeek(firstOfMonth);
     const diff = (startWeekday - firstDayOfWeek + 7) % 7;
-    const gridStart = new Date(
-      firstOfMonth.getFullYear(),
-      firstOfMonth.getMonth(),
-      firstOfMonth.getDate() - diff,
-      12, 0, 0 // Set to noon to avoid timezone boundary issues
-    );
+    const gridStart = addSwissDays(firstOfMonth, -diff);
 
     for (let i = 0; i < 42; i += 1) {
-      const d = new Date(
-        gridStart.getFullYear(),
-        gridStart.getMonth(),
-        gridStart.getDate() + i,
-        12, 0, 0 // Set to noon to avoid timezone boundary issues
-      );
-      dates.push(d);
+      dates.push(addSwissDays(gridStart, i));
     }
 
     return dates;
   }, [visibleMonth]);
 
   const todayYmd = formatYmd(new Date());
-  const visibleMonthIndex = visibleMonth.getMonth();
+  const visibleMonthIndex = swissYmdParts(visibleMonth).monthIndex;
 
   // Get selected doctor calendars for tabs
   const selectedDoctorCalendars = useMemo(() => {
@@ -2258,18 +2279,23 @@ export default function CalendarPage() {
   const activeRangeDates = useMemo(() => {
     if (!selectedDate) return [] as Date[];
     if (view === "day" || !rangeEndDate) {
-      const dates = [selectedDate];
-      return dates;
+      return [selectedDate];
     }
 
     const start = selectedDate < rangeEndDate ? selectedDate : rangeEndDate;
     const end = selectedDate < rangeEndDate ? rangeEndDate : selectedDate;
 
+    // Walk day-by-day in Swiss calendar space so every entry is a Swiss-noon
+    // anchor (comparing YYYY-MM-DD strings is timezone-safe).
     const dates: Date[] = [];
-    const current = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-    while (current <= end) {
-      dates.push(new Date(current));
-      current.setDate(current.getDate() + 1);
+    const startYmd = formatYmd(start);
+    const endYmd = formatYmd(end);
+    let current = start;
+    let currentYmd = startYmd;
+    while (currentYmd <= endYmd) {
+      dates.push(current);
+      current = addSwissDays(current, 1);
+      currentYmd = formatYmd(current);
     }
 
     // Week view is represented as a seven-day range. Keep Sunday out of the
@@ -2560,13 +2586,7 @@ export default function CalendarPage() {
   ]);
 
   function handleSelectDayView() {
-    const base = selectedDate ?? new Date();
-    const day = new Date(
-      base.getFullYear(),
-      base.getMonth(),
-      base.getDate(),
-      12, 0, 0
-    );
+    const day = swissDayAnchorFrom(selectedDate ?? new Date());
     setSelectedDate(day);
     setRangeEndDate(null);
     setView("day");
@@ -2574,20 +2594,12 @@ export default function CalendarPage() {
   }
 
   function handleSelectWeekView() {
-    const base = selectedDate ?? new Date();
-    const start = new Date(
-      base.getFullYear(),
-      base.getMonth(),
-      base.getDate(),
-      12, 0, 0
-    );
-    const weekday = start.getDay();
+    const base = swissDayAnchorFrom(selectedDate ?? new Date());
+    const weekday = getSwissDayOfWeek(base);
     // Adjust to make Monday the first day of the week (0=Sunday, 1=Monday, ..., 6=Saturday)
     const adjustedWeekday = weekday === 0 ? 6 : weekday - 1;
-    start.setDate(start.getDate() - adjustedWeekday);
-
-    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12, 0, 0);
-    end.setDate(start.getDate() + 6);
+    const start = addSwissDays(base, -adjustedWeekday);
+    const end = addSwissDays(start, 6);
 
     setSelectedDate(start);
     setRangeEndDate(end);
@@ -2596,8 +2608,8 @@ export default function CalendarPage() {
   }
 
   function handleSelectMonthView() {
-    const base = selectedDate ?? new Date();
-    setVisibleMonth(new Date(base.getFullYear(), base.getMonth(), 1));
+    const base = swissDayAnchorFrom(selectedDate ?? new Date());
+    setVisibleMonth(swissMonthAnchor(base));
     setSelectedDate(null);
     setRangeEndDate(null);
     setView("month");
@@ -4539,69 +4551,71 @@ export default function CalendarPage() {
   }
 
   function goToToday() {
-    const today = new Date();
-    setVisibleMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    const today = swissTodayAnchor();
+    setVisibleMonth(swissMonthAnchor(today));
     setSelectedDate(today);
     setRangeEndDate(null);
     setView("day");
   }
 
   function goPrevMonth() {
-    setVisibleMonth((prev) =>
-      new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
-    );
+    setVisibleMonth((prev) => swissMonthAnchor(prev, -1));
   }
 
   function goNextMonth() {
-    setVisibleMonth((prev) =>
-      new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
-    );
+    setVisibleMonth((prev) => swissMonthAnchor(prev, 1));
+  }
+
+  function goPrev() {
+    if (view === "month") {
+      goPrevMonth();
+    } else if (view === "day" && selectedDate) {
+      const newDate = addSwissDays(selectedDate, -1);
+      setSelectedDate(newDate);
+      setVisibleMonth(swissMonthAnchor(newDate));
+    } else if (view === "range" && selectedDate && rangeEndDate) {
+      const rangeLength = activeRangeDates.length || 1;
+      const newStart = addSwissDays(selectedDate, -rangeLength);
+      const newEnd = addSwissDays(rangeEndDate, -rangeLength);
+      setSelectedDate(newStart);
+      setRangeEndDate(newEnd);
+      setVisibleMonth(swissMonthAnchor(newStart));
+    }
+  }
+
+  function goNext() {
+    if (view === "month") {
+      goNextMonth();
+    } else if (view === "day" && selectedDate) {
+      const newDate = addSwissDays(selectedDate, 1);
+      setSelectedDate(newDate);
+      setVisibleMonth(swissMonthAnchor(newDate));
+    } else if (view === "range" && selectedDate && rangeEndDate) {
+      const rangeLength = activeRangeDates.length || 1;
+      const newStart = addSwissDays(selectedDate, rangeLength);
+      const newEnd = addSwissDays(rangeEndDate, rangeLength);
+      setSelectedDate(newStart);
+      setRangeEndDate(newEnd);
+      setVisibleMonth(swissMonthAnchor(newStart));
+    }
   }
 
   function handleMiniDayMouseDown(date: Date) {
-    const isWeekView =
-      view === "range" &&
-      selectedDate !== null &&
-      rangeEndDate !== null &&
-      Math.abs(
-        Date.UTC(
-          rangeEndDate.getFullYear(),
-          rangeEndDate.getMonth(),
-          rangeEndDate.getDate(),
-        ) -
-          Date.UTC(
-            selectedDate.getFullYear(),
-            selectedDate.getMonth(),
-            selectedDate.getDate(),
-          ),
-      ) /
-        (24 * 60 * 60 * 1000) ===
-        6;
-
-    if (isWeekView) {
-      const weekStart = new Date(
-        date.getFullYear(),
-        date.getMonth(),
-        date.getDate(),
-        12, 0, 0,
-      );
-      const weekday = weekStart.getDay();
-      const daysSinceMonday = weekday === 0 ? 6 : weekday - 1;
-      weekStart.setDate(weekStart.getDate() - daysSinceMonday);
-
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-
-      setSelectedDate(weekStart);
-      setRangeEndDate(weekEnd);
-      setIsDraggingRange(false);
-      return;
+    const base = swissDayAnchorFrom(date);
+    if (view === "range") {
+      const weekday = getSwissDayOfWeek(base);
+      const adjustedWeekday = weekday === 0 ? 6 : weekday - 1;
+      const start = addSwissDays(base, -adjustedWeekday);
+      const end = addSwissDays(start, 6);
+      setSelectedDate(start);
+      setRangeEndDate(end);
+      setVisibleMonth(swissMonthAnchor(start));
+    } else {
+      setSelectedDate(base);
+      setRangeEndDate(null);
+      setView("day");
     }
-
-    setSelectedDate(date);
-    setRangeEndDate(null);
     setIsDraggingRange(true);
-    setView("day");
   }
 
   function syncVisibleMonthToMiniDate(date: Date) {
@@ -4609,7 +4623,7 @@ export default function CalendarPage() {
     // mini-calendar grid. Re-rendering an adjacent month during mousedown can
     // put a different date beneath the pointer and trigger mouseenter, turning
     // a simple click into an unintended multi-week range selection.
-    setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    setVisibleMonth(swissMonthAnchor(date));
   }
 
   function handleMiniDayMouseEnter(date: Date) {
@@ -4624,102 +4638,137 @@ export default function CalendarPage() {
   }
 
   function handleMonthDayClick(date: Date) {
-    setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    setVisibleMonth(swissMonthAnchor(date));
     setSelectedDate(date);
     setRangeEndDate(null);
     setView("day");
   }
 
   return (
-    <div className="flex h-full min-h-0 gap-4 px-0 pb-4 pt-2 sm:px-1 lg:px-2">
+    <div
+      className="-mx-4 -my-4 flex h-full overflow-hidden gap-4 px-0 pb-4 pt-2 sm:-mx-6 sm:px-1 lg:-mx-8 lg:px-2"
+      style={{
+        WebkitOverflowScrolling: "touch",
+      } as React.CSSProperties}
+    >
       {/* Left sidebar similar to Google Calendar */}
-      <aside className="hidden w-64 flex-shrink-0 flex-col rounded-3xl border border-slate-200/80 bg-white/95 p-3 text-xs text-slate-700 shadow-[0_18px_40px_rgba(15,23,42,0.10)] md:flex">
-        <div className="mb-3">
-          <button
-            type="button"
-            onClick={() => {
-              const baseDate = selectedDate ?? new Date();
-              // Use Swiss timezone for consistent date
-              setDraftDate(formatSwissYmd(baseDate));
-              setDraftTime("");
-              setTimeSearch("");
-              setDraftTitle("");
-              setCreatePatientSearch("");
-              setCreatePatientId(null);
-              setCreatePatientName("");
-              setCreateNoPatient(false);
-              setSelectedServiceId("");
-              setServiceSearch("");
-              setBookingStatus("");
-              setStatusSearch("");
-              setAppointmentCategory("");
-              setCategorySearch("");
-              setDraftLocation(CLINIC_LOCATION_OPTIONS[0] ?? "");
-              setLocationSearch(CLINIC_LOCATION_OPTIONS[0] ?? "");
-              setDraftDescription("");
-              setSendEmailNotification(true);
-              setEmailNotificationMessage("");
-              resetCreateRecurrence();
-              const defaultCalendar =
-                doctorCalendars.find((calendar) => calendar.selected) ||
-                doctorCalendars[0] ||
-                null;
-              const defaultCalId = defaultCalendar?.id ?? "";
-              setCreateDoctorCalendarId(defaultCalId);
-              // Initialize multi-select with default doctor
-              if (defaultCalId) {
-                setSelectedDoctorIds([defaultCalId]);
-              } else {
-                setSelectedDoctorIds([]);
-              }
-              // Reset multi-select state
-              setSelectedServiceIds([]);
-              setServiceQuantities({});
-              setDoctorConflicts({});
-              // Apply doctor-specific scheduling defaults
-              const docConfig = doctorSchedulingSettings.find((s) => s.provider_id === defaultCalId);
-              if (docConfig) {
-                setConsultationDuration(docConfig.default_duration_minutes);
-                const durOpt = CONSULTATION_DURATION_OPTIONS.find((o) => o.value === docConfig.default_duration_minutes);
-                setDurationSearch(durOpt ? durOpt.label : `${docConfig.default_duration_minutes} minutes`);
-              } else {
-                setConsultationDuration(15);
-                setDurationSearch("15 minutes");
-              }
-              setCreateModalOpen(true);
-            }}
-            className="inline-flex w-full items-center justify-center rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-sky-700"
-          >
-            Create
-          </button>
-          {copiedAppointment && (
-            <div className="flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[10px] text-sky-700">
-              <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              <span className="truncate">
-                Copied: {copiedAppointment.patient ? formatPatientFileName(copiedAppointment.patient.first_name, copiedAppointment.patient.last_name) : "Appointment"}
-              </span>
+      <aside
+        className={`hidden shrink-0 flex-col rounded-3xl border border-slate-200/80 bg-white/95 text-xs text-slate-700 shadow-[0_18px_40px_rgba(15,23,42,0.10)] transition-all duration-200 md:flex ${
+          leftPanelOpen ? "w-64 p-3" : "w-10 items-center py-2 px-1"
+        }`}
+        style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+      >
+        <div className={`mb-3 flex items-center ${leftPanelOpen ? "justify-between gap-2" : "justify-center"}`}>
+          {leftPanelOpen && (
+            <div className="flex-1">
               <button
                 type="button"
-                onClick={() => setCopiedAppointment(null)}
-                className="ml-auto flex-shrink-0 rounded-full p-0.5 hover:bg-sky-100"
-                title="Clear"
+                onClick={() => {
+                  const baseDate = selectedDate ?? new Date();
+                  // Use Swiss timezone for consistent date
+                  setDraftDate(formatSwissYmd(baseDate));
+                  setDraftTime("");
+                  setTimeSearch("");
+                  setDraftTitle("");
+                  setCreatePatientSearch("");
+                  setCreatePatientId(null);
+                  setCreatePatientName("");
+                  setCreateNoPatient(false);
+                  setSelectedServiceId("");
+                  setServiceSearch("");
+                  setBookingStatus("");
+                  setStatusSearch("");
+                  setAppointmentCategory("");
+                  setCategorySearch("");
+                  setDraftLocation(CLINIC_LOCATION_OPTIONS[0] ?? "");
+                  setLocationSearch(CLINIC_LOCATION_OPTIONS[0] ?? "");
+                  setDraftDescription("");
+                  setSendEmailNotification(true);
+                  setEmailNotificationMessage("");
+                  resetCreateRecurrence();
+                  const defaultCalendar =
+                    doctorCalendars.find((calendar) => calendar.selected) ||
+                    doctorCalendars[0] ||
+                    null;
+                  const defaultCalId = defaultCalendar?.id ?? "";
+                  setCreateDoctorCalendarId(defaultCalId);
+                  // Initialize multi-select with default doctor
+                  if (defaultCalId) {
+                    setSelectedDoctorIds([defaultCalId]);
+                  } else {
+                    setSelectedDoctorIds([]);
+                  }
+                  // Reset multi-select state
+                  setSelectedServiceIds([]);
+                  setServiceQuantities({});
+                  setDoctorConflicts({});
+                  // Apply doctor-specific scheduling defaults
+                  const docConfig = doctorSchedulingSettings.find((s) => s.provider_id === defaultCalId);
+                  if (docConfig) {
+                    setConsultationDuration(docConfig.default_duration_minutes);
+                    const durOpt = CONSULTATION_DURATION_OPTIONS.find((o) => o.value === docConfig.default_duration_minutes);
+                    setDurationSearch(durOpt ? durOpt.label : `${docConfig.default_duration_minutes} minutes`);
+                  } else {
+                    setConsultationDuration(15);
+                    setDurationSearch("15 minutes");
+                  }
+                  setCreateModalOpen(true);
+                }}
+                className="inline-flex w-full items-center justify-center rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-sky-700"
               >
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                Create
               </button>
+              {copiedAppointment && (
+                <div className="flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[10px] text-sky-700">
+                  <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <span className="truncate">
+                    Copied: {copiedAppointment.patient ? formatPatientFileName(copiedAppointment.patient.first_name, copiedAppointment.patient.last_name) : "Appointment"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCopiedAppointment(null)}
+                    className="ml-auto flex-shrink-0 rounded-full p-0.5 hover:bg-sky-100"
+                    title="Clear"
+                  >
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => setLeftPanelOpen((prev) => !prev)}
+            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+            aria-label={leftPanelOpen ? "Collapse sidebar" : "Expand sidebar"}
+          >
+            {leftPanelOpen ? (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 17l-5-5 5-5" />
+                <path d="M18 17V7" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13 17l5-5-5-5" />
+                <path d="M6 17V7" />
+              </svg>
+            )}
+          </button>
         </div>
+        {leftPanelOpen && (
+        <>
         {/* Mini month */}
         <div className="mb-4 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-2">
           <div className="mb-2 flex items-center justify-between text-[11px] font-medium text-slate-700">
             <button
               type="button"
               onClick={goPrevMonth}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-slate-100"
+              style={{ touchAction: "manipulation" }}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-slate-100 touch-manipulation"
               aria-label="Previous month"
             >
               <svg
@@ -4738,7 +4787,8 @@ export default function CalendarPage() {
             <button
               type="button"
               onClick={goNextMonth}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-slate-100"
+              style={{ touchAction: "manipulation" }}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-slate-100 touch-manipulation"
               aria-label="Next month"
             >
               <svg
@@ -5061,28 +5111,31 @@ export default function CalendarPage() {
             )}
           </div>
         </div>
-
+        </>
+        )}
       </aside>
 
       {/* Main month view */}
-      <div className="flex min-w-0 flex-1 flex-col space-y-4">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Calendar header controls */}
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-shrink-0 items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-lg font-semibold text-slate-900">{t("title")}</h1>
             <button
               type="button"
               onClick={goToToday}
-              className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              style={{ touchAction: "manipulation" }}
+              className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 touch-manipulation"
             >
               {t("today")}
             </button>
             <div className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-1 py-0.5 text-slate-600 shadow-sm">
               <button
                 type="button"
-                onClick={goPrevMonth}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-50"
-                aria-label={t("previousMonth")}
+                onClick={goPrev}
+                style={{ touchAction: "manipulation" }}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-50 touch-manipulation"
+                aria-label={view === "month" ? t("previousMonth") : view === "day" ? t("previousDay") : t("previousWeek")}
               >
                 <svg
                   className="h-3 w-3"
@@ -5098,9 +5151,10 @@ export default function CalendarPage() {
               </button>
               <button
                 type="button"
-                onClick={goNextMonth}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-50"
-                aria-label={t("nextMonth")}
+                onClick={goNext}
+                style={{ touchAction: "manipulation" }}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-50 touch-manipulation"
+                aria-label={view === "month" ? t("nextMonth") : view === "day" ? t("nextDay") : t("nextWeek")}
               >
                 <svg
                   className="h-3 w-3"
@@ -5152,7 +5206,8 @@ export default function CalendarPage() {
               <button
                 type="button"
                 onClick={() => setViewMenuOpen((prev) => !prev)}
-                className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                style={{ touchAction: "manipulation" }}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 touch-manipulation"
               >
                 {view === "month"
                   ? t("view.month")
@@ -5172,29 +5227,49 @@ export default function CalendarPage() {
                 </svg>
               </button>
               {viewMenuOpen ? (
-                <div className="absolute right-0 z-20 mt-1 min-w-[120px] rounded-xl border border-slate-200 bg-white py-1 text-xs shadow-lg">
-                  <button
-                    type="button"
-                    onClick={handleSelectDayView}
-                    className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
-                  >
-                    {t("view.day")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSelectWeekView}
-                    className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
-                  >
-                    {t("view.week")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSelectMonthView}
-                    className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
-                  >
-                    {t("view.month")}
-                  </button>
-                </div>
+                <>
+                  {/* Invisible backdrop to close menu on touch/click outside */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setViewMenuOpen(false)}
+                    onTouchEnd={() => setViewMenuOpen(false)}
+                  />
+                  <div className="absolute right-0 z-50 mt-1 min-w-[140px] rounded-xl border border-slate-200 bg-white py-1 text-xs shadow-lg">
+                    <button
+                      type="button"
+                      onClick={handleSelectDayView}
+                      style={{ touchAction: "manipulation" }}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 active:bg-slate-100 touch-manipulation ${view === "day" ? "text-sky-600 font-medium" : "text-slate-700"}`}
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      {t("view.day")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSelectWeekView}
+                      style={{ touchAction: "manipulation" }}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 active:bg-slate-100 touch-manipulation ${view === "range" && activeRangeDates.length > 1 ? "text-sky-600 font-medium" : "text-slate-700"}`}
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                      </svg>
+                      {t("view.week")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSelectMonthView}
+                      style={{ touchAction: "manipulation" }}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 active:bg-slate-100 touch-manipulation ${view === "month" ? "text-sky-600 font-medium" : "text-slate-700"}`}
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                      </svg>
+                      {t("view.month")}
+                    </button>
+                  </div>
+                </>
               ) : null}
             </div>
             <Link
@@ -5212,7 +5287,7 @@ export default function CalendarPage() {
           </div>
         </div>
         {view === "month" ? (
-          <div className="flex-1 flex flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
             <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/80 text-[11px] font-medium uppercase tracking-wide text-slate-500 sticky top-0 z-10">
               {(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((key) => (
                 <div key={key} className="px-3 py-2">
@@ -5337,7 +5412,7 @@ export default function CalendarPage() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
+          <div className="flex-1 min-h-0 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
             <div className="flex flex-col h-full">
               {/* Sticky header row with doctor columns when multiple selected */}
               <div className="flex border-b border-slate-100 bg-slate-50/80 text-[11px] font-medium text-slate-500 sticky top-0 z-10">
