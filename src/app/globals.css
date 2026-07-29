@@ -182,6 +182,14 @@ html { font-size: 17px; }
   background-color: var(--blz-surface) !important;
 }
 
+/* Neutral badge/pill backgrounds (e.g. initials avatars, count chips) also
+   need a dark-mode fill — otherwise they stay light while the generic text
+   overrides below turn their label text light too, killing contrast. */
+.dark .blz-content [class*="bg-slate-200"],
+.dark .blz-content [class*="bg-slate-300"] {
+  background-color: var(--blz-border) !important;
+}
+
 .dark .blz-content [class*="text-slate-900"],
 .dark .blz-content [class*="text-slate-800"],
 .dark .blz-content [class*="text-slate-700"] {
@@ -196,6 +204,28 @@ html { font-size: 17px; }
 .dark .blz-content [class*="text-slate-400"],
 .dark .blz-content [class*="text-slate-300"] {
   color: var(--blz-text-muted) !important;
+}
+
+/* Calendar/agenda event blocks use custom category/doctor colors (arbitrary
+   hex or pastel Tailwind classes) that stay the same light shade in both
+   themes. The generic dark-mode text overrides above would otherwise turn
+   their text light/white, making it unreadable against that light
+   background — so pin the text back to dark for these specific blocks. */
+.dark .blz-content .calendar-event-card,
+.dark .blz-content .calendar-event-card [class*="text-slate-900"],
+.dark .blz-content .calendar-event-card [class*="text-slate-800"],
+.dark .blz-content .calendar-event-card [class*="text-slate-700"],
+.dark .blz-content .calendar-event-card [class*="text-slate-600"],
+.dark .blz-content .calendar-event-card [class*="text-slate-500"] {
+  color: #1e293b !important;
+}
+
+/* The "no category" fallback uses bg-slate-100, which the generic dark-mode
+   rule above turns into a dark translucent fill — undoing that here so it
+   stays light like every other category color and the pinned dark text
+   above remains readable on it. */
+.dark .blz-content .calendar-event-card[class*="bg-slate-100"] {
+  background-color: #e2e8f0 !important;
 }
 
 /* Accent background pills in dark mode — readable translucent fills */

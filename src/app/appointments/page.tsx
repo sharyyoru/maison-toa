@@ -5363,7 +5363,7 @@ export default function CalendarPage() {
                                 event.stopPropagation();
                                 openEditModalForAppointment(appt);
                               }}
-                              className={`w-full rounded-md px-1 py-0.5 text-[11px] text-left ${getAppointmentStatusColorClasses(
+                              className={`calendar-event-card w-full rounded-md px-1 py-0.5 text-[11px] text-left ${getAppointmentStatusColorClasses(
                                 appt.status,
                               )} ${resolveCategoryColorPresentation(category).className}`}
                               style={resolveCategoryColorPresentation(category).style}
@@ -5742,7 +5742,7 @@ export default function CalendarPage() {
                                               openEditModalForAppointment(appt);
                                             }
                                           }}
-                                          className={`relative w-full h-full rounded-md px-1 py-0.5 text-[11px] text-left shadow-sm overflow-hidden cursor-grab active:cursor-grabbing ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColorPresentation(category).className} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
+                                          className={`calendar-event-card relative w-full h-full rounded-md px-1 py-0.5 text-[11px] text-left shadow-sm overflow-hidden cursor-grab active:cursor-grabbing ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColorPresentation(category).className} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
                                           style={resolveCategoryColorPresentation(category).style}
                                         >
                                           {bufferBeforePercent > 0 && (

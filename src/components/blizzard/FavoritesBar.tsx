@@ -219,9 +219,10 @@ function TooltipIcon({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
+            e.preventDefault();
             onRemove();
           }}
-          className="absolute -right-1 -top-1 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-slate-500 text-[10px] leading-none text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 hover:bg-red-500 focus:opacity-100"
+          className="pointer-events-none absolute -right-1 -top-1 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-slate-500 text-[10px] leading-none text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 hover:bg-red-500 focus:pointer-events-auto focus:opacity-100"
           aria-label={`Remove ${label}`}
         >
           ×
