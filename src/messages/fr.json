@@ -1692,6 +1692,7 @@
       "deal_stage_changed": "Changement d'étape d'affaire",
       "patient_created": "Patient créé",
       "appointment_created": "Rendez-vous créé",
+      "appointment_status_changed": "Changement de statut du rendez-vous",
       "appointment_completed": "Rendez-vous terminé",
       "form_submitted": "Formulaire soumis",
       "task_completed": "Tâche terminée",

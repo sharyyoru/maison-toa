@@ -824,6 +824,8 @@ async function syncPendingAppointmentReminder(appointment: CalendarAppointment):
     .from("scheduled_emails")
     .select("id")
     .eq("appointment_id", appointment.id)
+    // Workflow emails use recipient_type "workflow" and must retain their own
+    // configured schedule when the appointment time changes.
     .eq("recipient_type", "patient")
     .eq("status", "pending")
     .limit(1)
