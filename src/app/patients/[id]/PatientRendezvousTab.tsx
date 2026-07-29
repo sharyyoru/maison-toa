@@ -6,6 +6,7 @@ import { getAppointmentNotes, getAppointmentTitle, getAppointmentDisplayName } f
 import { useTranslations } from "next-intl";
 import { formatSwissAppointmentDateTime } from "@/lib/swissTimezone";
 import { usePatientRealtime } from "./PatientRealtimeContext";
+import { useAppointmentStatusOptions } from "@/lib/appointmentStatuses";
 
 type AppointmentStatus =
   | "scheduled"
@@ -83,34 +84,6 @@ const APPOINTMENT_CATEGORY_OPTIONS = [
   "Caviar treatment",
   "Vacation/Leave",
   "Visia",
-];
-
-const BOOKING_STATUS_OPTIONS = [
-  "Aucune sélection",
-  "Vidéo conférence / appel",
-  "Bon/Solde/Voucher",
-  "CONTROLE INFOS PATIENT",
-  "PAIEMENT PARTIEL",
-  "FACTURATION TARMED",
-  "PAYE",
-  "FACTURE ENVOYEE",
-  "CB",
-  "Salle d'attente",
-  "Chez le médecin/dans la salle de consult.",
-  "Patient parti, hors du cabinet",
-  "à faire",
-  "fait",
-  "Attention",
-  "Annulé",
-  "Téléphone",
-  "N'est pas venu",
-  "en retard",
-  "à payer",
-  "Urgent",
-  "Déplacé",
-  "MANQUE",
-  "NUIT",
-  "ESPECES",
 ];
 
 function appointmentStatusToWorkflow(status: AppointmentStatus): WorkflowStatus {
@@ -200,6 +173,7 @@ export default function PatientRendezvousTab({
   patientId: string;
 }) {
   const t = useTranslations("patient.rendezvous");
+  const appointmentStatusOptions = useAppointmentStatusOptions();
   const { rendezvousRevision } = usePatientRealtime();
   const pendingRealtimeReloadRef = useRef(false);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -855,8 +829,10 @@ export default function PatientRendezvousTab({
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-sky-500 focus:outline-none"
                 >
                   <option value="">{t("searchStatus")}</option>
-                  {BOOKING_STATUS_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
+                  {appointmentStatusOptions.map((opt) => (
+                    <option key={opt.id} value={opt.name}>
+                      {opt.emoji ? `${opt.emoji} ${opt.name}` : opt.name}
+                    </option>
                   ))}
                 </select>
               </div>

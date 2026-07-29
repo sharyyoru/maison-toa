@@ -1356,6 +1356,7 @@
       "blockedDates": "Blocked Dates",
       "medidata": "MediData Connection",
       "bookingCategories": "Booking Categories",
+      "appointmentStatuses": "Appointment Statuses",
       "providersBilling": "Providers & Billing",
       "tardocGroups": "TARDOC Groups"
     },
