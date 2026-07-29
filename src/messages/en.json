@@ -1692,6 +1692,7 @@
       "deal_stage_changed": "Deal Stage Changed",
       "patient_created": "Patient Created",
       "appointment_created": "Appointment Created",
+      "appointment_status_changed": "Appointment Status Changed",
       "appointment_completed": "Appointment Completed",
       "form_submitted": "Form Submitted",
       "task_completed": "Task Completed",

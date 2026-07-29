@@ -7,12 +7,14 @@ import { supabaseClient } from "@/lib/supabaseClient";
 import EmailTemplateBuilder from "@/components/EmailTemplateBuilder";
 import UserSearchSelect from "@/components/UserSearchSelect";
 import MultiUserSearchSelect from "@/components/MultiUserSearchSelect";
+import { useAppointmentStatusOptions } from "@/lib/appointmentStatuses";
 
 // Types
 type TriggerType = 
   | "deal_stage_changed"
   | "patient_created"
   | "appointment_created"
+  | "appointment_status_changed"
   | "appointment_completed"
   | "form_submitted"
   | "task_completed"
@@ -83,6 +85,7 @@ const TRIGGER_OPTIONS: { value: TriggerType; label: string; description: string;
   { value: "deal_stage_changed", label: "Deal Stage Changed", description: "When a deal moves to a specific stage", icon: "📊" },
   { value: "patient_created", label: "Patient Created", description: "When a new patient is added", icon: "👤" },
   { value: "appointment_created", label: "Appointment Created", description: "When an appointment is scheduled", icon: "📅" },
+  { value: "appointment_status_changed", label: "Appointment Status Changed", description: "When an appointment moves to a specific status", icon: "🔄" },
   { value: "appointment_completed", label: "Appointment Completed", description: "When an appointment is marked complete", icon: "✅" },
   { value: "form_submitted", label: "Form Submitted", description: "When a lead form is submitted", icon: "📝" },
   { value: "task_completed", label: "Task Completed", description: "When a task is marked complete", icon: "☑️" },
@@ -112,6 +115,7 @@ const CONDITION_FIELDS = [
   { value: "deal.stage", label: "Deal Stage" },
   { value: "deal.service", label: "Deal Service" },
   { value: "appointment.type", label: "Appointment Type" },
+  { value: "appointment.status", label: "Appointment Status" },
   { value: "appointment.provider", label: "Appointment Provider" },
 ];
 
@@ -216,6 +220,7 @@ export default function WorkflowBuilderPage() {
   const [previewEmailHtml, setPreviewEmailHtml] = useState<string | null>(null);
   const [previewEmailSubject, setPreviewEmailSubject] = useState<string | null>(null);
   const [services, setServices] = useState<{ id: string; name: string }[]>([]);
+  const appointmentStatuses = useAppointmentStatusOptions();
 
   // Load stages, users, and email templates
   useEffect(() => {
@@ -398,6 +403,22 @@ export default function WorkflowBuilderPage() {
       setError("Workflow must have a trigger");
       return;
     }
+    const triggerData = triggerNode.data as TriggerNodeData;
+    if (triggerData.triggerType === "appointment_status_changed") {
+      const config = triggerData.config as {
+        appointment_status?: string;
+        appointment_statuses?: string[];
+      };
+      const selectedStatuses = config.appointment_statuses?.length
+        ? config.appointment_statuses
+        : config.appointment_status
+          ? [config.appointment_status]
+          : [];
+      if (selectedStatuses.length === 0) {
+        setError("Please select at least one appointment status");
+        return;
+      }
+    }
 
     try {
       setSaving(true);
@@ -575,6 +596,83 @@ export default function WorkflowBuilderPage() {
               </select>
             </div>
           )}
+
+          {data.triggerType === "appointment_status_changed" && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">When appointment status</label>
+                <select
+                  value={(data.config as { appointment_status_match_mode?: string }).appointment_status_match_mode || "includes"}
+                  onChange={(e) => updateNodeData(selectedNode.id, {
+                    config: { ...data.config, appointment_status_match_mode: e.target.value },
+                  })}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                >
+                  <option value="includes">is any of</option>
+                  <option value="excludes">is not any of</option>
+                </select>
+              </div>
+              <fieldset>
+                <legend className="block text-sm font-medium text-slate-700 mb-1.5">Statuses</legend>
+                <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+                  {appointmentStatuses.map((status) => {
+                    const config = data.config as {
+                      appointment_status?: string;
+                      appointment_statuses?: string[];
+                    };
+                    const selectedStatuses = config.appointment_statuses ?? (
+                      config.appointment_status ? [config.appointment_status] : []
+                    );
+                    const isChecked = selectedStatuses.includes(status.name);
+                    return (
+                      <label
+                        key={status.id}
+                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            const nextStatuses = isChecked
+                              ? selectedStatuses.filter((name) => name !== status.name)
+                              : [...selectedStatuses, status.name];
+                            updateNodeData(selectedNode.id, {
+                              config: {
+                                ...data.config,
+                                appointment_status: undefined,
+                                appointment_statuses: nextStatuses,
+                              },
+                            });
+                          }}
+                          className="h-4 w-4 rounded border-slate-300 text-sky-600"
+                        />
+                        <span>{status.emoji ? `${status.emoji} ` : ""}{status.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <input
+                  type="checkbox"
+                  checked={(data.config as { run_once_per_appointment?: boolean }).run_once_per_appointment || false}
+                  onChange={(e) => updateNodeData(selectedNode.id, {
+                    config: {
+                      ...data.config,
+                      run_once_per_appointment: e.target.checked,
+                    },
+                  })}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-slate-700">Run only once per appointment</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    After the first match, later matching status changes for the same appointment will be ignored.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
         </div>
       );
     }
@@ -695,6 +793,7 @@ export default function WorkflowBuilderPage() {
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
                 >
                   <option value="patient">Patient (from trigger)</option>
+                  <option value="appointment_patient">Patient (from appointment)</option>
                   <option value="deal_patient">Patient (from deal)</option>
                   <option value="assigned_user">Assigned Staff</option>
                   <option value="specific_user">Specific User</option>

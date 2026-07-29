@@ -1,10 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { POST as runAppointmentWorkflow } from "@/app/api/workflows/appointment-created/route";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+function appointmentDisplayStatus(reason: unknown): string {
+  if (typeof reason !== "string") return "Aucune sélection";
+  return reason.match(/\[Status:\s*([^\]]+)\]/i)?.[1]?.trim() || "Aucune sélection";
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -36,7 +42,7 @@ export async function PATCH(
 
     const { data: currentAppointment, error: currentError } = await supabase
       .from("appointments")
-      .select("id, provider_id, start_time, end_time, status, linked_parent_appointment_id, tracking_params")
+      .select("id, provider_id, start_time, end_time, status, reason, linked_parent_appointment_id, tracking_params")
       .eq("id", id)
       .single();
 
@@ -151,6 +157,25 @@ export async function PATCH(
         { error: error.message },
         { status: 500 }
       );
+    }
+
+    const previousDisplayStatus = appointmentDisplayStatus(currentAppointment.reason);
+    const nextDisplayStatus = appointmentDisplayStatus(data.reason);
+    if (nextDisplayStatus !== previousDisplayStatus) {
+      try {
+        await runAppointmentWorkflow(new Request(request.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            appointmentId: id,
+            triggerType: "appointment_status_changed",
+            appointmentStatus: nextDisplayStatus,
+            previousAppointmentStatus: previousDisplayStatus,
+          }),
+        }));
+      } catch (workflowError) {
+        console.error("Failed to run appointment status workflow:", workflowError);
+      }
     }
     
     return NextResponse.json(data);
