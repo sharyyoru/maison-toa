@@ -5996,7 +5996,7 @@ export default function CalendarPage() {
                     )}
                     {editingAppointment.patient?.phone && (
                       <p className="text-[10px] text-slate-500">
-                        {editingAppointment.patient.phone}
+                        {formatSwissLocalPhoneDisplay(editingAppointment.patient.phone)}
                       </p>
                     )}
                     {editingAppointment.patient?.date_of_birth && (
