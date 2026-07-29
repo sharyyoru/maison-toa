@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ReactNode, useEffect, useState, useCallback } from "react";
+import { ReactNode, useEffect, useState, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { useAuth } from "@/components/AuthContext";
+import { supabaseClient } from "@/lib/supabaseClient";
 
 type Favorite = {
   href: string;
@@ -67,6 +69,40 @@ function normalizeFavorite(href: string): Favorite | null {
   }
 
   return { href, icon: "custom" };
+}
+
+async function fetchFavoritesFromDb(userId: string): Promise<Favorite[] | null> {
+  const { data, error } = await supabaseClient
+    .from("favorites")
+    .select("href, icon, sort_order")
+    .eq("user_id", userId)
+    .order("sort_order", { ascending: true });
+  if (error || !data) {
+    console.error("Failed to load favorites from DB:", error);
+    return null;
+  }
+  return data.map((row) => ({ href: row.href as string, icon: row.icon as string }));
+}
+
+async function syncFavoritesToDb(userId: string, favorites: Favorite[]) {
+  const rows = favorites.map((f, i) => ({
+    user_id: userId,
+    href: f.href,
+    icon: f.icon,
+    sort_order: i,
+  }));
+  const { error: deleteError } = await supabaseClient
+    .from("favorites")
+    .delete()
+    .eq("user_id", userId);
+  if (deleteError) {
+    console.error("Failed to delete favorites:", deleteError);
+    return;
+  }
+  if (rows.length > 0) {
+    const { error: insertError } = await supabaseClient.from("favorites").insert(rows);
+    if (insertError) console.error("Failed to insert favorites:", insertError);
+  }
 }
 
 function FavoriteIcon({ icon, className }: { icon: string; className?: string }) {
@@ -198,29 +234,62 @@ function TooltipIcon({
 export default function FavoritesBar() {
   const pathname = usePathname();
   const tNav = useTranslations("nav");
+  const { user, loading } = useAuth();
   const [favorites, setFavorites] = useState<Favorite[]>(DEFAULT_FAVORITES);
   const [loaded, setLoaded] = useState(false);
+  const skipDbSyncRef = useRef(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Favorite[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setFavorites(parsed);
+    if (loading) return;
+    async function load() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as Favorite[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setFavorites(parsed);
+            setLoaded(true);
+            return;
+          }
+        } catch {
+          // ignore corrupt storage
         }
-      } catch {
-        // ignore corrupt storage
       }
+
+      if (user) {
+        const dbFavorites = await fetchFavoritesFromDb(user.id);
+        if (dbFavorites && dbFavorites.length > 0) {
+          setFavorites(dbFavorites);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(dbFavorites));
+          setLoaded(true);
+          return;
+        }
+
+        // Seed DB with defaults when both localStorage and DB are empty
+        setFavorites(DEFAULT_FAVORITES);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_FAVORITES));
+        await syncFavoritesToDb(user.id, DEFAULT_FAVORITES);
+      }
+
+      setLoaded(true);
     }
-    setLoaded(true);
-  }, []);
+    void load();
+  }, [loading, user]);
 
   useEffect(() => {
     if (loaded) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(favorites));
     }
   }, [favorites, loaded]);
+
+  useEffect(() => {
+    if (!loaded || !user) return;
+    if (skipDbSyncRef.current) {
+      skipDbSyncRef.current = false;
+      return;
+    }
+    void syncFavoritesToDb(user.id, favorites);
+  }, [favorites, loaded, user]);
 
   const isActive = useCallback(
     (href: string) => {
