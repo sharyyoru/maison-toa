@@ -172,6 +172,7 @@ function TooltipIcon({
   isActive,
   onClick,
   onRemove,
+  editing,
   ariaLabel,
   children,
 }: {
@@ -180,6 +181,7 @@ function TooltipIcon({
   isActive?: boolean;
   onClick?: () => void;
   onRemove?: () => void;
+  editing?: boolean;
   ariaLabel?: string;
   children: ReactNode;
 }) {
@@ -189,10 +191,11 @@ function TooltipIcon({
     "border-sky-400/60 bg-sky-500/10 text-sky-500 dark:text-sky-400";
   const inactiveClasses =
     "border-[var(--blz-border)] text-[var(--blz-text-muted)] hover:border-sky-400 hover:bg-sky-500/10 hover:text-sky-500 dark:hover:text-sky-200 hover:shadow-[0_0_16px_rgba(56,189,248,0.35)] hover:scale-105";
+  const editingClasses = editing ? "animate-[wiggle_0.25s_ease-in-out_infinite]" : "";
 
   return (
     <div className="group relative flex items-center justify-center">
-      {href ? (
+      {href && !editing ? (
         <Link
           href={href}
           aria-label={ariaLabel ?? label}
@@ -203,9 +206,10 @@ function TooltipIcon({
       ) : (
         <button
           type="button"
-          onClick={onClick}
+          onClick={editing ? undefined : onClick}
           aria-label={ariaLabel ?? label}
-          className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses}`}
+          tabIndex={editing ? -1 : undefined}
+          className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses} ${editingClasses} ${editing ? "cursor-default" : ""}`}
         >
           {children}
         </button>
@@ -214,7 +218,7 @@ function TooltipIcon({
         {label}
         <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-[var(--blz-surface-elevated)]" />
       </div>
-      {onRemove && (
+      {onRemove && editing && (
         <button
           type="button"
           onClick={(e) => {
@@ -222,7 +226,7 @@ function TooltipIcon({
             e.preventDefault();
             onRemove();
           }}
-          className="pointer-events-none absolute -right-1 -top-1 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-slate-500 text-[10px] leading-none text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 hover:bg-red-500 focus:pointer-events-auto focus:opacity-100"
+          className="absolute -right-1 -top-1 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-slate-500 text-[10px] leading-none text-white opacity-100 shadow-sm hover:bg-red-500"
           aria-label={`Remove ${label}`}
         >
           ×
@@ -238,6 +242,7 @@ export default function FavoritesBar() {
   const { user, loading } = useAuth();
   const [favorites, setFavorites] = useState<Favorite[]>(DEFAULT_FAVORITES);
   const [loaded, setLoaded] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const skipDbSyncRef = useRef(true);
 
   useEffect(() => {
@@ -305,13 +310,9 @@ export default function FavoritesBar() {
     ? favorites.some((f) => f.href === currentFavorite.href)
     : false;
 
-  function toggleCurrentFavorite() {
-    if (!currentFavorite) return;
-    if (isCurrentFavorite) {
-      setFavorites((prev) => prev.filter((f) => f.href !== currentFavorite.href));
-    } else {
-      setFavorites((prev) => [...prev, currentFavorite]);
-    }
+  function addCurrentFavorite() {
+    if (!currentFavorite || isCurrentFavorite) return;
+    setFavorites((prev) => [...prev, currentFavorite]);
   }
 
   function removeFavorite(href: string) {
@@ -331,22 +332,35 @@ export default function FavoritesBar() {
             label={getFavoriteLabel(favorite.href, tNav)}
             isActive={isActive(favorite.href)}
             onRemove={() => removeFavorite(favorite.href)}
+            editing={isEditing}
           >
             <FavoriteIcon icon={favorite.icon} />
           </TooltipIcon>
         ))}
-        <TooltipIcon
-          label={isCurrentFavorite ? "Remove current from favorites" : "Add current to favorites"}
-          onClick={toggleCurrentFavorite}
-          ariaLabel={isCurrentFavorite ? "Remove current from favorites" : "Add current to favorites"}
-        >
-          {isCurrentFavorite ? (
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14" />
-            </svg>
-          ) : (
+        {isEditing && !isCurrentFavorite && currentFavorite && (
+          <TooltipIcon
+            label="Add current page to favorites"
+            onClick={addCurrentFavorite}
+            ariaLabel="Add current page to favorites"
+          >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 5v14M5 12h14" />
+            </svg>
+          </TooltipIcon>
+        )}
+        <TooltipIcon
+          label={isEditing ? "Done editing" : "Edit favorites"}
+          onClick={() => setIsEditing((prev) => !prev)}
+          ariaLabel={isEditing ? "Done editing favorites" : "Edit favorites"}
+          isActive={isEditing}
+        >
+          {isEditing ? (
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
             </svg>
           )}
         </TooltipIcon>

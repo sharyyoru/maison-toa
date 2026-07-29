@@ -12,6 +12,12 @@ html.hide-placeholders textarea::placeholder {
 /* Global font-size bump (~+3pt via scaling from 16→17px) */
 html { font-size: 17px; }
 
+/* Subtle "jiggle" used to indicate favorites are in edit mode (iOS-style) */
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+
 /* Skeleton shimmer animation for loading states */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
@@ -216,7 +222,8 @@ html { font-size: 17px; }
 .dark .blz-content .calendar-event-card [class*="text-slate-800"],
 .dark .blz-content .calendar-event-card [class*="text-slate-700"],
 .dark .blz-content .calendar-event-card [class*="text-slate-600"],
-.dark .blz-content .calendar-event-card [class*="text-slate-500"] {
+.dark .blz-content .calendar-event-card [class*="text-slate-500"],
+.dark .blz-content .calendar-event-card [class*="text-slate-400"] {
   color: #1e293b !important;
 }
 
