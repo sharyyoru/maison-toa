@@ -8,6 +8,7 @@ import { supabaseClient } from "@/lib/supabaseClient";
 import { getAppointmentNotes, getAppointmentTitle, getAppointmentDisplayName } from "@/lib/appointmentUtils";
 import { formatSwissLocalPhoneDisplay } from "@/lib/phoneFormatter";
 import { getCategoryColorPresentation } from "@/utils/categoryColor";
+import { useAppointmentStatusOptions } from "@/lib/appointmentStatuses";
 import {
   formatSwissMonthYear,
   formatSwissYmd,
@@ -191,19 +192,6 @@ type ServiceOption = {
   category_name: string | null;
 };
 
-const BOOKING_STATUS_OPTIONS = [
-  "Aucune sélection",
-  "Salle d'attente",
-  "Chez le médecin/dans la salle de consult.",
-  "fait",
-  "Attention",
-  "Annulé",
-  "N'est pas venu",
-  "en retard",
-  "Urgent",
-  "Déplacé",
-];
-
 const CATEGORY_COLORS: Record<string, string> = {
   // French names (from Axenita) - using lighter/opacity variants for readability
   "Aucune sélection": "bg-sky-100/80",
@@ -271,19 +259,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Vacation/Leave": "bg-lime-200/70",
 };
 
-const STATUS_ICONS: Record<string, string> = {
-  "Aucune sélection": "",
-  "Salle d'attente": "🕐",
-  "Chez le médecin/dans la salle de consult.": "👤",
-  "fait": "☑",
-  "Attention": "⚠️",
-  "Annulé": "☒",
-  "N'est pas venu": "🚫",
-  "en retard": "📞",
-  "Urgent": "🆘",
-  "Déplacé": "📝",
-};
-
 function normalizeString(str: string): string {
   return str
     .toLowerCase()
@@ -317,11 +292,6 @@ function getCategoryColor(category: string | null): string {
   }
   
   return "bg-slate-100";
-}
-
-function getStatusIcon(status: string | null): string {
-  if (!status) return "";
-  return STATUS_ICONS[status] ?? "";
 }
 
 const CLINIC_LOCATION_OPTIONS = ["Lausanne", "Rhône", "Champel", "Gstaad", "Montreux"];
@@ -879,6 +849,19 @@ async function syncPendingAppointmentReminder(appointment: CalendarAppointment):
 }
 
 export default function CalendarPage() {
+  const appointmentStatusOptions = useAppointmentStatusOptions();
+  const bookingStatusOptions = useMemo(
+    () => appointmentStatusOptions.map((status) => status.name),
+    [appointmentStatusOptions],
+  );
+  const statusEmojiMap = useMemo(
+    () => new Map(appointmentStatusOptions.map((status) => [status.name, status.emoji])),
+    [appointmentStatusOptions],
+  );
+  const getStatusIcon = useCallback(
+    (status: string | null) => status ? statusEmojiMap.get(status) ?? "" : "",
+    [statusEmojiMap],
+  );
   const searchParams = useSearchParams();
   const t = useTranslations("calendar");
   const tCommon = useTranslations("common");
@@ -2405,9 +2388,9 @@ export default function CalendarPage() {
 
   const filteredStatusOptions = useMemo(() => {
     const search = statusSearch.trim().toLowerCase();
-    if (!search) return BOOKING_STATUS_OPTIONS;
-    return BOOKING_STATUS_OPTIONS.filter((opt) => opt.toLowerCase().includes(search));
-  }, [statusSearch]);
+    if (!search) return bookingStatusOptions;
+    return bookingStatusOptions.filter((opt) => opt.toLowerCase().includes(search));
+  }, [bookingStatusOptions, statusSearch]);
 
   // Merge hardcoded category options with DB-loaded categories so the calendar
   // reflects any categories created/edited via the Services page.
@@ -6276,7 +6259,7 @@ export default function CalendarPage() {
                       )}
                       {editBookingStatusDropdownOpen && (
                         <div className="absolute z-50 mt-1 max-h-40 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
-                          {BOOKING_STATUS_OPTIONS.filter((opt) =>
+                          {bookingStatusOptions.filter((opt) =>
                             opt.toLowerCase().includes(editBookingStatusSearch.toLowerCase())
                           ).map((opt) => (
                             <button
