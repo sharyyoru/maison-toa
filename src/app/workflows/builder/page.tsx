@@ -64,6 +64,7 @@ type ConditionNodeData = {
 type DelayNodeData = {
   delayType: "minutes" | "hours" | "days" | "until_time";
   delayValue: number;
+  delayAnchor?: "trigger_time" | "appointment_time";
   delayTime?: string;
 };
 
@@ -328,6 +329,7 @@ export default function WorkflowBuilderPage() {
         data: {
           delayType: "hours",
           delayValue: 1,
+          delayAnchor: "trigger_time",
         } as DelayNodeData,
       };
     }
@@ -498,7 +500,9 @@ export default function WorkflowBuilderPage() {
       icon = "⏰";
       title = "Delay";
       const data = node.data as DelayNodeData;
-      description = `Wait ${data.delayValue} ${data.delayType}`;
+      description = `Wait ${data.delayValue} ${data.delayType}${
+        data.delayAnchor === "appointment_time" ? " after appointment time" : ""
+      }`;
     }
 
     return (
@@ -1357,9 +1361,35 @@ export default function WorkflowBuilderPage() {
 
     if (selectedNode.type === "delay") {
       const data = selectedNode.data as DelayNodeData;
+      const triggerType = (
+        nodes.find((node) => node.type === "trigger")?.data as TriggerNodeData | undefined
+      )?.triggerType;
+      const supportsAppointmentAnchor =
+        triggerType === "appointment_created" || triggerType === "appointment_status_changed";
       return (
         <div className="space-y-4">
           <h3 className="font-semibold text-slate-900">Configure Delay</h3>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Delay starts from</label>
+            <select
+              value={data.delayAnchor || "trigger_time"}
+              onChange={(e) => updateNodeData(selectedNode.id, {
+                delayAnchor: e.target.value as DelayNodeData["delayAnchor"],
+              })}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+            >
+              <option value="trigger_time">Workflow trigger time</option>
+              {supportsAppointmentAnchor && (
+                <option value="appointment_time">Appointment time</option>
+              )}
+            </select>
+            {data.delayAnchor === "appointment_time" && (
+              <p className="mt-1 text-xs text-slate-500">
+                The delay is added to the appointment&apos;s scheduled start time.
+              </p>
+            )}
+          </div>
           
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Delay Type</label>
