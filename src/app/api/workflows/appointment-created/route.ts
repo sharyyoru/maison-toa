@@ -325,10 +325,16 @@ export async function POST(request: Request) {
         }));
 
       let cumulativeDelayMinutes = 0;
+      const workflowTriggeredAt = new Date();
+      let cumulativeDelayAnchor = workflowTriggeredAt;
 
       for (const step of steps) {
         if (step.step_type === "delay") {
-          const delayConfig = step.config as { delayType?: string; delayValue?: number };
+          const delayConfig = step.config as {
+            delayType?: string;
+            delayValue?: number;
+            delayAnchor?: "trigger_time" | "appointment_time";
+          };
           const delayValue = delayConfig.delayValue || 0;
           const delayType = delayConfig.delayType || "minutes";
           let delayMinutes = 0;
@@ -336,6 +342,10 @@ export async function POST(request: Request) {
           else if (delayType === "hours") delayMinutes = delayValue * 60;
           else if (delayType === "days") delayMinutes = delayValue * 24 * 60;
           cumulativeDelayMinutes += delayMinutes;
+          cumulativeDelayAnchor =
+            delayConfig.delayAnchor === "appointment_time" && appointmentDate
+              ? appointmentDate
+              : workflowTriggeredAt;
 
           if (enrollmentId) {
             await supabaseAdmin.from("workflow_enrollment_steps").insert({
@@ -345,7 +355,12 @@ export async function POST(request: Request) {
               step_config: step.config,
               status: "completed",
               executed_at: new Date().toISOString(),
-              result: { delay_minutes: delayMinutes, cumulative_delay_minutes: cumulativeDelayMinutes },
+              result: {
+                delay_minutes: delayMinutes,
+                cumulative_delay_minutes: cumulativeDelayMinutes,
+                delay_anchor: delayConfig.delayAnchor || "trigger_time",
+                delay_anchor_time: cumulativeDelayAnchor.toISOString(),
+              },
             });
           }
           continue;
@@ -512,9 +527,13 @@ export async function POST(request: Request) {
           const delayMin =
             (typeof config.delay_minutes === "number" && config.delay_minutes > 0 ? config.delay_minutes : 0) +
             cumulativeDelayMinutes;
-          if (delayMin > 0) scheduledAt = new Date(now.getTime() + delayMin * 60 * 1000);
+          if (delayMin > 0) {
+            scheduledAt = new Date(cumulativeDelayAnchor.getTime() + delayMin * 60 * 1000);
+          }
         } else if (cumulativeDelayMinutes > 0) {
-          scheduledAt = new Date(now.getTime() + cumulativeDelayMinutes * 60 * 1000);
+          scheduledAt = new Date(
+            cumulativeDelayAnchor.getTime() + cumulativeDelayMinutes * 60 * 1000,
+          );
         }
 
         const isFuture = !!scheduledAt && scheduledAt.getTime() > now.getTime();
