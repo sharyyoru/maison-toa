@@ -207,6 +207,7 @@ export default function WorkflowBuilderPage() {
 
   const [workflowName, setWorkflowName] = useState("New Workflow");
   const [workflowActive, setWorkflowActive] = useState(true);
+  const [originalWorkflowActive, setOriginalWorkflowActive] = useState(false);
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [stages, setStages] = useState<DealStage[]>([]);
@@ -266,6 +267,7 @@ export default function WorkflowBuilderPage() {
           if (workflow) {
             setWorkflowName(workflow.name);
             setWorkflowActive(workflow.active);
+            setOriginalWorkflowActive(workflow.active);
             
             // Parse nodes from config
             const config = workflow.config as { nodes?: WorkflowNode[] };
@@ -427,13 +429,40 @@ export default function WorkflowBuilderPage() {
       setError(null);
       setSuccess(null);
 
+      const currentTriggerConfig = triggerData.config as {
+        only_future_appointments_from_activation_day?: boolean;
+        future_appointments_activation_day?: string;
+      };
+      const restrictToFutureAppointments =
+        currentTriggerConfig.only_future_appointments_from_activation_day === true;
+      const activationDay = restrictToFutureAppointments && workflowActive
+        ? (!originalWorkflowActive || !currentTriggerConfig.future_appointments_activation_day
+            ? new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Zurich" })
+            : currentTriggerConfig.future_appointments_activation_day)
+        : undefined;
+      const savedTriggerConfig = {
+        ...triggerData.config,
+        future_appointments_activation_day: activationDay,
+      };
+      const savedNodes = nodes.map((node) =>
+        node.id === triggerNode.id
+          ? {
+              ...node,
+              data: {
+                ...triggerData,
+                config: savedTriggerConfig,
+              },
+            }
+          : node
+      );
+
       const workflowData = {
         name: workflowName,
         trigger_type: (triggerNode.data as TriggerNodeData).triggerType,
         active: workflowActive,
         config: {
-          nodes,
-          ...(triggerNode.data as TriggerNodeData).config,
+          nodes: savedNodes,
+          ...savedTriggerConfig,
         },
       };
 
@@ -659,19 +688,48 @@ export default function WorkflowBuilderPage() {
               <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <input
                   type="checkbox"
-                  checked={(data.config as { run_once_per_appointment?: boolean }).run_once_per_appointment || false}
+                  checked={Boolean(
+                    (data.config as {
+                      run_once_per_patient_per_day?: boolean;
+                      run_once_per_appointment?: boolean;
+                    }).run_once_per_patient_per_day ??
+                    (data.config as { run_once_per_appointment?: boolean }).run_once_per_appointment
+                  )}
                   onChange={(e) => updateNodeData(selectedNode.id, {
                     config: {
                       ...data.config,
-                      run_once_per_appointment: e.target.checked,
+                      run_once_per_patient_per_day: e.target.checked,
+                      run_once_per_appointment: undefined,
                     },
                   })}
                   className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600"
                 />
                 <span>
-                  <span className="block text-sm font-medium text-slate-700">Run only once per appointment</span>
+                  <span className="block text-sm font-medium text-slate-700">Run only once per patient per day</span>
                   <span className="mt-0.5 block text-xs text-slate-500">
-                    After the first match, later matching status changes for the same appointment will be ignored.
+                    If a patient has multiple appointments on the same day, only the first match will run this workflow.
+                  </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <input
+                  type="checkbox"
+                  checked={Boolean(
+                    (data.config as { only_future_appointments_from_activation_day?: boolean })
+                      .only_future_appointments_from_activation_day
+                  )}
+                  onChange={(e) => updateNodeData(selectedNode.id, {
+                    config: {
+                      ...data.config,
+                      only_future_appointments_from_activation_day: e.target.checked,
+                    },
+                  })}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-slate-700">Future appointments only</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    Only run for appointments scheduled on or after the day this workflow becomes active.
                   </span>
                 </span>
               </label>

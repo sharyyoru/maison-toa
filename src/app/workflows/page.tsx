@@ -168,17 +168,57 @@ export default function WorkflowsPage() {
   async function toggleWorkflow(workflow: WorkflowRow) {
     try {
       setTogglingId(workflow.id);
-      
+
+      const nextActive = !workflow.active;
+      const currentConfig = workflow.config && typeof workflow.config === "object"
+        ? workflow.config as Record<string, unknown>
+        : {};
+      const restrictToFutureAppointments =
+        currentConfig.only_future_appointments_from_activation_day === true;
+      const activationDay = restrictToFutureAppointments && nextActive
+        ? new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Zurich" })
+        : undefined;
+      const nodes = Array.isArray(currentConfig.nodes)
+        ? currentConfig.nodes.map((node) => {
+            if (!node || typeof node !== "object") return node;
+            const nodeRecord = node as Record<string, unknown>;
+            if (nodeRecord.type !== "trigger" || !nodeRecord.data || typeof nodeRecord.data !== "object") {
+              return node;
+            }
+            const data = nodeRecord.data as Record<string, unknown>;
+            const nodeConfig = data.config && typeof data.config === "object"
+              ? data.config as Record<string, unknown>
+              : {};
+            return {
+              ...nodeRecord,
+              data: {
+                ...data,
+                config: {
+                  ...nodeConfig,
+                  future_appointments_activation_day: activationDay,
+                },
+              },
+            };
+          })
+        : currentConfig.nodes;
+      const nextConfig = restrictToFutureAppointments
+        ? {
+            ...currentConfig,
+            nodes,
+            future_appointments_activation_day: activationDay,
+          }
+        : currentConfig;
+
       const { error } = await supabaseClient
         .from("workflows")
-        .update({ active: !workflow.active })
+        .update({ active: nextActive, config: nextConfig })
         .eq("id", workflow.id);
 
       if (error) throw error;
 
       setWorkflows((prev) =>
         prev.map((w) =>
-          w.id === workflow.id ? { ...w, active: !w.active } : w
+          w.id === workflow.id ? { ...w, active: nextActive, config: nextConfig } : w
         )
       );
     } catch (err) {

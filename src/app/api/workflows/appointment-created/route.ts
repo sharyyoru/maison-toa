@@ -9,6 +9,7 @@ import {
   generatePatientReminderEmail,
 } from "@/lib/appointmentEmails";
 import { normalizePatientLanguage } from "@/lib/languagePreference";
+import { formatSwissYmd } from "@/lib/swissTimezone";
 
 export const runtime = "nodejs";
 
@@ -241,6 +242,8 @@ export async function POST(request: Request) {
         appointment_status?: string;
         appointment_statuses?: string[];
         appointment_status_match_mode?: "includes" | "excludes";
+        only_future_appointments_from_activation_day?: boolean;
+        future_appointments_activation_day?: string;
       };
       if (triggerType === "appointment_status_changed") {
         // Fall back to the original single-status field for workflows saved
@@ -259,6 +262,11 @@ export async function POST(request: Request) {
           ? !statusIsSelected
           : statusIsSelected;
         if (!matchesStatus) return false;
+
+        if (config.only_future_appointments_from_activation_day) {
+          if (!appointmentDate || !config.future_appointments_activation_day) return false;
+          if (formatSwissYmd(appointmentDate) < config.future_appointments_activation_day) return false;
+        }
       }
       return evaluateConditions(config);
     });
@@ -273,22 +281,36 @@ export async function POST(request: Request) {
       const workflowConfig = workflow.config as {
         nodes?: any[];
         run_once_per_appointment?: boolean;
+        run_once_per_patient_per_day?: boolean;
       } | null;
+
+      // Treat the legacy setting as enabled so existing workflows immediately
+      // gain the safer patient/day behavior without needing to be re-saved.
+      const runOncePerPatientPerDay =
+        workflowConfig?.run_once_per_patient_per_day ??
+        workflowConfig?.run_once_per_appointment ??
+        false;
+      const appointmentDay = appointmentDate
+        ? formatSwissYmd(appointmentDate)
+        : null;
 
       if (
         triggerType === "appointment_status_changed" &&
-        workflowConfig?.run_once_per_appointment
+        runOncePerPatientPerDay &&
+        patientId &&
+        appointmentDay
       ) {
         const { data: existingEnrollment, error: existingEnrollmentError } = await supabaseAdmin
           .from("workflow_enrollments")
           .select("id")
           .eq("workflow_id", workflow.id)
-          .contains("trigger_data", { appointment_id: appointmentId })
+          .eq("patient_id", patientId)
+          .contains("trigger_data", { appointment_day: appointmentDay })
           .limit(1)
           .maybeSingle();
 
         if (existingEnrollmentError) {
-          console.error("Failed to check appointment workflow enrollment", existingEnrollmentError);
+          console.error("Failed to check daily patient workflow enrollment", existingEnrollmentError);
           continue;
         }
         if (existingEnrollment) continue;
@@ -304,6 +326,7 @@ export async function POST(request: Request) {
             trigger_type: triggerType,
             appointment_id: appointmentId,
             appointment_date: appointmentDateIso,
+            appointment_day: appointmentDay,
             appointment_status: body.appointmentStatus,
             previous_appointment_status: body.previousAppointmentStatus,
             patient: templateContext.patient,
