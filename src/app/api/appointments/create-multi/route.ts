@@ -107,6 +107,7 @@ export async function POST(request: Request) {
     
     // Generate unique group ID for this multi-doctor appointment
     const appointmentGroupId = crypto.randomUUID();
+    const recurrenceSeriesId = appointmentTimes.length > 1 ? crypto.randomUUID() : null;
     
     // Fetch service names if services are provided, or use custom text
     let serviceText = '';
@@ -289,7 +290,7 @@ export async function POST(request: Request) {
 
     // Create each logical occurrence and at most one linked mirror for it.
     const appointmentRows: Record<string, unknown>[] = [];
-    for (const appointmentTime of appointmentTimes) {
+    for (const [occurrenceIndex, appointmentTime] of appointmentTimes.entries()) {
       const intervals = getIntervals(appointmentTime);
       const doctorDurationMinutes = Math.round(
         (new Date(appointmentTime.endTime).getTime() - new Date(appointmentTime.startTime).getTime()) / 60_000,
@@ -313,6 +314,8 @@ export async function POST(request: Request) {
           no_patient: Boolean(noPatient),
           provider_id: providerId,
           appointment_group_id: providerIds.length > 1 ? appointmentGroupId : null,
+          recurrence_series_id: recurrenceSeriesId,
+          recurrence_sequence: recurrenceSeriesId ? occurrenceIndex : null,
           start_time: intervals.doctorCalendarStart.toISOString(),
           end_time: intervals.doctorCalendarEnd.toISOString(),
           status: status || 'scheduled',
@@ -339,6 +342,8 @@ export async function POST(request: Request) {
           no_patient: Boolean(noPatient),
           provider_id: mirrorProviderId,
           appointment_group_id: providerIds.length > 1 ? appointmentGroupId : null,
+          recurrence_series_id: recurrenceSeriesId,
+          recurrence_sequence: recurrenceSeriesId ? occurrenceIndex : null,
           start_time: mirrorStart.toISOString(),
           end_time: mirrorEnd.toISOString(),
           status: status || 'scheduled',

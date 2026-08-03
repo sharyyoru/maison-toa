@@ -173,6 +173,25 @@
       "deleting": "Suppression...",
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce rendez-vous ? Cette action est irréversible.",
       "deleteMirroredConfirm": "Supprimer cette réservation de calendrier miroir ? Le rendez-vous original du médecin sera conservé.",
+      "recurringAction": {
+        "seriesDescription": "Ce rendez-vous fait partie d'une série récurrente.",
+        "this": { "label": "Ce rendez-vous uniquement" },
+        "this_and_future": { "label": "Ce rendez-vous et les suivants" },
+        "modify": {
+          "title": "Modifier le rendez-vous récurrent",
+          "question": "Que souhaitez-vous modifier ?",
+          "thisDescription": "Seul ce rendez-vous sera modifié.",
+          "this_and_futureDescription": "Ce rendez-vous et tous les rendez-vous futurs seront modifiés.",
+          "confirm": "Modifier"
+        },
+        "delete": {
+          "title": "Supprimer le rendez-vous récurrent",
+          "question": "Que souhaitez-vous supprimer ?",
+          "thisDescription": "Seul ce rendez-vous sera supprimé.",
+          "this_and_futureDescription": "Ce rendez-vous et tous les rendez-vous futurs seront supprimés.",
+          "confirm": "Supprimer"
+        }
+      },
       "conflict": "CONFLIT",
       "consultationFor": "Consultation pour {name}"
     },
