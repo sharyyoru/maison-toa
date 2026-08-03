@@ -380,6 +380,8 @@ type CalendarAppointment = {
   temporary_text: string | null;
   machine_ids: string[];
   linked_parent_appointment_id?: string | null;
+  recurrence_series_id?: string | null;
+  recurrence_sequence?: number | null;
   tracking_params?: Record<string, string> | null;
   patient: AppointmentPatient | null;
   provider: {
@@ -1249,6 +1251,8 @@ export default function CalendarPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingAppointment, setDeletingAppointment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [recurringAction, setRecurringAction] = useState<"modify" | "delete" | null>(null);
+  const [recurringActionScope, setRecurringActionScope] = useState<"this" | "this_and_future" | null>(null);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [editNoPatient, setEditNoPatient] = useState(false);
   const editOriginalPatientIdRef = useRef<string | null>(null);
@@ -1358,7 +1362,7 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -3282,7 +3286,7 @@ export default function CalendarPage() {
           const { data: fullApptData } = await supabaseClient
             .from("appointments")
             .select(
-              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
             )
             .eq('id', firstAppt.id)
             .single();
@@ -3301,7 +3305,7 @@ export default function CalendarPage() {
         const { data: refreshedData } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -3352,7 +3356,7 @@ export default function CalendarPage() {
             source: "manual",
           })
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .single();
 
@@ -4295,10 +4299,11 @@ export default function CalendarPage() {
       appointment,
       sendCancellationEmail: shouldSend,
       personalizedMessage: message,
+      recurrenceScope: recurringActionScope ?? undefined,
     });
   }
 
-  async function handleSaveEditAppointment() {
+  async function handleSaveEditAppointment(recurrenceScope?: "this" | "this_and_future") {
     if (!editingAppointment || savingEdit) return;
 
     setEditError(null);
@@ -4310,6 +4315,12 @@ export default function CalendarPage() {
 
     if (!editNoPatient && !editPatientId) {
       setEditError("Please select a patient or choose No patient.");
+      return;
+    }
+
+    if (editingAppointment.recurrence_series_id && !editingAppointment.linked_parent_appointment_id && !recurrenceScope) {
+      setRecurringActionScope(null);
+      setRecurringAction("modify");
       return;
     }
 
@@ -4391,6 +4402,7 @@ export default function CalendarPage() {
             ? editingAppointment.provider_id
             : editProviderId || null,
           machine_ids: editMachineIds,
+          recurrence_scope: recurrenceScope,
         }),
       });
 
@@ -4403,7 +4415,7 @@ export default function CalendarPage() {
 
       const data = await response.json();
 
-      const updated = data as unknown as CalendarAppointment;
+      const updated = (data.appointment ?? data) as unknown as CalendarAppointment;
       const previousEndTime = editingAppointment.end_time
         ? new Date(editingAppointment.end_time).getTime()
         : null;
@@ -4451,6 +4463,8 @@ export default function CalendarPage() {
       });
 
       setSavingEdit(false);
+      setRecurringAction(null);
+      setRecurringActionScope(null);
       setEditModalOpen(false);
       setEditingAppointment(null);
       editOriginalPatientIdRef.current = null;
@@ -4476,6 +4490,7 @@ export default function CalendarPage() {
     appointment?: CalendarAppointment;
     sendCancellationEmail?: boolean;
     personalizedMessage?: string;
+    recurrenceScope?: "this" | "this_and_future";
   }) {
     const appointmentToDelete = options?.appointment ?? editingAppointment;
     if (!appointmentToDelete || deletingAppointment) return;
@@ -4503,7 +4518,10 @@ export default function CalendarPage() {
         return;
       }
 
-      const deleteResponse = await fetch(`/api/appointments/${appointmentToDelete.id}`, {
+      const recurrenceQuery = options?.recurrenceScope
+        ? `?recurrence_scope=${options.recurrenceScope}`
+        : "";
+      const deleteResponse = await fetch(`/api/appointments/${appointmentToDelete.id}${recurrenceQuery}`, {
         method: "DELETE",
       });
       if (!deleteResponse.ok) {
@@ -4525,6 +4543,8 @@ export default function CalendarPage() {
 
       setDeletingAppointment(false);
       setShowDeleteConfirm(false);
+      setRecurringAction(null);
+      setRecurringActionScope(null);
       closeCancellationEmailPrompt();
       setEditModalOpen(false);
       setEditingAppointment(null);
@@ -5767,6 +5787,7 @@ export default function CalendarPage() {
                                           </div>
                                           <div className="relative z-10 truncate text-[10px] font-medium text-slate-600">
                                             {timeLabel} {serviceLabel ? `• ${serviceLabel}` : ""}
+                                            {appt.recurrence_series_id ? <span className="ml-1 text-[9px] text-sky-600" title="Recurring appointment">↻</span> : null}
                                             {appt.machine_ids && appt.machine_ids.length > 0 && (() => { const m = machines.find((x) => x.id === appt.machine_ids[0]); return m ? <span className="ml-1 text-[8px] text-violet-600" title={appt.machine_ids.map((id) => machines.find((x) => x.id === id)?.name).filter(Boolean).join(", ")}>⚙</span> : null; })()}
                                           </div>
                                           {notes && (
@@ -6485,7 +6506,14 @@ export default function CalendarPage() {
                 {/* Delete button on left */}
                 <button
                   type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
+                  onClick={() => {
+                    if (editingAppointment?.recurrence_series_id && !editingAppointment.linked_parent_appointment_id) {
+                      setRecurringActionScope(null);
+                      setRecurringAction("delete");
+                    } else {
+                      setShowDeleteConfirm(true);
+                    }
+                  }}
                   disabled={savingEdit || deletingAppointment || showDeleteConfirm}
                   className="inline-flex items-center gap-1 rounded-full border border-red-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-red-600 shadow-sm hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -6528,6 +6556,78 @@ export default function CalendarPage() {
                     {tCommon("saveChanges")}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {recurringAction && editingAppointment ? (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/35 px-4 backdrop-blur-[1px]">
+            <div className="w-full max-w-[410px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.24)]">
+              <div className="relative px-7 pb-5 pt-7 text-center">
+                <button
+                  type="button"
+                  onClick={() => { setRecurringAction(null); setRecurringActionScope(null); }}
+                  className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  aria-label={tCommon("close")}
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M5 5l10 10M15 5L5 15" /></svg>
+                </button>
+                <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full ${recurringAction === "modify" ? "bg-blue-50 text-blue-500" : "bg-red-50 text-red-500"}`}>
+                  <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z" />
+                    {recurringAction === "modify" ? <path d="M14.5 16.5l3.7-3.7a1.4 1.4 0 012 2l-3.7 3.7-2.5.5.5-2.5z" /> : <><circle cx="17.5" cy="17.5" r="4" fill="white" /><path d="M16 16l3 3m0-3l-3 3" /></>}
+                  </svg>
+                </div>
+                <h2 className="mt-4 text-[17px] font-semibold text-slate-900">
+                  {t(`modal.recurringAction.${recurringAction}.title`)}
+                </h2>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  {t("modal.recurringAction.seriesDescription")}<br />
+                  {t(`modal.recurringAction.${recurringAction}.question`)}
+                </p>
+              </div>
+
+              <div className="space-y-3 px-5 pb-5">
+                {(["this", "this_and_future"] as const).map((scope) => {
+                  const selected = recurringActionScope === scope;
+                  return (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => setRecurringActionScope(scope)}
+                      className={`flex w-full items-center gap-4 rounded-lg border px-4 py-3 text-left transition ${selected ? recurringAction === "modify" ? "border-blue-400 bg-blue-50/40 ring-1 ring-blue-100" : "border-red-400 bg-red-50/40 ring-1 ring-red-100" : "border-slate-200 bg-white hover:bg-slate-50"}`}
+                    >
+                      <span className={`h-4 w-4 shrink-0 rounded-full border ${selected ? recurringAction === "modify" ? "border-[5px] border-blue-500" : "border-[5px] border-red-500" : "border-slate-400"}`} />
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${recurringAction === "modify" ? "bg-blue-50 text-blue-500" : "bg-red-50 text-red-500"}`}>
+                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z" />{scope === "this_and_future" ? <path d="M9 15h6m-2-2l2 2-2 2" /> : null}</svg>
+                      </span>
+                      <span>
+                        <span className="block text-xs font-semibold text-slate-800">{t(`modal.recurringAction.${scope}.label`)}</span>
+                        <span className="mt-1 block text-[11px] leading-4 text-slate-500">{t(`modal.recurringAction.${recurringAction}.${scope}Description`)}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-slate-100 px-5 py-4">
+                <button type="button" onClick={() => { setRecurringAction(null); setRecurringActionScope(null); }} className="min-w-24 rounded-md border border-slate-200 bg-white px-5 py-2 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50">{tCommon("cancel")}</button>
+                <button
+                  type="button"
+                  disabled={!recurringActionScope || savingEdit || deletingAppointment}
+                  onClick={() => {
+                    if (!recurringActionScope) return;
+                    const scope = recurringActionScope;
+                    const action = recurringAction;
+                    setRecurringAction(null);
+                    if (action === "modify") void handleSaveEditAppointment(scope);
+                    else if (editingAppointment.linked_parent_appointment_id) void handleDeleteAppointment({ appointment: editingAppointment, recurrenceScope: scope });
+                    else openCancellationEmailPrompt(editingAppointment);
+                  }}
+                  className={`min-w-28 rounded-md px-5 py-2 text-xs font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${recurringAction === "modify" ? "bg-blue-600 hover:bg-blue-700" : "bg-red-500 hover:bg-red-600"}`}
+                >
+                  {t(`modal.recurringAction.${recurringAction}.confirm`)}
+                </button>
               </div>
             </div>
           </div>
@@ -6672,6 +6772,7 @@ export default function CalendarPage() {
                       void handleDeleteAppointment({
                         appointment: cancellationEmailPromptAppointment,
                         sendCancellationEmail: false,
+                        recurrenceScope: recurringActionScope ?? undefined,
                       });
                       return;
                     }
