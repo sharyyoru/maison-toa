@@ -59,6 +59,7 @@ export default function WeekAvailabilityPicker({
   onFetchWeek,
 }: WeekAvailabilityPickerProps) {
   const minDate = useMemo(() => formatSwissYmd(getSwissToday()), []);
+  const WIDE_SEARCH_DAYS = 180;
 
   const [windowStart, setWindowStart] = useState<string>(() => selectedDate || minDate);
   // Extra availability fetched on demand for weeks that fall outside the
@@ -67,6 +68,13 @@ export default function WeekAvailabilityPicker({
   const [isFetchingWeek, setIsFetchingWeek] = useState(false);
   const fetchedWeeksRef = useRef(fetchedWeeks);
   fetchedWeeksRef.current = fetchedWeeks;
+
+  // Broader on-demand search used as a fallback when the current week (and
+  // the page's own cheap pre-scan) both come up empty, so the picker never
+  // just dead-ends on an empty "today" week with no way forward.
+  const [wideSearch, setWideSearch] = useState<{ start: string; end: string; result: AvailabilityWindowResult } | null>(null);
+  const [isSearchingForward, setIsSearchingForward] = useState(false);
+  const hasWideSearchedRef = useRef(false);
 
   // Auto-jump the visible week to the earliest available slot exactly once,
   // when it first becomes known (e.g. the initial "next open slot" lookup
@@ -93,9 +101,11 @@ export default function WeekAvailabilityPicker({
   // does just because *some* prefetch happened.
   const isWeekCoveredByPrefetch =
     !!availabilityWindow && windowStart >= availabilityWindow.startDate && weekEnd <= availabilityWindow.endDate;
+  const isWeekCoveredByWideSearch = !!wideSearch && windowStart >= wideSearch.start && weekEnd <= wideSearch.end;
+  const isWeekCovered = isWeekCoveredByPrefetch || isWeekCoveredByWideSearch;
 
   useEffect(() => {
-    if (isWeekCoveredByPrefetch) return;
+    if (isWeekCovered) return;
     if (fetchedWeeksRef.current[windowStart]) return;
     let cancelled = false;
     setIsFetchingWeek(true);
@@ -115,9 +125,13 @@ export default function WeekAvailabilityPicker({
     return () => {
       cancelled = true;
     };
-  }, [windowStart, weekEnd, isWeekCoveredByPrefetch, onFetchWeek]);
+  }, [windowStart, weekEnd, isWeekCovered, onFetchWeek]);
 
-  const activeResult = isWeekCoveredByPrefetch ? availabilityWindow?.result ?? null : fetchedWeeks[windowStart] ?? null;
+  const activeResult = isWeekCoveredByPrefetch
+    ? availabilityWindow?.result ?? null
+    : isWeekCoveredByWideSearch
+      ? wideSearch?.result ?? null
+      : fetchedWeeks[windowStart] ?? null;
 
   const slotsByDate = useMemo(() => {
     if (!activeResult) return {} as Record<string, string[]>;
@@ -134,6 +148,45 @@ export default function WeekAvailabilityPicker({
     }
     return grouped;
   }, [weekDates, activeResult, generateTimeSlots, getDayAvailability]);
+
+  const currentWeekHasSlots = weekDates.some((date) => slotsByDate[date]?.length);
+
+  // If the visible week has no openings and the page's own cheap lookahead
+  // scan didn't find anything nearby either, run one broader search (up to
+  // ~6 months) instead of leaving the patient stuck on a dead week, and
+  // jump straight to the first real opening it finds.
+  useEffect(() => {
+    if (hasWideSearchedRef.current) return;
+    if (isLoading || isFetchingWeek || !activeResult) return;
+    if (currentWeekHasSlots) return;
+    if (nextAvailableSlots.length > 0) return;
+    hasWideSearchedRef.current = true;
+    setIsSearchingForward(true);
+    (async () => {
+      try {
+        const searchEndDate = addDaysToYmd(windowStart, WIDE_SEARCH_DAYS);
+        const startIso = parseSwissDate(windowStart).toISOString();
+        const endIso = new Date(parseSwissDate(searchEndDate).getTime() + 24 * 60 * 60 * 1000).toISOString();
+        const result = await onFetchWeek(startIso, endIso);
+        setWideSearch({ start: windowStart, end: searchEndDate, result });
+        const earliest = getNextOpenSlots({
+          dates: Array.from({ length: WIDE_SEARCH_DAYS }, (_, i) => addDaysToYmd(windowStart, i)),
+          availabilityWindow: result,
+          generateTimeSlots,
+          getDayAvailability,
+          limit: 1,
+        });
+        if (earliest.length > 0) {
+          setWindowStart(earliest[0].date);
+          onSelectSlot(earliest[0].date, earliest[0].time);
+        }
+      } catch (err) {
+        console.error("Failed wide availability search:", err);
+      } finally {
+        setIsSearchingForward(false);
+      }
+    })();
+  }, [isLoading, isFetchingWeek, activeResult, currentWeekHasSlots, nextAvailableSlots, windowStart, onFetchWeek, generateTimeSlots, getDayAvailability, onSelectSlot]);
 
   const nextJumpSlot = useMemo(() => {
     const lastVisible = weekDates[weekDates.length - 1];
@@ -220,7 +273,7 @@ export default function WeekAvailabilityPicker({
       </div>
 
       {/* Day columns */}
-      {isLoading || isFetchingWeek ? (
+      {isLoading || isFetchingWeek || isSearchingForward ? (
         <div className="mt-5 flex items-center justify-center gap-2 py-10 text-sm text-slate-400">
           <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-slate-400" />
           Chargement...
