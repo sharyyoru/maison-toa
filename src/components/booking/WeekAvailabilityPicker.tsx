@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getNextOpenSlots, type AvailabilityWindowResult, type AvailableSlot } from "@/lib/bookingAvailability";
 import { parseSwissDate, formatSwissYmd, getSwissToday } from "@/lib/swissTimezone";
 
@@ -54,16 +54,23 @@ export default function WeekAvailabilityPicker({
 
   const [windowStart, setWindowStart] = useState<string>(() => selectedDate || minDate);
 
-  // Keep the visible week aligned to whatever date is currently selected,
-  // e.g. after "jump to next availability" picks a far-future date.
-  const effectiveWindowStart =
-    selectedDate && (selectedDate < windowStart || selectedDate > addDaysToYmd(windowStart, DAY_WINDOW_SIZE - 1))
-      ? selectedDate
-      : windowStart;
+  // Auto-jump the visible week to the earliest available slot exactly once,
+  // when it first becomes known (e.g. the initial "next open slot" lookup
+  // resolves after mount). After that, manual week navigation is left alone
+  // even if it moves away from the currently selected date.
+  const hasAutoJumpedRef = useRef(false);
+  useEffect(() => {
+    if (hasAutoJumpedRef.current) return;
+    if (!selectedDate) return;
+    hasAutoJumpedRef.current = true;
+    if (selectedDate < windowStart || selectedDate > addDaysToYmd(windowStart, DAY_WINDOW_SIZE - 1)) {
+      setWindowStart(selectedDate);
+    }
+  }, [selectedDate, windowStart]);
 
   const weekDates = useMemo(
-    () => Array.from({ length: DAY_WINDOW_SIZE }, (_, i) => addDaysToYmd(effectiveWindowStart, i)),
-    [effectiveWindowStart],
+    () => Array.from({ length: DAY_WINDOW_SIZE }, (_, i) => addDaysToYmd(windowStart, i)),
+    [windowStart],
   );
 
   const slotsByDate = useMemo(() => {
@@ -87,8 +94,8 @@ export default function WeekAvailabilityPicker({
     return nextAvailableSlots.find((slot) => slot.date > lastVisible) ?? null;
   }, [nextAvailableSlots, weekDates]);
 
-  const canGoBack = addDaysToYmd(effectiveWindowStart, -DAY_WINDOW_SIZE) >= minDate || effectiveWindowStart > minDate;
-  const canGoForward = !maxDate || addDaysToYmd(effectiveWindowStart, DAY_WINDOW_SIZE) <= maxDate || weekDates.some((d) => slotsByDate[d]?.length);
+  const canGoBack = addDaysToYmd(windowStart, -DAY_WINDOW_SIZE) >= minDate || windowStart > minDate;
+  const canGoForward = !maxDate || addDaysToYmd(windowStart, DAY_WINDOW_SIZE) <= maxDate || weekDates.some((d) => slotsByDate[d]?.length);
 
   function goToWeek(nextStart: string) {
     const clamped = nextStart < minDate ? minDate : nextStart;
@@ -141,7 +148,7 @@ export default function WeekAvailabilityPicker({
       <div className="mt-4 flex items-center justify-center gap-3">
         <button
           type="button"
-          onClick={() => goToWeek(addDaysToYmd(effectiveWindowStart, -DAY_WINDOW_SIZE))}
+          onClick={() => goToWeek(addDaysToYmd(windowStart, -DAY_WINDOW_SIZE))}
           disabled={!canGoBack}
           aria-label="Previous week"
           className="flex h-8 w-8 items-center justify-center rounded-full bg-[#252c3d] text-slate-300 transition-colors hover:bg-[#2f3750] disabled:opacity-30 disabled:cursor-not-allowed"
@@ -151,11 +158,11 @@ export default function WeekAvailabilityPicker({
           </svg>
         </button>
         <span className="rounded-full bg-[#252c3d] px-4 py-1.5 text-sm font-medium text-white">
-          {headerFormatter.format(parseSwissDate(effectiveWindowStart))}
+          {headerFormatter.format(parseSwissDate(windowStart))}
         </span>
         <button
           type="button"
-          onClick={() => goToWeek(addDaysToYmd(effectiveWindowStart, DAY_WINDOW_SIZE))}
+          onClick={() => goToWeek(addDaysToYmd(windowStart, DAY_WINDOW_SIZE))}
           disabled={!canGoForward}
           aria-label="Next week"
           className="flex h-8 w-8 items-center justify-center rounded-full bg-[#252c3d] text-slate-300 transition-colors hover:bg-[#2f3750] disabled:opacity-30 disabled:cursor-not-allowed"
