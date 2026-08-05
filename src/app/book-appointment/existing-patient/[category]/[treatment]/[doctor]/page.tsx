@@ -911,6 +911,17 @@ function DoctorBookingContent() {
                   dateLocale={dateLocale}
                   noSlotsLabel={t("booking.noAvailabilityForDay")}
                   nextAvailableLabel={t("booking.jumpToNextAvailable")}
+                  onFetchWeek={(start, end) =>
+                    fetchAvailabilityWindow({
+                      start,
+                      end,
+                      doctorName: doctor.name,
+                      doctorSlug,
+                      treatmentId,
+                      categorySlug,
+                      patientType: "existing",
+                    })
+                  }
                 />
 
                 <div>

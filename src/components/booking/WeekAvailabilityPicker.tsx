@@ -24,6 +24,14 @@ type WeekAvailabilityPickerProps = {
   dateLocale: string;
   noSlotsLabel: string;
   nextAvailableLabel: string;
+  /**
+   * Fetches fresh availability for an arbitrary [start, end) ISO range.
+   * Used as a fallback whenever the visible week isn't fully covered by
+   * the already-fetched `availabilityWindow`, e.g. after paging forward
+   * past the initial lookahead — so navigation never silently shows
+   * "no availability" just because nothing was ever actually checked.
+   */
+  onFetchWeek: (startIso: string, endIso: string) => Promise<AvailabilityWindowResult>;
 };
 
 function addDaysToYmd(ymd: string, days: number): string {
@@ -48,11 +56,17 @@ export default function WeekAvailabilityPicker({
   dateLocale,
   noSlotsLabel,
   nextAvailableLabel,
+  onFetchWeek,
 }: WeekAvailabilityPickerProps) {
   const minDate = useMemo(() => formatSwissYmd(getSwissToday()), []);
-  const maxDate = availabilityWindow?.endDate ?? null;
 
   const [windowStart, setWindowStart] = useState<string>(() => selectedDate || minDate);
+  // Extra availability fetched on demand for weeks that fall outside the
+  // page's initial prefetch, keyed by the week's start date.
+  const [fetchedWeeks, setFetchedWeeks] = useState<Record<string, AvailabilityWindowResult>>({});
+  const [isFetchingWeek, setIsFetchingWeek] = useState(false);
+  const fetchedWeeksRef = useRef(fetchedWeeks);
+  fetchedWeeksRef.current = fetchedWeeks;
 
   // Auto-jump the visible week to the earliest available slot exactly once,
   // when it first becomes known (e.g. the initial "next open slot" lookup
@@ -72,12 +86,44 @@ export default function WeekAvailabilityPicker({
     () => Array.from({ length: DAY_WINDOW_SIZE }, (_, i) => addDaysToYmd(windowStart, i)),
     [windowStart],
   );
+  const weekEnd = weekDates[weekDates.length - 1];
+
+  // The prefetched window covers the visible week only if every visible
+  // date falls within its [startDate, endDate] bounds. Never assume it
+  // does just because *some* prefetch happened.
+  const isWeekCoveredByPrefetch =
+    !!availabilityWindow && windowStart >= availabilityWindow.startDate && weekEnd <= availabilityWindow.endDate;
+
+  useEffect(() => {
+    if (isWeekCoveredByPrefetch) return;
+    if (fetchedWeeksRef.current[windowStart]) return;
+    let cancelled = false;
+    setIsFetchingWeek(true);
+    (async () => {
+      try {
+        const startIso = parseSwissDate(windowStart).toISOString();
+        const endIso = new Date(parseSwissDate(weekEnd).getTime() + 24 * 60 * 60 * 1000).toISOString();
+        const result = await onFetchWeek(startIso, endIso);
+        if (cancelled) return;
+        setFetchedWeeks((prev) => ({ ...prev, [windowStart]: result }));
+      } catch (err) {
+        console.error("Failed to fetch week availability:", err);
+      } finally {
+        if (!cancelled) setIsFetchingWeek(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [windowStart, weekEnd, isWeekCoveredByPrefetch, onFetchWeek]);
+
+  const activeResult = isWeekCoveredByPrefetch ? availabilityWindow?.result ?? null : fetchedWeeks[windowStart] ?? null;
 
   const slotsByDate = useMemo(() => {
-    if (!availabilityWindow) return {} as Record<string, string[]>;
+    if (!activeResult) return {} as Record<string, string[]>;
     const flat = getNextOpenSlots({
       dates: weekDates,
-      availabilityWindow: availabilityWindow.result,
+      availabilityWindow: activeResult,
       generateTimeSlots,
       getDayAvailability,
       limit: Number.MAX_SAFE_INTEGER,
@@ -87,7 +133,7 @@ export default function WeekAvailabilityPicker({
       grouped[slot.date] = grouped[slot.date] ? [...grouped[slot.date], slot.time] : [slot.time];
     }
     return grouped;
-  }, [weekDates, availabilityWindow, generateTimeSlots, getDayAvailability]);
+  }, [weekDates, activeResult, generateTimeSlots, getDayAvailability]);
 
   const nextJumpSlot = useMemo(() => {
     const lastVisible = weekDates[weekDates.length - 1];
@@ -95,7 +141,7 @@ export default function WeekAvailabilityPicker({
   }, [nextAvailableSlots, weekDates]);
 
   const canGoBack = addDaysToYmd(windowStart, -DAY_WINDOW_SIZE) >= minDate || windowStart > minDate;
-  const canGoForward = !maxDate || addDaysToYmd(windowStart, DAY_WINDOW_SIZE) <= maxDate || weekDates.some((d) => slotsByDate[d]?.length);
+  const canGoForward = true;
 
   function goToWeek(nextStart: string) {
     const clamped = nextStart < minDate ? minDate : nextStart;
@@ -174,7 +220,7 @@ export default function WeekAvailabilityPicker({
       </div>
 
       {/* Day columns */}
-      {isLoading ? (
+      {isLoading || isFetchingWeek ? (
         <div className="mt-5 flex items-center justify-center gap-2 py-10 text-sm text-slate-400">
           <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-slate-400" />
           Chargement...
