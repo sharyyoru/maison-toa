@@ -45,14 +45,21 @@ export async function GET(request: NextRequest) {
     // Resolve the canonical booking doctor name first. Display names can be
     // shortened (for example "Claire"), while the provider record uses the
     // full name. The slug is the stable identifier shared by the booking flow.
+    //
+    // Doctor-calendar resolution and secondary-calendar/treatment resolution
+    // are completely independent of each other, but were previously awaited
+    // one after another — run them concurrently instead of paying for two
+    // round trips back to back.
+    const [calendarLink, bookingContext] = await Promise.all([
+      doctorSlug ? resolveBookingDoctorCalendar(supabase, doctorSlug) : Promise.resolve(null),
+      resolveBookingSecondaryCalendar(supabase, { treatmentId, categorySlug, patientType }),
+    ]);
+
     let canonicalDoctorName = doctorName?.replace(/^Dr\.\s*/i, "").trim() || "";
     let providerId: string | null = null;
-    if (doctorSlug) {
-      const calendarLink = await resolveBookingDoctorCalendar(supabase, doctorSlug);
-      if (calendarLink) {
-        canonicalDoctorName = calendarLink.bookingDoctorName.replace(/^Dr\.\s*/i, "").trim();
-        providerId = calendarLink.providerId;
-      }
+    if (calendarLink) {
+      canonicalDoctorName = calendarLink.bookingDoctorName.replace(/^Dr\.\s*/i, "").trim();
+      providerId = calendarLink.providerId;
     }
 
     // Legacy fallback for booking doctors that are not mapped yet.
@@ -82,11 +89,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const bookingContext = await resolveBookingSecondaryCalendar(supabase, {
-      treatmentId,
-      categorySlug,
-      patientType,
-    });
     const secondaryCalendar = bookingContext.secondaryCalendar;
     const primaryDurationMinutes = bookingContext.primaryDurationMinutes;
     const doctorStartOffsetMinutes = secondaryCalendar?.position === "end"
@@ -104,23 +106,110 @@ export async function GET(request: NextRequest) {
     // slow, the unfiltered query also risked silently hitting Supabase's default
     // row cap on wide date ranges. Legacy appointments with no provider_id are only
     // matched via a `[Doctor: Name]` tag in `reason`, so keep those in scope too.
-    let query = supabase
-      .from("appointments")
-      .select("id, start_time, end_time, status, reason, no_patient, provider_id")
-      .lt("start_time", end)   // appointment starts before the range ends
-      .gt("end_time", start)   // appointment ends after the range starts
-      .neq("status", "cancelled");
+    async function fetchAppointments() {
+      let q = supabase
+        .from("appointments")
+        .select("id, start_time, end_time, status, reason, no_patient, provider_id")
+        .lt("start_time", end)   // appointment starts before the range ends
+        .gt("end_time", start)   // appointment ends after the range starts
+        .neq("status", "cancelled");
 
-    if (providerId && canonicalDoctorName) {
-      query = query.or(
-        `provider_id.eq.${providerId},and(provider_id.is.null,reason.ilike.%${canonicalDoctorName}%)`
-      );
-    } else if (canonicalDoctorName) {
-      query = query.ilike("reason", `%${canonicalDoctorName}%`);
+      if (providerId && canonicalDoctorName) {
+        q = q.or(
+          `provider_id.eq.${providerId},and(provider_id.is.null,reason.ilike.%${canonicalDoctorName}%)`
+        );
+      } else if (canonicalDoctorName) {
+        q = q.ilike("reason", `%${canonicalDoctorName}%`);
+      }
+      return await q;
     }
 
-    const { data: appointments, error } = await query;
+    // ── Machine availability: resolve which machine (if any) this treatment
+    // requires, then check its bookings for the range. ──
+    async function fetchMachineData() {
+      if (!treatmentId || treatmentId === "none") return null;
 
+      const { data: treatmentRow, error: treatmentError } = await supabase
+        .from("booking_treatments")
+        .select("id, name, machine_id, linked_service_id")
+        .eq("id", treatmentId)
+        .single();
+      if (treatmentError) {
+        console.log(`[CheckAvailability] Treatment lookup error: ${treatmentError.message}`);
+      }
+
+      let machineId: string | null = null;
+      let machineMax = 1;
+
+      if (treatmentRow?.machine_id) {
+        machineId = treatmentRow.machine_id;
+        const { data: machine } = await supabase
+          .from("machines")
+          .select("max_concurrent, name")
+          .eq("id", machineId)
+          .single();
+        if (machine) machineMax = machine.max_concurrent ?? 1;
+      } else if (treatmentRow?.linked_service_id) {
+        const { data: machineMapping } = await supabase
+          .from("service_machines")
+          .select("machine_id, machines(max_concurrent)")
+          .eq("service_id", treatmentRow.linked_service_id)
+          .limit(1)
+          .single();
+        if (machineMapping) {
+          machineId = machineMapping.machine_id;
+          machineMax = (machineMapping.machines as any)?.max_concurrent ?? 1;
+        }
+      }
+
+      if (!machineId) return null;
+
+      const { data: machineAppts, error: machineError } = await supabase
+        .from("appointments")
+        .select("id, appointment_group_id, start_time, end_time, status")
+        .contains("machine_ids", [machineId])
+        .lt("start_time", end)
+        .gt("end_time", start)
+        .not("status", "in", "(cancelled,no_show)");
+      if (machineError) {
+        console.log(`[CheckAvailability] Machine query error: ${machineError.message}`);
+        return null;
+      }
+      return { machineMax, machineAppts: machineAppts ?? [] };
+    }
+
+    async function fetchSecondaryAppointments() {
+      if (!secondaryCalendar || secondaryCalendar.providerId === providerId) return [];
+      const { data: resourceAppointments, error: resourceError } = await supabase
+        .from("appointments")
+        .select("start_time, end_time")
+        .eq("provider_id", secondaryCalendar.providerId)
+        .lt("start_time", end)
+        .gt("end_time", start)
+        .not("status", "in", "(cancelled,no_show)");
+      if (resourceError) {
+        console.error("Error checking secondary calendar availability:", resourceError);
+        throw new Error("secondary_calendar_failed");
+      }
+      return resourceAppointments || [];
+    }
+
+    // These three lookups don't depend on each other's results — run them
+    // concurrently instead of one after another.
+    let appointmentsResult: Awaited<ReturnType<typeof fetchAppointments>>;
+    let machineData: Awaited<ReturnType<typeof fetchMachineData>>;
+    let secondaryAppointments: Array<{ start_time: string; end_time: string }>;
+    try {
+      [appointmentsResult, machineData, secondaryAppointments] = await Promise.all([
+        fetchAppointments(),
+        fetchMachineData(),
+        fetchSecondaryAppointments(),
+      ]);
+    } catch {
+      return NextResponse.json({ error: "Failed to check secondary calendar availability" }, { status: 500 });
+    }
+
+    const { data: appointments, error } = appointmentsResult;
     if (error) {
       console.error("Error fetching appointments:", error);
       return NextResponse.json(
@@ -162,6 +251,9 @@ export async function GET(request: NextRequest) {
 
     // Get the max capacity for this doctor
     const maxCapacity = getMaxCapacity(doctorSlug);
+    // Parse each appointment's start/end once up front — these get reused
+    // across every slot below instead of re-parsing the same date strings
+    // thousands of times inside the O(slots × appointments) loop.
     const patientIntervals: BookingInterval[] = patientAppointments.map((appointment) => ({
       start: new Date(appointment.start_time),
       end: new Date(appointment.end_time),
@@ -180,27 +272,25 @@ export async function GET(request: NextRequest) {
     const fullSlots: string[] = [];
 
     allSlots.forEach((slotStart) => {
-      const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
+      const slotStartMs = slotStart.getTime();
+      const slotEndMs = slotStartMs + 30 * 60 * 1000;
 
       // Count patient appointments that OVERLAP this window.
       // Using overlap (not just start-in-window) so a 14:00-15:00 appointment
       // correctly blocks both the 14:00 and 14:30 slots.
-      const patientCount = patientAppointments.filter((apt) => {
-        const aptStart = new Date(apt.start_time);
-        const aptEnd = new Date(apt.end_time);
-        return aptStart < slotEnd && aptEnd > slotStart;
-      }).length;
+      let patientCount = 0;
+      for (const interval of patientIntervals) {
+        if (interval.start.getTime() < slotEndMs && interval.end.getTime() > slotStartMs) patientCount++;
+      }
 
       if (patientCount > 0) {
         slotCounts[slotStart.toISOString()] = patientCount;
       }
 
       // Check if any blocking appointment overlaps this slot
-      const isBlocked = blockingAppointments.some((apt) => {
-        const aptStart = new Date(apt.start_time);
-        const aptEnd = new Date(apt.end_time);
-        return aptStart < slotEnd && aptEnd > slotStart;
-      });
+      const isBlocked = blockingIntervals.some(
+        (interval) => interval.start.getTime() < slotEndMs && interval.end.getTime() > slotStartMs
+      );
 
       if (patientCount >= maxCapacity || isBlocked) {
         fullSlots.push(slotStart.toISOString());
@@ -210,111 +300,32 @@ export async function GET(request: NextRequest) {
     // ── Machine availability: mark slots as full if machine is at capacity ──
     let machineIntervals: BookingInterval[] = [];
     let machineMax = 1;
-    if (treatmentId && treatmentId !== "none") {
-      console.log(`[CheckAvailability] Checking machine for treatmentId=${treatmentId}`);
-      
-      const { data: treatmentRow, error: treatmentError } = await supabase
-        .from("booking_treatments")
-        .select("id, name, machine_id, linked_service_id")
-        .eq("id", treatmentId)
-        .single();
+    if (machineData && machineData.machineAppts.length > 0) {
+      machineMax = machineData.machineMax;
+      const machineAppts = machineData.machineAppts;
+      machineIntervals = machineAppts.map((appointment) => ({
+        start: new Date(appointment.start_time),
+        end: new Date(appointment.end_time),
+        groupId: appointment.appointment_group_id || appointment.id,
+      }));
 
-      if (treatmentError) {
-        console.log(`[CheckAvailability] Treatment lookup error: ${treatmentError.message}`);
-      }
-      console.log(`[CheckAvailability] Treatment found: ${JSON.stringify(treatmentRow)}`);
-
-      let machineId: string | null = null;
-      let machineName = "";
-
-      // First check direct machine_id on booking_treatments
-      if (treatmentRow?.machine_id) {
-        machineId = treatmentRow.machine_id;
-        const { data: machine } = await supabase
-          .from("machines")
-          .select("max_concurrent, name")
-          .eq("id", machineId)
-          .single();
-        if (machine) {
-          machineMax = machine.max_concurrent ?? 1;
-          machineName = machine.name;
-          console.log(`[CheckAvailability] Machine found: ${machineName}, max=${machineMax}`);
+      const fullSlotsSet = new Set(fullSlots);
+      allSlots.forEach((slotStart) => {
+        const slotIso = slotStart.toISOString();
+        if (fullSlotsSet.has(slotIso)) return; // already full
+        const slotStartMs = slotStart.getTime();
+        const slotEndMs = slotStartMs + 30 * 60 * 1000;
+        const uniqueUses = new Set<string>();
+        for (const interval of machineIntervals) {
+          if (interval.start.getTime() < slotEndMs && interval.end.getTime() > slotStartMs) {
+            uniqueUses.add(interval.groupId as string);
+          }
         }
-      } 
-      // Fallback: check linked_service_id → service_machines
-      else if (treatmentRow?.linked_service_id) {
-        const { data: machineMapping } = await supabase
-          .from("service_machines")
-          .select("machine_id, machines(max_concurrent)")
-          .eq("service_id", treatmentRow.linked_service_id)
-          .limit(1)
-          .single();
-
-        if (machineMapping) {
-          machineId = machineMapping.machine_id;
-          machineMax = (machineMapping.machines as any)?.max_concurrent ?? 1;
+        if (uniqueUses.size >= machineMax) {
+          fullSlots.push(slotIso);
+          fullSlotsSet.add(slotIso);
         }
-      }
-
-      // If a machine is required, check its availability for each slot
-      if (machineId) {
-        console.log(`[CheckAvailability] Checking machine ${machineName} (${machineId}) availability`);
-        
-        const { data: machineAppts, error: machineError } = await supabase
-          .from("appointments")
-          .select("id, appointment_group_id, start_time, end_time, status")
-          .contains("machine_ids", [machineId])
-          .lt("start_time", end)
-          .gt("end_time", start)
-          .not("status", "in", "(cancelled,no_show)");
-
-        console.log(`[CheckAvailability] Found ${machineAppts?.length || 0} machine appointments in range`);
-        if (machineError) {
-          console.log(`[CheckAvailability] Machine query error: ${machineError.message}`);
-        }
-        if (machineAppts && machineAppts.length > 0) {
-          machineIntervals = machineAppts.map((appointment) => ({
-            start: new Date(appointment.start_time),
-            end: new Date(appointment.end_time),
-            groupId: appointment.appointment_group_id || appointment.id,
-          }));
-          console.log(`[CheckAvailability] Machine appointments: ${JSON.stringify(machineAppts)}`);
-          
-          let slotsBlockedByMachine = 0;
-          allSlots.forEach((slotStart) => {
-            const slotIso = slotStart.toISOString();
-            if (fullSlots.includes(slotIso)) return; // already full
-            const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
-            const overlapping = machineAppts.filter((a) => {
-              return new Date(a.start_time) < slotEnd && new Date(a.end_time) > slotStart;
-            });
-            const uniqueUses = new Set(overlapping.map((a) => a.appointment_group_id || a.id));
-            if (uniqueUses.size >= machineMax) {
-              fullSlots.push(slotIso);
-              slotsBlockedByMachine++;
-            }
-          });
-          console.log(`[CheckAvailability] Blocked ${slotsBlockedByMachine} slots due to machine capacity`);
-        }
-      } else {
-        console.log(`[CheckAvailability] No machine required for this treatment`);
-      }
-    }
-
-    let secondaryAppointments: Array<{ start_time: string; end_time: string }> = [];
-    if (secondaryCalendar && secondaryCalendar.providerId !== providerId) {
-      const { data: resourceAppointments, error: resourceError } = await supabase
-        .from("appointments")
-        .select("start_time, end_time")
-        .eq("provider_id", secondaryCalendar.providerId)
-        .lt("start_time", end)
-        .gt("end_time", start)
-        .not("status", "in", "(cancelled,no_show)");
-      if (resourceError) {
-        console.error("Error checking secondary calendar availability:", resourceError);
-        return NextResponse.json({ error: "Failed to check secondary calendar availability" }, { status: 500 });
-      }
-      secondaryAppointments = resourceAppointments || [];
+      });
     }
 
     const secondaryIntervals: BookingInterval[] = secondaryAppointments.map((appointment, index) => ({
