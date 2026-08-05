@@ -1048,6 +1048,7 @@ function DoctorBookingContent() {
                   dateLocale={dateLocale}
                   noSlotsLabel={t("booking.noAvailabilityForDay")}
                   nextAvailableLabel={t("booking.jumpToNextAvailable")}
+                  checkingAvailabilityLabel={t("booking.checkingAvailability")}
                   onFetchWeek={(start, end) =>
                     fetchAvailabilityWindow({
                       start,

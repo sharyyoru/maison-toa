@@ -24,6 +24,7 @@ type WeekAvailabilityPickerProps = {
   dateLocale: string;
   noSlotsLabel: string;
   nextAvailableLabel: string;
+  checkingAvailabilityLabel: string;
   /**
    * Fetches fresh availability for an arbitrary [start, end) ISO range.
    * Used as a fallback whenever the visible week isn't fully covered by
@@ -56,6 +57,7 @@ export default function WeekAvailabilityPicker({
   dateLocale,
   noSlotsLabel,
   nextAvailableLabel,
+  checkingAvailabilityLabel,
   onFetchWeek,
 }: WeekAvailabilityPickerProps) {
   const minDate = useMemo(() => formatSwissYmd(getSwissToday()), []);
@@ -193,10 +195,16 @@ export default function WeekAvailabilityPicker({
     return nextAvailableSlots.find((slot) => slot.date > lastVisible) ?? null;
   }, [nextAvailableSlots, weekDates]);
 
-  const canGoBack = addDaysToYmd(windowStart, -DAY_WINDOW_SIZE) >= minDate || windowStart > minDate;
-  const canGoForward = true;
+  // Block all navigation while any fetch is in flight — otherwise a click
+  // during loading can land the user on a week before the "jump to
+  // earliest available" logic has had a chance to run, and it never gets
+  // a second chance to correct course.
+  const isBusy = isLoading || isFetchingWeek || isSearchingForward;
+  const canGoBack = !isBusy && (addDaysToYmd(windowStart, -DAY_WINDOW_SIZE) >= minDate || windowStart > minDate);
+  const canGoForward = !isBusy;
 
   function goToWeek(nextStart: string) {
+    if (isBusy) return;
     const clamped = nextStart < minDate ? minDate : nextStart;
     setWindowStart(clamped);
   }
@@ -273,10 +281,10 @@ export default function WeekAvailabilityPicker({
       </div>
 
       {/* Day columns */}
-      {isLoading || isFetchingWeek || isSearchingForward ? (
+      {isBusy ? (
         <div className="mt-5 flex items-center justify-center gap-2 py-10 text-sm text-slate-400">
           <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-slate-400" />
-          Chargement...
+          {checkingAvailabilityLabel}
         </div>
       ) : (
         <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-7 sm:gap-2.5">

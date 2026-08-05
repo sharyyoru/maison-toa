@@ -96,12 +96,28 @@ export async function GET(request: NextRequest) {
     // Fetch appointments that OVERLAP the date range (not just those starting within it).
     // This correctly catches multi-day blocking events (VACANCES, STOP) that started
     // before the queried day but still cover it.
-    const query = supabase
+    //
+    // Scope this to the requested doctor at the DB level instead of pulling every
+    // appointment in the whole clinic and filtering in JS: for a realistic lookahead
+    // window the clinic-wide table has thousands of rows (mostly other doctors'
+    // appointments) versus a few hundred that actually matter here. Besides being
+    // slow, the unfiltered query also risked silently hitting Supabase's default
+    // row cap on wide date ranges. Legacy appointments with no provider_id are only
+    // matched via a `[Doctor: Name]` tag in `reason`, so keep those in scope too.
+    let query = supabase
       .from("appointments")
       .select("id, start_time, end_time, status, reason, no_patient, provider_id")
       .lt("start_time", end)   // appointment starts before the range ends
       .gt("end_time", start)   // appointment ends after the range starts
       .neq("status", "cancelled");
+
+    if (providerId && canonicalDoctorName) {
+      query = query.or(
+        `provider_id.eq.${providerId},and(provider_id.is.null,reason.ilike.%${canonicalDoctorName}%)`
+      );
+    } else if (canonicalDoctorName) {
+      query = query.ilike("reason", `%${canonicalDoctorName}%`);
+    }
 
     const { data: appointments, error } = await query;
 
