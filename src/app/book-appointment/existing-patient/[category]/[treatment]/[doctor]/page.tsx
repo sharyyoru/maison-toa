@@ -13,6 +13,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
 import { getLocalizedBookingName } from "@/lib/bookingLocalization";
 import { fetchAvailabilityWindow, getNextOpenSlots, type AvailabilityWindowResult, type AvailableSlot } from "@/lib/bookingAvailability";
+import WeekAvailabilityPicker from "@/components/booking/WeekAvailabilityPicker";
 
 interface DoctorInfo {
   name: string;
@@ -112,6 +113,8 @@ interface Treatment {
   duration_minutes: number;
   prepayment_required?: boolean;
   linked_service_id?: string | null;
+  display_price?: number | null;
+  display_duration_minutes?: number | null;
 }
 
 const DEFAULT_TREATMENT: Treatment = {
@@ -121,6 +124,8 @@ const DEFAULT_TREATMENT: Treatment = {
   duration_minutes: 60,
   prepayment_required: false,
   linked_service_id: null,
+  display_price: null,
+  display_duration_minutes: null,
 };
 
 function DoctorBookingContent() {
@@ -877,123 +882,36 @@ function DoctorBookingContent() {
                   {t("booking.selectDateDesc").replace("{doctor}", doctor.name).replace("{location}", locationLabel)}
                 </p>
 
-                {isLoadingDates ? (
-                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-600"></div>
-                    <p className="text-sm text-slate-600">{t("booking.checkingAvailability")}</p>
-                  </div>
-                ) : nextAvailableSlots.length > 0 ? (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                    <div className="flex items-center gap-2 mb-3">
-                      <svg className="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <p className="text-sm font-medium text-emerald-700">{t("booking.nextAvailableSlots")}</p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {nextAvailableSlots.map((slot) => {
-                        const isSelected = selectedDate === slot.date && selectedTime === slot.time;
-                        return (
-                          <button
-                            key={`${slot.date}-${slot.time}`}
-                            type="button"
-                            onClick={() => {
-                              setSelectedDate(slot.date);
-                              setSelectedTime(slot.time);
-                              pushToDataLayer("SELECT_SLOT", {
-                                service_name: selectedService,
-                                practitioner_name: doctor?.name,
-                                slot_start_time: `${slot.date}T${slot.time}:00`,
-                              });
-                            }}
-                            className={`rounded-lg border px-3 py-2 text-left text-sm font-medium transition-all ${
-                              isSelected
-                                ? "border-slate-900 bg-slate-900 text-white"
-                                : "border-emerald-200 bg-white text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100"
-                            }`}
-                          >
-                            <span className="block">
-                              {new Date(slot.date + "T12:00:00").toLocaleDateString(dateLocale, { timeZone: SWISS_TIMEZONE, weekday: "short", month: "short", day: "numeric" })}
-                            </span>
-                            <span className={isSelected ? "text-white" : "text-emerald-700"}>{slot.time}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : nearestAvailableDate === null && !isLoadingDates && availableSlots.length === 0 ? (
-                  <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                    <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <p className="text-sm text-amber-700">{t("booking.noAvailableSlotsFound")}</p>
-                  </div>
-                ) : null}
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">{t("booking.date")} *</label>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => {
-                      const newDate = e.target.value;
-                      setSelectedDate(newDate);
-                      setSelectedTime("");
-                    }}
-                    min={getMinDate()}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 outline-none transition-all"
-                  />
-                </div>
-
-                {selectedDate && availableSlots.length > 0 && (() => {
-                  const openSlots = availableSlots.filter(time => !bookedSlots.includes(time));
-                  
-                  if (openSlots.length === 0) {
-                    return (
-                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                        <p className="text-sm text-amber-700 font-medium">
-                          {t("booking.noSlots")}
-                        </p>
-                      </div>
-                    );
-                  }
-                  
-                  return (
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-3">{t("booking.availableSlots")} *</label>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                        {openSlots.map((time: string) => (
-                          <button
-                            key={time}
-                            onClick={() => {
-                              setSelectedTime(time);
-                              pushToDataLayer("SELECT_SLOT", {
-                                service_name: selectedService,
-                                practitioner_name: doctor?.name,
-                                slot_start_time: `${selectedDate}T${time}:00`,
-                              });
-                            }}
-                            className={`py-3 rounded-xl text-sm font-medium transition-all ${
-                              selectedTime === time
-                                ? "bg-slate-900 text-white"
-                                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                            }`}
-                          >
-                            {time}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {selectedDate && availableSlots.length === 0 && (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                    <p className="text-sm text-amber-700 font-medium">
-                      {t("booking.notAvailable")}
-                    </p>
-                  </div>
-                )}
+                <WeekAvailabilityPicker
+                  serviceName={selectedService}
+                  servicePriceLabel={treatment?.display_price ? `CHF ${treatment.display_price.toFixed(2)}` : null}
+                  serviceDurationMinutes={treatment?.display_duration_minutes ?? treatment?.duration_minutes ?? null}
+                  doctorName={doctor.name}
+                  selectedDate={selectedDate}
+                  selectedTime={selectedTime}
+                  onSelectSlot={(date, time) => {
+                    setSelectedDate(date);
+                    setSelectedTime(time);
+                    pushToDataLayer("SELECT_SLOT", {
+                      service_name: selectedService,
+                      practitioner_name: doctor?.name,
+                      slot_start_time: `${date}T${time}:00`,
+                    });
+                  }}
+                  availabilityWindow={availabilityWindow}
+                  generateTimeSlots={(date) => generateTimeSlots(doctorSlug, locationId || "", date, dbAvailability)}
+                  getDayAvailability={(date) => {
+                    const day = getSwissDayOfWeek(parseLocalDate(date));
+                    return dbAvailability
+                      ? dbAvailability[day]
+                      : DEFAULT_WEEK_SLOTS[day as keyof typeof DEFAULT_WEEK_SLOTS];
+                  }}
+                  nextAvailableSlots={nextAvailableSlots}
+                  isLoading={isLoadingDates}
+                  dateLocale={dateLocale}
+                  noSlotsLabel={t("booking.noAvailabilityForDay")}
+                  nextAvailableLabel={t("booking.jumpToNextAvailable")}
+                />
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">{t("booking.notes")} *</label>
