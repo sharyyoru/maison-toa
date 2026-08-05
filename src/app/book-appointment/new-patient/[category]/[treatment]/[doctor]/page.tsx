@@ -543,8 +543,9 @@ function DoctorBookingContent() {
       const openSlots = getNextOpenSlots({
         dates: [date],
         availabilityWindow: availabilityResult,
-        generateTimeSlots: (slotDate) => generateTimeSlots(doctorSlug, locationId || "", slotDate, dbAvailability),
+        generateTimeSlots: (slotDate) => (blockedDates.has(slotDate) ? [] : generateTimeSlots(doctorSlug, locationId || "", slotDate, dbAvailability)),
         getDayAvailability: (slotDate) => {
+          if (blockedDates.has(slotDate)) return undefined;
           const day = getSwissDayOfWeek(parseLocalDate(slotDate));
           return dbAvailability
             ? dbAvailability[day]
@@ -1035,8 +1036,12 @@ function DoctorBookingContent() {
                     });
                   }}
                   availabilityWindow={availabilityWindow}
-                  generateTimeSlots={(date) => generateTimeSlots(doctorSlug, locationId || "", date, dbAvailability)}
+                  generateTimeSlots={(date) => (blockedDates.has(date) ? [] : generateTimeSlots(doctorSlug, locationId || "", date, dbAvailability))}
                   getDayAvailability={(date) => {
+                    // A clinic-wide closure (holiday, vacation, etc.) always wins over
+                    // the doctor's normal weekly hours — otherwise the calendar happily
+                    // generates slots for a day nobody is actually working.
+                    if (blockedDates.has(date)) return undefined;
                     const day = getSwissDayOfWeek(parseLocalDate(date));
                     return dbAvailability
                       ? dbAvailability[day]
