@@ -279,13 +279,13 @@ export default function WeekAvailabilityPicker({
           Chargement...
         </div>
       ) : (
-        <div className="mt-5 grid grid-cols-7 gap-1.5 sm:gap-2.5 overflow-x-auto">
+        <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-7 sm:gap-2.5">
           {weekDates.map((date, idx) => {
             const isToday = date === minDate;
             const times = slotsByDate[date] || [];
             const isLastColumn = idx === weekDates.length - 1;
             return (
-              <div key={date} className="min-w-[68px] sm:min-w-[92px]">
+              <div key={date} className="min-w-0">
                 <div className="mb-2 text-center">
                   <p className="truncate text-[11px] font-medium text-slate-400 sm:text-xs">
                     {isToday ? "Aujourd'hui" : weekdayFormatter.format(parseSwissDate(date))}
