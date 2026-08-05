@@ -29,6 +29,44 @@ const nextConfig: NextConfig = {
 
   // Optimize production builds
   productionBrowserSourceMaps: false,
+
+  // Disable the client-side Router Cache (the in-memory cache Next.js keeps
+  // for pages visited via <Link>/router navigation, separate from HTTP
+  // caching). Without this, navigating between booking pages client-side
+  // could briefly reuse a stale snapshot even though the server itself
+  // never caches these routes.
+  experimental: {
+    staleTimes: {
+      dynamic: 0,
+      static: 0,
+    },
+  },
+
+  // Belt-and-suspenders cache busting for the public booking flow. These
+  // pages show live appointment availability, so any stale copy (browser
+  // back/forward cache, an intermediate proxy, etc.) can show a patient
+  // slots that are no longer real. Next.js already treats these as
+  // dynamic (they have dynamic route segments), but that relies on
+  // defaults — make the "never cache" intent explicit and impossible to
+  // regress accidentally.
+  async headers() {
+    return [
+      {
+        source: "/book-appointment/:path*",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
+          { key: "Pragma", value: "no-cache" },
+        ],
+      },
+      {
+        source: "/api/appointments/check-availability",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
+          { key: "Pragma", value: "no-cache" },
+        ],
+      },
+    ];
+  },
 };
 
 export default withNextIntl(nextConfig);
