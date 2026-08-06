@@ -33,11 +33,34 @@ export const metadata: Metadata = {
   description: "Medical CRM and ERP for clinics",
 };
 
+// Public, patient-facing pages must never inherit an admin's CRM dark-mode
+// preference — the "dark" utility overrides in globals.css assume the
+// Blizzard dashboard shell (.blz-content) and aren't safe on these
+// standalone pages. Keep this list in sync with STANDALONE_ROUTES in
+// LayoutShellSwitch.tsx.
+const PUBLIC_STANDALONE_ROUTES = [
+  "/login",
+  "/book-appointment",
+  "/intake",
+  "/onboarding",
+  "/invoice/pay",
+  "/consultations",
+  "/embed",
+  "/form",
+  "/appointments/manage",
+  "/register",
+];
+
 const THEME_PREHYDRATION_SCRIPT = `
 (function(){
   try {
+    var publicRoutes = ${JSON.stringify(PUBLIC_STANDALONE_ROUTES)};
+    var path = window.location.pathname;
+    var isPublicRoute = publicRoutes.some(function(route) {
+      return path === route || path.indexOf(route + '/') === 0;
+    });
     var t = localStorage.getItem('app_theme');
-    if (t === 'dark') {
+    if (t === 'dark' && !isPublicRoute) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
