@@ -54,7 +54,11 @@ async function resolveField(field: string, context: RunContext, expected?: unkno
     if (field === "treatment.last_date") return data?.[0]?.performed_at ?? null;
     if (field === "treatment.never_performed") return !data?.length;
     if (field === "treatment.already_performed") return Boolean(data?.length);
-    return field === "treatment.name" ? context.event.payload.treatment_name : context.event.payload.treatment_category;
+    if (field === "treatment.name") {
+      const expectsServiceId = typeof expected === "string" && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(expected);
+      return expectsServiceId ? context.event.payload.service_id : context.event.payload.treatment_name;
+    }
+    return context.event.payload.treatment_category;
   }
   if (field.startsWith("billing.")) {
     const { data } = await supabaseAdmin.from("invoices").select("total_amount, paid_amount, status, due_date").eq("patient_id", patientId);

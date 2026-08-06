@@ -145,6 +145,7 @@ export default function WorkflowBuilderPage() {
   const [previewEmailHtml, setPreviewEmailHtml] = useState<string | null>(null);
   const [previewEmailSubject, setPreviewEmailSubject] = useState<string | null>(null);
   const [services, setServices] = useState<{ id: string; name: string }[]>([]);
+  const [treatmentServices, setTreatmentServices] = useState<{ id: string; name: string }[]>([]);
   const appointmentStatuses = useAppointmentStatusOptions();
 
   // Load stages and email templates
@@ -153,13 +154,15 @@ export default function WorkflowBuilderPage() {
       try {
         setLoading(true);
         
-        const [stagesRes, templatesRes] = await Promise.all([
+        const [stagesRes, templatesRes, treatmentServicesRes] = await Promise.all([
           supabaseClient.from("deal_stages").select("id, name, type, sort_order").order("sort_order"),
           supabaseClient.from("email_templates").select("id, name, subject_template, html_content").order("created_at", { ascending: false }),
+          supabaseClient.from("services").select("id, name").eq("is_active", true).order("name"),
         ]);
 
         if (stagesRes.data) setStages(stagesRes.data);
         if (templatesRes.data) setEmailTemplates(templatesRes.data);
+        if (treatmentServicesRes.data) setTreatmentServices(treatmentServicesRes.data);
 
         // Load services from Hubspot category
         const { data: categoryData } = await supabaseClient
@@ -1126,7 +1129,7 @@ export default function WorkflowBuilderPage() {
           <div className="space-y-4">
             <h3 className="font-semibold text-slate-900">Configure Decision</h3>
             <p className="text-xs text-slate-500">The Yes branch runs when this expression matches; otherwise the No branch runs.</p>
-            <ConditionExpressionEditor expression={data.expression} onChange={(expression) => updateNodeData(selectedNode.id, { expression })} />
+            <ConditionExpressionEditor expression={data.expression} serviceOptions={treatmentServices} onChange={(expression) => updateNodeData(selectedNode.id, { expression })} />
           </div>
         );
       }
