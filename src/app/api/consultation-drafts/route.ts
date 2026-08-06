@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 
 const roomPattern = /^patient:([0-9a-fA-F-]{36}):consultation(?:-create|:([0-9a-fA-F-]{36}))$/;
 
@@ -200,6 +201,14 @@ export async function POST(request: NextRequest) {
       title: data.title,
     },
   });
+
+  if (!existingDraft) {
+    try {
+      await emitWorkflowEvent({ type: "consultation_started", subjectType: "consultation", subjectId: data.id, patientId, payload: { consultation_id: data.id, consultation_type: data.record_type, title: data.title }, dedupeKey: `consultation_started:${data.id}` });
+    } catch (workflowError) {
+      console.error("[workflow-v2] Failed to emit consultation started event", workflowError);
+    }
+  }
 
   return NextResponse.json({ draft: data });
 }

@@ -8,8 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "whatsapp": "node server/whatsapp-server.js",
-    "test": "for f in src/__tests__/*.test.ts; do echo \"\\n--- $f ---\"; node_modules/.bin/tsx \"$f\" || exit 1; done",
-    "test:reminder": "node_modules/.bin/tsx src/__tests__/reminderTracking.test.ts"
+    "test": "tsx scripts/run-tests.ts",
+    "test:reminder": "node_modules/.bin/tsx src/__tests__/reminderTracking.test.ts",
+    "workflow:migrate-v2": "tsx scripts/migrate-workflows-v2.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -32,9 +33,11 @@
     "@types/qrcode": "^1.5.6",
     "@types/sharp": "^0.31.1",
     "@uiw/react-color": "^2.10.3",
+    "@xyflow/react": "^12.11.2",
     "docx": "^9.5.1",
     "docx-preview": "^0.3.7",
     "dotenv": "^17.2.3",
+    "elkjs": "^0.12.0",
     "emoji-picker-element": "^1.29.1",
     "fabric": "^6.9.0",
     "framer-motion": "^12.42.2",

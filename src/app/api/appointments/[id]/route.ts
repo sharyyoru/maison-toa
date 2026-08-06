@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { POST as runAppointmentWorkflow } from "@/app/api/workflows/appointment-created/route";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
+import type { WorkflowTriggerType } from "@/lib/workflows/types";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -341,6 +343,17 @@ export async function PATCH(
         }));
       } catch (workflowError) {
         console.error("Failed to run appointment status workflow:", workflowError);
+      }
+      try {
+        const normalized = nextDisplayStatus.toLowerCase();
+        const eventType: WorkflowTriggerType | null = normalized.includes("complete") ? "appointment_completed"
+          : normalized.includes("cancel") ? "appointment_cancelled"
+          : normalized.includes("no show") || normalized.includes("no_show") ? "appointment_no_show"
+          : normalized.includes("confirm") || normalized.includes("approved") ? "appointment_confirmed"
+          : normalized.includes("resched") ? "appointment_rescheduled" : null;
+        if (eventType) await emitWorkflowEvent({ type: eventType, subjectType: "appointment", subjectId: data.id, patientId: data.patient_id, payload: { ...data, previous_display_status: previousDisplayStatus, display_status: nextDisplayStatus }, dedupeKey: `${eventType}:display:${data.id}:${nextDisplayStatus}:${data.start_time}` });
+      } catch (workflowError) {
+        console.error("Failed to emit workflow v2 appointment event:", workflowError);
       }
     }
     

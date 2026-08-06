@@ -40,6 +40,7 @@ export type SendEmailOptions = {
   attachments?: EmailAttachment[];
   tags?: { name: string; value: string }[];
   scheduledAt?: Date; // ISO 8601 format for scheduled delivery
+  idempotencyKey?: string;
 };
 
 export type SendEmailResult = {
@@ -85,6 +86,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
     attachments,
     tags,
     scheduledAt,
+    idempotencyKey,
   } = options;
 
   // Build the from address
@@ -141,6 +143,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
       headers: {
         "Authorization": `Bearer ${RESEND_API_KEY}`,
         "Content-Type": "application/json",
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
       },
       body: JSON.stringify(body),
     });

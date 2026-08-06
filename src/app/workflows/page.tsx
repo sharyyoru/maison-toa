@@ -110,16 +110,17 @@ export default function WorkflowsPage() {
       // Load enrollment counts for each workflow
       if (workflowsRes.data && workflowsRes.data.length > 0) {
         const workflowIds = workflowsRes.data.map((w: any) => w.id);
-        const { data: enrollments } = await supabaseClient
-          .from("workflow_enrollments")
-          .select("workflow_id")
-          .in("workflow_id", workflowIds);
+        const [{ data: enrollments }, { data: v2Runs }] = await Promise.all([
+          supabaseClient.from("workflow_enrollments").select("workflow_id").in("workflow_id", workflowIds),
+          supabaseClient.from("workflow_runs_v2").select("workflow_id").in("workflow_id", workflowIds),
+        ]);
 
-        if (enrollments) {
+        if (enrollments || v2Runs) {
           const counts = new Map<string, number>();
-          for (const e of enrollments) {
+          for (const e of enrollments || []) {
             counts.set(e.workflow_id, (counts.get(e.workflow_id) || 0) + 1);
           }
+          for (const run of v2Runs || []) counts.set(run.workflow_id, (counts.get(run.workflow_id) || 0) + 1);
           setEnrollmentCounts(counts);
         }
       }
@@ -260,22 +261,12 @@ export default function WorkflowsPage() {
     try {
       setDuplicatingId(workflow.id);
 
-      // Create a copy of the workflow with a new name
-      const { data: newWorkflow, error } = await supabaseClient
-        .from("workflows")
-        .insert({
-          name: `${workflow.name} ${t("copySuffix")}`,
-          trigger_type: workflow.trigger_type,
-          active: false, // Start as inactive
-          config: workflow.config,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      if (newWorkflow) {
-        setWorkflows((prev) => [newWorkflow as WorkflowRow, ...prev]);
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const response = await fetch("/api/workflows/duplicate", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token || ""}` }, body: JSON.stringify({ workflowId: workflow.id, newName: `${workflow.name} ${t("copySuffix")}` }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || t("errorDuplicate"));
+      if (result.workflow) {
+        setWorkflows((prev) => [result.workflow as WorkflowRow, ...prev]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t("errorDuplicate"));
@@ -331,6 +322,8 @@ export default function WorkflowsPage() {
               {t("subtitle")}
             </p>
           </div>
+          <div className="flex gap-2">
+          <Link href="/workflows/properties" className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Custom Properties</Link>
           <Link
             href="/workflows/builder"
             className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-emerald-700"
@@ -340,6 +333,7 @@ export default function WorkflowsPage() {
             </svg>
             {t("createWorkflow")}
           </Link>
+          </div>
         </header>
 
         {error && (
@@ -688,18 +682,24 @@ function WorkflowEnrollmentsModal({
 
       if (fetchError) throw fetchError;
 
-      if (!data || data.length === 0) {
+      const legacyData = data || [];
+      const { data: v2Runs } = await supabaseClient
+        .from("workflow_runs_v2")
+        .select("id, patient_id, created_at, status, context, patient:patients(id, first_name, last_name, email)")
+        .eq("workflow_id", workflowId)
+        .order("created_at", { ascending: false });
+
+      if (legacyData.length === 0 && (!v2Runs || v2Runs.length === 0)) {
         setEnrollments([]);
         return;
       }
 
-      // Batch load all steps for all enrollments in ONE query
-      const enrollmentIds = data.map((e) => e.id);
-      const { data: allSteps } = await supabaseClient
+      const enrollmentIds = legacyData.map((e) => e.id);
+      const allSteps = enrollmentIds.length ? (await supabaseClient
         .from("workflow_enrollment_steps")
         .select("id, enrollment_id, step_type, step_action, status, executed_at, result, error_message")
         .in("enrollment_id", enrollmentIds)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true })).data : [];
 
       // Group steps by enrollment_id
       const stepsByEnrollment = new Map<string, typeof allSteps>();
@@ -710,7 +710,7 @@ function WorkflowEnrollmentsModal({
       }
 
       // Map enrollments with their steps and deal data
-      const enrollmentsWithSteps: EnrollmentRow[] = data.map((enrollment) => {
+      const enrollmentsWithSteps: EnrollmentRow[] = legacyData.map((enrollment) => {
         // Handle deal - Supabase may return as array for single relation
         const dealData = Array.isArray(enrollment.deal) ? enrollment.deal[0] : enrollment.deal;
         let deal = null;
@@ -730,6 +730,39 @@ function WorkflowEnrollmentsModal({
           steps: stepsByEnrollment.get(enrollment.id) || [],
         };
       });
+
+      const v2RunIds = (v2Runs || []).map((run) => run.id);
+      const v2Steps = v2RunIds.length ? (await supabaseClient
+        .from("workflow_step_runs_v2")
+        .select("id, run_id, node_id, node_type, status, executed_at, result, error_message")
+        .in("run_id", v2RunIds)
+        .order("created_at", { ascending: true })).data || [] : [];
+      const v2StepsByRun = new Map<string, typeof v2Steps>();
+      for (const step of v2Steps) v2StepsByRun.set(step.run_id, [...(v2StepsByRun.get(step.run_id) || []), step]);
+      for (const run of v2Runs || []) {
+        const patient = Array.isArray(run.patient) ? run.patient[0] : run.patient;
+        enrollmentsWithSteps.push({
+          id: run.id,
+          patient_id: run.patient_id || "",
+          deal_id: null,
+          enrolled_at: run.created_at,
+          status: run.status,
+          trigger_data: run.context,
+          patient: patient || null,
+          deal: null,
+          steps: (v2StepsByRun.get(run.id) || []).map((step) => ({
+            id: step.id,
+            step_type: step.node_type,
+            step_action: step.node_id,
+            status: step.status,
+            executed_at: step.executed_at,
+            result: step.result,
+            error_message: step.error_message,
+          })),
+        });
+      }
+
+      enrollmentsWithSteps.sort((a, b) => new Date(b.enrolled_at).getTime() - new Date(a.enrolled_at).getTime());
 
       setEnrollments(enrollmentsWithSteps);
     } catch (err) {

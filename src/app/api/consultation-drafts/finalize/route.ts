@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -124,6 +125,31 @@ export async function POST(request: NextRequest) {
     requestId,
     metadata: { recordType: data.record_type, title: data.title },
   });
+
+  try {
+    await emitWorkflowEvent({
+      type: "consultation_completed",
+      subjectType: "consultation",
+      subjectId: data.id,
+      patientId,
+      occurredAt: new Date().toISOString(),
+      payload: { consultation_id: data.id, consultation_type: data.record_type, title: data.title },
+      dedupeKey: `consultation_completed:${data.id}`,
+    });
+    const { count: treatments } = await supabaseAdmin.from("patient_treatments").select("id", { count: "exact", head: true }).eq("patient_id", patientId).gte("performed_at", data.scheduled_at);
+    if (!treatments) {
+      await emitWorkflowEvent({
+        type: "consultation_without_treatment",
+        subjectType: "consultation",
+        subjectId: data.id,
+        patientId,
+        payload: { consultation_id: data.id, consultation_type: data.record_type, title: data.title },
+        dedupeKey: `consultation_without_treatment:${data.id}`,
+      });
+    }
+  } catch (workflowError) {
+    console.error("[workflow-v2] Failed to emit consultation event", workflowError);
+  }
 
   return NextResponse.json({ consultation: data });
 }
