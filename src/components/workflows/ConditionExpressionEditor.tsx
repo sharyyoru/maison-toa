@@ -13,10 +13,13 @@ const OPERATORS: { value: ConditionOperator; label: string }[] = [
 
 const emptyRule = (): ConditionExpression => ({ kind: "rule", field: "patient.email", operator: "is_not_empty" });
 
-export default function ConditionExpressionEditor({ expression, onChange, onRemove, depth = 0 }: {
+type ServiceOption = { id: string; name: string };
+
+export default function ConditionExpressionEditor({ expression, onChange, onRemove, serviceOptions = [], depth = 0 }: {
   expression: ConditionExpression;
   onChange: (expression: ConditionExpression) => void;
   onRemove?: () => void;
+  serviceOptions?: ServiceOption[];
   depth?: number;
 }) {
   const wrapNot = () => onChange({ kind: "not", child: expression });
@@ -24,7 +27,7 @@ export default function ConditionExpressionEditor({ expression, onChange, onRemo
     return (
       <div className="rounded-lg border border-rose-200 bg-rose-50 p-2">
         <div className="mb-2 flex items-center justify-between"><span className="text-xs font-bold text-rose-700">NOT</span><button type="button" className="text-xs text-rose-700 underline" onClick={() => onChange(expression.child)}>Remove NOT</button></div>
-        <ConditionExpressionEditor expression={expression.child} onChange={(child) => onChange({ kind: "not", child })} onRemove={onRemove} depth={depth + 1} />
+        <ConditionExpressionEditor expression={expression.child} onChange={(child) => onChange({ kind: "not", child })} onRemove={onRemove} serviceOptions={serviceOptions} depth={depth + 1} />
       </div>
     );
   }
@@ -37,7 +40,7 @@ export default function ConditionExpressionEditor({ expression, onChange, onRemo
           {onRemove && <button type="button" className="ml-auto text-xs text-red-600" onClick={onRemove}>Remove group</button>}
         </div>
         {expression.children.map((child, index) => (
-          <ConditionExpressionEditor key={index} expression={child} depth={depth + 1} onChange={(next) => onChange({ ...expression, children: expression.children.map((item, childIndex) => childIndex === index ? next : item) })} onRemove={() => onChange({ ...expression, children: expression.children.filter((_, childIndex) => childIndex !== index) })} />
+          <ConditionExpressionEditor key={index} expression={child} depth={depth + 1} serviceOptions={serviceOptions} onChange={(next) => onChange({ ...expression, children: expression.children.map((item, childIndex) => childIndex === index ? next : item) })} onRemove={() => onChange({ ...expression, children: expression.children.filter((_, childIndex) => childIndex !== index) })} />
         ))}
         <div className="flex gap-2">
           <button type="button" className="rounded border border-purple-200 bg-white px-2 py-1 text-xs text-purple-700" onClick={() => onChange({ ...expression, children: [...expression.children, emptyRule()] })}>+ Rule</button>
@@ -47,15 +50,31 @@ export default function ConditionExpressionEditor({ expression, onChange, onRemo
     );
   }
   const noValue = ["is_empty", "is_not_empty", "is_true", "is_false"].includes(expression.operator);
+  const isTreatmentName = expression.field === "treatment.name";
+  const availableOperators = isTreatmentName
+    ? OPERATORS.filter(({ value }) => ["equals", "not_equals", "is_empty", "is_not_empty"].includes(value))
+    : OPERATORS;
   return (
     <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-2">
-      <select value={expression.field} onChange={(event) => onChange({ ...expression, field: event.target.value })} className="w-full rounded border border-slate-200 px-2 py-1.5 text-xs">
+      <select value={expression.field} onChange={(event) => {
+        const field = event.target.value;
+        onChange(field === "treatment.name"
+          ? { ...expression, field, operator: "equals", value: "" }
+          : { ...expression, field, value: undefined });
+      }} className="w-full rounded border border-slate-200 px-2 py-1.5 text-xs">
         {CONDITION_FIELDS.map((field) => <option key={field.value} value={field.value}>{field.label}</option>)}
       </select>
       <div className="flex gap-2">
-        <select value={expression.operator} onChange={(event) => onChange({ ...expression, operator: event.target.value as ConditionOperator })} className="min-w-0 flex-1 rounded border border-slate-200 px-2 py-1.5 text-xs">{OPERATORS.map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}</select>
-        {!noValue && <input value={String(expression.value ?? "")} onChange={(event) => onChange({ ...expression, value: event.target.value })} placeholder="Value" className="min-w-0 flex-1 rounded border border-slate-200 px-2 py-1.5 text-xs" />}
+        <select value={expression.operator} onChange={(event) => onChange({ ...expression, operator: event.target.value as ConditionOperator })} className="min-w-0 flex-1 rounded border border-slate-200 px-2 py-1.5 text-xs">{availableOperators.map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}</select>
+        {!noValue && isTreatmentName && (
+          <select value={String(expression.value ?? "")} onChange={(event) => onChange({ ...expression, value: event.target.value })} className="min-w-0 flex-1 rounded border border-slate-200 px-2 py-1.5 text-xs">
+            <option value="">Select service...</option>
+            {serviceOptions.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
+          </select>
+        )}
+        {!noValue && !isTreatmentName && <input value={String(expression.value ?? "")} onChange={(event) => onChange({ ...expression, value: event.target.value })} placeholder="Value" className="min-w-0 flex-1 rounded border border-slate-200 px-2 py-1.5 text-xs" />}
       </div>
+      {isTreatmentName && serviceOptions.length === 0 && <p className="text-[10px] text-amber-700">No active services are available.</p>}
       <div className="flex justify-between"><button type="button" className="text-[10px] text-slate-500 underline" onClick={wrapNot}>Wrap in NOT</button>{onRemove && <button type="button" className="text-[10px] text-red-600" onClick={onRemove}>Remove</button>}</div>
     </div>
   );
