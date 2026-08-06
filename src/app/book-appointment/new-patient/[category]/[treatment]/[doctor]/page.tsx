@@ -277,6 +277,7 @@ function DoctorBookingContent() {
   const [isLoadingDates, setIsLoadingDates] = useState(true);
   const [selectedTime, setSelectedTime] = useState("");
   const [notes, setNotes] = useState("");
+  const [notesError, setNotesError] = useState(false);
   const availabilityRequestSeq = useRef(0);
   const selectedDateRequestSeq = useRef(0);
 
@@ -1071,11 +1072,23 @@ function DoctorBookingContent() {
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">{t("booking.notes")} *</label>
                   <textarea
                     value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
+                    onChange={(e) => {
+                      setNotes(e.target.value);
+                      if (e.target.value.trim()) setNotesError(false);
+                    }}
                     rows={3}
-                    className={`w-full rounded-xl border px-4 py-3 text-slate-900 focus:ring-2 outline-none transition-all resize-none ${!notes.trim() ? "border-slate-200 focus:border-slate-400 focus:ring-slate-200" : "border-green-400 focus:border-green-400 focus:ring-green-100"}`}
+                    className={`w-full rounded-xl border px-4 py-3 text-slate-900 focus:ring-2 outline-none transition-all resize-none ${
+                      notesError && !notes.trim()
+                        ? "border-red-400 focus:border-red-400 focus:ring-red-100"
+                        : !notes.trim()
+                          ? "border-slate-200 focus:border-slate-400 focus:ring-slate-200"
+                          : "border-green-400 focus:border-green-400 focus:ring-green-100"
+                    }`}
                     placeholder={t("booking.notesPlaceholder")}
                   />
+                  {notesError && !notes.trim() && (
+                    <p className="mt-1.5 text-xs text-red-600">{t("error.notesRequired")}</p>
+                  )}
                 </div>
 
                 <div className="flex gap-3 pt-4">
@@ -1088,6 +1101,7 @@ function DoctorBookingContent() {
                   <button
                     onClick={() => {
                       if (!notes.trim()) {
+                        setNotesError(true);
                         setError(t("error.notesRequired"));
                         return;
                       }
@@ -1098,7 +1112,6 @@ function DoctorBookingContent() {
                         setError(t("error.selectDateTime"));
                       }
                     }}
-                    disabled={!notes.trim()}
                     className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t("booking.continue")}
