@@ -309,12 +309,18 @@ export default function WeekAvailabilityPicker({
                           key={time}
                           type="button"
                           onClick={() => onSelectSlot(date, time)}
-                          className={`w-full rounded-lg px-1.5 py-1.5 text-center text-[11px] font-medium transition-colors sm:text-xs ${
+                          aria-pressed={isSelected}
+                          className={`flex w-full items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-center text-[11px] font-semibold transition-all sm:text-xs ${
                             isSelected
-                              ? "bg-white text-[#1b2130]"
-                              : "bg-[#e7e6e2] text-[#1b2130] hover:bg-white"
+                              ? "bg-emerald-400 text-[#0f2a20] shadow-[0_0_0_2px_rgba(52,211,153,0.35)] ring-2 ring-emerald-300 scale-[1.04]"
+                              : "bg-[#e7e6e2] text-[#1b2130] font-medium hover:bg-white"
                           }`}
                         >
+                          {isSelected && (
+                            <svg className="h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
                           {time}
                         </button>
                       );
