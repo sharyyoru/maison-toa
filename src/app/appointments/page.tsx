@@ -5447,7 +5447,7 @@ export default function CalendarPage() {
                             className={`flex-1 px-1 py-1.5 text-center text-[10px] font-semibold text-white truncate ${calendar.color || "bg-slate-500"} ${idx < selectedDoctorCalendars.length - 1 ? "border-r border-white/30" : ""}`}
                             title={calendar.name}
                           >
-                            {calendar.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 3)}
+                            {calendar.initials}
                           </div>
                         ))}
                       </div>
