@@ -59,7 +59,7 @@ export default function RightPanel({ collapsed, onToggle }: Props) {
 
   if (collapsed) {
     return (
-      <div className="flex flex-col items-center border-l border-[var(--blz-border)] bg-[var(--blz-surface)] py-3 px-1.5 w-10">
+      <div className="flex flex-col items-center border-l border-[var(--blz-border)] bg-slate-100 dark:bg-[var(--blz-surface)] py-3 px-1.5 w-10">
         <button
           onClick={onToggle}
           className="flex h-7 w-7 items-center justify-center rounded text-[var(--blz-text-muted)] hover:bg-[var(--blz-hover)] hover:text-[var(--blz-text-primary)] transition-colors"
@@ -74,7 +74,7 @@ export default function RightPanel({ collapsed, onToggle }: Props) {
   }
 
   return (
-    <aside className="flex w-72 flex-col border-l border-[var(--blz-border)] bg-[var(--blz-surface)] overflow-hidden">
+    <aside className="flex w-72 flex-col border-l border-[var(--blz-border)] bg-slate-100 dark:bg-[var(--blz-surface)] overflow-hidden">
       <div className="flex items-center justify-between border-b border-[var(--blz-border)] px-3 py-2">
         <div className="flex items-center gap-2">
           <button className="flex h-7 w-7 items-center justify-center rounded bg-[var(--blz-hover)] text-[var(--blz-text-secondary)]" title="Patients">
