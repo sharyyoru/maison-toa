@@ -15,6 +15,41 @@ type PatientResult = {
   dob: string | null;
 };
 
+const ACCENT_GROUPS = [
+  "aàáâãäå", "cç", "eèéêë", "iìíîï", "nñ", "oòóôõöø",
+  "uùúûü", "yýÿ", "sš", "zž", "lł",
+];
+
+function normalizeSearchText(value: string) {
+  return value.toLocaleLowerCase().replace(/œ/g, "oe").replace(/æ/g, "ae")
+    .replace(/ß/g, "ss").replace(/ø/g, "o").replace(/ł/g, "l")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function accentVariants(value: string, limit = 20) {
+  let variants = [""];
+  for (const character of normalizeSearchText(value)) {
+    const group = ACCENT_GROUPS.find((candidate) => candidate[0] === character);
+    const options = group ? [...group] : [character];
+    const next: string[] = [];
+    for (const prefix of variants) {
+      for (const option of options) {
+        next.push(prefix + option);
+        if (next.length >= limit) break;
+      }
+      if (next.length >= limit) break;
+    }
+    variants = next;
+  }
+  return [...new Set([value.toLocaleLowerCase(), ...variants])];
+}
+
+function patientSearchText(patient: PatientResult) {
+  return normalizeSearchText([
+    patient.first_name, patient.last_name, patient.email, patient.phone, patient.dob,
+  ].filter(Boolean).join(" "));
+}
+
 export default function GlobalPatientSearch() {
   const router = useRouter();
   const t = useTranslations("header");
@@ -23,8 +58,10 @@ export default function GlobalPatientSearch() {
   const [results, setResults] = useState<PatientResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -38,17 +75,23 @@ export default function GlobalPatientSearch() {
 
   useEffect(() => {
     const trimmed = query.trim();
+    const requestId = ++requestIdRef.current;
     if (trimmed.length < 2) {
       setResults([]);
       setIsOpen(false);
+      setLoading(false);
+      setSearchError(false);
       return;
     }
+
+    setIsOpen(true);
+    setSearchError(false);
 
     const debounce = setTimeout(async () => {
       setLoading(true);
       try {
         // Split search into words for multi-word name searches
-        const words = trimmed.split(/\s+/).filter(w => w.length > 0);
+        const words = trimmed.replace(/[,()%_]/g, " ").split(/\s+/).filter(Boolean);
 
         // For multi-word queries (e.g. "alexandra christodoulou"), chain one .or()
         // per word so PostgREST applies AND logic between words. This avoids passing
@@ -57,21 +100,20 @@ export default function GlobalPatientSearch() {
           .from("patients")
           .select("id, first_name, last_name, email, phone, dob");
 
-        if (words.length > 1) {
-          for (const word of words) {
-            const t = `%${word}%`;
-            textQuery = textQuery.or(
-              `first_name.ilike.${t},last_name.ilike.${t},email.ilike.${t},phone.ilike.${t}`
-            );
-          }
-        } else {
-          const searchTerm = `%${trimmed}%`;
-          textQuery = textQuery.or(
-            `first_name.ilike.${searchTerm},last_name.ilike.${searchTerm},email.ilike.${searchTerm},phone.ilike.${searchTerm}`
-          );
+        for (const word of words) {
+          const nameFilters = accentVariants(word).flatMap((variant) => {
+            const term = `%${variant}%`;
+            return [`first_name.ilike.${term}`, `last_name.ilike.${term}`];
+          });
+          const term = `%${word}%`;
+          textQuery = textQuery.or([
+            ...nameFilters,
+            `email.ilike.${term}`,
+            `phone.ilike.${term}`,
+          ].join(","));
         }
 
-        textQuery = textQuery.limit(20);
+        textQuery = textQuery.limit(50);
 
         // Run DOB query in parallel if search looks like a date pattern
         const hasDigits = /\d/.test(trimmed);
@@ -118,23 +160,20 @@ export default function GlobalPatientSearch() {
           dobQuery ?? Promise.resolve({ data: [] as PatientResult[], error: null }),
         ]);
 
+        if (requestId !== requestIdRef.current) return;
+
         if (textResult.error) {
           console.error("Search error:", textResult.error);
           setResults([]);
+          setSearchError(true);
         } else {
           let filtered = (textResult.data ?? []) as PatientResult[];
 
-          // For multi-word searches, filter results to ensure ALL words match somewhere
-          if (words.length > 1) {
-            filtered = filtered.filter(patient => {
-              const fullName = `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.toLowerCase();
-              const email = (patient.email ?? "").toLowerCase();
-              const phone = (patient.phone ?? "").toLowerCase();
-              const dob = (patient.dob ?? "").toLowerCase();
-              const combined = `${fullName} ${email} ${phone} ${dob}`;
-              return words.every(word => combined.includes(word.toLowerCase()));
-            });
-          }
+          const normalizedWords = words.map(normalizeSearchText);
+          filtered = filtered.filter((patient) => {
+            const combined = patientSearchText(patient);
+            return normalizedWords.every((word) => combined.includes(word));
+          });
 
           // Merge DOB results (avoiding duplicates)
           const dobData = (dobResult?.data ?? []) as PatientResult[];
@@ -143,17 +182,18 @@ export default function GlobalPatientSearch() {
           }
 
           // Score and sort results by relevance
-          const queryLower = trimmed.toLowerCase();
+          const queryLower = normalizeSearchText(trimmed);
           const scored = filtered.map(patient => {
             let score = 0;
-            const firstName = (patient.first_name ?? "").toLowerCase();
-            const lastName = (patient.last_name ?? "").toLowerCase();
+            const firstName = normalizeSearchText(patient.first_name ?? "");
+            const lastName = normalizeSearchText(patient.last_name ?? "");
             const fullName = `${firstName} ${lastName}`.trim();
-            const email = (patient.email ?? "").toLowerCase();
-            const phone = (patient.phone ?? "").toLowerCase();
+            const reverseFullName = `${lastName} ${firstName}`.trim();
+            const email = normalizeSearchText(patient.email ?? "");
+            const phone = normalizeSearchText(patient.phone ?? "");
 
             // Exact full name match = highest priority
-            if (fullName === queryLower) {
+            if (fullName === queryLower || reverseFullName === queryLower) {
               score += 100;
             }
             // Exact first name or last name match
@@ -161,13 +201,13 @@ export default function GlobalPatientSearch() {
               score += 80;
             }
             // Name starts with query
-            else if (fullName.startsWith(queryLower) || firstName.startsWith(queryLower) || lastName.startsWith(queryLower)) {
+            else if (fullName.startsWith(queryLower) || reverseFullName.startsWith(queryLower) || firstName.startsWith(queryLower) || lastName.startsWith(queryLower)) {
               score += 60;
             }
             // For multi-word queries, check if each word starts a name part
             else if (words.length > 1) {
               const allWordsStartName = words.every(word => 
-                firstName.startsWith(word.toLowerCase()) || lastName.startsWith(word.toLowerCase())
+                firstName.startsWith(normalizeSearchText(word)) || lastName.startsWith(normalizeSearchText(word))
               );
               if (allWordsStartName) score += 50;
             }
@@ -211,13 +251,15 @@ export default function GlobalPatientSearch() {
           });
 
           setResults(scored.slice(0, 8));
-          setIsOpen(filtered.length > 0);
+          setSearchError(false);
         }
       } catch (err) {
+        if (requestId !== requestIdRef.current) return;
         console.error("Search catch error:", err);
         setResults([]);
+        setSearchError(true);
       } finally {
-        setLoading(false);
+        if (requestId === requestIdRef.current) setLoading(false);
       }
     }, 300);
 
@@ -253,7 +295,7 @@ export default function GlobalPatientSearch() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => results.length > 0 && setIsOpen(true)}
+          onFocus={() => query.trim().length >= 2 && setIsOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={t("searchPatients")}
           className="w-full rounded-full border border-slate-300/60 bg-slate-200/70 px-4 py-2 pl-4 pr-10 text-sm text-slate-900 placeholder-slate-500 shadow-inner backdrop-blur-sm transition-all focus:border-slate-400/80 focus:bg-slate-100/90 focus:outline-none focus:ring-1 focus:ring-slate-300/60"
@@ -273,8 +315,14 @@ export default function GlobalPatientSearch() {
         </div>
       </div>
 
-      {isOpen && results.length > 0 && (
+      {isOpen && (
         <div className="absolute top-full left-0 right-0 z-50 mt-2 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
+          {!loading && searchError && (
+            <p className="px-4 py-3 text-sm text-rose-600">{t("patientSearchFailed")}</p>
+          )}
+          {!loading && !searchError && results.length === 0 && (
+            <p className="px-4 py-3 text-sm text-slate-500">{t("noPatientsFound")}</p>
+          )}
           {results.map((patient) => {
             const name = `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim() || t("unnamed");
             return (

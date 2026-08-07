@@ -45,6 +45,8 @@
     "signOut": "Déconnexion",
     "signOutConfirm": "Êtes-vous sûr de vouloir vous déconnecter ?",
     "searchPatients": "Rechercher des patients...",
+    "noPatientsFound": "Aucun patient trouvé",
+    "patientSearchFailed": "La recherche a échoué. Veuillez réessayer.",
     "dob": "Né(e) le",
     "unnamed": "Sans nom",
     "loadingUser": "Chargement..."

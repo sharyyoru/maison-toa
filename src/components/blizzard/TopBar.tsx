@@ -13,6 +13,7 @@ import HeaderWhatsAppButton from "../HeaderWhatsAppButton";
 import HeaderUser from "../HeaderUser";
 import HeaderPdfJobsButton from "../HeaderPdfJobsButton";
 import CrmLanguageToggle from "../CrmLanguageToggle";
+import GlobalPatientSearch from "../GlobalPatientSearch";
 import { useTranslations } from "next-intl";
 
 export default function TopBar() {
@@ -103,7 +104,11 @@ export default function TopBar() {
         </nav>
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="hidden min-w-0 flex-1 justify-center lg:flex">
+        <GlobalPatientSearch />
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1">
         <HeaderTasksButton />
         <HeaderNotificationsButton />
         <HeaderPdfJobsButton />

@@ -45,6 +45,8 @@
     "signOut": "Sign out",
     "signOutConfirm": "Are you sure you want to log out?",
     "searchPatients": "Search patients...",
+    "noPatientsFound": "No patients found",
+    "patientSearchFailed": "Patient search failed. Please try again.",
     "dob": "DOB",
     "unnamed": "Unnamed",
     "loadingUser": "Loading..."
