@@ -4651,7 +4651,7 @@ export default function CalendarPage() {
 
   return (
     <div
-      className="-mx-4 -my-4 flex h-full overflow-hidden gap-4 px-0 pb-4 pt-2 sm:-mx-6 sm:px-1 lg:-mx-8 lg:px-2"
+      className="-mx-4 -my-4 flex h-[calc(100dvh-9.5rem)] max-h-full min-h-0 overflow-hidden gap-4 px-0 pb-4 pt-2 sm:-mx-6 sm:px-1 lg:-mx-8 lg:px-2"
       style={{
         WebkitOverflowScrolling: "touch",
       } as React.CSSProperties}
