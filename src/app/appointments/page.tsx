@@ -4658,7 +4658,7 @@ export default function CalendarPage() {
     >
       {/* Left sidebar similar to Google Calendar */}
       <aside
-        className={`hidden shrink-0 flex-col rounded-3xl border border-slate-200/80 bg-white/95 text-xs text-slate-700 shadow-[0_18px_40px_rgba(15,23,42,0.10)] transition-all duration-200 md:flex ${
+        className={`sticky top-2 hidden h-full shrink-0 self-start flex-col rounded-3xl border border-slate-200/80 bg-white/95 text-xs text-slate-700 shadow-[0_18px_40px_rgba(15,23,42,0.10)] transition-all duration-200 md:flex ${
           leftPanelOpen ? "w-64 p-3" : "w-10 items-center py-2 px-1"
         }`}
         style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
