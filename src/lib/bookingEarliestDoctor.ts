@@ -98,8 +98,7 @@ async function getFirstOpenSlot(
       });
     }
   } catch (error) {
-    console.error("Failed to fetch batch availability:", error);
-    // Continue anyway - will assume all slots are open
+    console.warn("Failed to fetch batch availability (falling back to showing all slots as open):", error instanceof Error ? error.message : error);
   }
 
   // Now iterate through days to find the first open slot
@@ -225,7 +224,7 @@ async function getMultipleOpenSlots(
       });
     }
   } catch (error) {
-    console.error("Failed to fetch batch availability:", error);
+    console.warn("Failed to fetch batch availability (falling back to showing all slots as open):", error instanceof Error ? error.message : error);
   }
 
   const results: EarliestDoctorResult[] = [];

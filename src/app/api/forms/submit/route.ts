@@ -106,8 +106,12 @@ export async function POST(request: Request) {
           .eq("id", submission.patient_id);
 
         if (patientUpdateError) {
-          console.error("Error updating patient record:", patientUpdateError);
-          // Don't fail the whole submission, just log the error
+          console.error("Error updating patient record:", patientUpdateError.message);
+          return NextResponse.json({
+            success: true,
+            message: "Form submitted successfully",
+            warning: "Patient record could not be updated with submitted data",
+          });
         }
       }
     }

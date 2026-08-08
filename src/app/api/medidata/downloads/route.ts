@@ -54,7 +54,7 @@ export async function GET() {
   } catch (error) {
     console.error("Error fetching downloads:", error);
     return NextResponse.json(
-      { success: false, error: "Internal server error", downloads: [] },
+      { success: false, error: error instanceof Error ? error.message : "Failed to fetch downloads", downloads: [] },
       { status: 500 }
     );
   }
@@ -104,13 +104,13 @@ export async function POST(request: NextRequest) {
 
     if (action === "acknowledge") {
       // Acknowledge (delete) the message from MediData
-      const success = await medidataClient.acknowledgeDownload(messageId);
+      await medidataClient.acknowledgeDownload(messageId);
 
       return NextResponse.json({
-        success,
+        success: true,
         messageId,
         action: "acknowledged",
-        acknowledgedAt: success ? new Date().toISOString() : null,
+        acknowledgedAt: new Date().toISOString(),
       });
     } else if (action === "process") {
       // Fetch the message first
@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error processing download:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }

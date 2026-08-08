@@ -75,6 +75,10 @@ export default function DocumentTemplatesPanel({
   const fetchTemplates = useCallback(async () => {
     try {
       const res = await fetch(`/api/documents/templates?search=${encodeURIComponent(templateSearch)}`);
+      if (!res.ok) {
+        console.error("Failed to fetch templates:", res.status, res.statusText);
+        return;
+      }
       const data = await res.json();
       if (data.templates) {
         setTemplates(data.templates);
@@ -125,6 +129,10 @@ export default function DocumentTemplatesPanel({
   const fetchDocuments = useCallback(async () => {
     try {
       const res = await fetch(`/api/documents/patient?patientId=${patientId}&search=${encodeURIComponent(searchQuery)}`);
+      if (!res.ok) {
+        console.error("Failed to fetch documents:", res.status, res.statusText);
+        return;
+      }
       const data = await res.json();
       if (data.documents) {
         setDocuments(data.documents);
@@ -158,12 +166,19 @@ export default function DocumentTemplatesPanel({
     if (!confirm("Are you sure you want to delete this document?")) return;
 
     try {
-      await fetch(`/api/documents/patient?documentId=${documentId}`, {
+      const res = await fetch(`/api/documents/patient?documentId=${documentId}`, {
         method: "DELETE",
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error("Failed to delete document:", data.error || res.statusText);
+        alert(`Failed to delete document: ${data.error || res.statusText}`);
+        return;
+      }
       fetchDocuments();
     } catch (error) {
       console.error("Error deleting document:", error);
+      alert("Failed to delete document. Please try again.");
     }
   };
 

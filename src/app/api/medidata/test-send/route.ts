@@ -396,8 +396,14 @@ export async function POST(request: NextRequest) {
         }
 
         // Link back
-        await supabaseAdmin.from("invoices").update({ medidata_submission_id: submission.id }).eq("id", invoiceId);
-        await supabaseAdmin.from("medidata_submission_history").insert({ submission_id: submission.id, previous_status: null, new_status: "draft" });
+        const { error: linkError } = await supabaseAdmin.from("invoices").update({ medidata_submission_id: submission.id }).eq("id", invoiceId);
+        if (linkError) {
+          console.error(`Failed to link submission to invoice ${invoiceId}:`, linkError.message);
+        }
+        const { error: historyError } = await supabaseAdmin.from("medidata_submission_history").insert({ submission_id: submission.id, previous_status: null, new_status: "draft" });
+        if (historyError) {
+          console.error(`Failed to insert submission history for ${submission.id}:`, historyError.message);
+        }
 
         // ── 5. Upload to MediData ──
         const uploadResult = await uploadInvoiceXml(xmlContent, `${inv.invoice_number}.xml`, {

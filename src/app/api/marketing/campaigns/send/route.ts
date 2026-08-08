@@ -205,7 +205,14 @@ export async function POST(request: Request) {
     // Chunk inserts to stay within Supabase row limits
     for (let i = 0; i < recipientRows.length; i += 500) {
       const slice = recipientRows.slice(i, i + 500);
-      await supabaseAdmin.from("marketing_campaign_recipients").insert(slice);
+      const { error: recipientInsertError } = await supabaseAdmin.from("marketing_campaign_recipients").insert(slice);
+      if (recipientInsertError) {
+        console.error("[marketing/send] Failed to insert recipient batch:", recipientInsertError.message);
+        return NextResponse.json(
+          { error: `Failed to insert campaign recipients: ${recipientInsertError.message}` },
+          { status: 500 },
+        );
+      }
     }
 
     // Send in batches with a small delay between batches

@@ -39,8 +39,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, user: data.user });
   } catch (err) {
+    console.error("Unexpected error updating user role:", err);
     return NextResponse.json(
-      { error: "Unexpected error updating user role" },
+      { error: "Unexpected error updating user role", details: err instanceof Error ? err.message : "Unknown error" },
       { status: 500 }
     );
   }
