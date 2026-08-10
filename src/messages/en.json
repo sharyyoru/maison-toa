@@ -408,7 +408,9 @@
       "loadingAxenita": "Loading Axenita medical records...",
       "axenitaTitle": "Axenita Medical Records",
       "stopReminders": "Stop Reminder",
-      "stopRemindersTooltip": "Stop reminder letters/emails for this invoice"
+      "stopRemindersTooltip": "Stop reminder letters/emails for this invoice",
+      "downloadAllInvoices": "Download All Invoices",
+      "zippingInvoices": "Zipping..."
     },
     "form": {
       "date": "Date",

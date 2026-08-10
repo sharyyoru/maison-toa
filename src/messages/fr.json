@@ -408,7 +408,9 @@
       "loadingAxenita": "Chargement des dossiers médicaux Axenita...",
       "axenitaTitle": "Dossiers médicaux Axenita",
       "stopReminders": "Stopper les rappels",
-      "stopRemindersTooltip": "Arrêter les lettres/e-mails de rappel pour cette facture"
+      "stopRemindersTooltip": "Arrêter les lettres/e-mails de rappel pour cette facture",
+      "downloadAllInvoices": "Télécharger toutes les factures",
+      "zippingInvoices": "Compression..."
     },
     "form": {
       "date": "Date",
