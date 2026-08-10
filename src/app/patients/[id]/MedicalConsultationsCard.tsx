@@ -101,6 +101,9 @@ type ConsultationRow = {
   invoice_reminder_1_sent_at: string | null;
   invoice_reminder_2_sent_at: string | null;
   invoice_reminder_3_sent_at: string | null;
+  // BILL-004.2: manual opt-out — no further reminder letters/emails should
+  // be generated for this invoice once set.
+  invoice_stop_reminders: boolean;
   payment_link_token: string | null;
   payrexx_payment_link: string | null;
   payrexx_payment_status: string | null;
@@ -1035,6 +1038,7 @@ function PendingCreateConsultationNoteEditor({
         invoice_reminder_1_sent_at: null,
         invoice_reminder_2_sent_at: null,
         invoice_reminder_3_sent_at: null,
+        invoice_stop_reminders: false,
       });
     } catch {
       onError("Failed to lock consultation note.");
@@ -1435,6 +1439,7 @@ function CollaborativeUnlockedNoteEditor({
         invoice_reminder_1_sent_at: null,
         invoice_reminder_2_sent_at: null,
         invoice_reminder_3_sent_at: null,
+        invoice_stop_reminders: false,
       };
 
       setSavingState("saved");
@@ -2656,7 +2661,7 @@ export default function MedicalConsultationsCard({
         const { data: invoiceData, error: invoiceError } = await supabaseClient
           .from("invoices")
           .select(
-            "id, patient_id, consultation_id, invoice_number, invoice_date, due_date, treatment_date, doctor_user_id, doctor_name, provider_name, payment_method, total_amount, subtotal, paid_amount, status, is_complimentary, cash_receipt_path, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, title, reference_number, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at",
+            "id, patient_id, consultation_id, invoice_number, invoice_date, due_date, treatment_date, doctor_user_id, doctor_name, provider_name, payment_method, total_amount, subtotal, paid_amount, status, is_complimentary, cash_receipt_path, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, title, reference_number, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at, stop_reminders",
           )
           .eq("patient_id", patientId)
           .eq("is_archived", showArchived ? true : false)
@@ -2700,6 +2705,7 @@ export default function MedicalConsultationsCard({
             invoice_reminder_1_sent_at: inv.reminder_1_sent_at ?? null,
             invoice_reminder_2_sent_at: inv.reminder_2_sent_at ?? null,
             invoice_reminder_3_sent_at: inv.reminder_3_sent_at ?? null,
+            invoice_stop_reminders: inv.stop_reminders ?? false,
             payment_link_token: inv.payment_link_token ?? null,
             payrexx_payment_link: inv.payrexx_payment_link ?? null,
             payrexx_payment_status: inv.payrexx_payment_status ?? null,
@@ -3938,6 +3944,7 @@ export default function MedicalConsultationsCard({
         invoice_reminder_1_sent_at: null,
         invoice_reminder_2_sent_at: null,
         invoice_reminder_3_sent_at: null,
+        invoice_stop_reminders: false,
       };
 
       setConsultations((prev) =>
@@ -4913,6 +4920,7 @@ export default function MedicalConsultationsCard({
         invoice_reminder_1_sent_at: null,
         invoice_reminder_2_sent_at: null,
         invoice_reminder_3_sent_at: null,
+        invoice_stop_reminders: false,
       };
 
       setConsultations((prev) =>
@@ -5028,6 +5036,7 @@ export default function MedicalConsultationsCard({
         invoice_reminder_1_sent_at: null,
         invoice_reminder_2_sent_at: null,
         invoice_reminder_3_sent_at: null,
+        invoice_stop_reminders: false,
       };
       let shouldBroadcastDraftChange = false;
       setConsultations((prev) => {
@@ -5217,6 +5226,35 @@ export default function MedicalConsultationsCard({
       router.refresh();
     } catch {
       setConsultationsError("Failed to update invoice status.");
+    }
+  }
+
+  /**
+   * BILL-004.2 — "Stop Reminder" / "Stopper les rappels": manually opt an
+   * invoice out of further reminder letters/emails. Does not touch
+   * reminder_level/*_sent_at history, purely a workflow flag checked
+   * wherever a reminder is offered or sent.
+   */
+  async function handleToggleStopReminders(invoiceId: string, nextValue: boolean) {
+    if (!invoiceId) return;
+    try {
+      const { error } = await supabaseClient
+        .from("invoices")
+        .update({ stop_reminders: nextValue })
+        .eq("id", invoiceId);
+
+      if (error) {
+        setConsultationsError(error.message ?? "Failed to update reminder setting.");
+        return;
+      }
+
+      setConsultations((prev) =>
+        prev.map((row) =>
+          row.id === invoiceId ? { ...row, invoice_stop_reminders: nextValue } : row,
+        ),
+      );
+    } catch {
+      setConsultationsError("Failed to update reminder setting.");
     }
   }
 
@@ -7771,6 +7809,7 @@ export default function MedicalConsultationsCard({
                           invoice_reminder_1_sent_at: null,
                           invoice_reminder_2_sent_at: null,
                           invoice_reminder_3_sent_at: null,
+                          invoice_stop_reminders: false,
                           payment_link_token: null,
                           payrexx_payment_link: null,
                           payrexx_payment_status: null,
@@ -11598,8 +11637,24 @@ export default function MedicalConsultationsCard({
                               );
                             })()}
 
+                            {/* BILL-004.2: Stop Reminder / Stopper les rappels */}
+                            {row.invoice_status !== "PAID" && row.invoice_status !== "CANCELLED" && row.invoice_id && (
+                              <label
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                                title={tc("stopRemindersTooltip")}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!row.invoice_stop_reminders}
+                                  onChange={(e) => handleToggleStopReminders(row.invoice_id!, e.target.checked)}
+                                  className="h-3 w-3 rounded border-slate-300 text-slate-600 focus:ring-slate-400"
+                                />
+                                {tc("stopReminders")}
+                              </label>
+                            )}
+
                             {/* Créer un rappel */}
-                            {row.invoice_status !== "PAID" && row.invoice_status !== "CANCELLED" && row.invoice_id && (() => {
+                            {row.invoice_status !== "PAID" && row.invoice_status !== "CANCELLED" && row.invoice_id && !row.invoice_stop_reminders && (() => {
                               const rl = row.invoice_reminder_level ?? 0;
                               const nextLevel = Math.min(rl + 1, 3) as 1 | 2 | 3;
                               const levelLabel = nextLevel === 1 ? "1er rappel" : nextLevel === 2 ? "2e rappel" : "3e rappel";

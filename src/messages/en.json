@@ -406,7 +406,9 @@
       "failedLoad": "Failed to load consultations.",
       "failedSendEmail": "Failed to send email.",
       "loadingAxenita": "Loading Axenita medical records...",
-      "axenitaTitle": "Axenita Medical Records"
+      "axenitaTitle": "Axenita Medical Records",
+      "stopReminders": "Stop Reminder",
+      "stopRemindersTooltip": "Stop reminder letters/emails for this invoice"
     },
     "form": {
       "date": "Date",

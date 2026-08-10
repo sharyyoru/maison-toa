@@ -52,6 +52,9 @@ type InvoiceRow = {
   // rejected again.
   medidata_processed_at: string | null;
   medidata_processed_by: string | null;
+  // BILL-004.2: manual opt-out — no further reminder letters/emails should
+  // be generated for this invoice once set.
+  stop_reminders: boolean;
 };
 
 type PatientInfo = { id: string; first_name: string | null; last_name: string | null; email: string | null };
@@ -234,7 +237,7 @@ export default function InvoicesPage() {
 
         const { data, error: err } = await supabaseClient
           .from("invoices")
-          .select("id, patient_id, invoice_number, invoice_date, due_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, paid_amount, status, is_complimentary, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, pdf_generated_at, updated_at, created_by_user_id, created_by_name, is_archived, health_insurance_law, billing_type, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at, medidata_processed_at, medidata_processed_by")
+          .select("id, patient_id, invoice_number, invoice_date, due_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, paid_amount, status, is_complimentary, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, pdf_generated_at, updated_at, created_by_user_id, created_by_name, is_archived, health_insurance_law, billing_type, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at, medidata_processed_at, medidata_processed_by, stop_reminders")
           .eq("is_archived", false)
           .is("parent_invoice_id", null)
           .order("invoice_date", { ascending: false });
@@ -402,6 +405,10 @@ export default function InvoicesPage() {
 
   /** Next reminder level that should be sent for a row, or null if not yet due */
   function nextReminderLevel(row: InvoiceRow): 1 | 2 | 3 | null {
+    // BILL-004.2: manually stopped invoices never have a reminder "due" —
+    // this is the single choke point for the due-badge, the "Rappel" bulk
+    // send, and the per-row popup eligibility.
+    if (row.stop_reminders) return null;
     const rl = row.reminder_level ?? 0;
     if (rl === 0) return overdueBaseDays(row) >= 35 ? 1 : null;
     if (rl === 1) return daysSince(row.reminder_1_sent_at) >= 25 ? 2 : null;
@@ -507,16 +514,16 @@ export default function InvoicesPage() {
         const isPaid = r.status === "PAID" || r.status === "CANCELLED";
         switch (reminderFilter) {
           case "r1_due":
-            // 1st reminder due: overdue ≥35d, no reminder sent yet, not paid
-            if (isPaid || rl !== 0 || overdueBaseDays(r) < 35) return false;
+            // 1st reminder due: overdue ≥35d, no reminder sent yet, not paid, not stopped
+            if (isPaid || r.stop_reminders || rl !== 0 || overdueBaseDays(r) < 35) return false;
             break;
           case "r2_due":
             // 2nd reminder due: ≥25d since 1st reminder
-            if (isPaid || rl !== 1 || daysSince(r.reminder_1_sent_at) < 25) return false;
+            if (isPaid || r.stop_reminders || rl !== 1 || daysSince(r.reminder_1_sent_at) < 25) return false;
             break;
           case "r3_due":
             // 3rd reminder due: ≥20d since 2nd reminder
-            if (isPaid || rl !== 2 || daysSince(r.reminder_2_sent_at) < 20) return false;
+            if (isPaid || r.stop_reminders || rl !== 2 || daysSince(r.reminder_2_sent_at) < 20) return false;
             break;
           case "r1_sent":
             if (rl < 1) return false;
@@ -529,6 +536,10 @@ export default function InvoicesPage() {
             break;
           case "any_due":
             if (isPaid || nextReminderLevel(r) === null) return false;
+            break;
+          case "stopped":
+            // BILL-004.2: invoices where reminders were manually stopped.
+            if (!r.stop_reminders) return false;
             break;
         }
       }
@@ -1259,6 +1270,7 @@ export default function InvoicesPage() {
           <option value="r1_sent">✉ 1er rappel envoyé</option>
           <option value="r2_sent">✉ 2e rappel envoyé</option>
           <option value="r3_sent">✉ 3e rappel envoyé</option>
+          <option value="stopped">🔕 Stop Reminder</option>
         </select>
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
@@ -1493,18 +1505,27 @@ export default function InvoicesPage() {
 
                         {/* Créer un rappel */}
                         {row.status !== "PAID" && row.status !== "CANCELLED" && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                              setReminderPopupPos({ top: rect.bottom + 4, left: rect.right - 180 });
-                              setReminderPopupRow(reminderPopupRow?.id === row.id ? null : row);
-                            }}
-                            className="inline-flex items-center gap-0.5 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-800 hover:bg-amber-100 transition-colors"
-                            title="Créer un rappel"
-                          >
-                            Rappel ▾
-                          </button>
+                          row.stop_reminders ? (
+                            <span
+                              className="inline-flex items-center gap-0.5 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-medium text-slate-500"
+                              title="Reminders manually stopped for this invoice — uncheck 'Stop Reminder' in the patient file to resume"
+                            >
+                              🔕 Stopped
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                setReminderPopupPos({ top: rect.bottom + 4, left: rect.right - 180 });
+                                setReminderPopupRow(reminderPopupRow?.id === row.id ? null : row);
+                              }}
+                              className="inline-flex items-center gap-0.5 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+                              title="Créer un rappel"
+                            >
+                              Rappel ▾
+                            </button>
+                          )
                         )}
                       </div>
                     </td>
