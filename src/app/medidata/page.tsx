@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import InvoiceStatusBadge, { InvoiceStatusTimeline } from "@/components/InvoiceStatusBadge";
 import type { MediDataInvoiceStatus } from "@/lib/medidata";
+import { useAuth } from "@/components/AuthContext";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -219,6 +220,40 @@ function InvoicePaymentBadge({ invoice }: { invoice?: InvoicePaymentInfo | null 
   );
 }
 
+// Categorize a rejection by parsing insurance_response_message + response
+// explanations. Shared by the Accountant Action panel.
+function categorizeRejection(message: string, responseExplanations: string): { category: string; detail: string } {
+  const combined = `${message} ${responseExplanations}`.toLowerCase();
+
+  let category = "Other";
+  let detail = message || responseExplanations || "No details available";
+
+  if (combined.includes("point tarifaire") || combined.includes("taxe de valeur") || combined.includes("0,91") || combined.includes("0.91")) {
+    category = "Wrong tariff point value";
+    detail = "Canton GE requires point value 0.91. Resubmit with corrected tariff.";
+  } else if (combined.includes("tarif 007") || combined.includes("type de tarif") || combined.includes("chiffre tarifaire") || combined.includes("chiffres tarifaires")) {
+    category = "Wrong tariff type/code";
+    detail = "Insurer requires TARDOC tariff 007. Check service codes and resubmit.";
+  } else if (combined.includes("déjà reçu") || combined.includes("bereits erhalten") || combined.includes("duplicate")) {
+    category = "Duplicate invoice";
+    detail = "Insurer already has this invoice. Verify if previously sent via another channel.";
+  } else if (combined.includes("assuré inconnu") || combined.includes("versicherter unbekannt")) {
+    category = "Unknown insured";
+    detail = "Patient not recognized by insurer. Verify insurance details and policy number.";
+  } else if (combined.includes("pas payés directement") || combined.includes("pas à notre charge") || combined.includes("conditions n'étant pas remplies")) {
+    category = "Not covered";
+    detail = "Treatment not covered by insurance. May need to bill patient directly.";
+  } else if (combined.includes("xml-schema") || combined.includes("w3c")) {
+    category = "XML Schema error";
+    detail = "Technical XML issue. Contact system administrator.";
+  } else if (combined.includes("rueckweisung") && !combined.includes("copy")) {
+    category = "Generic rejection";
+    detail = message || "Insurer rejected without specific reason. Check response details.";
+  }
+
+  return { category, detail: detail.length > 120 ? detail.substring(0, 120) + "…" : detail };
+}
+
 function parseNotificationMessage(message: string | null): ParsedNotification {
   const result: ParsedNotification = {
     description: "",
@@ -303,7 +338,29 @@ function parseNotificationMessage(message: string | null): ParsedNotification {
 // Component
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Accountant Action Items (rejected invoices) — BILL-004.1
+// ---------------------------------------------------------------------------
+
+// One row per invoice (not per submission): an invoice can have several
+// medidata_submissions rows over its lifetime (original, storno, resend
+// after correction), but the "Processed" workflow flag lives on the
+// invoice itself, so rejected invoices are grouped by invoice_id here.
+type RejectedActionInvoice = {
+  invoiceId: string | null;
+  invoiceNumber: string;
+  patientId: string;
+  patientName: string;
+  submissionId: string; // latest rejected submission, used to build category/detail
+  category: string;
+  detail: string;
+  createdAt: string;
+  invoicePaid: boolean;
+  processedAt: string | null;
+};
+
 export default function MediDataDashboard() {
+  const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("submissions");
 
   // Submissions
@@ -320,6 +377,14 @@ export default function MediDataDashboard() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
+
+  // Accountant Action Items — rejected invoices grouped by invoice, split
+  // into 3 tabs (BILL-004.1). Fetched independently of the paginated
+  // submissions table below so it always reflects the full rejected set.
+  const [actionItems, setActionItems] = useState<RejectedActionInvoice[]>([]);
+  const [actionItemsLoading, setActionItemsLoading] = useState(false);
+  const [actionTab, setActionTab] = useState<"unprocessed" | "processed" | "paid">("unprocessed");
+  const [processingInvoiceId, setProcessingInvoiceId] = useState<string | null>(null);
 
   // Participants
   const [participants, setParticipants] = useState<MediDataParticipant[]>([]);
@@ -504,6 +569,94 @@ export default function MediDataDashboard() {
     setSubsLoading(false);
   }, [submissionSearch, submissionsPage, statusFilter, dateFrom, dateTo, submissionKind]);
 
+  // ── Fetch all rejected invoices for the Accountant Action panel (BILL-004.1) ──
+  // Independent of the paginated submissions table/status filter above, so
+  // the 3 tabs always reflect the complete rejected set.
+  const fetchActionItems = useCallback(async () => {
+    setActionItemsLoading(true);
+    try {
+      const { data: rejectedSubs } = await supabaseClient
+        .from("medidata_submissions")
+        .select(`
+          id, invoice_id, invoice_number, patient_id, created_at,
+          insurance_response_message,
+          patient:patients(id,first_name,last_name),
+          invoice:invoices(id,status,paid_amount,total_amount,medidata_processed_at,medidata_processed_by)
+        `)
+        .eq("status", "rejected")
+        .order("created_at", { ascending: false });
+
+      const subs = (rejectedSubs as any[]) || [];
+      if (subs.length === 0) {
+        setActionItems([]);
+        setActionItemsLoading(false);
+        return;
+      }
+
+      // Rejection response explanations, for categorization (same parsing as before)
+      const subIds = subs.map((s) => s.id);
+      const { data: resps } = await supabaseClient
+        .from("medidata_responses")
+        .select("submission_id, explanation")
+        .in("submission_id", subIds);
+      const explanationsBySub = new Map<string, string[]>();
+      for (const r of (resps as any[]) || []) {
+        if (!explanationsBySub.has(r.submission_id)) explanationsBySub.set(r.submission_id, []);
+        if (r.explanation) explanationsBySub.get(r.submission_id)!.push(r.explanation);
+      }
+
+      // Keep only the latest rejected submission per invoice (dedupe groups)
+      const byInvoice = new Map<string, any>();
+      for (const s of subs) {
+        const key = s.invoice_id || `no-invoice:${s.invoice_number}`;
+        if (!byInvoice.has(key)) byInvoice.set(key, s); // subs already ordered newest-first
+      }
+
+      const items: RejectedActionInvoice[] = Array.from(byInvoice.values()).map((sub) => {
+        const msg = sub.insurance_response_message || "";
+        const respExplanations = (explanationsBySub.get(sub.id) || []).join(" ");
+        const { category, detail } = categorizeRejection(msg, respExplanations);
+        const invoice = sub.invoice;
+        const invoicePaid = invoice ? (Number(invoice.paid_amount) || 0) > 0 : false;
+        return {
+          invoiceId: sub.invoice_id,
+          invoiceNumber: sub.invoice_number,
+          patientId: sub.patient_id,
+          patientName: [sub.patient?.first_name, sub.patient?.last_name].filter(Boolean).join(" ") || "Unknown patient",
+          submissionId: sub.id,
+          category,
+          detail,
+          createdAt: sub.created_at,
+          invoicePaid,
+          processedAt: invoice?.medidata_processed_at ?? null,
+        };
+      });
+
+      setActionItems(items);
+    } catch (e) {
+      console.error("Error fetching accountant action items:", e);
+    }
+    setActionItemsLoading(false);
+  }, []);
+
+  /** BILL-004.1 — toggle the workflow-only "Processed" flag on an invoice. */
+  const toggleInvoiceProcessed = useCallback(async (invoiceId: string, processed: boolean) => {
+    setProcessingInvoiceId(invoiceId);
+    try {
+      const update = {
+        medidata_processed_at: processed ? new Date().toISOString() : null,
+        medidata_processed_by: processed ? (user?.id ?? null) : null,
+      };
+      await supabaseClient.from("invoices").update(update).eq("id", invoiceId);
+      setActionItems((prev) => prev.map((item) =>
+        item.invoiceId === invoiceId ? { ...item, processedAt: update.medidata_processed_at } : item
+      ));
+    } catch (e) {
+      console.error("Error updating processed flag:", e);
+    }
+    setProcessingInvoiceId(null);
+  }, [user?.id]);
+
   // ── Fetch responses from local DB ──
   const fetchResponses = useCallback(async () => {
     setRespLoading(true);
@@ -579,6 +732,7 @@ export default function MediDataDashboard() {
         fetchSubmissions();
         fetchResponses();
         fetchNotifications();
+        fetchActionItems();
       } else {
         if (!options?.silent) {
           setPollStatus(`Error: ${json.error}`);
@@ -807,6 +961,11 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
     if (tab === "responses") fetchResponses();
     if (tab === "notifications") fetchNotifications();
   }, [tab, fetchSubmissions, fetchParticipants, fetchResponses, fetchNotifications]);
+
+  // Accountant Action panel loads independently, once, alongside the Submissions tab
+  useEffect(() => {
+    if (tab === "submissions") fetchActionItems();
+  }, [tab, fetchActionItems]);
 
   useEffect(() => {
     setSubmissionsPage(0);
@@ -1098,61 +1257,19 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
             )}
           </div>
 
-          {/* ── Accountant Action Items ── */}
+          {/* ── Accountant Action Items (BILL-004.1) ── */}
           {(() => {
-            const rejected = submissions.filter((s) => s.status === "rejected");
-            if (rejected.length === 0 && !statusFilter) return null;
+            if (actionItems.length === 0 && !actionItemsLoading) return null;
 
-            // Categorize rejections by parsing insurance_response_message and response explanations
-            type ActionItem = { invoiceNumber: string; patientName: string; patientId: string; submissionId: string; category: string; detail: string };
-            const items: ActionItem[] = [];
+            const unprocessed = actionItems.filter((i) => !i.invoicePaid && !i.processedAt);
+            const processed = actionItems.filter((i) => !i.invoicePaid && !!i.processedAt);
+            const paid = actionItems.filter((i) => i.invoicePaid);
 
-            for (const sub of rejected) {
-              const msg = sub.insurance_response_message || "";
-              const respExplanations = (sub.rejection_responses || []).map((r) => r.explanation || "").join(" ");
-              const combined = `${msg} ${respExplanations}`.toLowerCase();
+            const tabItems = actionTab === "unprocessed" ? unprocessed : actionTab === "processed" ? processed : paid;
 
-              let category = "Other";
-              let detail = msg || respExplanations || "No details available";
-
-              if (combined.includes("point tarifaire") || combined.includes("taxe de valeur") || combined.includes("0,91") || combined.includes("0.91")) {
-                category = "Wrong tariff point value";
-                detail = "Canton GE requires point value 0.91. Resubmit with corrected tariff.";
-              } else if (combined.includes("tarif 007") || combined.includes("type de tarif") || combined.includes("chiffre tarifaire") || combined.includes("chiffres tarifaires")) {
-                category = "Wrong tariff type/code";
-                detail = "Insurer requires TARDOC tariff 007. Check service codes and resubmit.";
-              } else if (combined.includes("déjà reçu") || combined.includes("bereits erhalten") || combined.includes("duplicate")) {
-                category = "Duplicate invoice";
-                detail = "Insurer already has this invoice. Verify if previously sent via another channel.";
-              } else if (combined.includes("assuré inconnu") || combined.includes("versicherter unbekannt")) {
-                category = "Unknown insured";
-                detail = "Patient not recognized by insurer. Verify insurance details and policy number.";
-              } else if (combined.includes("pas payés directement") || combined.includes("pas à notre charge") || combined.includes("conditions n'étant pas remplies")) {
-                category = "Not covered";
-                detail = "Treatment not covered by insurance. May need to bill patient directly.";
-              } else if (combined.includes("xml-schema") || combined.includes("w3c")) {
-                category = "XML Schema error";
-                detail = "Technical XML issue. Contact system administrator.";
-              } else if (combined.includes("rueckweisung") && !combined.includes("copy")) {
-                category = "Generic rejection";
-                detail = msg || "Insurer rejected without specific reason. Check response details.";
-              }
-
-              items.push({
-                invoiceNumber: sub.invoice_number,
-                patientName: formatPatientName(sub.patient),
-                patientId: sub.patient_id,
-                submissionId: sub.id,
-                category,
-                detail: detail.length > 120 ? detail.substring(0, 120) + "…" : detail,
-              });
-            }
-
-            if (items.length === 0) return null;
-
-            // Group by category
-            const grouped: Record<string, ActionItem[]> = {};
-            for (const item of items) {
+            // Group the active tab's items by category
+            const grouped: Record<string, RejectedActionInvoice[]> = {};
+            for (const item of tabItems) {
               if (!grouped[item.category]) grouped[item.category] = [];
               grouped[item.category].push(item);
             }
@@ -1181,7 +1298,7 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
                       <h3 className="text-sm font-bold text-amber-900">
-                        Accountant Action Required - {items.length} rejected invoice{items.length !== 1 ? "s" : ""} need attention
+                        Accountant Action Required - {unprocessed.length} rejected invoice{unprocessed.length !== 1 ? "s" : ""} need attention
                       </h3>
                     </div>
                     <svg
@@ -1197,33 +1314,74 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                 </button>
 
                 {expandedSub === "accountant-actions" && (
-                  <div className="border-t border-amber-200 p-4 space-y-3 bg-white/50">
-                    {Object.entries(grouped).sort((a, b) => b[1].length - a[1].length).map(([cat, catItems]) => {
-                      const colors = categoryColors[cat] || categoryColors["Other"];
-                      return (
-                        <div key={cat} className={`rounded-lg border ${colors.border} ${colors.bg} p-3`}>
-                          <div className="mb-2 flex items-center gap-2">
-                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${colors.badge}`}>
-                              {catItems.length}
-                            </span>
-                            <span className={`text-xs font-semibold ${colors.text}`}>{cat}</span>
-                          </div>
-                          <div className="space-y-1.5">
-                            {catItems.slice(0, 5).map((item) => (
-                              <div key={item.submissionId} className="flex items-start gap-2 text-xs">
-                                <span className="font-mono font-semibold text-slate-700 whitespace-nowrap">{item.invoiceNumber}</span>
-                                <span className="text-slate-500">-</span>
-                                <Link href={`/patients/${item.patientId}`} className="text-sky-600 hover:underline whitespace-nowrap">{item.patientName}</Link>
-                                <span className="text-slate-400 truncate">{item.detail}</span>
+                  <div className="border-t border-amber-200 bg-white/50">
+                    {/* Tabs: Unprocessed / Processed / Paid */}
+                    <div className="flex items-center gap-1 border-b border-amber-200 px-4 pt-3">
+                      {([
+                        { key: "unprocessed" as const, label: "Unprocessed", count: unprocessed.length },
+                        { key: "processed" as const, label: "Processed", count: processed.length },
+                        { key: "paid" as const, label: "Paid", count: paid.length },
+                      ]).map((t) => (
+                        <button
+                          key={t.key}
+                          type="button"
+                          onClick={() => setActionTab(t.key)}
+                          className={`rounded-t-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            actionTab === t.key
+                              ? "bg-white text-amber-900 border border-b-white border-amber-200"
+                              : "text-slate-500 hover:text-slate-700"
+                          }`}
+                          style={actionTab === t.key ? { marginBottom: "-1px" } : undefined}
+                        >
+                          {t.label} <span className="ml-1 opacity-70">{t.count}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="p-4 space-y-3">
+                      {tabItems.length === 0 ? (
+                        <p className="text-xs text-slate-500 italic">Nothing here.</p>
+                      ) : (
+                        Object.entries(grouped).sort((a, b) => b[1].length - a[1].length).map(([cat, catItems]) => {
+                          const colors = categoryColors[cat] || categoryColors["Other"];
+                          return (
+                            <div key={cat} className={`rounded-lg border ${colors.border} ${colors.bg} p-3`}>
+                              <div className="mb-2 flex items-center gap-2">
+                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${colors.badge}`}>
+                                  {catItems.length}
+                                </span>
+                                <span className={`text-xs font-semibold ${colors.text}`}>{cat}</span>
                               </div>
-                            ))}
-                            {catItems.length > 5 && (
-                              <p className="text-[10px] text-slate-500 italic">+ {catItems.length - 5} more</p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                              <div className="space-y-1.5">
+                                {catItems.map((item) => (
+                                  <div key={item.invoiceId ?? item.submissionId} className="flex items-center gap-2 text-xs">
+                                    <span className="font-mono font-semibold text-slate-700 whitespace-nowrap">{item.invoiceNumber}</span>
+                                    <span className="text-slate-500">-</span>
+                                    <Link href={`/patients/${item.patientId}`} className="text-sky-600 hover:underline whitespace-nowrap">{item.patientName}</Link>
+                                    <span className="text-slate-400 truncate flex-1">{item.detail}</span>
+                                    {item.invoiceId && actionTab !== "paid" && (
+                                      <button
+                                        type="button"
+                                        disabled={processingInvoiceId === item.invoiceId}
+                                        onClick={() => toggleInvoiceProcessed(item.invoiceId!, actionTab !== "processed")}
+                                        className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-50 ${
+                                          actionTab === "processed"
+                                            ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                            : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                                        }`}
+                                        title="Workflow-only — does not change the MediData/Sumex status"
+                                      >
+                                        {actionTab === "processed" ? "✓ Processed — undo" : "Mark processed"}
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
