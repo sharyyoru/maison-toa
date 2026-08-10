@@ -28,7 +28,7 @@ import PatientMedicalNotes from "./PatientMedicalNotes";
 import PatientPageClientWrapper from "./PatientPageClientWrapper";
 import PatientFormsTab from "./PatientFormsTab";
 import PatientTabRegistrar from "./PatientTabRegistrar";
-import VipToggle from "./VipToggle";
+import PatientStatusWidgets from "./PatientStatusWidgets";
 import PatientNotesDrawer from "@/components/PatientNotesDrawer";
 
 export const dynamic = "force-dynamic";
@@ -65,7 +65,7 @@ async function getPatientWithDetails(id: string) {
   const { data: patient, error } = await supabaseAdmin
     .from("patients")
     .select(
-      "id, first_name, last_name, email, phone, gender, dob, marital_status, nationality, street_address, postal_code, town, country, profession, current_employer, source, notes, avatar_url, language_preference, clinic_preference, lifecycle_stage, contact_owner_name, contact_owner_email, created_by, created_at, updated_at",
+      "id, first_name, last_name, email, phone, gender, dob, marital_status, nationality, street_address, postal_code, town, country, profession, current_employer, source, notes, avatar_url, language_preference, clinic_preference, lifecycle_stage, contact_owner_name, contact_owner_email, is_vip, is_member, is_social_media, created_by, created_at, updated_at",
     )
     .eq("id", id)
     .single();
@@ -81,23 +81,6 @@ async function getPatientWithDetails(id: string) {
     .order("created_at", { ascending: false });
 
   return { patient, insurance: insurance ?? [] } as const;
-}
-
-async function hasSocialPhotoConsent(patientId: string): Promise<boolean> {
-  const { data, error } = await supabaseAdmin
-    .from("patient_form_submissions")
-    .select("submission_data")
-    .eq("patient_id", patientId)
-    .eq("status", "submitted")
-    .order("submitted_at", { ascending: false })
-    .limit(20);
-
-  if (error || !data) return false;
-
-  return data.some((submission) => {
-    const submissionData = submission.submission_data as Record<string, unknown> | null;
-    return submissionData?.photo_consent === "yes";
-  });
 }
 
 type InvoiceStatus = "OPEN" | "PAID" | "CANCELLED" | "OVERPAID" | "PARTIAL_LOSS" | "PARTIAL_PAID";
@@ -290,9 +273,11 @@ export default async function PatientPage({
       ? rawPaymentMethodFilter
       : null;
 
-  const [invoiceSummary, hasSocialConsent] = await Promise.all([
+  // Re-evaluate on profile load too, so statuses that aged out of the rolling
+  // window are corrected even when no invoice or appointment was edited.
+  const [{ data: automaticVip }, invoiceSummary] = await Promise.all([
+    supabaseAdmin.rpc("refresh_patient_vip", { target_patient_id: id }),
     getInvoiceSummary(id, paymentMethodFilter),
-    hasSocialPhotoConsent(id),
   ]);
 
   const crPlayerIdRaw = (() => {
@@ -395,7 +380,12 @@ export default async function PatientPage({
               <h1 className="text-lg font-semibold text-slate-900">
                 {patientFileName}
               </h1>
-              <VipToggle patientId={patient.id} />
+              <PatientStatusWidgets
+                patientId={patient.id}
+                isVip={Boolean(automaticVip)}
+                initialMember={Boolean((patient as any).is_member)}
+                initialSocialMedia={Boolean((patient as any).is_social_media)}
+              />
               <PatientEditingPresence patientId={patient.id} />
             </div>
             <div className="mt-1 flex items-center gap-3 text-xs">
@@ -411,12 +401,6 @@ export default async function PatientPage({
                 </span>
               ) : null}
               <AgeBadge patientId={patient.id} dob={rawDob || null} age={age} />
-              {hasSocialConsent ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">
-                  <span aria-hidden="true">📷</span>
-                  Social
-                </span>
-              ) : null}
             </div>
           </div>
           <div className="flex items-center gap-2">
