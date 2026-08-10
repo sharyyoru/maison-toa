@@ -1,4 +1,5 @@
 {
+  "regions": ["sin1"],
   "crons": [
     {
       "path": "/api/cron/send-scheduled-emails",
@@ -18,6 +19,10 @@
     },
     {
       "path": "/api/cron/process-submission-jobs",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/process-workflow-jobs",
       "schedule": "*/1 * * * *"
     }
   ],

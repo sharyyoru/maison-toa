@@ -5,6 +5,28 @@
  */
 
 /**
+ * Format a Swiss phone number for local UI display.
+ * +41217917070 / 0041217917070 / 0217917070 -> 021 791 70 70
+ * Non-Swiss or incomplete values are returned unchanged.
+ */
+export function formatSwissLocalPhoneDisplay(
+  value: string | null | undefined,
+): string | null {
+  if (!value) return null;
+
+  let digits = value.replace(/\D/g, "");
+  if (digits.startsWith("0041") && digits.length === 13) {
+    digits = `0${digits.slice(4)}`;
+  } else if (digits.startsWith("41") && digits.length === 11) {
+    digits = `0${digits.slice(2)}`;
+  }
+
+  if (digits.length !== 10 || !digits.startsWith("0")) return value;
+
+  return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 8)} ${digits.slice(8)}`;
+}
+
+/**
  * Format phone number to Swiss standard format
  * Handles various input formats:
  * - +41 79 395 31 37

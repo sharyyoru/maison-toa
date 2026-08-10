@@ -832,7 +832,7 @@ export async function POST(request: Request) {
                 .from("scheduled_emails")
                 .insert({
                   patient_id: safePatient.id,
-                  recipient_type: "patient",
+                  recipient_type: "workflow",
                   recipient_email: recipientEmail,
                   subject,
                   body: bodyHtml,

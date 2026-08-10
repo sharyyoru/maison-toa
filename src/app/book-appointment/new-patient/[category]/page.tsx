@@ -23,6 +23,7 @@ interface Treatment {
   order_index: number;
   enabled: boolean;
   display_price?: number | null;
+  price_prefix?: number | null;
 }
 
 interface Category {
@@ -95,6 +96,13 @@ export default function NewPatientTreatmentsPage() {
       return mins > 0 ? `${hours}h${mins}` : `${hours}h`;
     }
     return `${minutes} min`;
+  };
+
+  const formatPrice = (treatment: Treatment) => {
+    if (treatment.price_prefix != null) {
+      return `${language === "fr" ? "Dès" : "From"} CHF ${treatment.price_prefix}`;
+    }
+    return treatment.display_price != null ? `CHF ${treatment.display_price}` : undefined;
   };
 
   return (
@@ -174,7 +182,7 @@ export default function NewPatientTreatmentsPage() {
                                     description={description}
                                     serviceName={getLocalizedBookingName(treatment, language)}
                                     duration={formatDuration(treatment.display_duration_minutes ?? treatment.duration_minutes)}
-                                    price={treatment.display_price != null ? `CHF ${treatment.display_price}` : undefined}
+                                    price={formatPrice(treatment)}
                                     readMoreLabel={t("common.readMore")}
                                     descriptionLabel={t("common.description")}
                                     closeLabel={t("common.close")}
@@ -187,9 +195,9 @@ export default function NewPatientTreatmentsPage() {
                                     <span className="text-sm text-slate-500">
                                       {formatDuration(treatment.display_duration_minutes ?? treatment.duration_minutes)}
                                     </span>
-                                    {treatment.display_price != null && (
+                                    {formatPrice(treatment) && (
                                       <span className="text-sm font-medium text-slate-700">
-                                        CHF {treatment.display_price}
+                                        {formatPrice(treatment)}
                                       </span>
                                     )}
                                   </div>

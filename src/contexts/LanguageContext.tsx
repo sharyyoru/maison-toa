@@ -62,8 +62,8 @@ const translations: Record<Language, Record<string, string>> = {
     "booking.selectDateDesc": "Please select a date",
     "booking.date": "Date",
     "booking.availableSlots": "Available Time Slots",
-    "booking.notes": "Additional Notes",
-    "booking.notesPlaceholder": "Any specific concerns or requests...",
+    "booking.notes": "Treatment Area(s)",
+    "booking.notesPlaceholder": "Please indicate the area(s) you would like to treat.",
     "booking.confirmTitle": "Confirm Your Appointment",
     "booking.name": "Name",
     "booking.doctor": "Doctor",
@@ -84,6 +84,8 @@ const translations: Record<Language, Record<string, string>> = {
     "booking.checkingAvailability": "Checking availability...",
     "booking.nextAvailableSlots": "Next 15 available slots",
     "booking.noAvailableSlotsFound": "No available slots found",
+    "booking.noAvailabilityForDay": "No availability",
+    "booking.jumpToNextAvailable": "Next availability",
     "booking.doctorNotFound": "Doctor not found",
     "booking.noTreatmentsAvailable": "No treatments available in this category.",
     "booking.noCategoriesAvailable": "No categories available at the moment.",
@@ -184,8 +186,8 @@ const translations: Record<Language, Record<string, string>> = {
     "booking.selectDateDesc": "Veuillez sélectionner une date",
     "booking.date": "Date",
     "booking.availableSlots": "Créneaux horaires disponibles",
-    "booking.notes": "Notes supplémentaires",
-    "booking.notesPlaceholder": "Préoccupations ou demandes spécifiques...",
+    "booking.notes": "Zone(s) à traiter",
+    "booking.notesPlaceholder": "Veuillez indiquer la ou les zone(s) que vous souhaitez traiter.",
     "booking.confirmTitle": "Confirmez votre rendez-vous",
     "booking.name": "Nom",
     "booking.doctor": "Médecin",
@@ -206,6 +208,8 @@ const translations: Record<Language, Record<string, string>> = {
     "booking.checkingAvailability": "Vérification des disponibilités...",
     "booking.nextAvailableSlots": "15 prochains créneaux disponibles",
     "booking.noAvailableSlotsFound": "Aucun créneau disponible trouvé",
+    "booking.noAvailabilityForDay": "Aucune disponibilité",
+    "booking.jumpToNextAvailable": "Prochaine dispo",
     "booking.doctorNotFound": "Médecin introuvable",
     "booking.noTreatmentsAvailable": "Aucun traitement disponible dans cette catégorie.",
     "booking.noCategoriesAvailable": "Aucune catégorie disponible pour le moment.",
@@ -257,6 +261,30 @@ const translations: Record<Language, Record<string, string>> = {
   },
 };
 
+const normalizeLegacyBookingTranslations = (
+  language: Language,
+  values: Record<string, string>
+): Record<string, string> => {
+  const normalized = { ...values };
+  const legacyValues = language === "en"
+    ? {
+        "booking.notes": "Additional Notes",
+        "booking.notesPlaceholder": "Any specific concerns or requests...",
+      }
+    : {
+        "booking.notes": "Notes supplémentaires",
+        "booking.notesPlaceholder": "Préoccupations ou demandes spécifiques...",
+      };
+
+  for (const [key, legacyValue] of Object.entries(legacyValues)) {
+    if (normalized[key] === legacyValue) {
+      normalized[key] = translations[language][key];
+    }
+  }
+
+  return normalized;
+};
+
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 type Overrides = Record<Language, Record<string, string>>;
@@ -278,8 +306,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       .then((data) => {
         if (data.translations && typeof data.translations === "object") {
           setOverrides({
-            en: data.translations.en ?? {},
-            fr: data.translations.fr ?? {},
+            en: normalizeLegacyBookingTranslations("en", data.translations.en ?? {}),
+            fr: normalizeLegacyBookingTranslations("fr", data.translations.fr ?? {}),
           });
         }
       })

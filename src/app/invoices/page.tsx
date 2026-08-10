@@ -6,6 +6,7 @@ import Link from "next/link";
 import InsuranceBillingModal from "@/components/InsuranceBillingModal";
 import { usePDFJobNotifications } from "@/components/PDFJobNotificationsContext";
 import { useInsuranceSubmissionNotifications } from "@/components/InsuranceSubmissionNotificationsContext";
+import { useAuth } from "@/components/AuthContext";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +45,16 @@ type InvoiceRow = {
   reminder_1_sent_at: string | null;
   reminder_2_sent_at: string | null;
   reminder_3_sent_at: string | null;
+  // Workflow-only flag (BILL-004.1): billing staff can mark a rejected
+  // MediData invoice as "Processed" after correcting and resending it.
+  // Purely internal bookkeeping — never reflects the actual MediData/Sumex
+  // status, and is auto-cleared (via DB trigger) if the invoice is
+  // rejected again.
+  medidata_processed_at: string | null;
+  medidata_processed_by: string | null;
+  // BILL-004.2: manual opt-out — no further reminder letters/emails should
+  // be generated for this invoice once set.
+  stop_reminders: boolean;
 };
 
 type PatientInfo = { id: string; first_name: string | null; last_name: string | null; email: string | null };
@@ -138,6 +149,7 @@ function insuranceBadge(status: string | null | undefined, billingType: string |
 // ---------------------------------------------------------------------------
 
 export default function InvoicesPage() {
+  const { user } = useAuth();
   const pdfNotifications = usePDFJobNotifications();
   const insuranceNotifications = useInsuranceSubmissionNotifications();
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
@@ -225,7 +237,7 @@ export default function InvoicesPage() {
 
         const { data, error: err } = await supabaseClient
           .from("invoices")
-          .select("id, patient_id, invoice_number, invoice_date, due_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, paid_amount, status, is_complimentary, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, pdf_generated_at, updated_at, created_by_user_id, created_by_name, is_archived, health_insurance_law, billing_type, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at")
+          .select("id, patient_id, invoice_number, invoice_date, due_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, paid_amount, status, is_complimentary, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, pdf_generated_at, updated_at, created_by_user_id, created_by_name, is_archived, health_insurance_law, billing_type, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at, medidata_processed_at, medidata_processed_by, stop_reminders")
           .eq("is_archived", false)
           .is("parent_invoice_id", null)
           .order("invoice_date", { ascending: false });
@@ -393,6 +405,10 @@ export default function InvoicesPage() {
 
   /** Next reminder level that should be sent for a row, or null if not yet due */
   function nextReminderLevel(row: InvoiceRow): 1 | 2 | 3 | null {
+    // BILL-004.2: manually stopped invoices never have a reminder "due" —
+    // this is the single choke point for the due-badge, the "Rappel" bulk
+    // send, and the per-row popup eligibility.
+    if (row.stop_reminders) return null;
     const rl = row.reminder_level ?? 0;
     if (rl === 0) return overdueBaseDays(row) >= 35 ? 1 : null;
     if (rl === 1) return daysSince(row.reminder_1_sent_at) >= 25 ? 2 : null;
@@ -444,6 +460,11 @@ export default function InvoicesPage() {
         const isInsuranceInvoice = (r.payment_method ?? "").toLowerCase() === "insurance";
         const isNotSubmitted = !latest && isInsuranceInvoice;
         const isRejectedUnpaid = st === "rejected" && !invoicePaid;
+        // BILL-004.1: "Processed" is a workflow-only flag on the invoice
+        // row itself (never on the MediData/Sumex status). It only makes
+        // sense to look at it for rejected-and-unpaid invoices — paid ones
+        // are already resolved regardless of the flag.
+        const isProcessed = !!r.medidata_processed_at;
         switch (insuranceFilter) {
           case "needs_action":
             if (!isNotSubmitted && !isRejectedUnpaid) return false;
@@ -459,6 +480,12 @@ export default function InvoicesPage() {
             break;
           case "rejected_unpaid":
             if (!isRejectedUnpaid) return false;
+            break;
+          case "rejected_unprocessed":
+            if (!isRejectedUnpaid || isProcessed) return false;
+            break;
+          case "rejected_processed":
+            if (!isRejectedUnpaid || !isProcessed) return false;
             break;
           case "rejected_paid":
             if (st !== "rejected" || !invoicePaid) return false;
@@ -487,16 +514,16 @@ export default function InvoicesPage() {
         const isPaid = r.status === "PAID" || r.status === "CANCELLED";
         switch (reminderFilter) {
           case "r1_due":
-            // 1st reminder due: overdue ≥35d, no reminder sent yet, not paid
-            if (isPaid || rl !== 0 || overdueBaseDays(r) < 35) return false;
+            // 1st reminder due: overdue ≥35d, no reminder sent yet, not paid, not stopped
+            if (isPaid || r.stop_reminders || rl !== 0 || overdueBaseDays(r) < 35) return false;
             break;
           case "r2_due":
             // 2nd reminder due: ≥25d since 1st reminder
-            if (isPaid || rl !== 1 || daysSince(r.reminder_1_sent_at) < 25) return false;
+            if (isPaid || r.stop_reminders || rl !== 1 || daysSince(r.reminder_1_sent_at) < 25) return false;
             break;
           case "r3_due":
             // 3rd reminder due: ≥20d since 2nd reminder
-            if (isPaid || rl !== 2 || daysSince(r.reminder_2_sent_at) < 20) return false;
+            if (isPaid || r.stop_reminders || rl !== 2 || daysSince(r.reminder_2_sent_at) < 20) return false;
             break;
           case "r1_sent":
             if (rl < 1) return false;
@@ -509,6 +536,10 @@ export default function InvoicesPage() {
             break;
           case "any_due":
             if (isPaid || nextReminderLevel(r) === null) return false;
+            break;
+          case "stopped":
+            // BILL-004.2: invoices where reminders were manually stopped.
+            if (!r.stop_reminders) return false;
             break;
         }
       }
@@ -811,6 +842,22 @@ export default function InvoicesPage() {
         }
       : r
     ));
+  }
+
+  /**
+   * BILL-004.1 — Toggle the "Processed" workflow flag on a rejected MediData
+   * invoice. This is purely an internal bookkeeping aid for billing staff
+   * (does not touch the invoice's MediData/Sumex submission status). If the
+   * invoice gets rejected again later, a DB trigger clears this flag
+   * automatically so it reappears in the unprocessed list.
+   */
+  async function toggleInvoiceProcessed(row: InvoiceRow, processed: boolean) {
+    const update = {
+      medidata_processed_at: processed ? new Date().toISOString() : null,
+      medidata_processed_by: processed ? (user?.id ?? null) : null,
+    };
+    await supabaseClient.from("invoices").update(update).eq("id", row.id);
+    setInvoices(prev => prev.map(r => r.id === row.id ? { ...r, ...update } : r));
   }
 
   async function handleReminderPrint(row: InvoiceRow, level: 1 | 2 | 3) {
@@ -1203,6 +1250,8 @@ export default function InvoicesPage() {
           <option value="in_flight">⏳ Pending / Transmitted</option>
           <option value="rejected">❌ Rejected (all)</option>
           <option value="rejected_unpaid">❌ Rejected &amp; Unpaid</option>
+          <option value="rejected_unprocessed">❌ Rejected &amp; Unpaid — Unprocessed</option>
+          <option value="rejected_processed">✓ Rejected &amp; Unpaid — Processed</option>
           <option value="rejected_paid">✓ Rejected but Paid (bank)</option>
           <option value="accepted">✓ Accepted / Paid (Sumex)</option>
         </select>
@@ -1221,6 +1270,7 @@ export default function InvoicesPage() {
           <option value="r1_sent">✉ 1er rappel envoyé</option>
           <option value="r2_sent">✉ 2e rappel envoyé</option>
           <option value="r3_sent">✉ 3e rappel envoyé</option>
+          <option value="stopped">🔕 Stop Reminder</option>
         </select>
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" />
@@ -1354,10 +1404,32 @@ export default function InvoicesPage() {
                       {(() => {
                         const latest = latestInsByInvoice[row.id];
                         const b = insuranceBadge(latest?.status, row.billing_type);
+                        const isRejectedUnpaid = latest?.status?.toLowerCase() === "rejected" && (Number(row.paid_amount) || 0) <= 0;
+                        const isProcessed = !!row.medidata_processed_at;
                         return (
-                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${b.cls}`} title={b.title}>
-                            {b.label}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${b.cls}`} title={b.title}>
+                              {b.label}
+                            </span>
+                            {isRejectedUnpaid && (
+                              <button
+                                type="button"
+                                onClick={() => toggleInvoiceProcessed(row, !isProcessed)}
+                                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                                  isProcessed
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                                }`}
+                                title={
+                                  isProcessed
+                                    ? "Marked as processed — click to undo (workflow-only, does not change MediData status)"
+                                    : "Mark as processed once corrected & resent (workflow-only, does not change MediData status)"
+                                }
+                              >
+                                {isProcessed ? "✓ Processed" : "Mark processed"}
+                              </button>
+                            )}
+                          </div>
                         );
                       })()}
                     </td>
@@ -1433,18 +1505,27 @@ export default function InvoicesPage() {
 
                         {/* Créer un rappel */}
                         {row.status !== "PAID" && row.status !== "CANCELLED" && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                              setReminderPopupPos({ top: rect.bottom + 4, left: rect.right - 180 });
-                              setReminderPopupRow(reminderPopupRow?.id === row.id ? null : row);
-                            }}
-                            className="inline-flex items-center gap-0.5 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-800 hover:bg-amber-100 transition-colors"
-                            title="Créer un rappel"
-                          >
-                            Rappel ▾
-                          </button>
+                          row.stop_reminders ? (
+                            <span
+                              className="inline-flex items-center gap-0.5 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-medium text-slate-500"
+                              title="Reminders manually stopped for this invoice — uncheck 'Stop Reminder' in the patient file to resume"
+                            >
+                              🔕 Stopped
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                setReminderPopupPos({ top: rect.bottom + 4, left: rect.right - 180 });
+                                setReminderPopupRow(reminderPopupRow?.id === row.id ? null : row);
+                              }}
+                              className="inline-flex items-center gap-0.5 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+                              title="Créer un rappel"
+                            >
+                              Rappel ▾
+                            </button>
+                          )
                         )}
                       </div>
                     </td>

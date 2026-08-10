@@ -211,6 +211,7 @@ DO $$ BEGIN
     'deal_stage_changed',
     'patient_created',
     'appointment_created',
+    'appointment_status_changed',
     'appointment_completed',
     'appointment_updated',
     'form_submitted',
@@ -224,6 +225,10 @@ END $$;
 -- Add missing values to workflow_trigger_type enum (for existing databases)
 DO $$ BEGIN
   ALTER TYPE workflow_trigger_type ADD VALUE IF NOT EXISTS 'patient_created';
+EXCEPTION WHEN others THEN null;
+END $$;
+DO $$ BEGIN
+  ALTER TYPE workflow_trigger_type ADD VALUE IF NOT EXISTS 'appointment_status_changed';
 EXCEPTION WHEN others THEN null;
 END $$;
 DO $$ BEGIN

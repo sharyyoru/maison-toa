@@ -9,6 +9,7 @@ import {
   generatePatientReminderEmail,
 } from "@/lib/appointmentEmails";
 import { normalizePatientLanguage } from "@/lib/languagePreference";
+import { formatSwissYmd } from "@/lib/swissTimezone";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,9 @@ const emailFromName = process.env.EMAIL_FROM_NAME || "Maison Toa";
 
 type AppointmentCreatedPayload = {
   appointmentId: string;
+  triggerType?: "appointment_created" | "appointment_status_changed";
+  appointmentStatus?: string;
+  previousAppointmentStatus?: string | null;
   patientId?: string | null;
   language?: string;
   formUrl?: string;
@@ -112,6 +116,9 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    const triggerType = body.triggerType === "appointment_status_changed"
+      ? "appointment_status_changed"
+      : "appointment_created";
 
     // Resolve patient + appointment context. Prefer the payload (so emails are
     // identical to the booking flow), falling back to the database when needed.
@@ -168,11 +175,11 @@ export async function POST(request: Request) {
     const { data: workflows, error: workflowsError } = await supabaseAdmin
       .from("workflows")
       .select("id, name, trigger_type, active, config")
-      .eq("trigger_type", "appointment_created")
+      .eq("trigger_type", triggerType)
       .eq("active", true);
 
     if (workflowsError) {
-      console.error("Failed to load appointment_created workflows", workflowsError);
+      console.error(`Failed to load ${triggerType} workflows`, workflowsError);
       return NextResponse.json({ error: "Failed to load workflows" }, { status: 500 });
     }
 
@@ -191,6 +198,7 @@ export async function POST(request: Request) {
       },
       appointment: {
         id: appointmentId,
+        status: body.appointmentStatus || "",
         date: appointmentDate ? formatAppointmentDate(appointmentDate, language) : "",
         time: appointmentDate ? formatAppointmentTime(appointmentDate, language) : "",
         service,
@@ -215,6 +223,7 @@ export async function POST(request: Request) {
         if (data.field === "patient.email") fieldValue = (patientEmail || "").toLowerCase();
         else if (data.field === "patient.phone") fieldValue = (patientPhone || "").toLowerCase();
         else if (data.field === "appointment.type") fieldValue = (service || "").toLowerCase();
+        else if (data.field === "appointment.status") fieldValue = (body.appointmentStatus || "").toLowerCase();
         else if (data.field === "appointment.provider") fieldValue = (doctorName || "").toLowerCase();
         else continue; // unsupported field: ignore
 
@@ -227,9 +236,40 @@ export async function POST(request: Request) {
       return true;
     }
 
-    const matchingWorkflows = (workflows as any[]).filter((w) =>
-      evaluateConditions((w.config || {}) as { nodes?: any[] }),
-    );
+    const matchingWorkflows = (workflows as any[]).filter((w) => {
+      const config = (w.config || {}) as {
+        nodes?: any[];
+        appointment_status?: string;
+        appointment_statuses?: string[];
+        appointment_status_match_mode?: "includes" | "excludes";
+        only_future_appointments_from_activation_day?: boolean;
+        future_appointments_activation_day?: string;
+      };
+      if (triggerType === "appointment_status_changed") {
+        // Fall back to the original single-status field for workflows saved
+        // before multi-select support was added.
+        const selectedStatuses = config.appointment_statuses?.length
+          ? config.appointment_statuses
+          : config.appointment_status
+            ? [config.appointment_status]
+            : [];
+        if (selectedStatuses.length === 0) return false;
+
+        const statusIsSelected = body.appointmentStatus
+          ? selectedStatuses.includes(body.appointmentStatus)
+          : false;
+        const matchesStatus = config.appointment_status_match_mode === "excludes"
+          ? !statusIsSelected
+          : statusIsSelected;
+        if (!matchesStatus) return false;
+
+        if (config.only_future_appointments_from_activation_day) {
+          if (!appointmentDate || !config.future_appointments_activation_day) return false;
+          if (formatSwissYmd(appointmentDate) < config.future_appointments_activation_day) return false;
+        }
+      }
+      return evaluateConditions(config);
+    });
 
     if (matchingWorkflows.length === 0) {
       return NextResponse.json({ ok: true, workflowsRun: 0, actionsRun: 0 });
@@ -238,6 +278,44 @@ export async function POST(request: Request) {
     let actionsRun = 0;
 
     for (const workflow of matchingWorkflows) {
+      const workflowConfig = workflow.config as {
+        nodes?: any[];
+        run_once_per_appointment?: boolean;
+        run_once_per_patient_per_day?: boolean;
+      } | null;
+
+      // Treat the legacy setting as enabled so existing workflows immediately
+      // gain the safer patient/day behavior without needing to be re-saved.
+      const runOncePerPatientPerDay =
+        workflowConfig?.run_once_per_patient_per_day ??
+        workflowConfig?.run_once_per_appointment ??
+        false;
+      const appointmentDay = appointmentDate
+        ? formatSwissYmd(appointmentDate)
+        : null;
+
+      if (
+        triggerType === "appointment_status_changed" &&
+        runOncePerPatientPerDay &&
+        patientId &&
+        appointmentDay
+      ) {
+        const { data: existingEnrollment, error: existingEnrollmentError } = await supabaseAdmin
+          .from("workflow_enrollments")
+          .select("id")
+          .eq("workflow_id", workflow.id)
+          .eq("patient_id", patientId)
+          .contains("trigger_data", { appointment_day: appointmentDay })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingEnrollmentError) {
+          console.error("Failed to check daily patient workflow enrollment", existingEnrollmentError);
+          continue;
+        }
+        if (existingEnrollment) continue;
+      }
+
       const { data: enrollment } = await supabaseAdmin
         .from("workflow_enrollments")
         .insert({
@@ -245,9 +323,12 @@ export async function POST(request: Request) {
           patient_id: patientId,
           status: "active",
           trigger_data: {
-            trigger_type: "appointment_created",
+            trigger_type: triggerType,
             appointment_id: appointmentId,
             appointment_date: appointmentDateIso,
+            appointment_day: appointmentDay,
+            appointment_status: body.appointmentStatus,
+            previous_appointment_status: body.previousAppointmentStatus,
             patient: templateContext.patient,
           },
         })
@@ -256,7 +337,6 @@ export async function POST(request: Request) {
 
       const enrollmentId = enrollment?.id;
 
-      const workflowConfig = workflow.config as { nodes?: any[] } | null;
       if (!workflowConfig?.nodes || !Array.isArray(workflowConfig.nodes)) continue;
 
       const steps = workflowConfig.nodes
@@ -268,10 +348,16 @@ export async function POST(request: Request) {
         }));
 
       let cumulativeDelayMinutes = 0;
+      const workflowTriggeredAt = new Date();
+      let cumulativeDelayAnchor = workflowTriggeredAt;
 
       for (const step of steps) {
         if (step.step_type === "delay") {
-          const delayConfig = step.config as { delayType?: string; delayValue?: number };
+          const delayConfig = step.config as {
+            delayType?: string;
+            delayValue?: number;
+            delayAnchor?: "trigger_time" | "appointment_time";
+          };
           const delayValue = delayConfig.delayValue || 0;
           const delayType = delayConfig.delayType || "minutes";
           let delayMinutes = 0;
@@ -279,6 +365,10 @@ export async function POST(request: Request) {
           else if (delayType === "hours") delayMinutes = delayValue * 60;
           else if (delayType === "days") delayMinutes = delayValue * 24 * 60;
           cumulativeDelayMinutes += delayMinutes;
+          cumulativeDelayAnchor =
+            delayConfig.delayAnchor === "appointment_time" && appointmentDate
+              ? appointmentDate
+              : workflowTriggeredAt;
 
           if (enrollmentId) {
             await supabaseAdmin.from("workflow_enrollment_steps").insert({
@@ -288,7 +378,12 @@ export async function POST(request: Request) {
               step_config: step.config,
               status: "completed",
               executed_at: new Date().toISOString(),
-              result: { delay_minutes: delayMinutes, cumulative_delay_minutes: cumulativeDelayMinutes },
+              result: {
+                delay_minutes: delayMinutes,
+                cumulative_delay_minutes: cumulativeDelayMinutes,
+                delay_anchor: delayConfig.delayAnchor || "trigger_time",
+                delay_anchor_time: cumulativeDelayAnchor.toISOString(),
+              },
             });
           }
           continue;
@@ -401,6 +496,10 @@ export async function POST(request: Request) {
             recipientEmail = config.email_address;
           } else if (config.recipient === "doctor") {
             recipientEmail = doctorEmail;
+          } else if (config.recipient === "appointment_patient") {
+            // patientEmail is resolved from the appointment's patient_id above,
+            // including status-change triggers that only provide appointmentId.
+            recipientEmail = patientEmail;
           } else {
             recipientEmail = patientEmail;
           }
@@ -451,22 +550,71 @@ export async function POST(request: Request) {
           const delayMin =
             (typeof config.delay_minutes === "number" && config.delay_minutes > 0 ? config.delay_minutes : 0) +
             cumulativeDelayMinutes;
-          if (delayMin > 0) scheduledAt = new Date(now.getTime() + delayMin * 60 * 1000);
+          if (delayMin > 0) {
+            scheduledAt = new Date(cumulativeDelayAnchor.getTime() + delayMin * 60 * 1000);
+          }
         } else if (cumulativeDelayMinutes > 0) {
-          scheduledAt = new Date(now.getTime() + cumulativeDelayMinutes * 60 * 1000);
+          scheduledAt = new Date(
+            cumulativeDelayAnchor.getTime() + cumulativeDelayMinutes * 60 * 1000,
+          );
         }
 
         const isFuture = !!scheduledAt && scheduledAt.getTime() > now.getTime();
 
-        // Future sends (reminders/delays) are queued in scheduled_emails for the
-        // cron job — the same reliable path the booking flow already used.
+        // Let Resend handle delays up to 72 hours so short workflow delays are
+        // delivered at their configured time. The hourly database cron remains
+        // the fallback for longer schedules (and unconfigured email providers).
         if (isFuture && scheduledAt) {
+          const delayMs = scheduledAt.getTime() - now.getTime();
+          const canUseProviderScheduling =
+            isEmailConfigured() && delayMs <= 72 * 60 * 60 * 1000;
+
+          if (canUseProviderScheduling) {
+            const sendResult = await sendEmailViaResend({
+              to: recipientEmail,
+              subject,
+              html: bodyHtml,
+              from: emailFromAddress,
+              fromName: emailFromName,
+              scheduledAt,
+            });
+
+            if (enrollmentId) {
+              await supabaseAdmin.from("workflow_enrollment_steps").insert({
+                enrollment_id: enrollmentId,
+                step_type: "action",
+                step_action: "send_email",
+                step_config: config,
+                status: sendResult.success ? "scheduled" : "failed",
+                executed_at: new Date().toISOString(),
+                error_message: sendResult.error,
+                result: sendResult.success
+                  ? {
+                      scheduled_for: scheduledAt.toISOString(),
+                      recipient: recipientEmail,
+                      provider: "resend",
+                      message_id: sendResult.messageId,
+                    }
+                  : undefined,
+              });
+            }
+
+            if (sendResult.success) {
+              actionsRun += 1;
+              continue;
+            }
+            // If native scheduling fails, retain the job in the database queue
+            // so the cron processor can retry it.
+          }
+
           const { error: scheduleError } = await supabaseAdmin
             .from("scheduled_emails")
             .insert({
               patient_id: patientId,
               appointment_id: appointmentId,
-              recipient_type: "patient",
+              // Keep workflow jobs distinct from the built-in 24-hour patient
+              // reminder. Calendar time synchronization only manages the latter.
+              recipient_type: "workflow",
               recipient_email: recipientEmail,
               subject,
               body: bodyHtml,

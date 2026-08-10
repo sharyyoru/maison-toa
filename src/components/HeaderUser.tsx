@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
+import { useAuth } from "./AuthContext";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { clearDemoCache } from "@/lib/demoMode";
 
@@ -14,57 +15,35 @@ interface CurrentUserInfo {
   avatarUrl: string | null;
 }
 
+function getUserInfo(user: NonNullable<ReturnType<typeof useAuth>["user"]>): CurrentUserInfo {
+  const meta = (user.user_metadata || {}) as Record<string, unknown>;
+  const firstName = (meta["first_name"] as string) || "";
+  const lastName = (meta["last_name"] as string) || "";
+  const role = ((meta["role"] as string) || "Staff").toString();
+  const avatarUrl = (meta["avatar_url"] as string) || null;
+
+  const fullName = [firstName, lastName].filter(Boolean).join(" ") ||
+    (user.email ?? "User");
+
+  const initialsSource = fullName || user.email || "?";
+  const parts = initialsSource.split(" ");
+  const initials = (parts[0]?.[0] ?? "").toUpperCase() +
+    (parts[1]?.[0] ?? "").toUpperCase();
+
+  return {
+    fullName,
+    initials: initials || "U",
+    role,
+    avatarUrl,
+  };
+}
+
 export default function HeaderUser() {
   const router = useRouter();
   const t = useTranslations("header");
   const tCommon = useTranslations("common");
-  const [userInfo, setUserInfo] = useState<CurrentUserInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading: authLoading } = useAuth();
   const [confirmOpen, setConfirmOpen] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadUser() {
-      const { data } = await supabaseClient.auth.getUser();
-      if (!isMounted) return;
-
-      const user = data.user;
-      if (!user) {
-        setUserInfo(null);
-        setLoading(false);
-        return;
-      }
-
-      const meta = (user.user_metadata || {}) as Record<string, unknown>;
-      const firstName = (meta["first_name"] as string) || "";
-      const lastName = (meta["last_name"] as string) || "";
-      const role = ((meta["role"] as string) || "Staff").toString();
-      const avatarUrl = (meta["avatar_url"] as string) || null;
-
-      const fullName = [firstName, lastName].filter(Boolean).join(" ") ||
-        (user.email ?? "User");
-
-      const initialsSource = fullName || user.email || "?";
-      const parts = initialsSource.split(" ");
-      const initials = (parts[0]?.[0] ?? "").toUpperCase() +
-        (parts[1]?.[0] ?? "").toUpperCase();
-
-      setUserInfo({
-        fullName,
-        initials: initials || "U",
-        role,
-        avatarUrl,
-      });
-      setLoading(false);
-    }
-
-    loadUser();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   async function confirmLogout() {
     await supabaseClient.auth.signOut();
@@ -73,18 +52,20 @@ export default function HeaderUser() {
     router.refresh();
   }
 
-  if (loading || !userInfo) {
+  if (authLoading || !user) {
     return (
       <div className="ml-1 flex items-center gap-2 rounded-full bg-white/80 px-2 py-1 text-[11px] text-slate-400 shadow-sm">
         <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-[11px] font-medium text-slate-600">
           --
         </div>
         <div className="hidden flex-col sm:flex">
-          <span className="font-medium">{t("loadingUser")}</span>
+          <span className="font-medium">{authLoading ? t("loadingUser") : "--"}</span>
         </div>
       </div>
     );
   }
+
+  const userInfo = getUserInfo(user);
 
   return (
     <div className="flex items-center gap-2">

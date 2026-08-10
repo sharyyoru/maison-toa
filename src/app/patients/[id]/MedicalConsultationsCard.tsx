@@ -101,6 +101,9 @@ type ConsultationRow = {
   invoice_reminder_1_sent_at: string | null;
   invoice_reminder_2_sent_at: string | null;
   invoice_reminder_3_sent_at: string | null;
+  // BILL-004.2: manual opt-out — no further reminder letters/emails should
+  // be generated for this invoice once set.
+  invoice_stop_reminders: boolean;
   payment_link_token: string | null;
   payrexx_payment_link: string | null;
   payrexx_payment_status: string | null;
@@ -1035,6 +1038,7 @@ function PendingCreateConsultationNoteEditor({
         invoice_reminder_1_sent_at: null,
         invoice_reminder_2_sent_at: null,
         invoice_reminder_3_sent_at: null,
+        invoice_stop_reminders: false,
       });
     } catch {
       onError("Failed to lock consultation note.");
@@ -1435,6 +1439,7 @@ function CollaborativeUnlockedNoteEditor({
         invoice_reminder_1_sent_at: null,
         invoice_reminder_2_sent_at: null,
         invoice_reminder_3_sent_at: null,
+        invoice_stop_reminders: false,
       };
 
       setSavingState("saved");
@@ -1928,6 +1933,8 @@ export default function MedicalConsultationsCard({
   const [pdfDropdownOpen, setPdfDropdownOpen] = useState<string | null>(null);
   const [emailDropdownOpen, setEmailDropdownOpen] = useState<string | null>(null);
   const [viewPdfDropdownOpen, setViewPdfDropdownOpen] = useState<string | null>(null);
+  // BILL-005: "Download All Invoices" ZIP button state
+  const [downloadingAllInvoices, setDownloadingAllInvoices] = useState(false);
   const [pdfError, setPdfError] = useState<{ message: string; details?: string; abortInfo?: string } | null>(null);
   const [pdfSuccessToast, setPdfSuccessToast] = useState<{ invoiceNumber: string | null; type: string; message: string } | null>(null);
   const [generatedPaymentLink, setGeneratedPaymentLink] = useState<{ consultationId: string; url: string } | null>(null);
@@ -2656,7 +2663,7 @@ export default function MedicalConsultationsCard({
         const { data: invoiceData, error: invoiceError } = await supabaseClient
           .from("invoices")
           .select(
-            "id, patient_id, consultation_id, invoice_number, invoice_date, due_date, treatment_date, doctor_user_id, doctor_name, provider_name, payment_method, total_amount, subtotal, paid_amount, status, is_complimentary, cash_receipt_path, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, title, reference_number, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at",
+            "id, patient_id, consultation_id, invoice_number, invoice_date, due_date, treatment_date, doctor_user_id, doctor_name, provider_name, payment_method, total_amount, subtotal, paid_amount, status, is_complimentary, cash_receipt_path, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, title, reference_number, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at, stop_reminders",
           )
           .eq("patient_id", patientId)
           .eq("is_archived", showArchived ? true : false)
@@ -2700,6 +2707,7 @@ export default function MedicalConsultationsCard({
             invoice_reminder_1_sent_at: inv.reminder_1_sent_at ?? null,
             invoice_reminder_2_sent_at: inv.reminder_2_sent_at ?? null,
             invoice_reminder_3_sent_at: inv.reminder_3_sent_at ?? null,
+            invoice_stop_reminders: inv.stop_reminders ?? false,
             payment_link_token: inv.payment_link_token ?? null,
             payrexx_payment_link: inv.payrexx_payment_link ?? null,
             payrexx_payment_status: inv.payrexx_payment_status ?? null,
@@ -3938,6 +3946,7 @@ export default function MedicalConsultationsCard({
         invoice_reminder_1_sent_at: null,
         invoice_reminder_2_sent_at: null,
         invoice_reminder_3_sent_at: null,
+        invoice_stop_reminders: false,
       };
 
       setConsultations((prev) =>
@@ -4913,6 +4922,7 @@ export default function MedicalConsultationsCard({
         invoice_reminder_1_sent_at: null,
         invoice_reminder_2_sent_at: null,
         invoice_reminder_3_sent_at: null,
+        invoice_stop_reminders: false,
       };
 
       setConsultations((prev) =>
@@ -5028,6 +5038,7 @@ export default function MedicalConsultationsCard({
         invoice_reminder_1_sent_at: null,
         invoice_reminder_2_sent_at: null,
         invoice_reminder_3_sent_at: null,
+        invoice_stop_reminders: false,
       };
       let shouldBroadcastDraftChange = false;
       setConsultations((prev) => {
@@ -5217,6 +5228,35 @@ export default function MedicalConsultationsCard({
       router.refresh();
     } catch {
       setConsultationsError("Failed to update invoice status.");
+    }
+  }
+
+  /**
+   * BILL-004.2 — "Stop Reminder" / "Stopper les rappels": manually opt an
+   * invoice out of further reminder letters/emails. Does not touch
+   * reminder_level/*_sent_at history, purely a workflow flag checked
+   * wherever a reminder is offered or sent.
+   */
+  async function handleToggleStopReminders(invoiceId: string, nextValue: boolean) {
+    if (!invoiceId) return;
+    try {
+      const { error } = await supabaseClient
+        .from("invoices")
+        .update({ stop_reminders: nextValue })
+        .eq("id", invoiceId);
+
+      if (error) {
+        setConsultationsError(error.message ?? "Failed to update reminder setting.");
+        return;
+      }
+
+      setConsultations((prev) =>
+        prev.map((row) =>
+          row.id === invoiceId ? { ...row, invoice_stop_reminders: nextValue } : row,
+        ),
+      );
+    } catch {
+      setConsultationsError("Failed to update reminder setting.");
     }
   }
 
@@ -5513,6 +5553,129 @@ export default function MedicalConsultationsCard({
     } catch (error) {
       console.error("Error viewing PDF:", error);
       alert("Failed to load PDF. Please try again.");
+    }
+  }
+
+  /**
+   * BILL-005 — one-click download of an already-generated invoice PDF.
+   * Skips the old "view in modal, then download from the viewer" step:
+   * fetches the file straight from storage and triggers a browser
+   * download. Never generates anything — callers must only invoke this
+   * for paths that already exist (disabled/greyed out otherwise).
+   */
+  async function handleDownloadPdf(pdfPath: string, fileName: string) {
+    try {
+      const { data, error } = await supabaseClient.storage
+        .from("invoice-pdfs")
+        .createSignedUrl(pdfPath, 3600);
+
+      if (error || !data?.signedUrl) {
+        console.error("Error creating signed URL:", error);
+        alert("Failed to download PDF. The file may not exist or access was denied.");
+        return;
+      }
+
+      const res = await fetch(data.signedUrl);
+      if (!res.ok) throw new Error(`Failed to fetch PDF (${res.status})`);
+      const blob = await res.blob();
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading PDF:", error);
+      alert("Failed to download PDF. Please try again.");
+    }
+  }
+
+  /**
+   * BILL-005 — "Download All Invoices": zips up every already-generated
+   * PDF for this patient's invoices, one folder per invoice number, with
+   * one file per doc type (TG/TP/Reminder/Receipt) — always the latest
+   * generated version, since pdf_path_* columns only ever hold the most
+   * recent path for that type. Does not generate anything that's missing;
+   * those are simply skipped.
+   */
+  async function handleDownloadAllInvoices() {
+    const invoiceRows = consultations.filter(
+      (row) => row.record_type === "invoice" && row.invoice_id,
+    );
+
+    if (invoiceRows.length === 0) {
+      alert("No invoices found for this patient.");
+      return;
+    }
+
+    setDownloadingAllInvoices(true);
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+
+      const tasks = invoiceRows.flatMap((row) => {
+        const invoiceLabel = row.consultation_id || row.invoice_id || row.id;
+        const types: { path: string | null; label: string }[] = [
+          { path: row.invoice_pdf_path_tg, label: "TG" },
+          { path: row.invoice_pdf_path_tp, label: "TP" },
+          { path: row.invoice_pdf_path_reminder, label: "Reminder" },
+          { path: row.invoice_pdf_path_receipt, label: "Receipt" },
+        ];
+        return types
+          .filter((t) => !!t.path)
+          .map((t) => ({ invoiceLabel, path: t.path as string, label: t.label }));
+      });
+
+      const results = await Promise.all(
+        tasks.map(async (task) => {
+          try {
+            const { data } = await supabaseClient.storage
+              .from("invoice-pdfs")
+              .createSignedUrl(task.path, 3600);
+            if (!data?.signedUrl) return null;
+            const res = await fetch(data.signedUrl);
+            if (!res.ok) return null;
+            const blob = await res.blob();
+            return { ...task, blob };
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      let addedCount = 0;
+      for (const result of results) {
+        if (!result) continue;
+        const folder = zip.folder(String(result.invoiceLabel));
+        folder?.file(`${result.invoiceLabel}_${result.label}.pdf`, result.blob);
+        addedCount++;
+      }
+
+      if (addedCount === 0) {
+        alert("No generated PDFs found yet. Generate at least one invoice PDF first.");
+        return;
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const patientLabel = [patientFirstName, patientLastName].filter(Boolean).join("_") || "patient";
+      const zipName = `${patientLabel}_invoices_${new Date().toISOString().split("T")[0]}.zip`;
+
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = zipName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error building invoices ZIP:", error);
+      alert("Failed to build the ZIP file. Please try again.");
+    } finally {
+      setDownloadingAllInvoices(false);
     }
   }
 
@@ -6420,6 +6583,22 @@ export default function MedicalConsultationsCard({
                 </button>
               </>
             ) : null}
+            {/* BILL-005: "Download All Invoices" — only shown in the dedicated Invoices section */}
+            {recordTypeFilter === "invoice" && (
+              <button
+                type="button"
+                onClick={() => void handleDownloadAllInvoices()}
+                disabled={downloadingAllInvoices}
+                title="Download every already-generated invoice PDF as a ZIP (one folder per invoice, latest version of each type)"
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+              >
+                <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="12" height="12" rx="1.5" />
+                  <path d="M8 5v5M5.5 7.5L8 10l2.5-2.5" />
+                </svg>
+                {downloadingAllInvoices ? tc("zippingInvoices") : tc("downloadAllInvoices")}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void exportConsultationsToPdf()}
@@ -7771,6 +7950,7 @@ export default function MedicalConsultationsCard({
                           invoice_reminder_1_sent_at: null,
                           invoice_reminder_2_sent_at: null,
                           invoice_reminder_3_sent_at: null,
+                          invoice_stop_reminders: false,
                           payment_link_token: null,
                           payrexx_payment_link: null,
                           payrexx_payment_status: null,
@@ -11321,29 +11501,31 @@ export default function MedicalConsultationsCard({
                           {/* Action buttons toolbar */}
                           <div className="flex flex-wrap items-center gap-1.5">
                             {/* Document group */}
-                            {/* View PDF dropdown - always visible */}
+                            {/* BILL-005: Download PDF dropdown — one click, straight to the browser's
+                                download, no intermediate "view then Save As" step. Disabled entries
+                                mean that type hasn't been generated yet. */}
                             <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setViewPdfDropdownOpen(null); }}>
                               <button
                                 type="button"
                                 onClick={() => setViewPdfDropdownOpen(viewPdfDropdownOpen === row.id ? null : row.id)}
                                 className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
                               >
-                                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                View PDF
+                                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg>
+                                Download PDF
                                 <svg className="h-3 w-3 ml-0.5" fill="none" viewBox="0 0 20 20" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8l4 4 4-4" /></svg>
                               </button>
                               {viewPdfDropdownOpen === row.id && (
                                 <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                                  <button type="button" disabled={!row.invoice_pdf_path_tg} title={!row.invoice_pdf_path_tg ? "Generate this type first" : ""} className={`w-full px-3 py-1.5 text-left text-[11px] ${row.invoice_pdf_path_tg ? "text-slate-700 hover:bg-indigo-50 cursor-pointer" : "text-slate-300 cursor-not-allowed"}`} onClick={() => { if (row.invoice_pdf_path_tg) { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_tg); } }}>
+                                  <button type="button" disabled={!row.invoice_pdf_path_tg} title={!row.invoice_pdf_path_tg ? "Generate this type first" : ""} className={`w-full px-3 py-1.5 text-left text-[11px] ${row.invoice_pdf_path_tg ? "text-slate-700 hover:bg-indigo-50 cursor-pointer" : "text-slate-300 cursor-not-allowed"}`} onClick={() => { if (row.invoice_pdf_path_tg) { setViewPdfDropdownOpen(null); handleDownloadPdf(row.invoice_pdf_path_tg, `${row.consultation_id || row.invoice_id}_TG.pdf`); } }}>
                                     Invoice (patient)
                                   </button>
-                                  <button type="button" disabled={!row.invoice_pdf_path_tp} title={!row.invoice_pdf_path_tp ? "Generate this type first" : ""} className={`w-full px-3 py-1.5 text-left text-[11px] ${row.invoice_pdf_path_tp ? "text-slate-700 hover:bg-indigo-50 cursor-pointer" : "text-slate-300 cursor-not-allowed"}`} onClick={() => { if (row.invoice_pdf_path_tp) { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_tp); } }}>
+                                  <button type="button" disabled={!row.invoice_pdf_path_tp} title={!row.invoice_pdf_path_tp ? "Generate this type first" : ""} className={`w-full px-3 py-1.5 text-left text-[11px] ${row.invoice_pdf_path_tp ? "text-slate-700 hover:bg-indigo-50 cursor-pointer" : "text-slate-300 cursor-not-allowed"}`} onClick={() => { if (row.invoice_pdf_path_tp) { setViewPdfDropdownOpen(null); handleDownloadPdf(row.invoice_pdf_path_tp, `${row.consultation_id || row.invoice_id}_TP.pdf`); } }}>
                                     Invoice (insurance)
                                   </button>
-                                  <button type="button" disabled={!row.invoice_pdf_path_reminder} title={!row.invoice_pdf_path_reminder ? "Generate this type first" : ""} className={`w-full px-3 py-1.5 text-left text-[11px] ${row.invoice_pdf_path_reminder ? "text-slate-700 hover:bg-indigo-50 cursor-pointer" : "text-slate-300 cursor-not-allowed"}`} onClick={() => { if (row.invoice_pdf_path_reminder) { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_reminder); } }}>
+                                  <button type="button" disabled={!row.invoice_pdf_path_reminder} title={!row.invoice_pdf_path_reminder ? "Generate this type first" : ""} className={`w-full px-3 py-1.5 text-left text-[11px] ${row.invoice_pdf_path_reminder ? "text-slate-700 hover:bg-indigo-50 cursor-pointer" : "text-slate-300 cursor-not-allowed"}`} onClick={() => { if (row.invoice_pdf_path_reminder) { setViewPdfDropdownOpen(null); handleDownloadPdf(row.invoice_pdf_path_reminder, `${row.consultation_id || row.invoice_id}_Reminder.pdf`); } }}>
                                     Reminder
                                   </button>
-                                  <button type="button" disabled={!row.invoice_pdf_path_receipt} title={!row.invoice_pdf_path_receipt ? "Generate this type first" : ""} className={`w-full px-3 py-1.5 text-left text-[11px] ${row.invoice_pdf_path_receipt ? "text-slate-700 hover:bg-indigo-50 cursor-pointer" : "text-slate-300 cursor-not-allowed"}`} onClick={() => { if (row.invoice_pdf_path_receipt) { setViewPdfDropdownOpen(null); handleViewPdf(row.invoice_pdf_path_receipt); } }}>
+                                  <button type="button" disabled={!row.invoice_pdf_path_receipt} title={!row.invoice_pdf_path_receipt ? "Generate this type first" : ""} className={`w-full px-3 py-1.5 text-left text-[11px] ${row.invoice_pdf_path_receipt ? "text-slate-700 hover:bg-indigo-50 cursor-pointer" : "text-slate-300 cursor-not-allowed"}`} onClick={() => { if (row.invoice_pdf_path_receipt) { setViewPdfDropdownOpen(null); handleDownloadPdf(row.invoice_pdf_path_receipt, `${row.consultation_id || row.invoice_id}_Receipt.pdf`); } }}>
                                     Patient receipt
                                   </button>
                                 </div>
@@ -11598,8 +11780,24 @@ export default function MedicalConsultationsCard({
                               );
                             })()}
 
+                            {/* BILL-004.2: Stop Reminder / Stopper les rappels */}
+                            {row.invoice_status !== "PAID" && row.invoice_status !== "CANCELLED" && row.invoice_id && (
+                              <label
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                                title={tc("stopRemindersTooltip")}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!row.invoice_stop_reminders}
+                                  onChange={(e) => handleToggleStopReminders(row.invoice_id!, e.target.checked)}
+                                  className="h-3 w-3 rounded border-slate-300 text-slate-600 focus:ring-slate-400"
+                                />
+                                {tc("stopReminders")}
+                              </label>
+                            )}
+
                             {/* Créer un rappel */}
-                            {row.invoice_status !== "PAID" && row.invoice_status !== "CANCELLED" && row.invoice_id && (() => {
+                            {row.invoice_status !== "PAID" && row.invoice_status !== "CANCELLED" && row.invoice_id && !row.invoice_stop_reminders && (() => {
                               const rl = row.invoice_reminder_level ?? 0;
                               const nextLevel = Math.min(rl + 1, 3) as 1 | 2 | 3;
                               const levelLabel = nextLevel === 1 ? "1er rappel" : nextLevel === 2 ? "2e rappel" : "3e rappel";

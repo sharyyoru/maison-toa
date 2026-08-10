@@ -4,6 +4,8 @@ import { useEffect, useState, ChangeEvent } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
+import PatientCustomProperties from "./PatientCustomProperties";
+import PatientConsentControls from "./PatientConsentControls";
 
 type PatientRecord = {
   id: string;
@@ -501,6 +503,9 @@ export default function PatientCrmPreferencesCard({
       {avatarSuccess ? (
         <p className="text-[11px] text-emerald-600">{avatarSuccess}</p>
       ) : null}
+
+      <PatientCustomProperties patientId={basePatient.id} />
+      <PatientConsentControls patientId={basePatient.id} />
 
       <div className="mt-auto rounded-xl crm-id-strip px-3 py-2 text-[11px] text-white shadow-[0_10px_25px_rgba(16,185,129,0.45)]">
         <div className="flex items-center justify-between gap-2">

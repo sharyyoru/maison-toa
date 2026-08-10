@@ -7,35 +7,23 @@ import { supabaseClient } from "@/lib/supabaseClient";
 import EmailTemplateBuilder from "@/components/EmailTemplateBuilder";
 import UserSearchSelect from "@/components/UserSearchSelect";
 import MultiUserSearchSelect from "@/components/MultiUserSearchSelect";
+import { useAppointmentStatusOptions } from "@/lib/appointmentStatuses";
+import WorkflowCanvas from "@/components/workflows/WorkflowCanvas";
+import ConditionExpressionEditor from "@/components/workflows/ConditionExpressionEditor";
+import type { ConditionExpression, WorkflowActionType, WorkflowTriggerType } from "@/lib/workflows/types";
+import { WORKFLOW_ACTIONS, WORKFLOW_TRIGGERS, CONDITION_FIELDS as V2_CONDITION_FIELDS } from "@/lib/workflows/catalog";
 
 // Types
-type TriggerType = 
-  | "deal_stage_changed"
-  | "patient_created"
-  | "appointment_created"
-  | "appointment_completed"
-  | "form_submitted"
-  | "task_completed"
-  | "manual";
+type TriggerType = WorkflowTriggerType;
 
-type ActionType =
-  | "send_email"
-  | "send_whatsapp"
-  | "send_notification"
-  | "create_task"
-  | "update_task"
-  | "create_deal"
-  | "update_deal"
-  | "update_patient"
-  | "webhook"
-  | "delay";
+type ActionType = WorkflowActionType | "delay";
 
 type ConditionOperator = "equals" | "not_equals" | "contains" | "greater_than" | "less_than" | "is_empty" | "is_not_empty";
 
 type WorkflowNode = {
   id: string;
-  type: "trigger" | "action" | "condition" | "delay";
-  data: TriggerNodeData | ActionNodeData | ConditionNodeData | DelayNodeData;
+  type: "trigger" | "action" | "condition" | "delay" | "exit";
+  data: TriggerNodeData | ActionNodeData | ConditionNodeData | DelayNodeData | ExitNodeData;
   nextNodeId?: string | null;
   trueBranchId?: string | null;
   falseBranchId?: string | null;
@@ -52,6 +40,7 @@ type ActionNodeData = {
 };
 
 type ConditionNodeData = {
+  expression?: ConditionExpression;
   field: string;
   operator: ConditionOperator;
   value: string;
@@ -60,10 +49,13 @@ type ConditionNodeData = {
 };
 
 type DelayNodeData = {
-  delayType: "minutes" | "hours" | "days" | "until_time";
+  delayType: "minutes" | "hours" | "days" | "weeks" | "months" | "until_time";
   delayValue: number;
+  delayAnchor?: "trigger_time" | "appointment_time";
   delayTime?: string;
 };
+
+type ExitNodeData = { reason?: string };
 
 type DealStage = {
   id: string;
@@ -72,21 +64,19 @@ type DealStage = {
   sort_order: number;
 };
 
-type User = {
-  id: string;
-  email: string | null;
-  full_name: string | null;
-};
-
 // Trigger definitions
 const TRIGGER_OPTIONS: { value: TriggerType; label: string; description: string; icon: string }[] = [
   { value: "deal_stage_changed", label: "Deal Stage Changed", description: "When a deal moves to a specific stage", icon: "📊" },
   { value: "patient_created", label: "Patient Created", description: "When a new patient is added", icon: "👤" },
   { value: "appointment_created", label: "Appointment Created", description: "When an appointment is scheduled", icon: "📅" },
+  { value: "appointment_status_changed", label: "Appointment Status Changed", description: "When an appointment moves to a specific status", icon: "🔄" },
   { value: "appointment_completed", label: "Appointment Completed", description: "When an appointment is marked complete", icon: "✅" },
   { value: "form_submitted", label: "Form Submitted", description: "When a lead form is submitted", icon: "📝" },
   { value: "task_completed", label: "Task Completed", description: "When a task is marked complete", icon: "☑️" },
   { value: "manual", label: "Manual Trigger", description: "Triggered manually by user", icon: "🖱️" },
+  ...WORKFLOW_TRIGGERS
+    .filter((option) => !["patient_created", "appointment_created", "appointment_completed"].includes(option.value))
+    .map((option) => ({ value: option.value, label: option.label, description: option.description, icon: "⚡" })),
 ];
 
 // Action definitions
@@ -101,6 +91,9 @@ const ACTION_OPTIONS: { value: ActionType; label: string; description: string; i
   { value: "update_patient", label: "Update Patient", description: "Update patient information", icon: "👤", color: "cyan" },
   { value: "webhook", label: "Send Webhook", description: "Send data to external URL", icon: "🌐", color: "slate" },
   { value: "delay", label: "Add Delay", description: "Wait before next action", icon: "⏰", color: "orange" },
+  ...WORKFLOW_ACTIONS
+    .filter((option) => !["send_email", "create_task", "send_notification", "update_patient"].includes(option.value))
+    .map((option) => ({ value: option.value, label: option.label, description: option.description, icon: "⚡", color: "emerald" })),
 ];
 
 const CONDITION_FIELDS = [
@@ -112,7 +105,9 @@ const CONDITION_FIELDS = [
   { value: "deal.stage", label: "Deal Stage" },
   { value: "deal.service", label: "Deal Service" },
   { value: "appointment.type", label: "Appointment Type" },
+  { value: "appointment.status", label: "Appointment Status" },
   { value: "appointment.provider", label: "Appointment Provider" },
+  ...V2_CONDITION_FIELDS.filter((option) => !["patient.email", "appointment.status"].includes(option.value)),
 ];
 
 const CONDITION_OPERATORS: { value: ConditionOperator; label: string }[] = [
@@ -129,72 +124,6 @@ function generateId(): string {
   return `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Click-based add step button component
-function AddStepButton({ 
-  nodeId, 
-  onAdd 
-}: { 
-  nodeId: string; 
-  onAdd: (afterNodeId: string, nodeType: "action" | "condition" | "delay") => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="flex justify-center py-2">
-      <div className="relative">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-dashed transition-colors ${
-            isOpen 
-              ? "border-sky-400 bg-sky-50 text-sky-500" 
-              : "border-slate-300 bg-white text-slate-400 hover:border-sky-400 hover:text-sky-500"
-          }`}
-        >
-          <svg className={`h-4 w-4 transition-transform ${isOpen ? "rotate-45" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-        {isOpen && (
-          <div className="absolute left-1/2 top-10 z-20 -translate-x-1/2">
-            <div className="flex gap-1 rounded-lg bg-white p-2 shadow-lg border border-slate-200">
-              <button
-                onClick={() => {
-                  onAdd(nodeId, "action");
-                  setIsOpen(false);
-                }}
-                className="flex flex-col items-center gap-1 rounded-lg px-3 py-2 hover:bg-emerald-50 text-[10px] font-medium text-slate-700"
-              >
-                <span className="text-lg">⚡</span>
-                Action
-              </button>
-              <button
-                onClick={() => {
-                  onAdd(nodeId, "condition");
-                  setIsOpen(false);
-                }}
-                className="flex flex-col items-center gap-1 rounded-lg px-3 py-2 hover:bg-purple-50 text-[10px] font-medium text-slate-700"
-              >
-                <span className="text-lg">🔀</span>
-                Condition
-              </button>
-              <button
-                onClick={() => {
-                  onAdd(nodeId, "delay");
-                  setIsOpen(false);
-                }}
-                className="flex flex-col items-center gap-1 rounded-lg px-3 py-2 hover:bg-blue-50 text-[10px] font-medium text-slate-700"
-              >
-                <span className="text-lg">⏰</span>
-                Delay
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function WorkflowBuilderPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -202,10 +131,10 @@ export default function WorkflowBuilderPage() {
 
   const [workflowName, setWorkflowName] = useState("New Workflow");
   const [workflowActive, setWorkflowActive] = useState(true);
+  const [originalWorkflowActive, setOriginalWorkflowActive] = useState(false);
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [stages, setStages] = useState<DealStage[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -216,22 +145,24 @@ export default function WorkflowBuilderPage() {
   const [previewEmailHtml, setPreviewEmailHtml] = useState<string | null>(null);
   const [previewEmailSubject, setPreviewEmailSubject] = useState<string | null>(null);
   const [services, setServices] = useState<{ id: string; name: string }[]>([]);
+  const [treatmentServices, setTreatmentServices] = useState<{ id: string; name: string }[]>([]);
+  const appointmentStatuses = useAppointmentStatusOptions();
 
-  // Load stages, users, and email templates
+  // Load stages and email templates
   useEffect(() => {
     async function loadData() {
       try {
         setLoading(true);
         
-        const [stagesRes, usersRes, templatesRes] = await Promise.all([
+        const [stagesRes, templatesRes, treatmentServicesRes] = await Promise.all([
           supabaseClient.from("deal_stages").select("id, name, type, sort_order").order("sort_order"),
-          supabaseClient.from("users").select("id, email, full_name"),
           supabaseClient.from("email_templates").select("id, name, subject_template, html_content").order("created_at", { ascending: false }),
+          supabaseClient.from("services").select("id, name").eq("is_active", true).order("name"),
         ]);
 
         if (stagesRes.data) setStages(stagesRes.data);
-        if (usersRes.data) setUsers(usersRes.data as User[]);
         if (templatesRes.data) setEmailTemplates(templatesRes.data);
+        if (treatmentServicesRes.data) setTreatmentServices(treatmentServicesRes.data);
 
         // Load services from Hubspot category
         const { data: categoryData } = await supabaseClient
@@ -251,20 +182,21 @@ export default function WorkflowBuilderPage() {
 
         // Load existing workflow if editing
         if (editId) {
-          const { data: workflow } = await supabaseClient
-            .from("workflows")
-            .select("*")
-            .eq("id", editId)
-            .single();
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const response = await fetch(`/api/workflows/v2/${editId}`, {
+            headers: { Authorization: `Bearer ${sessionData.session?.access_token || ""}` },
+          });
+          const workflow = response.ok ? await response.json() : null;
 
           if (workflow) {
             setWorkflowName(workflow.name);
             setWorkflowActive(workflow.active);
+            setOriginalWorkflowActive(workflow.active);
             
             // Parse nodes from config
-            const config = workflow.config as { nodes?: WorkflowNode[] };
-            if (config?.nodes) {
-              setNodes(config.nodes);
+            const loadedNodes = workflow.nodes as WorkflowNode[] | undefined;
+            if (loadedNodes) {
+              setNodes(loadedNodes);
             }
           }
         } else {
@@ -293,7 +225,7 @@ export default function WorkflowBuilderPage() {
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
 
   // Add new node after a specific node
-  const addNodeAfter = useCallback((afterNodeId: string, nodeType: "action" | "condition" | "delay") => {
+  const addNodeAfter = useCallback((afterNodeId: string, nodeType: "action" | "condition" | "delay" | "exit", branch: "next" | "yes" | "no" = "next") => {
     const newNodeId = generateId();
     let newNode: WorkflowNode;
 
@@ -311,19 +243,27 @@ export default function WorkflowBuilderPage() {
         id: newNodeId,
         type: "condition",
         data: {
+          expression: { kind: "group", operator: "and", children: [{ kind: "rule", field: "patient.email", operator: "is_not_empty" }] },
           field: "patient.email",
           operator: "is_not_empty",
           value: "",
         } as ConditionNodeData,
       };
-    } else {
+    } else if (nodeType === "delay") {
       newNode = {
         id: newNodeId,
         type: "delay",
         data: {
           delayType: "hours",
           delayValue: 1,
+          delayAnchor: "trigger_time",
         } as DelayNodeData,
+      };
+    } else {
+      newNode = {
+        id: newNodeId,
+        type: "exit",
+        data: { reason: "Workflow completed" } as ExitNodeData,
       };
     }
 
@@ -331,11 +271,9 @@ export default function WorkflowBuilderPage() {
       const updated = [...prev];
       const afterIndex = updated.findIndex((n) => n.id === afterNodeId);
       if (afterIndex !== -1) {
-        // Get the next node ID from the current node
-        const currentNextId = updated[afterIndex].nextNodeId;
-        // Update the current node to point to the new node
-        updated[afterIndex] = { ...updated[afterIndex], nextNodeId: newNodeId };
-        // Add the new node with the previous next node
+        const pointer = branch === "yes" ? "trueBranchId" : branch === "no" ? "falseBranchId" : "nextNodeId";
+        const currentNextId = updated[afterIndex][pointer];
+        updated[afterIndex] = { ...updated[afterIndex], [pointer]: newNodeId };
         newNode.nextNodeId = currentNextId;
         updated.splice(afterIndex + 1, 0, newNode);
       } else {
@@ -387,7 +325,7 @@ export default function WorkflowBuilderPage() {
   }, []);
 
   // Save workflow
-  const handleSave = async () => {
+  const handleSave = async (publish: boolean) => {
     if (!workflowName.trim()) {
       setError("Please enter a workflow name");
       return;
@@ -398,137 +336,84 @@ export default function WorkflowBuilderPage() {
       setError("Workflow must have a trigger");
       return;
     }
+    const triggerData = triggerNode.data as TriggerNodeData;
+    if (triggerData.triggerType === "appointment_status_changed") {
+      const config = triggerData.config as {
+        appointment_status?: string;
+        appointment_statuses?: string[];
+      };
+      const selectedStatuses = config.appointment_statuses?.length
+        ? config.appointment_statuses
+        : config.appointment_status
+          ? [config.appointment_status]
+          : [];
+      if (selectedStatuses.length === 0) {
+        setError("Please select at least one appointment status");
+        return;
+      }
+    }
 
     try {
       setSaving(true);
       setError(null);
       setSuccess(null);
 
+      const currentTriggerConfig = triggerData.config as {
+        only_future_appointments_from_activation_day?: boolean;
+        future_appointments_activation_day?: string;
+      };
+      const restrictToFutureAppointments =
+        currentTriggerConfig.only_future_appointments_from_activation_day === true;
+      const activationDay = restrictToFutureAppointments && workflowActive
+        ? (!originalWorkflowActive || !currentTriggerConfig.future_appointments_activation_day
+            ? new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Zurich" })
+            : currentTriggerConfig.future_appointments_activation_day)
+        : undefined;
+      const savedTriggerConfig = {
+        ...triggerData.config,
+        future_appointments_activation_day: activationDay,
+      };
+      const savedNodes = nodes.map((node) =>
+        node.id === triggerNode.id
+          ? {
+              ...node,
+              data: {
+                ...triggerData,
+                config: savedTriggerConfig,
+              },
+            }
+          : node
+      );
+
       const workflowData = {
         name: workflowName,
         trigger_type: (triggerNode.data as TriggerNodeData).triggerType,
         active: workflowActive,
         config: {
-          nodes,
-          ...(triggerNode.data as TriggerNodeData).config,
+          nodes: savedNodes,
+          ...savedTriggerConfig,
         },
       };
 
-      if (editId) {
-        await supabaseClient.from("workflows").update(workflowData).eq("id", editId);
-      } else {
-        await supabaseClient.from("workflows").insert(workflowData);
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const response = await fetch(editId ? `/api/workflows/v2/${editId}` : "/api/workflows/v2", {
+        method: editId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token || ""}` },
+        body: JSON.stringify({ name: workflowData.name, active: workflowData.active, nodes: savedNodes, publish }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        const details = Array.isArray(result.issues) ? ` ${result.issues.map((issue: { message: string }) => issue.message).join(" ")}` : "";
+        throw new Error(`${result.error || "Failed to save workflow"}${details}`);
       }
 
-      setSuccess("Workflow saved successfully!");
+      setSuccess(publish ? "Workflow published successfully!" : "Draft saved successfully!");
       setTimeout(() => router.push("/workflows"), 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save workflow");
     } finally {
       setSaving(false);
     }
-  };
-
-  // Render node card
-  const renderNodeCard = (node: WorkflowNode, index: number) => {
-    const isSelected = selectedNodeId === node.id;
-    const isTrigger = node.type === "trigger";
-    const isCondition = node.type === "condition";
-    const isDelay = node.type === "delay";
-    const isAction = node.type === "action";
-
-    let bgColor = "bg-white";
-    let borderColor = "border-slate-200";
-    let badgeColor = "bg-slate-100 text-slate-700";
-    let icon = "⚡";
-    let title = "";
-    let description = "";
-
-    if (isTrigger) {
-      const data = node.data as TriggerNodeData;
-      const triggerDef = TRIGGER_OPTIONS.find((t) => t.value === data.triggerType);
-      bgColor = "bg-gradient-to-r from-amber-50 to-orange-50";
-      borderColor = "border-amber-200";
-      badgeColor = "bg-amber-200 text-amber-800";
-      icon = triggerDef?.icon || "⚡";
-      title = triggerDef?.label || "Trigger";
-      description = triggerDef?.description || "";
-    } else if (isAction) {
-      const data = node.data as ActionNodeData;
-      const actionDef = ACTION_OPTIONS.find((a) => a.value === data.actionType);
-      bgColor = "bg-gradient-to-r from-emerald-50 to-teal-50";
-      borderColor = "border-emerald-200";
-      badgeColor = "bg-emerald-200 text-emerald-800";
-      icon = actionDef?.icon || "📧";
-      title = actionDef?.label || "Action";
-      description = actionDef?.description || "";
-    } else if (isCondition) {
-      bgColor = "bg-gradient-to-r from-purple-50 to-pink-50";
-      borderColor = "border-purple-200";
-      badgeColor = "bg-purple-200 text-purple-800";
-      icon = "🔀";
-      title = "Condition";
-      const data = node.data as ConditionNodeData;
-      description = `If ${data.field} ${data.operator} ${data.value || "..."}`;
-    } else if (isDelay) {
-      bgColor = "bg-gradient-to-r from-blue-50 to-indigo-50";
-      borderColor = "border-blue-200";
-      badgeColor = "bg-blue-200 text-blue-800";
-      icon = "⏰";
-      title = "Delay";
-      const data = node.data as DelayNodeData;
-      description = `Wait ${data.delayValue} ${data.delayType}`;
-    }
-
-    return (
-      <div key={node.id} className="relative">
-        {/* Connector line */}
-        {index > 0 && (
-          <div className="absolute left-6 -top-4 h-4 w-0.5 bg-gradient-to-b from-slate-300 to-slate-200" />
-        )}
-
-        <div
-          onClick={() => setSelectedNodeId(node.id)}
-          className={`
-            relative cursor-pointer rounded-xl p-4 transition-all border-2
-            ${bgColor} ${isSelected ? "border-sky-500 ring-2 ring-sky-200" : borderColor}
-            hover:shadow-md
-          `}
-        >
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/80 text-2xl shadow-sm">
-              {icon}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${badgeColor}`}>
-                  {node.type}
-                </span>
-                <span className="text-xs text-slate-400">Step {index + 1}</span>
-              </div>
-              <h3 className="font-medium text-slate-900">{title}</h3>
-              <p className="text-sm text-slate-600 truncate">{description}</p>
-            </div>
-            {!isTrigger && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteNode(node.id);
-                }}
-                className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-red-50 hover:text-red-500"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Add node button - click to toggle menu */}
-        <AddStepButton nodeId={node.id} onAdd={addNodeAfter} />
-      </div>
-    );
   };
 
   // Render configuration panel based on selected node type
@@ -575,6 +460,112 @@ export default function WorkflowBuilderPage() {
               </select>
             </div>
           )}
+
+          {data.triggerType === "appointment_status_changed" && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">When appointment status</label>
+                <select
+                  value={(data.config as { appointment_status_match_mode?: string }).appointment_status_match_mode || "includes"}
+                  onChange={(e) => updateNodeData(selectedNode.id, {
+                    config: { ...data.config, appointment_status_match_mode: e.target.value },
+                  })}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                >
+                  <option value="includes">is any of</option>
+                  <option value="excludes">is not any of</option>
+                </select>
+              </div>
+              <fieldset>
+                <legend className="block text-sm font-medium text-slate-700 mb-1.5">Statuses</legend>
+                <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+                  {appointmentStatuses.map((status) => {
+                    const config = data.config as {
+                      appointment_status?: string;
+                      appointment_statuses?: string[];
+                    };
+                    const selectedStatuses = config.appointment_statuses ?? (
+                      config.appointment_status ? [config.appointment_status] : []
+                    );
+                    const isChecked = selectedStatuses.includes(status.name);
+                    return (
+                      <label
+                        key={status.id}
+                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            const nextStatuses = isChecked
+                              ? selectedStatuses.filter((name) => name !== status.name)
+                              : [...selectedStatuses, status.name];
+                            updateNodeData(selectedNode.id, {
+                              config: {
+                                ...data.config,
+                                appointment_status: undefined,
+                                appointment_statuses: nextStatuses,
+                              },
+                            });
+                          }}
+                          className="h-4 w-4 rounded border-slate-300 text-sky-600"
+                        />
+                        <span>{status.emoji ? `${status.emoji} ` : ""}{status.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <input
+                  type="checkbox"
+                  checked={Boolean(
+                    (data.config as {
+                      run_once_per_patient_per_day?: boolean;
+                      run_once_per_appointment?: boolean;
+                    }).run_once_per_patient_per_day ??
+                    (data.config as { run_once_per_appointment?: boolean }).run_once_per_appointment
+                  )}
+                  onChange={(e) => updateNodeData(selectedNode.id, {
+                    config: {
+                      ...data.config,
+                      run_once_per_patient_per_day: e.target.checked,
+                      run_once_per_appointment: undefined,
+                    },
+                  })}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-slate-700">Run only once per patient per day</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    If a patient has multiple appointments on the same day, only the first match will run this workflow.
+                  </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <input
+                  type="checkbox"
+                  checked={Boolean(
+                    (data.config as { only_future_appointments_from_activation_day?: boolean })
+                      .only_future_appointments_from_activation_day
+                  )}
+                  onChange={(e) => updateNodeData(selectedNode.id, {
+                    config: {
+                      ...data.config,
+                      only_future_appointments_from_activation_day: e.target.checked,
+                    },
+                  })}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-slate-700">Future appointments only</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    Only run for appointments scheduled on or after the day this workflow becomes active.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
         </div>
       );
     }
@@ -600,6 +591,13 @@ export default function WorkflowBuilderPage() {
 
           {data.actionType === "send_email" && (
             <>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Message classification</label>
+                <select value={(data.config as { classification?: string }).classification || "marketing"} onChange={(e) => updateNodeData(selectedNode.id, { config: { ...data.config, classification: e.target.value } })} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900">
+                  <option value="marketing">Marketing — consent required</option>
+                  <option value="transactional">Transactional — operational message</option>
+                </select>
+              </div>
               {/* Email Type */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Type</label>
@@ -695,6 +693,7 @@ export default function WorkflowBuilderPage() {
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
                 >
                   <option value="patient">Patient (from trigger)</option>
+                  <option value="appointment_patient">Patient (from appointment)</option>
                   <option value="deal_patient">Patient (from deal)</option>
                   <option value="assigned_user">Assigned Staff</option>
                   <option value="specific_user">Specific User</option>
@@ -1097,12 +1096,43 @@ export default function WorkflowBuilderPage() {
               </div>
             </>
           )}
+
+          {data.actionType === "add_internal_note" && (
+            <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Note</label><textarea rows={5} value={(data.config as { body?: string }).body || ""} onChange={(e) => updateNodeData(selectedNode.id, { config: { ...data.config, body: e.target.value } })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Supports {{patient.first_name}}" /></div>
+          )}
+          {(data.actionType === "add_tag" || data.actionType === "remove_tag") && (
+            <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Tag name</label><input value={(data.config as { tag_name?: string }).tag_name || ""} onChange={(e) => updateNodeData(selectedNode.id, { config: { ...data.config, tag_name: e.target.value } })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></div>
+          )}
+          {data.actionType === "update_patient_property" && (
+            <>
+              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Property key</label><input value={(data.config as { property_key?: string }).property_key || ""} onChange={(e) => updateNodeData(selectedNode.id, { config: { ...data.config, property_key: e.target.value } })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="follow_up_status" /></div>
+              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Value</label><input value={(data.config as { value?: string }).value || ""} onChange={(e) => updateNodeData(selectedNode.id, { config: { ...data.config, value: e.target.value } })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></div>
+            </>
+          )}
+          {data.actionType === "notify_staff" && (
+            <>
+              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Recipients</label><MultiUserSearchSelect value={(data.config as { recipient_user_ids?: string[] }).recipient_user_ids || []} onChange={(ids) => updateNodeData(selectedNode.id, { config: { ...data.config, recipient_user_ids: ids } })} assignmentMode="all" onAssignmentModeChange={() => undefined} placeholder="Search staff..." /></div>
+              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Title</label><input value={(data.config as { title?: string }).title || ""} onChange={(e) => updateNodeData(selectedNode.id, { config: { ...data.config, title: e.target.value } })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></div>
+            </>
+          )}
+          {data.actionType === "stop_workflow" && (
+            <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Reason</label><input value={(data.config as { reason?: string }).reason || ""} onChange={(e) => updateNodeData(selectedNode.id, { config: { ...data.config, reason: e.target.value } })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></div>
+          )}
         </div>
       );
     }
 
     if (selectedNode.type === "condition") {
       const data = selectedNode.data as ConditionNodeData;
+      if (data.expression) {
+        return (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-slate-900">Configure Decision</h3>
+            <p className="text-xs text-slate-500">The Yes branch runs when this expression matches; otherwise the No branch runs.</p>
+            <ConditionExpressionEditor expression={data.expression} serviceOptions={treatmentServices} onChange={(expression) => updateNodeData(selectedNode.id, { expression })} />
+          </div>
+        );
+      }
       return (
         <div className="space-y-4">
           <h3 className="font-semibold text-slate-900">Configure Condition</h3>
@@ -1258,9 +1288,35 @@ export default function WorkflowBuilderPage() {
 
     if (selectedNode.type === "delay") {
       const data = selectedNode.data as DelayNodeData;
+      const triggerType = (
+        nodes.find((node) => node.type === "trigger")?.data as TriggerNodeData | undefined
+      )?.triggerType;
+      const supportsAppointmentAnchor =
+        triggerType === "appointment_created" || triggerType === "appointment_status_changed";
       return (
         <div className="space-y-4">
           <h3 className="font-semibold text-slate-900">Configure Delay</h3>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Delay starts from</label>
+            <select
+              value={data.delayAnchor || "trigger_time"}
+              onChange={(e) => updateNodeData(selectedNode.id, {
+                delayAnchor: e.target.value as DelayNodeData["delayAnchor"],
+              })}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+            >
+              <option value="trigger_time">Workflow trigger time</option>
+              {supportsAppointmentAnchor && (
+                <option value="appointment_time">Appointment time</option>
+              )}
+            </select>
+            {data.delayAnchor === "appointment_time" && (
+              <p className="mt-1 text-xs text-slate-500">
+                The delay is added to the appointment&apos;s scheduled start time.
+              </p>
+            )}
+          </div>
           
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Delay Type</label>
@@ -1272,6 +1328,8 @@ export default function WorkflowBuilderPage() {
               <option value="minutes">Minutes</option>
               <option value="hours">Hours</option>
               <option value="days">Days</option>
+              <option value="weeks">Weeks</option>
+              <option value="months">Months</option>
             </select>
           </div>
 
@@ -1287,6 +1345,19 @@ export default function WorkflowBuilderPage() {
               />
               <span className="text-sm text-slate-600">{data.delayType}</span>
             </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (selectedNode.type === "exit") {
+      const data = selectedNode.data as ExitNodeData;
+      return (
+        <div className="space-y-4">
+          <h3 className="font-semibold text-slate-900">Configure Exit</h3>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Reason</label>
+            <input value={data.reason || ""} onChange={(event) => updateNodeData(selectedNode.id, { reason: event.target.value })} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900" />
           </div>
         </div>
       );
@@ -1341,11 +1412,18 @@ export default function WorkflowBuilderPage() {
               Active
             </label>
             <button
-              onClick={handleSave}
+              onClick={() => handleSave(false)}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 whitespace-nowrap"
+            >
+              {saving ? "Saving..." : "Save Draft"}
+            </button>
+            <button
+              onClick={() => handleSave(true)}
               disabled={saving}
               className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap"
             >
-              {saving ? "Saving..." : "Save Workflow"}
+              {saving ? "Publishing..." : "Publish"}
             </button>
           </div>
         </header>
@@ -1359,10 +1437,16 @@ export default function WorkflowBuilderPage() {
 
         <div className="flex flex-col xl:flex-row gap-4 xl:gap-6">
           {/* Workflow Canvas */}
-          <div className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm min-h-[400px] overflow-x-auto">
-            <h2 className="mb-4 text-base font-semibold text-slate-900">Workflow Steps</h2>
-            <div className="space-y-0 min-w-[280px]">
-              {nodes.map((node, index) => renderNodeCard(node, index))}
+          <div className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm min-h-[640px] overflow-hidden">
+            <h2 className="mb-4 text-base font-semibold text-slate-900">Workflow Tree</h2>
+            <div className="h-[570px] min-w-[280px] overflow-hidden rounded-lg border border-slate-100">
+              <WorkflowCanvas
+                nodes={nodes as any}
+                selectedNodeId={selectedNodeId}
+                onSelect={setSelectedNodeId}
+                onDelete={deleteNode}
+                onAdd={(nodeId, branch, type) => addNodeAfter(nodeId, type, branch)}
+              />
             </div>
           </div>
 

@@ -63,8 +63,8 @@ const DEFAULT_TRANSLATIONS: Record<Language, Record<string, string>> = {
     "booking.selectDateDesc": "Please select a date",
     "booking.date": "Date",
     "booking.availableSlots": "Available Time Slots",
-    "booking.notes": "Additional Notes",
-    "booking.notesPlaceholder": "Any specific concerns or requests...",
+    "booking.notes": "Treatment Area(s)",
+    "booking.notesPlaceholder": "Please indicate the area(s) you would like to treat.",
     "booking.confirmTitle": "Confirm Your Appointment",
     "booking.name": "Name",
     "booking.doctor": "Doctor",
@@ -123,8 +123,8 @@ const DEFAULT_TRANSLATIONS: Record<Language, Record<string, string>> = {
     "booking.selectDateDesc": "Veuillez sélectionner une date",
     "booking.date": "Date",
     "booking.availableSlots": "Créneaux horaires disponibles",
-    "booking.notes": "Notes supplémentaires",
-    "booking.notesPlaceholder": "Préoccupations ou demandes spécifiques...",
+    "booking.notes": "Zone(s) à traiter",
+    "booking.notesPlaceholder": "Veuillez indiquer la ou les zone(s) que vous souhaitez traiter.",
     "booking.confirmTitle": "Confirmez votre rendez-vous",
     "booking.name": "Nom",
     "booking.doctor": "Médecin",
@@ -150,6 +150,30 @@ const DEFAULT_TRANSLATIONS: Record<Language, Record<string, string>> = {
     "common.loading": "Chargement...",
     "common.footer": "© {year} Maison Toá. Tous droits réservés.",
   },
+};
+
+const normalizeLegacyBookingTranslations = (
+  language: Language,
+  values: Record<string, string>
+): Record<string, string> => {
+  const normalized = { ...values };
+  const legacyValues = language === "en"
+    ? {
+        "booking.notes": "Additional Notes",
+        "booking.notesPlaceholder": "Any specific concerns or requests...",
+      }
+    : {
+        "booking.notes": "Notes supplémentaires",
+        "booking.notesPlaceholder": "Préoccupations ou demandes spécifiques...",
+      };
+
+  for (const [key, legacyValue] of Object.entries(legacyValues)) {
+    if (normalized[key] === legacyValue) {
+      normalized[key] = DEFAULT_TRANSLATIONS[language][key];
+    }
+  }
+
+  return normalized;
 };
 
 const CONTENT_GROUPS: { label: string; keys: string[] }[] = [
@@ -301,8 +325,8 @@ export default function BookAppointmentCMSPage() {
       const data = await res.json();
       if (data.translations && typeof data.translations === "object") {
         setContentDrafts({
-          en: { ...DEFAULT_TRANSLATIONS.en, ...(data.translations.en ?? {}) },
-          fr: { ...DEFAULT_TRANSLATIONS.fr, ...(data.translations.fr ?? {}) },
+          en: { ...DEFAULT_TRANSLATIONS.en, ...normalizeLegacyBookingTranslations("en", data.translations.en ?? {}) },
+          fr: { ...DEFAULT_TRANSLATIONS.fr, ...normalizeLegacyBookingTranslations("fr", data.translations.fr ?? {}) },
         });
       } else {
         setContentDrafts({

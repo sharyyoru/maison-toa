@@ -45,6 +45,8 @@
     "signOut": "Déconnexion",
     "signOutConfirm": "Êtes-vous sûr de vouloir vous déconnecter ?",
     "searchPatients": "Rechercher des patients...",
+    "noPatientsFound": "Aucun patient trouvé",
+    "patientSearchFailed": "La recherche a échoué. Veuillez réessayer.",
     "dob": "Né(e) le",
     "unnamed": "Sans nom",
     "loadingUser": "Chargement..."
@@ -74,6 +76,10 @@
     "today": "Aujourd'hui",
     "previousMonth": "Mois précédent",
     "nextMonth": "Mois suivant",
+    "previousDay": "Jour précédent",
+    "nextDay": "Jour suivant",
+    "previousWeek": "Semaine précédente",
+    "nextWeek": "Semaine suivante",
     "view": {
       "day": "Jour",
       "week": "Semaine",
@@ -169,6 +175,25 @@
       "deleting": "Suppression...",
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce rendez-vous ? Cette action est irréversible.",
       "deleteMirroredConfirm": "Supprimer cette réservation de calendrier miroir ? Le rendez-vous original du médecin sera conservé.",
+      "recurringAction": {
+        "seriesDescription": "Ce rendez-vous fait partie d'une série récurrente.",
+        "this": { "label": "Ce rendez-vous uniquement" },
+        "this_and_future": { "label": "Ce rendez-vous et les suivants" },
+        "modify": {
+          "title": "Modifier le rendez-vous récurrent",
+          "question": "Que souhaitez-vous modifier ?",
+          "thisDescription": "Seul ce rendez-vous sera modifié.",
+          "this_and_futureDescription": "Ce rendez-vous et tous les rendez-vous futurs seront modifiés.",
+          "confirm": "Modifier"
+        },
+        "delete": {
+          "title": "Supprimer le rendez-vous récurrent",
+          "question": "Que souhaitez-vous supprimer ?",
+          "thisDescription": "Seul ce rendez-vous sera supprimé.",
+          "this_and_futureDescription": "Ce rendez-vous et tous les rendez-vous futurs seront supprimés.",
+          "confirm": "Supprimer"
+        }
+      },
       "conflict": "CONFLIT",
       "consultationFor": "Consultation pour {name}"
     },
@@ -200,6 +225,10 @@
       "newCalendar": "+ Nouveau calendrier",
       "bookingPages": "Pages de réservation",
       "otherCalendars": "Autres calendriers",
+      "showOnlyCalendar": "Afficher uniquement {name}",
+      "calendarActions": "Plus d’actions pour {name}",
+      "editCalendar": "Modifier le calendrier",
+      "deleteCalendar": "Supprimer le calendrier",
       "comingSoon": "Bientôt disponible"
     },
     "errors": {
@@ -377,7 +406,11 @@
       "failedLoad": "Échec du chargement des consultations.",
       "failedSendEmail": "Échec de l'envoi de l'e-mail.",
       "loadingAxenita": "Chargement des dossiers médicaux Axenita...",
-      "axenitaTitle": "Dossiers médicaux Axenita"
+      "axenitaTitle": "Dossiers médicaux Axenita",
+      "stopReminders": "Stopper les rappels",
+      "stopRemindersTooltip": "Arrêter les lettres/e-mails de rappel pour cette facture",
+      "downloadAllInvoices": "Télécharger toutes les factures",
+      "zippingInvoices": "Compression..."
     },
     "form": {
       "date": "Date",
@@ -1348,6 +1381,7 @@
       "blockedDates": "Dates bloquées",
       "medidata": "Connexion MediData",
       "bookingCategories": "Catégories de réservation",
+      "appointmentStatuses": "Statuts des rendez-vous",
       "providersBilling": "Prestataires & Facturation",
       "tardocGroups": "Groupes TARDOC"
     },
@@ -1437,6 +1471,15 @@
     "booking": {
       "categoriesBtn": "Catégories",
       "treatmentsBtn": "Traitements",
+      "orderingBtn": "Organiser l'ordre",
+      "orderingTitle": "Ordre des pages de réservation",
+      "orderingDescription": "Faites glisser les catégories et les traitements dans l'ordre souhaité sur les pages de réservation.",
+      "dragToReorder": "Faire glisser pour réorganiser",
+      "dragCategory": "Faire glisser la catégorie {name}",
+      "dragTreatment": "Faire glisser le traitement {name}",
+      "saveOrdering": "Enregistrer l'ordre",
+      "orderingSaved": "Ordre des pages de réservation enregistré !",
+      "orderingSaveFailed": "Échec de l'enregistrement de l'ordre des pages de réservation",
       "doctorsBtn": "Médecins",
       "firstTimePatients": "Nouveaux patients",
       "existingPatients": "Patients existants",
@@ -1674,6 +1717,7 @@
       "deal_stage_changed": "Changement d'étape d'affaire",
       "patient_created": "Patient créé",
       "appointment_created": "Rendez-vous créé",
+      "appointment_status_changed": "Changement de statut du rendez-vous",
       "appointment_completed": "Rendez-vous terminé",
       "form_submitted": "Formulaire soumis",
       "task_completed": "Tâche terminée",

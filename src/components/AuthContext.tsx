@@ -25,8 +25,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async (): Promise<User | null> => {
     try {
-      const { data } = await supabaseClient.auth.getUser();
-      const fetchedUser = data?.user ?? null;
+      const {
+        data: { session },
+      } = await supabaseClient.auth.getSession();
+      const fetchedUser = session?.user ?? null;
       setUser(fetchedUser);
       return fetchedUser;
     } catch {
@@ -40,9 +42,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function loadUser() {
       try {
-        const { data } = await supabaseClient.auth.getUser();
+        const {
+          data: { session },
+        } = await supabaseClient.auth.getSession();
         if (isMounted) {
-          setUser(data?.user ?? null);
+          setUser(session?.user ?? null);
           setLoading(false);
         }
       } catch {

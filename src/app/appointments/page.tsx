@@ -6,7 +6,9 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getAppointmentNotes, getAppointmentTitle, getAppointmentDisplayName } from "@/lib/appointmentUtils";
+import { formatSwissLocalPhoneDisplay } from "@/lib/phoneFormatter";
 import { getCategoryColorPresentation } from "@/utils/categoryColor";
+import { useAppointmentStatusOptions } from "@/lib/appointmentStatuses";
 import {
   formatSwissMonthYear,
   formatSwissYmd,
@@ -19,6 +21,7 @@ import {
   getSwissMonthRange,
   getSwissDayRange,
   createSwissDateTime,
+  getSwissDayOfWeek,
 } from "@/lib/swissTimezone";
 
 type AppointmentStatus =
@@ -189,19 +192,6 @@ type ServiceOption = {
   category_name: string | null;
 };
 
-const BOOKING_STATUS_OPTIONS = [
-  "Aucune sélection",
-  "Salle d'attente",
-  "Chez le médecin/dans la salle de consult.",
-  "fait",
-  "Attention",
-  "Annulé",
-  "N'est pas venu",
-  "en retard",
-  "Urgent",
-  "Déplacé",
-];
-
 const CATEGORY_COLORS: Record<string, string> = {
   // French names (from Axenita) - using lighter/opacity variants for readability
   "Aucune sélection": "bg-sky-100/80",
@@ -269,19 +259,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Vacation/Leave": "bg-lime-200/70",
 };
 
-const STATUS_ICONS: Record<string, string> = {
-  "Aucune sélection": "",
-  "Salle d'attente": "🕐",
-  "Chez le médecin/dans la salle de consult.": "👤",
-  "fait": "☑",
-  "Attention": "⚠️",
-  "Annulé": "☒",
-  "N'est pas venu": "🚫",
-  "en retard": "📞",
-  "Urgent": "🆘",
-  "Déplacé": "📝",
-};
-
 function normalizeString(str: string): string {
   return str
     .toLowerCase()
@@ -315,11 +292,6 @@ function getCategoryColor(category: string | null): string {
   }
   
   return "bg-slate-100";
-}
-
-function getStatusIcon(status: string | null): string {
-  if (!status) return "";
-  return STATUS_ICONS[status] ?? "";
 }
 
 const CLINIC_LOCATION_OPTIONS = ["Lausanne", "Rhône", "Champel", "Gstaad", "Montreux"];
@@ -408,6 +380,8 @@ type CalendarAppointment = {
   temporary_text: string | null;
   machine_ids: string[];
   linked_parent_appointment_id?: string | null;
+  recurrence_series_id?: string | null;
+  recurrence_sequence?: number | null;
   tracking_params?: Record<string, string> | null;
   patient: AppointmentPatient | null;
   provider: {
@@ -417,6 +391,15 @@ type CalendarAppointment = {
 };
 
 type CalendarView = "month" | "day" | "range";
+
+function getLogicalPatientAppointmentStart(appointment: {
+  start_time: string;
+  tracking_params?: Record<string, string> | null;
+}): string {
+  const trackedStart = appointment.tracking_params?.patient_appointment_start;
+  const parsed = new Date(trackedStart || appointment.start_time);
+  return Number.isNaN(parsed.getTime()) ? appointment.start_time : parsed.toISOString();
+}
 
 const DAY_VIEW_START_MINUTES = 6 * 60;
 const DAY_VIEW_END_MINUTES = 20 * 60; // 8 PM
@@ -534,6 +517,40 @@ function formatMonthYear(date: Date) {
 function formatYmd(date: Date) {
   // Use Swiss timezone for consistent date display regardless of browser location
   return formatSwissYmd(date);
+}
+
+// ── Swiss-time calendar helpers ─────────────────────────────────────────────
+// Calendar days are anchored at Swiss noon, keeping date selection and display
+// stable for users outside the Europe/Zurich timezone and across DST changes.
+const CALENDAR_DAY_MS = 24 * 60 * 60 * 1000;
+
+function swissDayAnchor(year: number, monthIndex: number, day: number): Date {
+  const normalized = new Date(year, monthIndex, day);
+  const ymd = `${normalized.getFullYear()}-${String(normalized.getMonth() + 1).padStart(2, "0")}-${String(normalized.getDate()).padStart(2, "0")}`;
+  return createSwissDateTime(ymd, 12, 0);
+}
+
+function swissYmdParts(date: Date): { year: number; monthIndex: number; day: number } {
+  const [year, month, day] = formatSwissYmd(date).split("-").map(Number);
+  return { year, monthIndex: month - 1, day };
+}
+
+function swissDayAnchorFrom(date: Date): Date {
+  const { year, monthIndex, day } = swissYmdParts(date);
+  return swissDayAnchor(year, monthIndex, day);
+}
+
+function swissTodayAnchor(): Date {
+  return swissDayAnchorFrom(new Date());
+}
+
+function swissMonthAnchor(date: Date, monthDelta = 0): Date {
+  const { year, monthIndex } = swissYmdParts(date);
+  return swissDayAnchor(year, monthIndex + monthDelta, 1);
+}
+
+function addSwissDays(date: Date, days: number): Date {
+  return swissDayAnchorFrom(new Date(date.getTime() + days * CALENDAR_DAY_MS));
 }
 
 function formatTimeRangeLabel(start: Date, end: Date | null): string {
@@ -809,6 +826,8 @@ async function syncPendingAppointmentReminder(appointment: CalendarAppointment):
     .from("scheduled_emails")
     .select("id")
     .eq("appointment_id", appointment.id)
+    // Workflow emails use recipient_type "workflow" and must retain their own
+    // configured schedule when the appointment time changes.
     .eq("recipient_type", "patient")
     .eq("status", "pending")
     .limit(1)
@@ -834,6 +853,19 @@ async function syncPendingAppointmentReminder(appointment: CalendarAppointment):
 }
 
 export default function CalendarPage() {
+  const appointmentStatusOptions = useAppointmentStatusOptions();
+  const bookingStatusOptions = useMemo(
+    () => appointmentStatusOptions.map((status) => status.name),
+    [appointmentStatusOptions],
+  );
+  const statusEmojiMap = useMemo(
+    () => new Map(appointmentStatusOptions.map((status) => [status.name, status.emoji])),
+    [appointmentStatusOptions],
+  );
+  const getStatusIcon = useCallback(
+    (status: string | null) => status ? statusEmojiMap.get(status) ?? "" : "",
+    [statusEmojiMap],
+  );
   const searchParams = useSearchParams();
   const t = useTranslations("calendar");
   const tCommon = useTranslations("common");
@@ -901,6 +933,7 @@ export default function CalendarPage() {
   const [editAgendaSpecialty, setEditAgendaSpecialty] = useState("");
   const [editAgendaShortCode, setEditAgendaShortCode] = useState("");
   const [deletingAgendaId, setDeletingAgendaId] = useState<string | null>(null);
+  const [openCalendarActionsId, setOpenCalendarActionsId] = useState<string | null>(null);
   // Appointment resize state
   const [resizingAppointment, setResizingAppointment] = useState<CalendarAppointment | null>(null);
   // Undo history for appointment changes
@@ -911,6 +944,7 @@ export default function CalendarPage() {
   }>>([]);
   const [view, setView] = useState<CalendarView>("day");
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rangeEndDate, setRangeEndDate] = useState<Date | null>(null);
   const [isDraggingRange, setIsDraggingRange] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
@@ -945,7 +979,7 @@ export default function CalendarPage() {
     slotHeight: number;
     startMinutesOffset: number;
   } | null>(null);
-  
+
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDate, setDraftDate] = useState("");
@@ -1217,6 +1251,8 @@ export default function CalendarPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingAppointment, setDeletingAppointment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [recurringAction, setRecurringAction] = useState<"modify" | "delete" | null>(null);
+  const [recurringActionScope, setRecurringActionScope] = useState<"this" | "this_and_future" | null>(null);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [editNoPatient, setEditNoPatient] = useState(false);
   const editOriginalPatientIdRef = useRef<string | null>(null);
@@ -1326,7 +1362,7 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -1427,10 +1463,9 @@ export default function CalendarPage() {
       try {
         const { data, error } = await supabaseClient
           .from("appointments")
-          .select("patient_id, start_time")
+          .select("patient_id, start_time, tracking_params")
           .in("patient_id", patientIds)
-          .neq("status", "cancelled")
-          .order("start_time", { ascending: true });
+          .neq("status", "cancelled");
         if (cancelled) return;
         if (error || !data) {
           setFirstAppointmentByPatient({});
@@ -1441,7 +1476,11 @@ export default function CalendarPage() {
           const pid = row.patient_id as string | null;
           const st = row.start_time as string | null;
           if (!pid || !st) continue;
-          if (!map[pid]) map[pid] = st; // first occurrence wins (ordered asc)
+          const logicalStart = getLogicalPatientAppointmentStart({
+            start_time: st,
+            tracking_params: (row.tracking_params as Record<string, string> | null) ?? null,
+          });
+          if (!map[pid] || new Date(logicalStart) < new Date(map[pid])) map[pid] = logicalStart;
         }
         setFirstAppointmentByPatient(map);
       } catch {
@@ -2107,6 +2146,20 @@ export default function CalendarPage() {
     };
   }, [createDoctorCalendarId]);
 
+  useEffect(() => {
+    if (!openCalendarActionsId) return;
+
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as HTMLElement;
+      if (!target.closest("[data-calendar-actions]")) {
+        setOpenCalendarActionsId(null);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openCalendarActionsId]);
+
   const appointmentsByDay = useMemo(() => {
     const map: Record<string, CalendarAppointment[]> = {};
 
@@ -2190,37 +2243,22 @@ export default function CalendarPage() {
 
   const gridDates = useMemo(() => {
     const dates: Date[] = [];
-    const firstDayOfWeek = 1; // Monday
-    const firstOfMonth = new Date(
-      visibleMonth.getFullYear(),
-      visibleMonth.getMonth(),
-      1,
-      12, 0, 0 // Set to noon to avoid timezone boundary issues
-    );
-    const startWeekday = firstOfMonth.getDay();
+    const firstDayOfWeek = 1; // Monday (Swiss / European convention)
+    const { year, monthIndex } = swissYmdParts(visibleMonth);
+    const firstOfMonth = swissDayAnchor(year, monthIndex, 1);
+    const startWeekday = getSwissDayOfWeek(firstOfMonth);
     const diff = (startWeekday - firstDayOfWeek + 7) % 7;
-    const gridStart = new Date(
-      firstOfMonth.getFullYear(),
-      firstOfMonth.getMonth(),
-      firstOfMonth.getDate() - diff,
-      12, 0, 0 // Set to noon to avoid timezone boundary issues
-    );
+    const gridStart = addSwissDays(firstOfMonth, -diff);
 
     for (let i = 0; i < 42; i += 1) {
-      const d = new Date(
-        gridStart.getFullYear(),
-        gridStart.getMonth(),
-        gridStart.getDate() + i,
-        12, 0, 0 // Set to noon to avoid timezone boundary issues
-      );
-      dates.push(d);
+      dates.push(addSwissDays(gridStart, i));
     }
 
     return dates;
   }, [visibleMonth]);
 
   const todayYmd = formatYmd(new Date());
-  const visibleMonthIndex = visibleMonth.getMonth();
+  const visibleMonthIndex = swissYmdParts(visibleMonth).monthIndex;
 
   // Get selected doctor calendars for tabs
   const selectedDoctorCalendars = useMemo(() => {
@@ -2230,21 +2268,30 @@ export default function CalendarPage() {
   const activeRangeDates = useMemo(() => {
     if (!selectedDate) return [] as Date[];
     if (view === "day" || !rangeEndDate) {
-      const dates = [selectedDate];
-      return dates;
+      return [selectedDate];
     }
 
     const start = selectedDate < rangeEndDate ? selectedDate : rangeEndDate;
     const end = selectedDate < rangeEndDate ? rangeEndDate : selectedDate;
 
+    // Walk day-by-day in Swiss calendar space so every entry is a Swiss-noon
+    // anchor (comparing YYYY-MM-DD strings is timezone-safe).
     const dates: Date[] = [];
-    const current = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-    while (current <= end) {
-      dates.push(new Date(current));
-      current.setDate(current.getDate() + 1);
+    const startYmd = formatYmd(start);
+    const endYmd = formatYmd(end);
+    let current = start;
+    let currentYmd = startYmd;
+    while (currentYmd <= endYmd) {
+      dates.push(current);
+      current = addSwissDays(current, 1);
+      currentYmd = formatYmd(current);
     }
 
-    return dates;
+    // Week view is represented as a seven-day range. Keep Sunday out of the
+    // displayed columns without changing shorter, manually selected ranges.
+    return dates.length === 7
+      ? dates.filter((date) => date.getDay() !== 0)
+      : dates;
   }, [view, selectedDate, rangeEndDate]);
 
   const timeSlots = useMemo(() => {
@@ -2338,15 +2385,18 @@ export default function CalendarPage() {
   // Filtered options for smart search dropdowns
   const filteredServiceOptions = useMemo(() => {
     const search = serviceSearch.trim().toLowerCase();
-    if (!search) return serviceOptions;
-    return serviceOptions.filter((opt) => opt.name.toLowerCase().includes(search));
+    const servicesWithDuration = serviceOptions.filter(
+      (opt) => opt.duration_minutes !== null && opt.duration_minutes > 0,
+    );
+    if (!search) return servicesWithDuration;
+    return servicesWithDuration.filter((opt) => opt.name.toLowerCase().includes(search));
   }, [serviceOptions, serviceSearch]);
 
   const filteredStatusOptions = useMemo(() => {
     const search = statusSearch.trim().toLowerCase();
-    if (!search) return BOOKING_STATUS_OPTIONS;
-    return BOOKING_STATUS_OPTIONS.filter((opt) => opt.toLowerCase().includes(search));
-  }, [statusSearch]);
+    if (!search) return bookingStatusOptions;
+    return bookingStatusOptions.filter((opt) => opt.toLowerCase().includes(search));
+  }, [bookingStatusOptions, statusSearch]);
 
   // Merge hardcoded category options with DB-loaded categories so the calendar
   // reflects any categories created/edited via the Services page.
@@ -2525,13 +2575,7 @@ export default function CalendarPage() {
   ]);
 
   function handleSelectDayView() {
-    const base = selectedDate ?? new Date();
-    const day = new Date(
-      base.getFullYear(),
-      base.getMonth(),
-      base.getDate(),
-      12, 0, 0
-    );
+    const day = swissDayAnchorFrom(selectedDate ?? new Date());
     setSelectedDate(day);
     setRangeEndDate(null);
     setView("day");
@@ -2539,20 +2583,12 @@ export default function CalendarPage() {
   }
 
   function handleSelectWeekView() {
-    const base = selectedDate ?? new Date();
-    const start = new Date(
-      base.getFullYear(),
-      base.getMonth(),
-      base.getDate(),
-      12, 0, 0
-    );
-    const weekday = start.getDay();
+    const base = swissDayAnchorFrom(selectedDate ?? new Date());
+    const weekday = getSwissDayOfWeek(base);
     // Adjust to make Monday the first day of the week (0=Sunday, 1=Monday, ..., 6=Saturday)
     const adjustedWeekday = weekday === 0 ? 6 : weekday - 1;
-    start.setDate(start.getDate() - adjustedWeekday);
-
-    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12, 0, 0);
-    end.setDate(start.getDate() + 6);
+    const start = addSwissDays(base, -adjustedWeekday);
+    const end = addSwissDays(start, 6);
 
     setSelectedDate(start);
     setRangeEndDate(end);
@@ -2561,8 +2597,8 @@ export default function CalendarPage() {
   }
 
   function handleSelectMonthView() {
-    const base = selectedDate ?? new Date();
-    setVisibleMonth(new Date(base.getFullYear(), base.getMonth(), 1));
+    const base = swissDayAnchorFrom(selectedDate ?? new Date());
+    setVisibleMonth(swissMonthAnchor(base));
     setSelectedDate(null);
     setRangeEndDate(null);
     setView("month");
@@ -2581,6 +2617,24 @@ export default function CalendarPage() {
         const selectedIds = updated.filter((c) => c.selected).map((c) => c.id);
         localStorage.setItem("appointments_selected_calendars", JSON.stringify(selectedIds));
       } catch {}
+      return updated;
+    });
+  }
+
+  function handleIsolateCalendar(calendarId: string) {
+    setDoctorCalendars((prev) => {
+      const updated = prev.map((calendar) => ({
+        ...calendar,
+        selected: calendar.id === calendarId,
+      }));
+
+      try {
+        localStorage.setItem(
+          "appointments_selected_calendars",
+          JSON.stringify([calendarId]),
+        );
+      } catch {}
+
       return updated;
     });
   }
@@ -3232,7 +3286,7 @@ export default function CalendarPage() {
           const { data: fullApptData } = await supabaseClient
             .from("appointments")
             .select(
-              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
             )
             .eq('id', firstAppt.id)
             .single();
@@ -3251,7 +3305,7 @@ export default function CalendarPage() {
         const { data: refreshedData } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -3302,7 +3356,7 @@ export default function CalendarPage() {
             source: "manual",
           })
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, language_preference), provider:providers(id, name)",
           )
           .single();
 
@@ -4245,10 +4299,11 @@ export default function CalendarPage() {
       appointment,
       sendCancellationEmail: shouldSend,
       personalizedMessage: message,
+      recurrenceScope: recurringActionScope ?? undefined,
     });
   }
 
-  async function handleSaveEditAppointment() {
+  async function handleSaveEditAppointment(recurrenceScope?: "this" | "this_and_future") {
     if (!editingAppointment || savingEdit) return;
 
     setEditError(null);
@@ -4260,6 +4315,12 @@ export default function CalendarPage() {
 
     if (!editNoPatient && !editPatientId) {
       setEditError("Please select a patient or choose No patient.");
+      return;
+    }
+
+    if (editingAppointment.recurrence_series_id && !editingAppointment.linked_parent_appointment_id && !recurrenceScope) {
+      setRecurringActionScope(null);
+      setRecurringAction("modify");
       return;
     }
 
@@ -4341,6 +4402,7 @@ export default function CalendarPage() {
             ? editingAppointment.provider_id
             : editProviderId || null,
           machine_ids: editMachineIds,
+          recurrence_scope: recurrenceScope,
         }),
       });
 
@@ -4353,7 +4415,7 @@ export default function CalendarPage() {
 
       const data = await response.json();
 
-      const updated = data as unknown as CalendarAppointment;
+      const updated = (data.appointment ?? data) as unknown as CalendarAppointment;
       const previousEndTime = editingAppointment.end_time
         ? new Date(editingAppointment.end_time).getTime()
         : null;
@@ -4401,6 +4463,8 @@ export default function CalendarPage() {
       });
 
       setSavingEdit(false);
+      setRecurringAction(null);
+      setRecurringActionScope(null);
       setEditModalOpen(false);
       setEditingAppointment(null);
       editOriginalPatientIdRef.current = null;
@@ -4426,6 +4490,7 @@ export default function CalendarPage() {
     appointment?: CalendarAppointment;
     sendCancellationEmail?: boolean;
     personalizedMessage?: string;
+    recurrenceScope?: "this" | "this_and_future";
   }) {
     const appointmentToDelete = options?.appointment ?? editingAppointment;
     if (!appointmentToDelete || deletingAppointment) return;
@@ -4453,7 +4518,10 @@ export default function CalendarPage() {
         return;
       }
 
-      const deleteResponse = await fetch(`/api/appointments/${appointmentToDelete.id}`, {
+      const recurrenceQuery = options?.recurrenceScope
+        ? `?recurrence_scope=${options.recurrenceScope}`
+        : "";
+      const deleteResponse = await fetch(`/api/appointments/${appointmentToDelete.id}${recurrenceQuery}`, {
         method: "DELETE",
       });
       if (!deleteResponse.ok) {
@@ -4475,6 +4543,8 @@ export default function CalendarPage() {
 
       setDeletingAppointment(false);
       setShowDeleteConfirm(false);
+      setRecurringAction(null);
+      setRecurringActionScope(null);
       closeCancellationEmailPrompt();
       setEditModalOpen(false);
       setEditingAppointment(null);
@@ -4486,32 +4556,79 @@ export default function CalendarPage() {
   }
 
   function goToToday() {
-    const today = new Date();
-    setVisibleMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    const today = swissTodayAnchor();
+    setVisibleMonth(swissMonthAnchor(today));
     setSelectedDate(today);
     setRangeEndDate(null);
     setView("day");
   }
 
   function goPrevMonth() {
-    setVisibleMonth((prev) =>
-      new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
-    );
+    setVisibleMonth((prev) => swissMonthAnchor(prev, -1));
   }
 
   function goNextMonth() {
-    setVisibleMonth((prev) =>
-      new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
-    );
+    setVisibleMonth((prev) => swissMonthAnchor(prev, 1));
+  }
+
+  function goPrev() {
+    if (view === "month") {
+      goPrevMonth();
+    } else if (view === "day" && selectedDate) {
+      const newDate = addSwissDays(selectedDate, -1);
+      setSelectedDate(newDate);
+      setVisibleMonth(swissMonthAnchor(newDate));
+    } else if (view === "range" && selectedDate && rangeEndDate) {
+      const rangeLength = activeRangeDates.length || 1;
+      const newStart = addSwissDays(selectedDate, -rangeLength);
+      const newEnd = addSwissDays(rangeEndDate, -rangeLength);
+      setSelectedDate(newStart);
+      setRangeEndDate(newEnd);
+      setVisibleMonth(swissMonthAnchor(newStart));
+    }
+  }
+
+  function goNext() {
+    if (view === "month") {
+      goNextMonth();
+    } else if (view === "day" && selectedDate) {
+      const newDate = addSwissDays(selectedDate, 1);
+      setSelectedDate(newDate);
+      setVisibleMonth(swissMonthAnchor(newDate));
+    } else if (view === "range" && selectedDate && rangeEndDate) {
+      const rangeLength = activeRangeDates.length || 1;
+      const newStart = addSwissDays(selectedDate, rangeLength);
+      const newEnd = addSwissDays(rangeEndDate, rangeLength);
+      setSelectedDate(newStart);
+      setRangeEndDate(newEnd);
+      setVisibleMonth(swissMonthAnchor(newStart));
+    }
   }
 
   function handleMiniDayMouseDown(date: Date) {
-    setSelectedDate(date);
-    setRangeEndDate(null);
+    const base = swissDayAnchorFrom(date);
+    if (view === "range") {
+      const weekday = getSwissDayOfWeek(base);
+      const adjustedWeekday = weekday === 0 ? 6 : weekday - 1;
+      const start = addSwissDays(base, -adjustedWeekday);
+      const end = addSwissDays(start, 6);
+      setSelectedDate(start);
+      setRangeEndDate(end);
+      setVisibleMonth(swissMonthAnchor(start));
+    } else {
+      setSelectedDate(base);
+      setRangeEndDate(null);
+      setView("day");
+    }
     setIsDraggingRange(true);
-    setView("day");
-    // Update visible month to match selected date so appointments are loaded
-    setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+  }
+
+  function syncVisibleMonthToMiniDate(date: Date) {
+    // Wait until the pointer interaction has finished before changing the
+    // mini-calendar grid. Re-rendering an adjacent month during mousedown can
+    // put a different date beneath the pointer and trigger mouseenter, turning
+    // a simple click into an unintended multi-week range selection.
+    setVisibleMonth(swissMonthAnchor(date));
   }
 
   function handleMiniDayMouseEnter(date: Date) {
@@ -4526,102 +4643,137 @@ export default function CalendarPage() {
   }
 
   function handleMonthDayClick(date: Date) {
-    setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    setVisibleMonth(swissMonthAnchor(date));
     setSelectedDate(date);
     setRangeEndDate(null);
     setView("day");
   }
 
   return (
-    <div className="flex h-[calc(100vh-96px)] gap-4 px-0 pb-4 pt-2 sm:px-1 lg:px-2">
+    <div
+      className="-mx-4 -my-4 flex h-[calc(100dvh-9.5rem)] max-h-full min-h-0 overflow-hidden gap-4 px-0 pb-4 pt-2 sm:-mx-6 sm:px-1 lg:-mx-8 lg:px-2"
+      style={{
+        WebkitOverflowScrolling: "touch",
+      } as React.CSSProperties}
+    >
       {/* Left sidebar similar to Google Calendar */}
-      <aside className="hidden w-64 flex-shrink-0 flex-col rounded-3xl border border-slate-200/80 bg-white/95 p-3 text-xs text-slate-700 shadow-[0_18px_40px_rgba(15,23,42,0.10)] md:flex">
-        <div className="mb-3">
-          <button
-            type="button"
-            onClick={() => {
-              const baseDate = selectedDate ?? new Date();
-              // Use Swiss timezone for consistent date
-              setDraftDate(formatSwissYmd(baseDate));
-              setDraftTime("");
-              setTimeSearch("");
-              setDraftTitle("");
-              setCreatePatientSearch("");
-              setCreatePatientId(null);
-              setCreatePatientName("");
-              setCreateNoPatient(false);
-              setSelectedServiceId("");
-              setServiceSearch("");
-              setBookingStatus("");
-              setStatusSearch("");
-              setAppointmentCategory("");
-              setCategorySearch("");
-              setDraftLocation(CLINIC_LOCATION_OPTIONS[0] ?? "");
-              setLocationSearch(CLINIC_LOCATION_OPTIONS[0] ?? "");
-              setDraftDescription("");
-              setSendEmailNotification(true);
-              setEmailNotificationMessage("");
-              resetCreateRecurrence();
-              const defaultCalendar =
-                doctorCalendars.find((calendar) => calendar.selected) ||
-                doctorCalendars[0] ||
-                null;
-              const defaultCalId = defaultCalendar?.id ?? "";
-              setCreateDoctorCalendarId(defaultCalId);
-              // Initialize multi-select with default doctor
-              if (defaultCalId) {
-                setSelectedDoctorIds([defaultCalId]);
-              } else {
-                setSelectedDoctorIds([]);
-              }
-              // Reset multi-select state
-              setSelectedServiceIds([]);
-              setServiceQuantities({});
-              setDoctorConflicts({});
-              // Apply doctor-specific scheduling defaults
-              const docConfig = doctorSchedulingSettings.find((s) => s.provider_id === defaultCalId);
-              if (docConfig) {
-                setConsultationDuration(docConfig.default_duration_minutes);
-                const durOpt = CONSULTATION_DURATION_OPTIONS.find((o) => o.value === docConfig.default_duration_minutes);
-                setDurationSearch(durOpt ? durOpt.label : `${docConfig.default_duration_minutes} minutes`);
-              } else {
-                setConsultationDuration(15);
-                setDurationSearch("15 minutes");
-              }
-              setCreateModalOpen(true);
-            }}
-            className="inline-flex w-full items-center justify-center rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-sky-700"
-          >
-            Create
-          </button>
-          {copiedAppointment && (
-            <div className="flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[10px] text-sky-700">
-              <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              <span className="truncate">
-                Copied: {copiedAppointment.patient ? formatPatientFileName(copiedAppointment.patient.first_name, copiedAppointment.patient.last_name) : "Appointment"}
-              </span>
+      <aside
+        className={`sticky top-2 hidden h-full shrink-0 self-start flex-col rounded-3xl border border-slate-200/80 bg-white/95 text-xs text-slate-700 shadow-[0_18px_40px_rgba(15,23,42,0.10)] transition-all duration-200 md:flex ${
+          leftPanelOpen ? "w-64 p-3" : "w-10 items-center py-2 px-1"
+        }`}
+        style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+      >
+        <div className={`mb-3 flex items-center ${leftPanelOpen ? "justify-between gap-2" : "justify-center"}`}>
+          {leftPanelOpen && (
+            <div className="flex-1">
               <button
                 type="button"
-                onClick={() => setCopiedAppointment(null)}
-                className="ml-auto flex-shrink-0 rounded-full p-0.5 hover:bg-sky-100"
-                title="Clear"
+                onClick={() => {
+                  const baseDate = selectedDate ?? new Date();
+                  // Use Swiss timezone for consistent date
+                  setDraftDate(formatSwissYmd(baseDate));
+                  setDraftTime("");
+                  setTimeSearch("");
+                  setDraftTitle("");
+                  setCreatePatientSearch("");
+                  setCreatePatientId(null);
+                  setCreatePatientName("");
+                  setCreateNoPatient(false);
+                  setSelectedServiceId("");
+                  setServiceSearch("");
+                  setBookingStatus("");
+                  setStatusSearch("");
+                  setAppointmentCategory("");
+                  setCategorySearch("");
+                  setDraftLocation(CLINIC_LOCATION_OPTIONS[0] ?? "");
+                  setLocationSearch(CLINIC_LOCATION_OPTIONS[0] ?? "");
+                  setDraftDescription("");
+                  setSendEmailNotification(true);
+                  setEmailNotificationMessage("");
+                  resetCreateRecurrence();
+                  const defaultCalendar =
+                    doctorCalendars.find((calendar) => calendar.selected) ||
+                    doctorCalendars[0] ||
+                    null;
+                  const defaultCalId = defaultCalendar?.id ?? "";
+                  setCreateDoctorCalendarId(defaultCalId);
+                  // Initialize multi-select with default doctor
+                  if (defaultCalId) {
+                    setSelectedDoctorIds([defaultCalId]);
+                  } else {
+                    setSelectedDoctorIds([]);
+                  }
+                  // Reset multi-select state
+                  setSelectedServiceIds([]);
+                  setServiceQuantities({});
+                  setDoctorConflicts({});
+                  // Apply doctor-specific scheduling defaults
+                  const docConfig = doctorSchedulingSettings.find((s) => s.provider_id === defaultCalId);
+                  if (docConfig) {
+                    setConsultationDuration(docConfig.default_duration_minutes);
+                    const durOpt = CONSULTATION_DURATION_OPTIONS.find((o) => o.value === docConfig.default_duration_minutes);
+                    setDurationSearch(durOpt ? durOpt.label : `${docConfig.default_duration_minutes} minutes`);
+                  } else {
+                    setConsultationDuration(15);
+                    setDurationSearch("15 minutes");
+                  }
+                  setCreateModalOpen(true);
+                }}
+                className="inline-flex w-full items-center justify-center rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-sky-700"
               >
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                Create
               </button>
+              {copiedAppointment && (
+                <div className="flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[10px] text-sky-700">
+                  <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <span className="truncate">
+                    Copied: {copiedAppointment.patient ? formatPatientFileName(copiedAppointment.patient.first_name, copiedAppointment.patient.last_name) : "Appointment"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCopiedAppointment(null)}
+                    className="ml-auto flex-shrink-0 rounded-full p-0.5 hover:bg-sky-100"
+                    title="Clear"
+                  >
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => setLeftPanelOpen((prev) => !prev)}
+            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+            aria-label={leftPanelOpen ? "Collapse sidebar" : "Expand sidebar"}
+          >
+            {leftPanelOpen ? (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 17l-5-5 5-5" />
+                <path d="M18 17V7" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13 17l5-5-5-5" />
+                <path d="M6 17V7" />
+              </svg>
+            )}
+          </button>
         </div>
+        {leftPanelOpen && (
+        <>
         {/* Mini month */}
         <div className="mb-4 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-2">
           <div className="mb-2 flex items-center justify-between text-[11px] font-medium text-slate-700">
             <button
               type="button"
               onClick={goPrevMonth}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-slate-100"
+              style={{ touchAction: "manipulation" }}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-slate-100 touch-manipulation"
               aria-label="Previous month"
             >
               <svg
@@ -4640,7 +4792,8 @@ export default function CalendarPage() {
             <button
               type="button"
               onClick={goNextMonth}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-slate-100"
+              style={{ touchAction: "manipulation" }}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-slate-100 touch-manipulation"
               aria-label="Next month"
             >
               <svg
@@ -4689,6 +4842,7 @@ export default function CalendarPage() {
                     e.preventDefault(); // Prevent text selection during drag
                     handleMiniDayMouseDown(date);
                   }}
+                  onClick={() => syncVisibleMonthToMiniDate(date)}
                   onMouseEnter={() => handleMiniDayMouseEnter(date)}
                   onTouchStart={(e) => {
                     e.preventDefault();
@@ -4707,7 +4861,10 @@ export default function CalendarPage() {
                       }
                     }
                   }}
-                  onTouchEnd={() => setIsDraggingRange(false)}
+                  onTouchEnd={() => {
+                    setIsDraggingRange(false);
+                    syncVisibleMonthToMiniDate(date);
+                  }}
                   data-mini-date={ymd}
                   className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] ${
                     isCurrentMonth ? "text-slate-700" : "text-slate-400"
@@ -4782,50 +4939,92 @@ export default function CalendarPage() {
                   {calendarsToShow.map((calendar) => (
                     <div
                       key={calendar.id}
-                      className="group flex items-center gap-2 text-[11px] text-slate-700"
+                      className="relative flex items-center gap-2 text-[11px] text-slate-700"
                     >
-                      <label className="flex flex-1 cursor-pointer items-center gap-2">
+                      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
                         <input
                           type="checkbox"
                           checked={calendar.selected}
                           onChange={() => handleToggleCalendarSelected(calendar.id)}
                           className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                         />
-                        <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
                           <span
                             className="inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded bg-slate-200 px-1 text-[9px] font-bold text-slate-600"
                           >
                             {calendar.initials}
                           </span>
-                          <span className="truncate">{calendar.name}</span>
+                          <span className="block truncate">{calendar.name}</span>
                         </span>
                       </label>
-                      <div className="hidden gap-0.5 group-hover:flex">
+                      <button
+                        type="button"
+                        onClick={() => handleIsolateCalendar(calendar.id)}
+                        className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors ${
+                          calendar.selected
+                            ? "text-sky-600 hover:bg-sky-50"
+                            : "text-slate-400 hover:bg-slate-100 hover:text-sky-600"
+                        }`}
+                        title={t("sidebar.showOnlyCalendar", { name: calendar.name })}
+                        aria-label={t("sidebar.showOnlyCalendar", { name: calendar.name })}
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .638C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </button>
+                      <div className="relative shrink-0" data-calendar-actions>
                         <button
                           type="button"
-                          onClick={() => handleOpenEditAgenda(calendar)}
+                          onClick={() =>
+                            setOpenCalendarActionsId((current) =>
+                              current === calendar.id ? null : calendar.id,
+                            )
+                          }
                           className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                          title="Edit"
+                          title={t("sidebar.calendarActions", { name: calendar.name })}
+                          aria-label={t("sidebar.calendarActions", { name: calendar.name })}
+                          aria-expanded={openCalendarActionsId === calendar.id}
+                          aria-haspopup="menu"
                         >
-                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="5" cy="12" r="1.75" />
+                            <circle cx="12" cy="12" r="1.75" />
+                            <circle cx="19" cy="12" r="1.75" />
                           </svg>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm(`Delete "${calendar.name}"? This cannot be undone.`)) {
-                              void handleDeleteAgenda(calendar.providerId);
-                            }
-                          }}
-                          disabled={deletingAgendaId === calendar.providerId}
-                          className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                          title="Delete"
-                        >
-                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {openCalendarActionsId === calendar.id && (
+                          <div
+                            role="menu"
+                            className="absolute right-0 top-6 z-30 w-28 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+                          >
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setOpenCalendarActionsId(null);
+                                handleOpenEditAgenda(calendar);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50"
+                            >
+                              {t("sidebar.editCalendar")}
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setOpenCalendarActionsId(null);
+                                if (confirm(`Delete "${calendar.name}"? This cannot be undone.`)) {
+                                  void handleDeleteAgenda(calendar.providerId);
+                                }
+                              }}
+                              disabled={deletingAgendaId === calendar.providerId}
+                              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {t("sidebar.deleteCalendar")}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -4917,28 +5116,31 @@ export default function CalendarPage() {
             )}
           </div>
         </div>
-
+        </>
+        )}
       </aside>
 
       {/* Main month view */}
-      <div className="flex min-w-0 flex-1 flex-col space-y-4">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Calendar header controls */}
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-shrink-0 items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-lg font-semibold text-slate-900">{t("title")}</h1>
             <button
               type="button"
               onClick={goToToday}
-              className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              style={{ touchAction: "manipulation" }}
+              className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 touch-manipulation"
             >
               {t("today")}
             </button>
             <div className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-1 py-0.5 text-slate-600 shadow-sm">
               <button
                 type="button"
-                onClick={goPrevMonth}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-50"
-                aria-label={t("previousMonth")}
+                onClick={goPrev}
+                style={{ touchAction: "manipulation" }}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-50 touch-manipulation"
+                aria-label={view === "month" ? t("previousMonth") : view === "day" ? t("previousDay") : t("previousWeek")}
               >
                 <svg
                   className="h-3 w-3"
@@ -4954,9 +5156,10 @@ export default function CalendarPage() {
               </button>
               <button
                 type="button"
-                onClick={goNextMonth}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-50"
-                aria-label={t("nextMonth")}
+                onClick={goNext}
+                style={{ touchAction: "manipulation" }}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-50 touch-manipulation"
+                aria-label={view === "month" ? t("nextMonth") : view === "day" ? t("nextDay") : t("nextWeek")}
               >
                 <svg
                   className="h-3 w-3"
@@ -5008,7 +5211,8 @@ export default function CalendarPage() {
               <button
                 type="button"
                 onClick={() => setViewMenuOpen((prev) => !prev)}
-                className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                style={{ touchAction: "manipulation" }}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 touch-manipulation"
               >
                 {view === "month"
                   ? t("view.month")
@@ -5028,29 +5232,49 @@ export default function CalendarPage() {
                 </svg>
               </button>
               {viewMenuOpen ? (
-                <div className="absolute right-0 z-20 mt-1 min-w-[120px] rounded-xl border border-slate-200 bg-white py-1 text-xs shadow-lg">
-                  <button
-                    type="button"
-                    onClick={handleSelectDayView}
-                    className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
-                  >
-                    {t("view.day")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSelectWeekView}
-                    className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
-                  >
-                    {t("view.week")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSelectMonthView}
-                    className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
-                  >
-                    {t("view.month")}
-                  </button>
-                </div>
+                <>
+                  {/* Invisible backdrop to close menu on touch/click outside */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setViewMenuOpen(false)}
+                    onTouchEnd={() => setViewMenuOpen(false)}
+                  />
+                  <div className="absolute right-0 z-50 mt-1 min-w-[140px] rounded-xl border border-slate-200 bg-white py-1 text-xs shadow-lg">
+                    <button
+                      type="button"
+                      onClick={handleSelectDayView}
+                      style={{ touchAction: "manipulation" }}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 active:bg-slate-100 touch-manipulation ${view === "day" ? "text-sky-600 font-medium" : "text-slate-700"}`}
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      {t("view.day")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSelectWeekView}
+                      style={{ touchAction: "manipulation" }}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 active:bg-slate-100 touch-manipulation ${view === "range" && activeRangeDates.length > 1 ? "text-sky-600 font-medium" : "text-slate-700"}`}
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                      </svg>
+                      {t("view.week")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSelectMonthView}
+                      style={{ touchAction: "manipulation" }}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 active:bg-slate-100 touch-manipulation ${view === "month" ? "text-sky-600 font-medium" : "text-slate-700"}`}
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                      </svg>
+                      {t("view.month")}
+                    </button>
+                  </div>
+                </>
               ) : null}
             </div>
             <Link
@@ -5068,7 +5292,7 @@ export default function CalendarPage() {
           </div>
         </div>
         {view === "month" ? (
-          <div className="flex-1 flex flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
             <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/80 text-[11px] font-medium uppercase tracking-wide text-slate-500 sticky top-0 z-10">
               {(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((key) => (
                 <div key={key} className="px-3 py-2">
@@ -5144,7 +5368,7 @@ export default function CalendarPage() {
                                 event.stopPropagation();
                                 openEditModalForAppointment(appt);
                               }}
-                              className={`w-full rounded-md px-1 py-0.5 text-[10px] text-left ${getAppointmentStatusColorClasses(
+                              className={`calendar-event-card w-full rounded-md px-1 py-0.5 text-[11px] text-left ${getAppointmentStatusColorClasses(
                                 appt.status,
                               )} ${resolveCategoryColorPresentation(category).className}`}
                               style={resolveCategoryColorPresentation(category).style}
@@ -5160,7 +5384,7 @@ export default function CalendarPage() {
                                   </span>
                                 ) : null}
                                 {appt.patient_id &&
-                                firstAppointmentByPatient[appt.patient_id] === appt.start_time ? (
+                                firstAppointmentByPatient[appt.patient_id] === getLogicalPatientAppointmentStart(appt) ? (
                                   <span
                                     title={t("badges.newPatientTooltip")}
                                     className="flex-shrink-0 rounded-full bg-emerald-500/90 px-1.5 text-[8px] font-bold leading-tight text-white"
@@ -5168,18 +5392,18 @@ export default function CalendarPage() {
                                     {t("badges.newPatient")}
                                   </span>
                                 ) : null}
-                                <span className="truncate">{patientName || serviceLabel}</span>
+                                <span className="truncate font-bold">{patientName || serviceLabel}</span>
                               </div>
-                              <div className="truncate text-[10px] text-slate-500">
+                              <div className="truncate text-[11px] font-medium text-slate-500">
                                 {timeLabel} {serviceLabel ? `• ${serviceLabel}` : ""}
                               </div>
                               {category && (
-                                <div className="truncate text-[9px] text-slate-400">
+                                <div className="truncate text-[10px] font-medium text-slate-400">
                                   {category}
                                 </div>
                               )}
                               {notes && (
-                                <div className="truncate text-[9px] text-slate-400 italic">
+                                <div className="truncate text-[10px] font-medium text-slate-400 italic">
                                   {notes}
                                 </div>
                               )}
@@ -5193,7 +5417,7 @@ export default function CalendarPage() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
+          <div className="flex-1 min-h-0 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
             <div className="flex flex-col h-full">
               {/* Sticky header row with doctor columns when multiple selected */}
               <div className="flex border-b border-slate-100 bg-slate-50/80 text-[11px] font-medium text-slate-500 sticky top-0 z-10">
@@ -5223,7 +5447,7 @@ export default function CalendarPage() {
                             className={`flex-1 px-1 py-1.5 text-center text-[10px] font-semibold text-white truncate ${calendar.color || "bg-slate-500"} ${idx < selectedDoctorCalendars.length - 1 ? "border-r border-white/30" : ""}`}
                             title={calendar.name}
                           >
-                            {calendar.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 3)}
+                            {calendar.initials}
                           </div>
                         ))}
                       </div>
@@ -5470,7 +5694,7 @@ export default function CalendarPage() {
                                       appt.patient?.first_name,
                                       appt.patient?.last_name,
                                     );
-                                    const patientPhone = appt.patient?.phone ?? null;
+                                    const patientPhone = formatSwissLocalPhoneDisplay(appt.patient?.phone);
                                     const patientEmail = appt.patient?.email ?? null;
                                     const durationMins = end && !Number.isNaN(end.getTime()) 
                                       ? Math.round((end.getTime() - start.getTime()) / 60000) 
@@ -5523,7 +5747,7 @@ export default function CalendarPage() {
                                               openEditModalForAppointment(appt);
                                             }
                                           }}
-                                          className={`relative w-full h-full rounded-md px-1 py-0.5 text-[10px] text-left shadow-sm overflow-hidden cursor-grab active:cursor-grabbing ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColorPresentation(category).className} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
+                                          className={`calendar-event-card relative w-full h-full rounded-md px-1 py-0.5 text-[11px] text-left shadow-sm overflow-hidden cursor-grab active:cursor-grabbing ${getAppointmentStatusColorClasses(appt.status)} ${resolveCategoryColorPresentation(category).className} ${resizingAppointment?.id === appt.id ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
                                           style={resolveCategoryColorPresentation(category).style}
                                         >
                                           {bufferBeforePercent > 0 && (
@@ -5551,7 +5775,7 @@ export default function CalendarPage() {
                                               </span>
                                             ) : null}
                                             {appt.patient_id &&
-                                            firstAppointmentByPatient[appt.patient_id] === appt.start_time ? (
+                                            firstAppointmentByPatient[appt.patient_id] === getLogicalPatientAppointmentStart(appt) ? (
                                               <span
                                                 title={t("badges.newPatientTooltip")}
                                                 className="flex-shrink-0 rounded-full bg-emerald-500/90 px-1.5 text-[8px] font-bold leading-tight text-white"
@@ -5559,14 +5783,15 @@ export default function CalendarPage() {
                                                 {t("badges.newPatient")}
                                               </span>
                                             ) : null}
-                                            <span className="truncate">{patientName || serviceLabel}</span>
+                                            <span className="truncate font-bold">{patientName || serviceLabel}</span>
                                           </div>
-                                          <div className="relative z-10 truncate text-[9px] text-slate-600">
+                                          <div className="relative z-10 truncate text-[10px] font-medium text-slate-600">
                                             {timeLabel} {serviceLabel ? `• ${serviceLabel}` : ""}
+                                            {appt.recurrence_series_id ? <span className="ml-1 text-[9px] text-sky-600" title="Recurring appointment">↻</span> : null}
                                             {appt.machine_ids && appt.machine_ids.length > 0 && (() => { const m = machines.find((x) => x.id === appt.machine_ids[0]); return m ? <span className="ml-1 text-[8px] text-violet-600" title={appt.machine_ids.map((id) => machines.find((x) => x.id === id)?.name).filter(Boolean).join(", ")}>⚙</span> : null; })()}
                                           </div>
                                           {notes && (
-                                            <div className="relative z-10 truncate text-[9px] text-slate-500 italic">
+                                            <div className="relative z-10 truncate text-[10px] font-medium text-slate-500 italic">
                                               {notes}
                                             </div>
                                           )}
@@ -5591,25 +5816,38 @@ export default function CalendarPage() {
                                           </div>
                                         </div>
                                         {/* Hover tooltip - position based on column location */}
-                                        <div className={`pointer-events-none absolute top-0 z-[100] hidden min-w-[280px] rounded-lg border border-slate-200 bg-white p-3 text-[11px] shadow-xl group-hover:block ${tooltipPositionClass}`}>
-                                          <div className="font-semibold text-slate-800 mb-1">
-                                            {formatYmd(date)} {timeLabel} {durationLabel && `(${durationLabel})`}
+                                        <div className={`pointer-events-none absolute top-0 z-[100] hidden min-w-[300px] max-w-[360px] rounded-xl border border-slate-200 bg-white p-3.5 text-xs leading-relaxed shadow-xl group-hover:block ${tooltipPositionClass}`}>
+                                          <div className="mb-2 flex items-center gap-2 border-b border-slate-100 pb-2 font-semibold text-slate-800">
+                                            <span>{formatYmd(date)} · {timeLabel}</span>
+                                            {durationLabel && (
+                                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                                                {durationLabel}
+                                              </span>
+                                            )}
                                           </div>
-                                          <div className="text-slate-700 font-medium">{patientName || "No Patient"}</div>
-                                          {serviceLabel && <div className="text-slate-600 mt-1">{serviceLabel}</div>}
-                                          {category && <div className="text-slate-500">Catégorie: {category}</div>}
+                                          <div className="text-[13px] font-bold text-slate-900">{patientName || "No Patient"}</div>
+                                          {serviceLabel && <div className="mt-1 font-semibold text-slate-700">{serviceLabel}</div>}
+                                          {category && (
+                                            <div className="text-slate-600">
+                                              <span className="font-semibold text-slate-500">Catégorie:</span> {category}
+                                            </div>
+                                          )}
                                           {patientPhone && (
-                                            <div className="text-slate-500 mt-1">
-                                              <span className="text-slate-400">privé:</span> {patientPhone}
+                                            <div className="mt-1 text-slate-600">
+                                              <span className="font-semibold text-slate-500">Privé:</span> {patientPhone}
                                             </div>
                                           )}
                                           {patientEmail && (
-                                            <div className="text-slate-500">
-                                              <span className="text-slate-400">privé:</span> {patientEmail}
+                                            <div className="break-all text-slate-600">
+                                              <span className="font-semibold text-slate-500">Privé:</span> {patientEmail}
                                             </div>
                                           )}
-                                          {appt.location && <div className="text-slate-500 mt-1">📍 {appt.location}</div>}
-                                          {notes && <div className="text-slate-600 mt-1 italic border-t border-slate-100 pt-1">📝 {notes}</div>}
+                                          {appt.location && <div className="mt-1 font-medium text-slate-600">📍 {appt.location}</div>}
+                                          {notes && (
+                                            <div className="mt-2 border-t border-slate-100 pt-2 font-medium italic text-slate-600">
+                                              📝 {notes}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     );
@@ -5839,7 +6077,7 @@ export default function CalendarPage() {
                     )}
                     {editingAppointment.patient?.phone && (
                       <p className="text-[10px] text-slate-500">
-                        {editingAppointment.patient.phone}
+                        {formatSwissLocalPhoneDisplay(editingAppointment.patient.phone)}
                       </p>
                     )}
                     {editingAppointment.patient?.date_of_birth && (
@@ -6044,7 +6282,7 @@ export default function CalendarPage() {
                       )}
                       {editBookingStatusDropdownOpen && (
                         <div className="absolute z-50 mt-1 max-h-40 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
-                          {BOOKING_STATUS_OPTIONS.filter((opt) =>
+                          {bookingStatusOptions.filter((opt) =>
                             opt.toLowerCase().includes(editBookingStatusSearch.toLowerCase())
                           ).map((opt) => (
                             <button
@@ -6268,7 +6506,14 @@ export default function CalendarPage() {
                 {/* Delete button on left */}
                 <button
                   type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
+                  onClick={() => {
+                    if (editingAppointment?.recurrence_series_id && !editingAppointment.linked_parent_appointment_id) {
+                      setRecurringActionScope(null);
+                      setRecurringAction("delete");
+                    } else {
+                      setShowDeleteConfirm(true);
+                    }
+                  }}
                   disabled={savingEdit || deletingAppointment || showDeleteConfirm}
                   className="inline-flex items-center gap-1 rounded-full border border-red-200/80 bg-white px-3 py-1.5 text-[11px] font-medium text-red-600 shadow-sm hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -6311,6 +6556,78 @@ export default function CalendarPage() {
                     {tCommon("saveChanges")}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {recurringAction && editingAppointment ? (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/35 px-4 backdrop-blur-[1px]">
+            <div className="w-full max-w-[410px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.24)]">
+              <div className="relative px-7 pb-5 pt-7 text-center">
+                <button
+                  type="button"
+                  onClick={() => { setRecurringAction(null); setRecurringActionScope(null); }}
+                  className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  aria-label={tCommon("close")}
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M5 5l10 10M15 5L5 15" /></svg>
+                </button>
+                <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full ${recurringAction === "modify" ? "bg-blue-50 text-blue-500" : "bg-red-50 text-red-500"}`}>
+                  <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z" />
+                    {recurringAction === "modify" ? <path d="M14.5 16.5l3.7-3.7a1.4 1.4 0 012 2l-3.7 3.7-2.5.5.5-2.5z" /> : <><circle cx="17.5" cy="17.5" r="4" fill="white" /><path d="M16 16l3 3m0-3l-3 3" /></>}
+                  </svg>
+                </div>
+                <h2 className="mt-4 text-[17px] font-semibold text-slate-900">
+                  {t(`modal.recurringAction.${recurringAction}.title`)}
+                </h2>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  {t("modal.recurringAction.seriesDescription")}<br />
+                  {t(`modal.recurringAction.${recurringAction}.question`)}
+                </p>
+              </div>
+
+              <div className="space-y-3 px-5 pb-5">
+                {(["this", "this_and_future"] as const).map((scope) => {
+                  const selected = recurringActionScope === scope;
+                  return (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => setRecurringActionScope(scope)}
+                      className={`flex w-full items-center gap-4 rounded-lg border px-4 py-3 text-left transition ${selected ? recurringAction === "modify" ? "border-blue-400 bg-blue-50/40 ring-1 ring-blue-100" : "border-red-400 bg-red-50/40 ring-1 ring-red-100" : "border-slate-200 bg-white hover:bg-slate-50"}`}
+                    >
+                      <span className={`h-4 w-4 shrink-0 rounded-full border ${selected ? recurringAction === "modify" ? "border-[5px] border-blue-500" : "border-[5px] border-red-500" : "border-slate-400"}`} />
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${recurringAction === "modify" ? "bg-blue-50 text-blue-500" : "bg-red-50 text-red-500"}`}>
+                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z" />{scope === "this_and_future" ? <path d="M9 15h6m-2-2l2 2-2 2" /> : null}</svg>
+                      </span>
+                      <span>
+                        <span className="block text-xs font-semibold text-slate-800">{t(`modal.recurringAction.${scope}.label`)}</span>
+                        <span className="mt-1 block text-[11px] leading-4 text-slate-500">{t(`modal.recurringAction.${recurringAction}.${scope}Description`)}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-slate-100 px-5 py-4">
+                <button type="button" onClick={() => { setRecurringAction(null); setRecurringActionScope(null); }} className="min-w-24 rounded-md border border-slate-200 bg-white px-5 py-2 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50">{tCommon("cancel")}</button>
+                <button
+                  type="button"
+                  disabled={!recurringActionScope || savingEdit || deletingAppointment}
+                  onClick={() => {
+                    if (!recurringActionScope) return;
+                    const scope = recurringActionScope;
+                    const action = recurringAction;
+                    setRecurringAction(null);
+                    if (action === "modify") void handleSaveEditAppointment(scope);
+                    else if (editingAppointment.linked_parent_appointment_id) void handleDeleteAppointment({ appointment: editingAppointment, recurrenceScope: scope });
+                    else openCancellationEmailPrompt(editingAppointment);
+                  }}
+                  className={`min-w-28 rounded-md px-5 py-2 text-xs font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${recurringAction === "modify" ? "bg-blue-600 hover:bg-blue-700" : "bg-red-500 hover:bg-red-600"}`}
+                >
+                  {t(`modal.recurringAction.${recurringAction}.confirm`)}
+                </button>
               </div>
             </div>
           </div>
@@ -6455,6 +6772,7 @@ export default function CalendarPage() {
                       void handleDeleteAppointment({
                         appointment: cancellationEmailPromptAppointment,
                         sendCancellationEmail: false,
+                        recurrenceScope: recurringActionScope ?? undefined,
                       });
                       return;
                     }
