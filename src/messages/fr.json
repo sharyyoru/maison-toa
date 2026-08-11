@@ -1581,6 +1581,7 @@
     "invoiceTypeEsthetic": "Esthétique",
     "showOnlyUnpaid": "Afficher uniquement les factures impayées",
     "loadingData": "Chargement des données financières...",
+    "recalculatingTotals": "Recalcul des totaux sur toutes les factures correspondantes…",
     "totalBilled": "Total facturé (hors gratuit)",
     "totalPaid": "Total payé",
     "outstanding": "En attente (impayé)",

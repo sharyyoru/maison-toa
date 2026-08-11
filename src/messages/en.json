@@ -1581,6 +1581,7 @@
     "invoiceTypeEsthetic": "Esthetic",
     "showOnlyUnpaid": "Show only unpaid invoices",
     "loadingData": "Loading financial data...",
+    "recalculatingTotals": "Recalculating totals across all matching invoices…",
     "totalBilled": "Total billed (non-complimentary)",
     "totalPaid": "Total paid",
     "outstanding": "Outstanding (unpaid)",

@@ -159,9 +159,190 @@ function toExcelDate(iso: string | null | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+// Shared row → NormalizedInvoice mapping, used both for the (paginated) invoice
+// list table and for the full-dataset aggregates (summary cards, per-patient
+// and per-owner breakdowns) so the two stay numerically consistent.
+function normalizeInvoiceRow(
+  row: InvoiceRow,
+  patientsById: PatientsById,
+  providersById: ProvidersById,
+  t: (key: string) => string,
+): NormalizedInvoice {
+  const patient = row.patient_id ? patientsById[row.patient_id] : undefined;
+  const nameParts = [
+    patient?.first_name ? patient.first_name.trim() : "",
+    patient?.last_name ? patient.last_name.trim() : "",
+  ].filter(Boolean);
+  const patientName = nameParts.join(" ") || row.patient_id || t("unknownPatient");
+
+  const amount = Number(row.total_amount) || 0;
+  const isPaid = row.status === "PAID" || row.status === "OVERPAID";
+
+  // Owner: prefer provider (from providers table), then doctor, then creator
+  const provider = row.provider_id ? providersById[row.provider_id] : undefined;
+  const ownerKey = row.provider_id || row.doctor_user_id || row.created_by_user_id || "unknown";
+
+  const ownerLabel =
+    provider?.name ||
+    row.provider_name ||
+    row.doctor_name ||
+    row.created_by_name ||
+    (ownerKey === "unknown" ? t("unassigned") : ownerKey);
+
+  const invoiceType = row.health_insurance_law?.trim() || row.billing_type?.trim() || "esthetic";
+  const invoiceTypeLabel =
+    row.health_insurance_law?.trim() || row.billing_type?.trim() || t("invoiceTypeEsthetic");
+
+  const filterStatus = row.is_complimentary
+    ? "complimentary"
+    : isPaid
+    ? "paid"
+    : row.status === "PARTIAL_PAID"
+    ? "partial"
+    : row.status === "CANCELLED"
+    ? "cancelled"
+    : "unpaid";
+
+  const statusLabel =
+    filterStatus === "complimentary"
+      ? t("statusComplimentary")
+      : filterStatus === "paid"
+      ? t("statusPaid")
+      : filterStatus === "partial"
+      ? t("statusPartial")
+      : filterStatus === "cancelled"
+      ? t("statusCancelled")
+      : t("statusUnpaid");
+
+  return {
+    ...row,
+    amount,
+    isPaid,
+    patientName,
+    ownerKey,
+    ownerLabel,
+    invoiceType,
+    invoiceTypeLabel,
+    filterStatus,
+    statusLabel,
+  };
+}
+
+type InvoiceFilterParams = {
+  dateFromFilter: string;
+  dateToFilter: string;
+  dateField: "invoice_date" | "paid_at";
+  patientFilter: string;
+  ownerFilter: string;
+  invoiceTypeFilter: string;
+  statusFilter: string;
+  showOnlyUnpaid: boolean;
+};
+
+// Applies all the Financials Overview filters to a Supabase query builder.
+// Shared by the paginated invoice-list fetch, the full-dataset aggregate
+// fetch, and the Excel export fetch so the three can never drift apart.
+function applyInvoiceFilters(query: any, filters: InvoiceFilterParams): any {
+  const {
+    dateFromFilter,
+    dateToFilter,
+    dateField,
+    patientFilter,
+    ownerFilter,
+    invoiceTypeFilter,
+    statusFilter,
+    showOnlyUnpaid,
+  } = filters;
+
+  let q = query;
+
+  if (dateFromFilter) {
+    q = q.gte(dateField, dateFromFilter);
+  }
+
+  if (dateToFilter) {
+    // Append end-of-day so the lte includes all records on that date
+    // (paid_at and invoice_date are timestamp columns, not date columns)
+    q = q.lte(dateField, `${dateToFilter}T23:59:59.999Z`);
+  }
+
+  if (patientFilter !== "all") {
+    q = q.eq("patient_id", patientFilter);
+  }
+
+  if (ownerFilter !== "all") {
+    // Filter by provider_id only — using doctor_user_id or created_by_user_id
+    // causes cross-contamination because the same doctor UUID appears on invoices
+    // from different provider entities (e.g. Dr Guarino and Soins Guarino share
+    // the same doctor_user_id, so they must be separated by provider_id only).
+    const ownerIds = ownerFilter.split("|");
+    const orClauses = ownerIds.map((id) => `provider_id.eq.${id}`);
+    q = q.or(orClauses.join(","));
+  }
+
+  if (invoiceTypeFilter !== "all") {
+    if (invoiceTypeFilter === "esthetic") {
+      q = q.is("health_insurance_law", null).is("billing_type", null);
+    } else {
+      q = q.or(`health_insurance_law.eq.${invoiceTypeFilter},billing_type.eq.${invoiceTypeFilter}`);
+    }
+  }
+
+  if (statusFilter === "complimentary") {
+    q = q.eq("is_complimentary", true);
+  } else if (statusFilter === "paid") {
+    q = q.in("status", ["PAID", "OVERPAID"]);
+  } else if (statusFilter === "partial") {
+    q = q.eq("status", "PARTIAL_PAID");
+  } else if (statusFilter === "cancelled") {
+    q = q.eq("status", "CANCELLED");
+  } else if (statusFilter === "unpaid") {
+    q = q.eq("is_complimentary", false).not("status", "in", "(PAID,OVERPAID,PARTIAL_PAID,CANCELLED)");
+  }
+
+  if (showOnlyUnpaid) {
+    q = q.eq("is_complimentary", false).not("status", "in", "(PAID,OVERPAID)");
+  }
+
+  return q;
+}
+
+const INVOICE_SELECT_COLUMNS =
+  "id, patient_id, invoice_number, invoice_date, treatment_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, paid_at, health_insurance_law, billing_type, insurance_name, total_amount, paid_amount, vat_amount, status, is_complimentary, created_by_user_id, created_by_name, is_archived";
+
+// Fetches every invoice matching the given filters (looping through pages
+// server-side), not just one page — used for the Overview aggregates (totals,
+// per-patient and per-owner breakdowns) so they reflect the whole filtered
+// dataset instead of a single page of results.
+async function fetchAllFilteredInvoices(filters: InvoiceFilterParams): Promise<InvoiceRow[]> {
+  const BATCH_SIZE = 1000;
+  const all: InvoiceRow[] = [];
+  for (let from = 0; ; from += BATCH_SIZE) {
+    let query = supabaseClient.from("invoices").select(INVOICE_SELECT_COLUMNS).eq("is_archived", false);
+    query = applyInvoiceFilters(query, filters);
+    const { data, error } = await query
+      .order("invoice_date", { ascending: false, nullsFirst: false })
+      .range(from, from + BATCH_SIZE - 1);
+
+    if (error || !data) break;
+    all.push(...(data as InvoiceRow[]));
+    if (data.length < BATCH_SIZE) break;
+  }
+  return all;
+}
+
 export default function FinancialsPage() {
   const t = useTranslations("financialsPage");
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
+  // Full set of invoices matching the current filters (not just the current
+  // page) — used exclusively to compute the Overview aggregates (totals,
+  // per-patient and per-owner breakdowns). Without this, those numbers only
+  // reflected the first ROWS_PER_PAGE invoices, which silently under-reported
+  // totals whenever a filter matched more rows than one page (see the
+  // "Invoices" page's own totals for comparison — those were always correct
+  // because they aggregate over the full, unpaginated result set client-side).
+  const [summaryInvoices, setSummaryInvoices] = useState<InvoiceRow[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [patientsById, setPatientsById] = useState<PatientsById>({});
   const [providersById, setProvidersById] = useState<ProvidersById>({});
   const [loading, setLoading] = useState(false);
@@ -276,6 +457,30 @@ export default function FinancialsPage() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const invoiceFilterParams: InvoiceFilterParams = useMemo(
+    () => ({
+      dateFromFilter,
+      dateToFilter,
+      dateField,
+      patientFilter,
+      ownerFilter,
+      invoiceTypeFilter,
+      statusFilter,
+      showOnlyUnpaid,
+    }),
+    [
+      dateFromFilter,
+      dateToFilter,
+      dateField,
+      patientFilter,
+      ownerFilter,
+      invoiceTypeFilter,
+      statusFilter,
+      showOnlyUnpaid,
+    ],
+  );
+
+  // Paginated fetch — feeds only the raw "Invoices" list table below.
   useEffect(() => {
     let isMounted = true;
 
@@ -287,68 +492,8 @@ export default function FinancialsPage() {
         const from = invoicePage * ROWS_PER_PAGE;
         const to = from + ROWS_PER_PAGE;
 
-        let query = supabaseClient
-          .from("invoices")
-          .select(
-            "id, patient_id, invoice_number, invoice_date, treatment_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, paid_at, health_insurance_law, billing_type, insurance_name, total_amount, paid_amount, vat_amount, status, is_complimentary, created_by_user_id, created_by_name, is_archived",
-          )
-          .eq("is_archived", false);
-
-        if (dateFromFilter) {
-          query = query.gte(dateField, dateFromFilter);
-        }
-
-        if (dateToFilter) {
-          // Append end-of-day so the lte includes all records on that date
-          // (paid_at and invoice_date are timestamp columns, not date columns)
-          query = query.lte(dateField, `${dateToFilter}T23:59:59.999Z`);
-        }
-
-        if (patientFilter !== "all") {
-          query = query.eq("patient_id", patientFilter);
-        }
-
-        if (ownerFilter !== "all") {
-          // Filter by provider_id only — using doctor_user_id or created_by_user_id
-          // causes cross-contamination because the same doctor UUID appears on invoices
-          // from different provider entities (e.g. Dr Guarino and Soins Guarino share
-          // the same doctor_user_id, so they must be separated by provider_id only).
-          const ownerIds = ownerFilter.split("|");
-          const orClauses = ownerIds.map((id) => `provider_id.eq.${id}`);
-          query = query.or(orClauses.join(","));
-        }
-
-        if (invoiceTypeFilter !== "all") {
-          if (invoiceTypeFilter === "esthetic") {
-            query = query
-              .is("health_insurance_law", null)
-              .is("billing_type", null);
-          } else {
-            query = query.or(
-              `health_insurance_law.eq.${invoiceTypeFilter},billing_type.eq.${invoiceTypeFilter}`,
-            );
-          }
-        }
-
-        if (statusFilter === "complimentary") {
-          query = query.eq("is_complimentary", true);
-        } else if (statusFilter === "paid") {
-          query = query.in("status", ["PAID", "OVERPAID"]);
-        } else if (statusFilter === "partial") {
-          query = query.eq("status", "PARTIAL_PAID");
-        } else if (statusFilter === "cancelled") {
-          query = query.eq("status", "CANCELLED");
-        } else if (statusFilter === "unpaid") {
-          query = query
-            .eq("is_complimentary", false)
-            .not("status", "in", "(PAID,OVERPAID,PARTIAL_PAID,CANCELLED)");
-        }
-
-        if (showOnlyUnpaid) {
-          query = query
-            .eq("is_complimentary", false)
-            .not("status", "in", "(PAID,OVERPAID)");
-        }
+        let query = supabaseClient.from("invoices").select(INVOICE_SELECT_COLUMNS).eq("is_archived", false);
+        query = applyInvoiceFilters(query, invoiceFilterParams);
 
         const { data, error: invoicesError } = await query
           .order("invoice_date", { ascending: false, nullsFirst: false })
@@ -387,89 +532,44 @@ export default function FinancialsPage() {
     return () => {
       isMounted = false;
     };
-  }, [
-    dateFromFilter,
-    dateToFilter,
-    dateField,
-    patientFilter,
-    ownerFilter,
-    invoiceTypeFilter,
-    statusFilter,
-    showOnlyUnpaid,
-    invoicePage,
-    reloadVersion,
-  ]);
+  }, [invoiceFilterParams, invoicePage, reloadVersion]);
+
+  // Full, unpaginated fetch — feeds the Overview aggregates (totals cards,
+  // per-patient and per-owner breakdowns) so they always reflect every
+  // invoice matching the current filters, not just the visible page.
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSummaryInvoices() {
+      setSummaryLoading(true);
+      try {
+        const rows = await fetchAllFilteredInvoices(invoiceFilterParams);
+        if (!isMounted) return;
+        setSummaryInvoices(rows);
+      } finally {
+        if (isMounted) setSummaryLoading(false);
+      }
+    }
+
+    void loadSummaryInvoices();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [invoiceFilterParams, reloadVersion]);
 
   const normalizedInvoices = useMemo<NormalizedInvoice[]>(() => {
     if (!invoices || invoices.length === 0) return [];
-
-    return invoices.map((row) => {
-      const patient = row.patient_id ? patientsById[row.patient_id] : undefined;
-      const nameParts = [
-        patient?.first_name ? patient.first_name.trim() : "",
-        patient?.last_name ? patient.last_name.trim() : "",
-      ].filter(Boolean);
-      const patientName =
-        nameParts.join(" ") || row.patient_id || t("unknownPatient");
-
-      const amount = Number(row.total_amount) || 0;
-      const isPaid = row.status === "PAID" || row.status === "OVERPAID";
-
-      // Owner: prefer provider (from providers table), then doctor, then creator
-      const provider = row.provider_id ? providersById[row.provider_id] : undefined;
-      const ownerKey =
-        row.provider_id || row.doctor_user_id || row.created_by_user_id || "unknown";
-
-      const ownerLabel =
-        provider?.name ||
-        row.provider_name ||
-        row.doctor_name ||
-        row.created_by_name ||
-        (ownerKey === "unknown" ? t("unassigned") : ownerKey);
-
-      const invoiceType =
-        row.health_insurance_law?.trim() ||
-        row.billing_type?.trim() ||
-        "esthetic";
-      const invoiceTypeLabel =
-        row.health_insurance_law?.trim() ||
-        row.billing_type?.trim() ||
-        t("invoiceTypeEsthetic");
-
-      const filterStatus = row.is_complimentary
-        ? "complimentary"
-        : isPaid
-        ? "paid"
-        : row.status === "PARTIAL_PAID"
-        ? "partial"
-        : row.status === "CANCELLED"
-        ? "cancelled"
-        : "unpaid";
-
-      const statusLabel = filterStatus === "complimentary"
-        ? t("statusComplimentary")
-        : filterStatus === "paid"
-        ? t("statusPaid")
-        : filterStatus === "partial"
-        ? t("statusPartial")
-        : filterStatus === "cancelled"
-        ? t("statusCancelled")
-        : t("statusUnpaid");
-
-      return {
-        ...row,
-        amount,
-        isPaid,
-        patientName,
-        ownerKey,
-        ownerLabel,
-        invoiceType,
-        invoiceTypeLabel,
-        filterStatus,
-        statusLabel,
-      };
-    });
+    return invoices.map((row) => normalizeInvoiceRow(row, patientsById, providersById, t));
   }, [invoices, patientsById, providersById, t]);
+
+  // Normalized version of the FULL filtered dataset (see summaryInvoices
+  // above) — this, not normalizedInvoices, is what the Overview aggregates
+  // must be computed from.
+  const normalizedSummaryInvoices = useMemo<NormalizedInvoice[]>(() => {
+    if (!summaryInvoices || summaryInvoices.length === 0) return [];
+    return summaryInvoices.map((row) => normalizeInvoiceRow(row, patientsById, providersById, t));
+  }, [summaryInvoices, patientsById, providersById, t]);
 
   const patientOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -503,9 +603,11 @@ export default function FinancialsPage() {
       map.set(provider.id, label);
     }
 
-    // Third pass: add any doctor/user keys from invoices not covered above
+    // Third pass: add any doctor/user keys from invoices not covered above.
+    // Uses the full filtered dataset (not just the current page) so options
+    // aren't silently missing when a match only occurs beyond page 1.
     const seenLabels = new Set(Array.from(map.values()).map((l) => l.toLowerCase().trim()));
-    for (const row of normalizedInvoices) {
+    for (const row of normalizedSummaryInvoices) {
       const key = row.ownerKey || "unknown";
       const label = row.ownerLabel || "Unassigned";
       if (!map.has(key) && !seenLabels.has(label.toLowerCase().trim())) {
@@ -515,7 +617,7 @@ export default function FinancialsPage() {
     }
 
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [normalizedInvoices, providersById]);
+  }, [normalizedSummaryInvoices, providersById]);
 
   const invoiceTypeOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -526,17 +628,24 @@ export default function FinancialsPage() {
     map.set("IVG", "IVG");
     map.set("TP", "TP");
     map.set("TG", "TG");
-    for (const row of normalizedInvoices) {
+    for (const row of normalizedSummaryInvoices) {
       if (!map.has(row.invoiceType)) {
         map.set(row.invoiceType, row.invoiceTypeLabel);
       }
     }
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [normalizedInvoices, t]);
+  }, [normalizedSummaryInvoices, t]);
 
   const filteredInvoices = useMemo(() => {
     return normalizedInvoices;
   }, [normalizedInvoices]);
+
+  // Full filtered dataset — the Overview aggregates below (totals cards,
+  // per-patient and per-owner breakdowns) must be computed from this, not
+  // from `filteredInvoices`, which only holds the current page.
+  const filteredSummaryInvoices = useMemo(() => {
+    return normalizedSummaryInvoices;
+  }, [normalizedSummaryInvoices]);
 
   // Reset pages when filters change
   useEffect(() => {
@@ -565,7 +674,7 @@ export default function FinancialsPage() {
     let totalComplimentary = 0;
     let invoiceCount = 0;
 
-    for (const row of filteredInvoices) {
+    for (const row of filteredSummaryInvoices) {
       const amount = row.amount;
       if (!Number.isFinite(amount) || amount <= 0) continue;
 
@@ -586,12 +695,12 @@ export default function FinancialsPage() {
     }
 
     return { totalAmount, totalPaid, totalUnpaid, totalComplimentary, invoiceCount };
-  }, [filteredInvoices]);
+  }, [filteredSummaryInvoices]);
 
   const patientSummaryRows: PatientSummaryRow[] = useMemo(() => {
     const byPatient = new Map<string, PatientSummaryRow>();
 
-    for (const row of filteredInvoices) {
+    for (const row of filteredSummaryInvoices) {
       if (!row.patient_id) continue;
 
       const existing = byPatient.get(row.patient_id) || {
@@ -626,7 +735,7 @@ export default function FinancialsPage() {
     return Array.from(byPatient.values()).sort(
       (a, b) => b.totalAmount - a.totalAmount,
     );
-  }, [filteredInvoices]);
+  }, [filteredSummaryInvoices]);
 
   const totalPatientPages = Math.max(1, Math.ceil(patientSummaryRows.length / ROWS_PER_PAGE));
   const paginatedPatientRows = useMemo(() => {
@@ -637,7 +746,7 @@ export default function FinancialsPage() {
   const ownerSummaryRows: OwnerSummaryRow[] = useMemo(() => {
     const byOwner = new Map<string, OwnerSummaryRow>();
 
-    for (const row of filteredInvoices) {
+    for (const row of filteredSummaryInvoices) {
       const key = row.ownerKey || "unknown";
       const label = row.ownerLabel || "Unassigned";
 
@@ -676,7 +785,7 @@ export default function FinancialsPage() {
     return Array.from(byOwner.values()).sort(
       (a, b) => b.totalAmount - a.totalAmount,
     );
-  }, [filteredInvoices]);
+  }, [filteredSummaryInvoices]);
 
   const [activeTab, setActiveTab] = useState<"overview" | "receipts" | "import_history">("overview");
 
@@ -691,87 +800,12 @@ export default function FinancialsPage() {
     const XLSX = await import("xlsx");
 
     // Fetch ALL invoices matching the current filters (not just the current page)
-    const allInvoices: InvoiceRow[] = [];
-    const FETCH_BATCH = 1000;
-    for (let from = 0; ; from += FETCH_BATCH) {
-      let query = supabaseClient
-        .from("invoices")
-        .select(
-          "id, patient_id, invoice_number, invoice_date, treatment_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, paid_at, health_insurance_law, billing_type, insurance_name, total_amount, paid_amount, vat_amount, status, is_complimentary, created_by_user_id, created_by_name, is_archived",
-        )
-        .eq("is_archived", false);
-
-      if (dateFromFilter) query = query.gte(dateField, dateFromFilter);
-      if (dateToFilter) query = query.lte(dateField, `${dateToFilter}T23:59:59.999Z`);
-      if (patientFilter !== "all") query = query.eq("patient_id", patientFilter);
-      if (ownerFilter !== "all") {
-        const ownerIds = ownerFilter.split("|");
-        const orClauses = ownerIds.map((id) => `provider_id.eq.${id}`);
-        query = query.or(orClauses.join(","));
-      }
-      if (invoiceTypeFilter !== "all") {
-        if (invoiceTypeFilter === "esthetic") {
-          query = query.is("health_insurance_law", null).is("billing_type", null);
-        } else {
-          query = query.or(
-            `health_insurance_law.eq.${invoiceTypeFilter},billing_type.eq.${invoiceTypeFilter}`,
-          );
-        }
-      }
-      if (statusFilter === "complimentary") {
-        query = query.eq("is_complimentary", true);
-      } else if (statusFilter === "paid") {
-        query = query.in("status", ["PAID", "OVERPAID"]);
-      } else if (statusFilter === "partial") {
-        query = query.eq("status", "PARTIAL_PAID");
-      } else if (statusFilter === "cancelled") {
-        query = query.eq("status", "CANCELLED");
-      } else if (statusFilter === "unpaid") {
-        query = query
-          .eq("is_complimentary", false)
-          .not("status", "in", "(PAID,OVERPAID,PARTIAL_PAID,CANCELLED)");
-      }
-      if (showOnlyUnpaid) {
-        query = query
-          .eq("is_complimentary", false)
-          .not("status", "in", "(PAID,OVERPAID)");
-      }
-
-      const { data, error: fetchError } = await query
-        .order("invoice_date", { ascending: false, nullsFirst: false })
-        .range(from, from + FETCH_BATCH - 1);
-
-      if (fetchError) { setError(fetchError.message); return; }
-      if (!data || data.length === 0) break;
-
-      allInvoices.push(...(data as InvoiceRow[]));
-      if (data.length < FETCH_BATCH) break;
-    }
+    const allInvoices = await fetchAllFilteredInvoices(invoiceFilterParams);
 
     // Normalise the full set using the same logic as normalizedInvoices
-    const allNormalized: NormalizedInvoice[] = allInvoices.map((row) => {
-      const patient = row.patient_id ? patientsById[row.patient_id] : undefined;
-      const nameParts = [
-        patient?.first_name ? patient.first_name.trim() : "",
-        patient?.last_name ? patient.last_name.trim() : "",
-      ].filter(Boolean);
-      const patientName = nameParts.join(" ") || row.patient_id || t("unknownPatient");
-      const amount = Number(row.total_amount) || 0;
-      const isPaid = row.status === "PAID" || row.status === "OVERPAID";
-      const provider = row.provider_id ? providersById[row.provider_id] : undefined;
-      const ownerKey = row.provider_id || row.doctor_user_id || row.created_by_user_id || "unknown";
-      const ownerLabel =
-        provider?.name || row.provider_name || row.doctor_name || row.created_by_name ||
-        (ownerKey === "unknown" ? t("unassigned") : ownerKey);
-      const invoiceType = row.health_insurance_law?.trim() || row.billing_type?.trim() || "esthetic";
-      const invoiceTypeLabel = row.health_insurance_law?.trim() || row.billing_type?.trim() || t("invoiceTypeEsthetic");
-      const filterStatus = row.is_complimentary ? "complimentary" : isPaid ? "paid" :
-        row.status === "PARTIAL_PAID" ? "partial" : row.status === "CANCELLED" ? "cancelled" : "unpaid";
-      const statusLabel = filterStatus === "complimentary" ? t("statusComplimentary") :
-        filterStatus === "paid" ? t("statusPaid") : filterStatus === "partial" ? t("statusPartial") :
-        filterStatus === "cancelled" ? t("statusCancelled") : t("statusUnpaid");
-      return { ...row, amount, isPaid, patientName, ownerKey, ownerLabel, invoiceType, invoiceTypeLabel, filterStatus, statusLabel };
-    });
+    const allNormalized: NormalizedInvoice[] = allInvoices.map((row) =>
+      normalizeInvoiceRow(row, patientsById, providersById, t),
+    );
 
     // Fetch line items for all invoices in batches
     const lineItemsByInvoice = new Map<string, InvoiceLineItemRow[]>();
@@ -1132,7 +1166,12 @@ export default function FinancialsPage() {
           <p className="text-[11px] text-red-600">{error}</p>
         ) : (
           <>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 financials-hide-on-print">
+            {summaryLoading && (
+              <p className="mb-2 text-[10px] italic text-slate-400 financials-hide-on-print">
+                {t("recalculatingTotals")}
+              </p>
+            )}
+            <div className={`grid gap-3 md:grid-cols-2 lg:grid-cols-4 financials-hide-on-print transition-opacity ${summaryLoading ? "opacity-60" : ""}`}>
               <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
                 <p className="text-[11px] font-medium text-slate-500">
                   {t("totalBilled")}
