@@ -35,6 +35,8 @@ type Submission = {
     status: string | null;            // OPEN | PAID | PARTIAL_PAID | OVERPAID | CANCELLED | PARTIAL_LOSS
     paid_amount: number | null;
     total_amount: number | null;
+    medidata_processed_at?: string | null;
+    medidata_processed_by?: string | null;
   } | null;
   status: MediDataInvoiceStatus;
   patient_id: string;
@@ -217,6 +219,57 @@ function InvoicePaymentBadge({ invoice }: { invoice?: InvoicePaymentInfo | null 
         </span>
       )}
     </span>
+  );
+}
+
+// BILL-004.1 follow-up: surface the "Processed" workflow flag directly on
+// every row of the main submissions list (not just the compact Accountant
+// Action panel / dedicated sub-filter view), with an inline toggle, so
+// accountants can triage the full list without switching views.
+function WorkflowStatusBadge({
+  submissionStatus,
+  invoice,
+  processingInvoiceId,
+  onToggleProcessed,
+}: {
+  submissionStatus: MediDataInvoiceStatus;
+  invoice?: { id: string; paid_amount: number | null; medidata_processed_at?: string | null } | null;
+  processingInvoiceId: string | null;
+  onToggleProcessed: (invoiceId: string, processed: boolean) => void;
+}) {
+  if (submissionStatus !== "rejected" || !invoice?.id) return null;
+
+  const isPaid = (Number(invoice.paid_amount) || 0) > 0;
+  const isProcessed = !!invoice.medidata_processed_at;
+
+  if (isPaid) {
+    return (
+      <span
+        className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-medium text-cyan-700"
+        title="Rejected but already paid — no action needed"
+      >
+        💰 Paid
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={processingInvoiceId === invoice.id}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggleProcessed(invoice.id, !isProcessed);
+      }}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-50 ${
+        isProcessed
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+          : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+      }`}
+      title="Workflow-only — does not change the MediData/Sumex status"
+    >
+      {isProcessed ? "✓ Processed" : "Mark processed"}
+    </button>
   );
 }
 
@@ -526,7 +579,7 @@ export default function MediDataDashboard() {
         .select(`
           *,
           patient:patients(id,first_name,last_name),
-          invoice:invoices(id,pdf_path,pdf_generated_at,status,paid_amount,total_amount),
+          invoice:invoices(id,pdf_path,pdf_generated_at,status,paid_amount,total_amount,medidata_processed_at,medidata_processed_by),
           history:medidata_submission_history(*)
         `, { count: "exact" })
         .order("created_at", { ascending: false })
@@ -738,6 +791,13 @@ export default function MediDataDashboard() {
       await supabaseClient.from("invoices").update(update).eq("id", invoiceId);
       setActionItems((prev) => prev.map((item) =>
         item.invoiceId === invoiceId ? { ...item, processedAt: update.medidata_processed_at } : item
+      ));
+      // Keep the main submissions list (BILL-004.1 follow-up: workflow badge
+      // shown directly on the full list, not just the accountant panel) in sync.
+      setSubmissions((prev) => prev.map((s) =>
+        s.invoice && s.invoice.id === invoiceId
+          ? { ...s, invoice: { ...s.invoice, medidata_processed_at: update.medidata_processed_at, medidata_processed_by: update.medidata_processed_by } }
+          : s
       ));
     } catch (e) {
       console.error("Error updating processed flag:", e);
@@ -1530,10 +1590,19 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                   // A single sub renders exactly as before; multiples get a group header
                   const renderSubRow = (sub: Submission) => (
                     <div key={sub.id} className={hasMultiple && isGroupExpanded ? "bg-slate-50/60" : "border-b border-slate-100 last:border-b-0"}>
-                      <button
-                        type="button"
-                        className="grid w-full grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)_minmax(110px,0.9fr)_minmax(90px,0.8fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_32px] gap-3 px-4 py-3 text-left hover:bg-slate-50"
+                      {/* Not a <button> — a nested "Mark processed" toggle button is
+                          rendered inside this row (invalid to nest <button> in <button>). */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="grid w-full cursor-pointer grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)_minmax(110px,0.9fr)_minmax(90px,0.8fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_32px] gap-3 px-4 py-3 text-left hover:bg-slate-50"
                         onClick={() => setExpandedSub(expandedSub === sub.id ? null : sub.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setExpandedSub(expandedSub === sub.id ? null : sub.id);
+                          }
+                        }}
                       >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-slate-900">{sub.invoice_number}</p>
@@ -1584,8 +1653,14 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                     <div className="min-w-0">
                       <InvoicePaymentBadge invoice={sub.invoice} />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex flex-col items-start gap-1">
                       <InvoiceStatusBadge status={sub.status} />
+                      <WorkflowStatusBadge
+                        submissionStatus={sub.status}
+                        invoice={sub.invoice}
+                        processingInvoiceId={processingInvoiceId}
+                        onToggleProcessed={toggleInvoiceProcessed}
+                      />
                     </div>
                     <div className="flex items-center justify-center">
                       <svg
@@ -1598,7 +1673,7 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                       </svg>
                     </div>
-                  </button>
+                  </div>
 
                   {expandedSub === sub.id && (
                     <div className="border-t border-slate-100 p-4 space-y-4 bg-white">
@@ -2045,11 +2120,19 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                   // Group header row for invoices with multiple submissions
                   return (
                     <div key={invoiceNumber} className="border-b border-slate-100 last:border-b-0">
-                      {/* Group header */}
-                      <button
-                        type="button"
-                        className="grid w-full grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)_minmax(110px,0.9fr)_minmax(90px,0.8fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_32px] gap-3 px-4 py-3 text-left hover:bg-amber-50/60 bg-amber-50/30"
+                      {/* Group header — a nested "Mark processed" toggle is rendered
+                          inside, so this can't be a <button> (invalid nesting). */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="grid w-full cursor-pointer grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)_minmax(110px,0.9fr)_minmax(90px,0.8fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_32px] gap-3 px-4 py-3 text-left hover:bg-amber-50/60 bg-amber-50/30"
                         onClick={() => setExpandedGroup(isGroupExpanded ? null : invoiceNumber)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setExpandedGroup(isGroupExpanded ? null : invoiceNumber);
+                          }
+                        }}
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
@@ -2091,10 +2174,18 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                         </div>
                         <div className="min-w-0">
                           {/* Show all unique statuses across the group so no single one misleads */}
-                          <div className="flex flex-col gap-1">
+                          <div className="flex flex-col items-start gap-1">
                             {Array.from(new Map(groupSubs.map((s) => [s.status, s])).values()).map((s) => (
                               <InvoiceStatusBadge key={s.status} status={s.status} />
                             ))}
+                            {/* Workflow flag lives on the invoice, keyed off the latest
+                                rejected submission in the group. */}
+                            <WorkflowStatusBadge
+                              submissionStatus={latest.status}
+                              invoice={latest.invoice}
+                              processingInvoiceId={processingInvoiceId}
+                              onToggleProcessed={toggleInvoiceProcessed}
+                            />
                           </div>
                         </div>
                         <div className="flex items-center justify-center">
@@ -2105,7 +2196,7 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                           </svg>
                         </div>
-                      </button>
+                      </div>
 
                       {/* Expanded: individual submission rows */}
                       {isGroupExpanded && (
