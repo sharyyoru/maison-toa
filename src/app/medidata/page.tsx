@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import InvoiceStatusBadge, { InvoiceStatusTimeline } from "@/components/InvoiceStatusBadge";
 import type { MediDataInvoiceStatus } from "@/lib/medidata";
@@ -220,6 +220,19 @@ function InvoicePaymentBadge({ invoice }: { invoice?: InvoicePaymentInfo | null 
   );
 }
 
+// Shared category → color mapping, used by both the compact Accountant
+// Action panel and the main submissions list's "workflow status" view.
+const CATEGORY_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+  "Wrong tariff point value": { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-900", badge: "bg-amber-100 text-amber-800" },
+  "Wrong tariff type/code": { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-900", badge: "bg-orange-100 text-orange-800" },
+  "Duplicate invoice": { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-900", badge: "bg-blue-100 text-blue-800" },
+  "Unknown insured": { bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-900", badge: "bg-rose-100 text-rose-800" },
+  "Not covered": { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-900", badge: "bg-purple-100 text-purple-800" },
+  "XML Schema error": { bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-900", badge: "bg-slate-100 text-slate-800" },
+  "Generic rejection": { bg: "bg-red-50", border: "border-red-200", text: "text-red-900", badge: "bg-red-100 text-red-800" },
+  "Other": { bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-900", badge: "bg-slate-100 text-slate-800" },
+};
+
 // Categorize a rejection by parsing insurance_response_message + response
 // explanations. Shared by the Accountant Action panel.
 function categorizeRejection(message: string, responseExplanations: string): { category: string; detail: string } {
@@ -359,6 +372,76 @@ type RejectedActionInvoice = {
   processedAt: string | null;
 };
 
+// Renders rejected invoices grouped by rejection category, with an
+// optional "Mark processed" toggle per row. Shared by the compact
+// Accountant Action panel and the main submissions list's own
+// "workflow status" sub-filter view (BILL-004.1 follow-up) so both stay
+// visually and behaviorally consistent.
+function RejectedInvoiceGroups({
+  items,
+  bucket,
+  processingInvoiceId,
+  onToggleProcessed,
+}: {
+  items: RejectedActionInvoice[];
+  bucket: "unprocessed" | "processed" | "paid";
+  processingInvoiceId: string | null;
+  onToggleProcessed: (invoiceId: string, processed: boolean) => void;
+}) {
+  if (items.length === 0) {
+    return <p className="text-xs text-slate-500 italic">Nothing here.</p>;
+  }
+
+  const grouped: Record<string, RejectedActionInvoice[]> = {};
+  for (const item of items) {
+    if (!grouped[item.category]) grouped[item.category] = [];
+    grouped[item.category].push(item);
+  }
+
+  return (
+    <div className="space-y-3">
+      {Object.entries(grouped).sort((a, b) => b[1].length - a[1].length).map(([cat, catItems]) => {
+        const colors = CATEGORY_COLORS[cat] || CATEGORY_COLORS["Other"];
+        return (
+          <div key={cat} className={`rounded-lg border ${colors.border} ${colors.bg} p-3`}>
+            <div className="mb-2 flex items-center gap-2">
+              <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${colors.badge}`}>
+                {catItems.length}
+              </span>
+              <span className={`text-xs font-semibold ${colors.text}`}>{cat}</span>
+            </div>
+            <div className="space-y-1.5">
+              {catItems.map((item) => (
+                <div key={item.invoiceId ?? item.submissionId} className="flex items-center gap-2 text-xs">
+                  <span className="font-mono font-semibold text-slate-700 whitespace-nowrap">{item.invoiceNumber}</span>
+                  <span className="text-slate-500">-</span>
+                  <Link href={`/patients/${item.patientId}`} className="text-sky-600 hover:underline whitespace-nowrap">{item.patientName}</Link>
+                  <span className="text-slate-400 truncate flex-1">{item.detail}</span>
+                  {item.invoiceId && bucket !== "paid" && (
+                    <button
+                      type="button"
+                      disabled={processingInvoiceId === item.invoiceId}
+                      onClick={() => onToggleProcessed(item.invoiceId!, bucket !== "processed")}
+                      className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-50 ${
+                        bucket === "processed"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                      }`}
+                      title="Workflow-only — does not change the MediData/Sumex status"
+                    >
+                      {bucket === "processed" ? "✓ Processed — undo" : "Mark processed"}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function MediDataDashboard() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("submissions");
@@ -385,6 +468,11 @@ export default function MediDataDashboard() {
   const [actionItemsLoading, setActionItemsLoading] = useState(false);
   const [actionTab, setActionTab] = useState<"unprocessed" | "processed" | "paid">("unprocessed");
   const [processingInvoiceId, setProcessingInvoiceId] = useState<string | null>(null);
+  // Independent workflow-state sub-filter for the main submissions list
+  // itself (separate from the compact Accountant Action panel above, and
+  // separate from the regular status dropdown) — lets accountants browse
+  // the full submissions list pre-sorted into the same 3 buckets.
+  const [workflowFilter, setWorkflowFilter] = useState<"all" | "unprocessed" | "processed" | "paid">("all");
 
   // Participants
   const [participants, setParticipants] = useState<MediDataParticipant[]>([]);
@@ -656,6 +744,16 @@ export default function MediDataDashboard() {
     }
     setProcessingInvoiceId(null);
   }, [user?.id]);
+
+  // Shared 3-way categorization of rejected invoices — feeds both the
+  // compact Accountant Action panel and the main submissions list's own
+  // "Unprocessed / Processed / Paid" sub-filter, so the two stay consistent.
+  const actionItemsByBucket = useMemo(() => {
+    const unprocessed = actionItems.filter((i) => !i.invoicePaid && !i.processedAt);
+    const processed = actionItems.filter((i) => !i.invoicePaid && !!i.processedAt);
+    const paid = actionItems.filter((i) => i.invoicePaid);
+    return { unprocessed, processed, paid };
+  }, [actionItems]);
 
   // ── Fetch responses from local DB ──
   const fetchResponses = useCallback(async () => {
@@ -1171,24 +1269,26 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                 {submissionKind === "storno" ? "Storno Submissions" : "Invoice Submissions"}
               </h2>
               <p className="text-xs text-slate-500">
-                {submissionsCount > 0
-                  ? `Showing ${submissionsPage * SUBMISSIONS_PAGE_SIZE + 1}-${Math.min((submissionsPage + 1) * SUBMISSIONS_PAGE_SIZE, submissionsCount)} of ${submissionsCount}`
-                  : submissionKind === "storno"
-                    ? "No storno submissions found"
-                    : "No submissions found"}
+                {workflowFilter !== "all"
+                  ? "Filtered by workflow status — pagination below doesn't apply"
+                  : submissionsCount > 0
+                    ? `Showing ${submissionsPage * SUBMISSIONS_PAGE_SIZE + 1}-${Math.min((submissionsPage + 1) * SUBMISSIONS_PAGE_SIZE, submissionsCount)} of ${submissionsCount}`
+                    : submissionKind === "storno"
+                      ? "No storno submissions found"
+                      : "No submissions found"}
               </p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSubmissionsPage((prev) => Math.max(0, prev - 1))}
-                disabled={subsLoading || submissionsPage === 0}
+                disabled={workflowFilter !== "all" || subsLoading || submissionsPage === 0}
                 className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
               >
                 Previous
               </button>
               <button
                 onClick={() => setSubmissionsPage((prev) => (prev + 1 < submissionTotalPages ? prev + 1 : prev))}
-                disabled={subsLoading || submissionsPage + 1 >= submissionTotalPages}
+                disabled={workflowFilter !== "all" || subsLoading || submissionsPage + 1 >= submissionTotalPages}
                 className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
               >
                 Next
@@ -1255,35 +1355,60 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                 Clear filters
               </button>
             )}
+
+            {/* BILL-004.1 follow-up: independent "workflow status" sub-filter
+                for rejected invoices, applied to the main submissions list
+                itself (not just the compact Accountant Action panel above).
+                Provided both as a dropdown and as quick-access chips. */}
+            <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Workflow status</label>
+                <select
+                  value={workflowFilter}
+                  onChange={(e) => setWorkflowFilter(e.target.value as typeof workflowFilter)}
+                  className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                >
+                  <option value="all">All (regular list)</option>
+                  <option value="unprocessed">Unprocessed ({actionItemsByBucket.unprocessed.length})</option>
+                  <option value="processed">Processed ({actionItemsByBucket.processed.length})</option>
+                  <option value="paid">Paid ({actionItemsByBucket.paid.length})</option>
+                </select>
+              </div>
+              <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-0.5">
+                {([
+                  { key: "all" as const, label: "All" },
+                  { key: "unprocessed" as const, label: `Unprocessed (${actionItemsByBucket.unprocessed.length})` },
+                  { key: "processed" as const, label: `Processed (${actionItemsByBucket.processed.length})` },
+                  { key: "paid" as const, label: `Paid (${actionItemsByBucket.paid.length})` },
+                ]).map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setWorkflowFilter(t.key)}
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      workflowFilter === t.key
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {workflowFilter !== "all" && (
+                <span className="text-[10px] text-slate-400 italic">
+                  Showing rejected invoices only, grouped by rejection reason — independent of the Status filter above.
+                </span>
+              )}
+            </div>
           </div>
 
           {/* ── Accountant Action Items (BILL-004.1) ── */}
           {(() => {
             if (actionItems.length === 0 && !actionItemsLoading) return null;
 
-            const unprocessed = actionItems.filter((i) => !i.invoicePaid && !i.processedAt);
-            const processed = actionItems.filter((i) => !i.invoicePaid && !!i.processedAt);
-            const paid = actionItems.filter((i) => i.invoicePaid);
-
+            const { unprocessed, processed, paid } = actionItemsByBucket;
             const tabItems = actionTab === "unprocessed" ? unprocessed : actionTab === "processed" ? processed : paid;
-
-            // Group the active tab's items by category
-            const grouped: Record<string, RejectedActionInvoice[]> = {};
-            for (const item of tabItems) {
-              if (!grouped[item.category]) grouped[item.category] = [];
-              grouped[item.category].push(item);
-            }
-
-            const categoryColors: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-              "Wrong tariff point value": { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-900", badge: "bg-amber-100 text-amber-800" },
-              "Wrong tariff type/code": { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-900", badge: "bg-orange-100 text-orange-800" },
-              "Duplicate invoice": { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-900", badge: "bg-blue-100 text-blue-800" },
-              "Unknown insured": { bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-900", badge: "bg-rose-100 text-rose-800" },
-              "Not covered": { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-900", badge: "bg-purple-100 text-purple-800" },
-              "XML Schema error": { bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-900", badge: "bg-slate-100 text-slate-800" },
-              "Generic rejection": { bg: "bg-red-50", border: "border-red-200", text: "text-red-900", badge: "bg-red-100 text-red-800" },
-              "Other": { bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-900", badge: "bg-slate-100 text-slate-800" },
-            };
 
             return (
               <div className="rounded-xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 shadow-sm overflow-hidden">
@@ -1338,49 +1463,13 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
                       ))}
                     </div>
 
-                    <div className="p-4 space-y-3">
-                      {tabItems.length === 0 ? (
-                        <p className="text-xs text-slate-500 italic">Nothing here.</p>
-                      ) : (
-                        Object.entries(grouped).sort((a, b) => b[1].length - a[1].length).map(([cat, catItems]) => {
-                          const colors = categoryColors[cat] || categoryColors["Other"];
-                          return (
-                            <div key={cat} className={`rounded-lg border ${colors.border} ${colors.bg} p-3`}>
-                              <div className="mb-2 flex items-center gap-2">
-                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${colors.badge}`}>
-                                  {catItems.length}
-                                </span>
-                                <span className={`text-xs font-semibold ${colors.text}`}>{cat}</span>
-                              </div>
-                              <div className="space-y-1.5">
-                                {catItems.map((item) => (
-                                  <div key={item.invoiceId ?? item.submissionId} className="flex items-center gap-2 text-xs">
-                                    <span className="font-mono font-semibold text-slate-700 whitespace-nowrap">{item.invoiceNumber}</span>
-                                    <span className="text-slate-500">-</span>
-                                    <Link href={`/patients/${item.patientId}`} className="text-sky-600 hover:underline whitespace-nowrap">{item.patientName}</Link>
-                                    <span className="text-slate-400 truncate flex-1">{item.detail}</span>
-                                    {item.invoiceId && actionTab !== "paid" && (
-                                      <button
-                                        type="button"
-                                        disabled={processingInvoiceId === item.invoiceId}
-                                        onClick={() => toggleInvoiceProcessed(item.invoiceId!, actionTab !== "processed")}
-                                        className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-50 ${
-                                          actionTab === "processed"
-                                            ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                                            : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-                                        }`}
-                                        title="Workflow-only — does not change the MediData/Sumex status"
-                                      >
-                                        {actionTab === "processed" ? "✓ Processed — undo" : "Mark processed"}
-                                      </button>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
+                    <div className="p-4">
+                      <RejectedInvoiceGroups
+                        items={tabItems}
+                        bucket={actionTab}
+                        processingInvoiceId={processingInvoiceId}
+                        onToggleProcessed={toggleInvoiceProcessed}
+                      />
                     </div>
                   </div>
                 )}
@@ -1388,7 +1477,26 @@ ${d.pending.messages.map((m: {code:string;text:string}) => `<div class="msg-row"
             );
           })()}
 
-          {submissions.length === 0 && !subsLoading ? (
+          {/* ── Main submissions list, "workflow status" sub-filter (BILL-004.1 follow-up) ──
+              When a bucket other than "all" is selected, replace the regular
+              paginated table with the same category-grouped view as the
+              Accountant Action panel above, scoped to that bucket, so
+              accountants can browse the complete rejected-invoice list
+              (not just a compact summary) split by Unprocessed/Processed/Paid. */}
+          {workflowFilter !== "all" ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">
+                Rejected invoices — {workflowFilter === "unprocessed" ? "Unprocessed" : workflowFilter === "processed" ? "Processed" : "Paid"}
+                <span className="ml-2 text-xs font-normal text-slate-400">({actionItemsByBucket[workflowFilter].length})</span>
+              </h3>
+              <RejectedInvoiceGroups
+                items={actionItemsByBucket[workflowFilter]}
+                bucket={workflowFilter}
+                processingInvoiceId={processingInvoiceId}
+                onToggleProcessed={toggleInvoiceProcessed}
+              />
+            </div>
+          ) : submissions.length === 0 && !subsLoading ? (
             <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
               <p className="text-sm text-slate-400">No submissions found</p>
             </div>
