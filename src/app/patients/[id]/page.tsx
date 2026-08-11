@@ -382,7 +382,7 @@ export default async function PatientPage({
               </h1>
               <PatientStatusWidgets
                 patientId={patient.id}
-                isVip={Boolean(automaticVip)}
+                initialVip={Boolean(automaticVip)}
                 initialMember={Boolean((patient as any).is_member)}
                 initialSocialMedia={Boolean((patient as any).is_social_media)}
               />
