@@ -219,7 +219,7 @@ export async function PATCH(
 
       const { data: selectedUpdated, error: selectedError } = await supabase
         .from("appointments")
-        .select("id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)")
+        .select("id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)")
         .eq("id", id)
         .single();
       if (selectedError) return NextResponse.json({ error: selectedError.message }, { status: 500 });
@@ -316,7 +316,7 @@ export async function PATCH(
       .from("appointments")
       .update(updateData)
       .eq("id", id)
-      .select("id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, language_preference), provider:providers(id, name)")
+      .select("id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)")
       .single();
     
     if (error) {
@@ -442,7 +442,7 @@ export async function GET(
       .from("appointments")
       .select(`
         *,
-        patient:patients(id, first_name, last_name, email, phone),
+        patient:patients(id, first_name, last_name, email, phone, is_vip, is_member),
         provider:providers(id, name, specialty)
       `)
       .eq("id", id)
