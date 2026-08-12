@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireWorkflowAdmin } from "@/lib/workflows/auth";
 import { legacyNodesToGraph } from "@/lib/workflows/legacy";
 import { validateWorkflowGraph } from "@/lib/workflows/validation";
+import { configWithFlattenedTrigger } from "@/lib/workflows/legacyConfig";
 
 export async function POST(request: Request) {
   const auth = await requireWorkflowAdmin(request);
@@ -16,7 +17,8 @@ export async function POST(request: Request) {
 
   const { data: workflow, error } = await supabaseAdmin.from("workflows").insert({
     name: String(body.name || "New Workflow").trim(), trigger_type: trigger.data.triggerType,
-    active: Boolean(body.active && body.publish), config: { nodes: body.nodes }, engine_version: 2,
+    active: Boolean(body.active && body.publish),
+    config: configWithFlattenedTrigger(body.nodes, trigger.data.triggerType), engine_version: 2,
     migration_status: body.publish ? "live" : "ready",
   }).select("id").single();
   if (error || !workflow) return NextResponse.json({ error: error?.message || "Could not create workflow" }, { status: 500 });

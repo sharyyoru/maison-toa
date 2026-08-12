@@ -10,6 +10,7 @@ import {
 } from "@/lib/appointmentEmails";
 import { normalizePatientLanguage } from "@/lib/languagePreference";
 import { formatSwissYmd } from "@/lib/swissTimezone";
+import { resolveLegacyWorkflowConfig } from "@/lib/workflows/legacyConfig";
 
 export const runtime = "nodejs";
 
@@ -237,7 +238,7 @@ export async function POST(request: Request) {
     }
 
     const matchingWorkflows = (workflows as any[]).filter((w) => {
-      const config = (w.config || {}) as {
+      const config = resolveLegacyWorkflowConfig(w.config, triggerType) as {
         nodes?: any[];
         appointment_status?: string;
         appointment_statuses?: string[];
@@ -278,7 +279,7 @@ export async function POST(request: Request) {
     let actionsRun = 0;
 
     for (const workflow of matchingWorkflows) {
-      const workflowConfig = workflow.config as {
+      const workflowConfig = resolveLegacyWorkflowConfig(workflow.config, triggerType) as {
         nodes?: any[];
         run_once_per_appointment?: boolean;
         run_once_per_patient_per_day?: boolean;

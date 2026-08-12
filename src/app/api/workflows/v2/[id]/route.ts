@@ -4,6 +4,7 @@ import { requireWorkflowAdmin } from "@/lib/workflows/auth";
 import { graphToLegacyNodes, legacyNodesToGraph } from "@/lib/workflows/legacy";
 import { validateWorkflowGraph } from "@/lib/workflows/validation";
 import type { WorkflowGraph } from "@/lib/workflows/types";
+import { configWithFlattenedTrigger } from "@/lib/workflows/legacyConfig";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireWorkflowAdmin(request);
@@ -45,7 +46,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
   const update: Record<string, unknown> = {
     name: String(body.name || "Workflow").trim(), trigger_type: trigger.data.triggerType,
-    config: { nodes: body.nodes }, engine_version: 2, draft_version_id: versionId,
+    config: configWithFlattenedTrigger(body.nodes, trigger.data.triggerType), engine_version: 2, draft_version_id: versionId,
     migration_status: "ready", updated_at: new Date().toISOString(),
   };
   if (body.publish) {
