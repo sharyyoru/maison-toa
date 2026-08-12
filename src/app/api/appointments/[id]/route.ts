@@ -14,6 +14,41 @@ function appointmentDisplayStatus(reason: unknown): string {
   return reason.match(/\[Status:\s*([^\]]+)\]/i)?.[1]?.trim() || "Aucune sélection";
 }
 
+async function synchronizePendingReminders(
+  appointmentId: string,
+  options: { startDeltaMs?: number; cancelled?: boolean },
+) {
+  if (options.cancelled) {
+    const { error } = await supabase
+      .from("scheduled_emails")
+      .delete()
+      .eq("appointment_id", appointmentId)
+      .eq("status", "pending");
+    if (error) throw error;
+    return;
+  }
+
+  if (!options.startDeltaMs) return;
+  const { data: reminders, error } = await supabase
+    .from("scheduled_emails")
+    .select("id, scheduled_for")
+    .eq("appointment_id", appointmentId)
+    .eq("status", "pending");
+  if (error) throw error;
+  for (const reminder of reminders ?? []) {
+    const scheduledFor = new Date(reminder.scheduled_for);
+    if (Number.isNaN(scheduledFor.getTime())) continue;
+    const { error: updateError } = await supabase
+      .from("scheduled_emails")
+      .update({
+        scheduled_for: new Date(scheduledFor.getTime() + options.startDeltaMs).toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", reminder.id);
+    if (updateError) throw updateError;
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -181,21 +216,10 @@ export async function PATCH(
         const { error: updateError } = await supabase.from("appointments").update(targetUpdate).eq("id", target.id);
         if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
-        if (startDeltaMs !== 0) {
-          const { data: reminders } = await supabase
-            .from("scheduled_emails")
-            .select("id, scheduled_for")
-            .eq("appointment_id", target.id)
-            .eq("status", "pending");
-          for (const reminder of reminders ?? []) {
-            const scheduledFor = new Date(reminder.scheduled_for);
-            if (Number.isNaN(scheduledFor.getTime())) continue;
-            await supabase
-              .from("scheduled_emails")
-              .update({ scheduled_for: new Date(scheduledFor.getTime() + startDeltaMs).toISOString(), updated_at: new Date().toISOString() })
-              .eq("id", reminder.id);
-          }
-        }
+        await synchronizePendingReminders(target.id, {
+          startDeltaMs,
+          cancelled: proposedStatus === "cancelled" || proposedStatus === "no_show",
+        });
 
         const previousDisplayStatus = appointmentDisplayStatus(target.reason);
         const nextDisplayStatus = appointmentDisplayStatus(targetUpdate.reason ?? target.reason);
@@ -326,6 +350,11 @@ export async function PATCH(
         { status: 500 }
       );
     }
+
+    await synchronizePendingReminders(id, {
+      startDeltaMs: proposedStart.getTime() - new Date(currentAppointment.start_time).getTime(),
+      cancelled: proposedStatus === "cancelled" || proposedStatus === "no_show",
+    });
 
     const previousDisplayStatus = appointmentDisplayStatus(currentAppointment.reason);
     const nextDisplayStatus = appointmentDisplayStatus(data.reason);

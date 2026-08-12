@@ -823,24 +823,20 @@ async function syncPendingAppointmentReminder(appointment: CalendarAppointment):
   const patientStart = appointment.tracking_params?.patient_appointment_start || appointment.start_time;
   const reminderDate = new Date(new Date(patientStart).getTime() - 24 * 60 * 60 * 1000);
 
-  const { data: existingReminder } = await supabaseClient
+  const { data: existingReminders } = await supabaseClient
     .from("scheduled_emails")
     .select("id")
     .eq("appointment_id", appointment.id)
-    // Workflow emails use recipient_type "workflow" and must retain their own
-    // configured schedule when the appointment time changes.
-    .eq("recipient_type", "patient")
-    .eq("status", "pending")
-    .limit(1)
-    .maybeSingle();
+    .eq("status", "pending");
 
-  if (!existingReminder?.id) return;
+  const reminderIds = (existingReminders ?? []).map((reminder) => reminder.id);
+  if (reminderIds.length === 0) return;
 
   if (reminderDate.getTime() <= Date.now()) {
     await supabaseClient
       .from("scheduled_emails")
       .delete()
-      .eq("id", existingReminder.id);
+      .in("id", reminderIds);
     return;
   }
 
@@ -850,7 +846,7 @@ async function syncPendingAppointmentReminder(appointment: CalendarAppointment):
       scheduled_for: reminderDate.toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq("id", existingReminder.id);
+    .in("id", reminderIds);
 }
 
 export default function CalendarPage() {

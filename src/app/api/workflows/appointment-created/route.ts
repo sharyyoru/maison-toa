@@ -567,8 +567,14 @@ export async function POST(request: Request) {
         // the fallback for longer schedules (and unconfigured email providers).
         if (isFuture && scheduledAt) {
           const delayMs = scheduledAt.getTime() - now.getTime();
+          // Appointment reminders must remain in our database queue so they can
+          // be moved or removed when the appointment is rescheduled/cancelled.
+          // Once a message is scheduled natively with Resend, its provider ID is
+          // not available to the calendar update paths and it becomes stale.
           const canUseProviderScheduling =
-            isEmailConfigured() && delayMs <= 72 * 60 * 60 * 1000;
+            sendMode !== "reminder_before" &&
+            isEmailConfigured() &&
+            delayMs <= 72 * 60 * 60 * 1000;
 
           if (canUseProviderScheduling) {
             const sendResult = await sendEmailViaResend({

@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/send-scheduled-emails",
-      "schedule": "0 * * * *"
+      "schedule": "*/1 * * * *"
     },
     {
       "path": "/api/cron/cancel-unpaid-deposits",

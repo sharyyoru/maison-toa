@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
+import { generatePatientReminderEmail } from "@/lib/appointmentEmails";
+import { normalizePatientLanguage } from "@/lib/languagePreference";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -76,10 +78,68 @@ export async function GET(request: Request) {
       
       const results = await Promise.allSettled(
         batch.map(async (email) => {
+          let subject = email.subject;
+          let body = email.body;
+
+          // Appointment reminder content is intentionally rebuilt at send time.
+          // This is the final guard against stale queued content after a calendar
+          // edit, and it also prevents reminders for cancelled/deleted visits.
+          if (email.appointment_id && /rappel de votre rendez-vous|appointment reminder/i.test(email.subject || "")) {
+            const { data: appointment, error: appointmentError } = await supabase
+              .from("appointments")
+              .select("id, patient_id, start_time, status, reason, tracking_params")
+              .eq("id", email.appointment_id)
+              .maybeSingle();
+
+            if (appointmentError) {
+              throw new Error(`Failed to validate appointment ${email.appointment_id}: ${appointmentError.message}`);
+            }
+
+            const displayStatus = typeof appointment?.reason === "string"
+              ? appointment.reason.match(/\[Status:\s*([^\]]+)\]/i)?.[1]?.trim().toLowerCase()
+              : "";
+            const isCancelled =
+              !appointment ||
+              ["cancelled", "no_show"].includes(String(appointment.status || "").toLowerCase()) ||
+              !!displayStatus?.match(/cancel|annul|no[ _-]?show/);
+
+            if (isCancelled) {
+              await supabase.from("scheduled_emails").delete().eq("id", email.id);
+              return "skipped" as const;
+            }
+
+            const { data: patient } = await supabase
+              .from("patients")
+              .select("last_name, gender, language_preference")
+              .eq("id", appointment.patient_id)
+              .maybeSingle();
+            const trackingParams = (appointment.tracking_params || {}) as Record<string, unknown>;
+            const currentStart = new Date(
+              typeof trackingParams.patient_appointment_start === "string"
+                ? trackingParams.patient_appointment_start
+                : appointment.start_time,
+            );
+            if (Number.isNaN(currentStart.getTime())) {
+              await supabase.from("scheduled_emails").update({ status: "failed", error: "Invalid appointment start time" }).eq("id", email.id);
+              return false;
+            }
+
+            const language = normalizePatientLanguage(patient?.language_preference, "en");
+            subject = language === "fr" ? "Rappel de votre rendez-vous" : "Appointment reminder";
+            body = generatePatientReminderEmail(
+              patient?.last_name || "",
+              patient?.gender || undefined,
+              currentStart,
+              appointment.reason || "",
+              language,
+              appointment.id,
+            );
+          }
+
           const success = await sendEmail(
             email.recipient_email,
-            email.subject,
-            email.body
+            subject,
+            body
           );
 
           // Update status in scheduled_emails
@@ -100,8 +160,8 @@ export async function GET(request: Request) {
               patient_id: email.patient_id ?? null,
               to_address: email.recipient_email,
               from_address: process.env.EMAIL_FROM_ADDRESS ?? "info@mail.maisontoa.com",
-              subject: email.subject,
-              body: email.body,
+              subject,
+              body,
               status: "sent",
               direction: "outbound",
               sent_at: sentAt,
@@ -114,6 +174,7 @@ export async function GET(request: Request) {
       );
 
       results.forEach((result) => {
+        if (result.status === "fulfilled" && result.value === "skipped") return;
         if (result.status === "fulfilled" && result.value) {
           sentCount++;
         } else {
