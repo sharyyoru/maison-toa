@@ -45,7 +45,7 @@ export default function PatientStatusWidgets({ patientId, initialVip, initialMem
 
   return <div className="flex flex-wrap items-center gap-1.5" title={error ?? undefined}>
     {button("is_vip", "⭐", "VIP", "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200")}
-    {button("is_member", "💎", "Mbrs", "border-violet-300 bg-violet-100 text-violet-800 hover:bg-violet-200")}
+    {button("is_member", "💎", "MBRS", "border-violet-300 bg-violet-100 text-violet-800 hover:bg-violet-200")}
     {button("is_social_media", "📷", "Social", "border-pink-300 bg-pink-100 text-pink-700 hover:bg-pink-200")}
   </div>;
 }

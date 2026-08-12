@@ -5387,7 +5387,7 @@ export default function CalendarPage() {
                                 {appt.patient?.is_member ? (
                                   <span
                                     title="Membership patient"
-                                    className="flex-shrink-0 rounded-full bg-sky-500 px-1 text-[8px] font-bold leading-tight text-white"
+                                    className="flex-shrink-0 text-[14px] leading-none"
                                   >
                                     💎
                                   </span>
@@ -5786,7 +5786,7 @@ export default function CalendarPage() {
                                             {appt.patient?.is_member ? (
                                               <span
                                                 title="Membership patient"
-                                                className="flex-shrink-0 rounded-full bg-sky-500 px-1 text-[8px] font-bold leading-tight text-white"
+                                                className="flex-shrink-0 text-[14px] leading-none"
                                               >
                                                 💎
                                               </span>
