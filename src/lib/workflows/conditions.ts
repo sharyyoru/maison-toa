@@ -8,6 +8,41 @@ async function latestConsent(patientId: string, channel: string) {
   return data?.granted ?? false;
 }
 
+async function appointmentTreatment(context: RunContext) {
+  const payloadServiceIds = Array.isArray(context.event.payload.service_ids)
+    ? context.event.payload.service_ids.map(String)
+    : context.event.payload.service_id
+      ? [String(context.event.payload.service_id)]
+      : [];
+  let serviceIds = payloadServiceIds;
+  let fallbackName = String(context.event.payload.treatment_name || context.event.payload.service || context.event.payload.reason || "");
+
+  if (context.event.subjectType === "appointment" && context.event.subjectId) {
+    const { data: appointment } = await supabaseAdmin
+      .from("appointments")
+      .select("service_ids, reason")
+      .eq("id", context.event.subjectId)
+      .maybeSingle();
+    if (serviceIds.length === 0 && Array.isArray(appointment?.service_ids)) serviceIds = appointment.service_ids.map(String);
+    if (!fallbackName && appointment?.reason) fallbackName = String(appointment.reason);
+  }
+
+  if (serviceIds.length === 0) {
+    return { serviceIds, names: fallbackName ? [fallbackName] : [], categories: [] as string[] };
+  }
+  const { data: services } = await supabaseAdmin
+    .from("services")
+    .select("id, name, category:service_categories(name)")
+    .in("id", serviceIds);
+  const rows = (services || []) as unknown as Array<{ id: string; name: string; category?: { name?: string } | Array<{ name?: string }> | null }>;
+  const categoryName = (category: (typeof rows)[number]["category"]) => Array.isArray(category) ? category[0]?.name : category?.name;
+  return {
+    serviceIds,
+    names: rows.map((service) => service.name).filter(Boolean),
+    categories: rows.map((service) => categoryName(service.category)).filter((name): name is string => Boolean(name)),
+  };
+}
+
 async function resolveField(field: string, context: RunContext, expected?: unknown): Promise<unknown> {
   const patientId = context.patientId;
   if (!patientId) return null;
@@ -46,6 +81,14 @@ async function resolveField(field: string, context: RunContext, expected?: unkno
     return Boolean(data?.length);
   }
   if (field.startsWith("treatment.")) {
+    if (context.event.subjectType === "appointment" && ["treatment.name", "treatment.category"].includes(field)) {
+      const treatment = await appointmentTreatment(context);
+      if (field === "treatment.name") {
+        const expectsServiceId = typeof expected === "string" && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(expected);
+        return expectsServiceId ? treatment.serviceIds : treatment.names;
+      }
+      return treatment.categories;
+    }
     let query = supabaseAdmin.from("patient_treatments").select("treatment_name, treatment_category, performed_at", { count: "exact" }).eq("patient_id", patientId).in("status", ["performed", "completed"]);
     const configuredName = typeof expected === "string" && expected ? expected : context.event.payload.treatment_name;
     if (configuredName && !["treatment.name", "treatment.category"].includes(field)) query = query.eq("treatment_name", configuredName);
@@ -94,6 +137,13 @@ async function resolveField(field: string, context: RunContext, expected?: unkno
 }
 
 function compare(actual: unknown, operator: string, expected: unknown) {
+  if (Array.isArray(actual)) {
+    if (operator === "is_empty") return actual.length === 0;
+    if (operator === "is_not_empty") return actual.length > 0;
+    if (operator === "equals") return actual.some((value) => String(value ?? "").toLowerCase() === String(expected ?? "").toLowerCase());
+    if (operator === "not_equals") return actual.every((value) => String(value ?? "").toLowerCase() !== String(expected ?? "").toLowerCase());
+    if (operator === "contains") return actual.some((value) => String(value ?? "").toLowerCase().includes(String(expected ?? "").toLowerCase()));
+  }
   if (operator === "is_empty") return actual === null || actual === undefined || actual === "";
   if (operator === "is_not_empty") return actual !== null && actual !== undefined && actual !== "";
   if (operator === "is_true") return actual === true;

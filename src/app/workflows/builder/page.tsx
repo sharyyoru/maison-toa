@@ -79,6 +79,23 @@ const TRIGGER_OPTIONS: { value: TriggerType; label: string; description: string;
     .map((option) => ({ value: option.value, label: option.label, description: option.description, icon: "⚡" })),
 ];
 
+const TRIGGER_GROUPS: { label: string; values: TriggerType[] }[] = [
+  { label: "Deals & CRM", values: ["deal_stage_changed"] },
+  {
+    label: "Patients",
+    values: ["patient_created", "birthday"],
+  },
+  {
+    label: "Appointments",
+    values: ["appointment_created", "appointment_status_changed", "appointment_rescheduled", "appointment_cancelled", "appointment_completed", "appointment_no_show", "appointment_confirmed"],
+  },
+  {
+    label: "Consultations",
+    values: ["consultation_started", "consultation_completed", "consultation_without_treatment"],
+  },
+  { label: "Billing", values: ["invoice_overdue"] },
+];
+
 // Action definitions
 const ACTION_OPTIONS: { value: ActionType; label: string; description: string; icon: string; color: string }[] = [
   { value: "send_email", label: "Send Email", description: "Send an email to patient or staff", icon: "📧", color: "emerald" },
@@ -134,6 +151,7 @@ export default function WorkflowBuilderPage() {
   const [originalWorkflowActive, setOriginalWorkflowActive] = useState(false);
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [builderView, setBuilderView] = useState<"guided" | "advanced">("guided");
   const [stages, setStages] = useState<DealStage[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -201,9 +219,10 @@ export default function WorkflowBuilderPage() {
           }
         } else {
           // Initialize with default trigger node
+          const triggerId = generateId();
           setNodes([
             {
-              id: generateId(),
+              id: triggerId,
               type: "trigger",
               data: {
                 triggerType: "deal_stage_changed",
@@ -211,6 +230,7 @@ export default function WorkflowBuilderPage() {
               } as TriggerNodeData,
             },
           ]);
+          setSelectedNodeId(triggerId);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load data");
@@ -223,6 +243,35 @@ export default function WorkflowBuilderPage() {
   }, [editId]);
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
+  const triggerNode = nodes.find((node) => node.type === "trigger");
+  const hasAction = nodes.some((node) => node.type === "action");
+  const triggerConfigured = Boolean(triggerNode && (
+    (triggerNode.data as TriggerNodeData).triggerType !== "deal_stage_changed" ||
+    ((triggerNode.data as TriggerNodeData).config as { to_stage_id?: string }).to_stage_id
+  ));
+
+  const nodeTitle = (node: WorkflowNode) => {
+    if (node.type === "trigger") return TRIGGER_OPTIONS.find((option) => option.value === (node.data as TriggerNodeData).triggerType)?.label || "Starting event";
+    if (node.type === "action") return ACTION_OPTIONS.find((option) => option.value === (node.data as ActionNodeData).actionType)?.label || "Action";
+    if (node.type === "delay") return `Wait ${(node.data as DelayNodeData).delayValue} ${(node.data as DelayNodeData).delayType}`;
+    if (node.type === "condition") return "Check a condition";
+    return "End workflow";
+  };
+
+  const nodeDescription = (node: WorkflowNode) => {
+    if (node.type === "trigger") {
+      const data = node.data as TriggerNodeData;
+      if (data.triggerType === "deal_stage_changed") {
+        const stage = stages.find((item) => item.id === (data.config as { to_stage_id?: string }).to_stage_id);
+        return stage ? `When a deal moves to ${stage.name}` : "Choose the deal stage that starts this workflow";
+      }
+      return TRIGGER_OPTIONS.find((option) => option.value === data.triggerType)?.description || "This starts the workflow";
+    }
+    if (node.type === "action") return ACTION_OPTIONS.find((option) => option.value === (node.data as ActionNodeData).actionType)?.description || "This happens next";
+    if (node.type === "condition") return "Continue only when the rules match";
+    if (node.type === "delay") return "Pause before continuing";
+    return "Stop this branch";
+  };
 
   // Add new node after a specific node
   const addNodeAfter = useCallback((afterNodeId: string, nodeType: "action" | "condition" | "delay" | "exit", branch: "next" | "yes" | "no" = "next") => {
@@ -439,9 +488,19 @@ export default function WorkflowBuilderPage() {
               onChange={(e) => updateNodeData(selectedNode.id, { triggerType: e.target.value as TriggerType, config: {} })}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
             >
-              {TRIGGER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
+              {TRIGGER_GROUPS.map((group) => {
+                const options = group.values
+                  .map((value) => TRIGGER_OPTIONS.find((option) => option.value === value))
+                  .filter((option): option is (typeof TRIGGER_OPTIONS)[number] => Boolean(option));
+                if (options.length === 0) return null;
+                return (
+                  <optgroup key={group.label} label={group.label}>
+                    {options.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </optgroup>
+                );
+              })}
             </select>
           </div>
 
@@ -1129,7 +1188,12 @@ export default function WorkflowBuilderPage() {
           <div className="space-y-4">
             <h3 className="font-semibold text-slate-900">Configure Decision</h3>
             <p className="text-xs text-slate-500">The Yes branch runs when this expression matches; otherwise the No branch runs.</p>
-            <ConditionExpressionEditor expression={data.expression} serviceOptions={treatmentServices} onChange={(expression) => updateNodeData(selectedNode.id, { expression })} />
+            <ConditionExpressionEditor
+              expression={data.expression}
+              serviceOptions={treatmentServices}
+              triggerType={(triggerNode?.data as TriggerNodeData | undefined)?.triggerType}
+              onChange={(expression) => updateNodeData(selectedNode.id, { expression })}
+            />
           </div>
         );
       }
@@ -1399,7 +1463,7 @@ export default function WorkflowBuilderPage() {
                 </svg>
               </div>
             </div>
-            <p className="text-xs sm:text-sm text-slate-500 truncate">Build custom automations with triggers, actions, and conditions</p>
+            <p className="text-xs sm:text-sm text-slate-500 truncate">Tell us when something happens, then choose what should happen next</p>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-slate-600">
@@ -1409,7 +1473,7 @@ export default function WorkflowBuilderPage() {
                 onChange={(e) => setWorkflowActive(e.target.checked)}
                 className="h-4 w-4 rounded border-slate-300 text-emerald-600"
               />
-              Active
+              Activate now
             </label>
             <button
               onClick={() => handleSave(false)}
@@ -1423,7 +1487,7 @@ export default function WorkflowBuilderPage() {
               disabled={saving}
               className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap"
             >
-              {saving ? "Publishing..." : "Publish"}
+              {saving ? "Activating..." : "Review & activate"}
             </button>
           </div>
         </header>
@@ -1435,10 +1499,22 @@ export default function WorkflowBuilderPage() {
           <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs sm:text-sm text-emerald-700">{success}</div>
         )}
 
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+          <div className="flex gap-1" role="tablist" aria-label="Builder view">
+            <button type="button" onClick={() => setBuilderView("guided")} className={`rounded-lg px-4 py-2 text-sm font-medium ${builderView === "guided" ? "bg-sky-50 text-sky-700" : "text-slate-500 hover:bg-slate-50"}`}>Guided builder</button>
+            <button type="button" onClick={() => setBuilderView("advanced")} className={`rounded-lg px-4 py-2 text-sm font-medium ${builderView === "advanced" ? "bg-sky-50 text-sky-700" : "text-slate-500 hover:bg-slate-50"}`}>Advanced canvas</button>
+          </div>
+          <div className="hidden items-center gap-2 pr-2 text-xs text-slate-500 sm:flex">
+            <span className={`h-2 w-2 rounded-full ${triggerConfigured ? "bg-emerald-500" : "bg-amber-400"}`} /> Starting event
+            <span className="text-slate-300">→</span>
+            <span className={`h-2 w-2 rounded-full ${hasAction ? "bg-emerald-500" : "bg-slate-300"}`} /> First action
+          </div>
+        </div>
+
         <div className="flex flex-col xl:flex-row gap-4 xl:gap-6">
           {/* Workflow Canvas */}
-          <div className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm min-h-[640px] overflow-hidden">
-            <h2 className="mb-4 text-base font-semibold text-slate-900">Workflow Tree</h2>
+          {builderView === "advanced" ? <div className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm min-h-[640px] overflow-hidden">
+            <div className="mb-4"><h2 className="text-base font-semibold text-slate-900">Workflow canvas</h2><p className="text-sm text-slate-500">Use this view for branches and complex workflows.</p></div>
             <div className="h-[570px] min-w-[280px] overflow-hidden rounded-lg border border-slate-100">
               <WorkflowCanvas
                 nodes={nodes as any}
@@ -1448,11 +1524,69 @@ export default function WorkflowBuilderPage() {
                 onAdd={(nodeId, branch, type) => addNodeAfter(nodeId, type, branch)}
               />
             </div>
-          </div>
+          </div> : <div className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm min-h-[640px]">
+            <div className="mb-6">
+              <span className="text-xs font-semibold uppercase tracking-wider text-sky-600">Build your workflow</span>
+              <h2 className="mt-1 text-xl font-semibold text-slate-900">What should happen automatically?</h2>
+              <p className="mt-1 text-sm text-slate-500">Work from top to bottom. Select any step to edit its details.</p>
+            </div>
+
+            <div className="mx-auto max-w-2xl space-y-3">
+              {nodes.map((node, index) => (
+                <React.Fragment key={node.id}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedNodeId(node.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedNodeId(node.id);
+                      }
+                    }}
+                    className={`w-full cursor-pointer rounded-xl border-2 p-4 text-left transition ${selectedNodeId === node.id ? "border-sky-400 bg-sky-50/60 shadow-sm" : "border-slate-200 bg-white hover:border-sky-200"}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${node.type === "trigger" ? "bg-amber-100 text-amber-700" : node.type === "condition" ? "bg-purple-100 text-purple-700" : node.type === "delay" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>{index + 1}</span>
+                      <span className="min-w-0 flex-1"><span className="block text-xs font-semibold uppercase tracking-wide text-slate-400">{node.type === "trigger" ? "When this happens" : node.type === "condition" ? "Only continue if" : node.type === "delay" ? "Wait" : node.type === "exit" ? "Finish" : "Do this"}</span><span className="mt-0.5 block font-semibold text-slate-900">{nodeTitle(node)}</span><span className="mt-0.5 block text-sm text-slate-500">{nodeDescription(node)}</span></span>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <span className="px-2 text-sm font-medium text-sky-600">Edit</span>
+                        {node.type !== "trigger" && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              deleteNode(node.id);
+                            }}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            aria-label={`Remove ${nodeTitle(node)}`}
+                            title="Remove step"
+                          >
+                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6m4-6v6" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {index < nodes.length - 1 && <div className="flex h-5 justify-center"><div className="w-px bg-slate-300" /></div>}
+                </React.Fragment>
+              ))}
+
+              {nodes.length === 1 && <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center"><p className="font-medium text-slate-800">Now choose what happens next</p><p className="mt-1 text-sm text-slate-500">Add an action such as sending an email or creating a task.</p></div>}
+              {nodes.length > 0 && <div className="flex flex-wrap justify-center gap-2 pt-2">
+                <button type="button" onClick={() => addNodeAfter(nodes[nodes.length - 1].id, "action")} className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700">+ Add action</button>
+                <button type="button" onClick={() => addNodeAfter(nodes[nodes.length - 1].id, "delay")} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">+ Add wait</button>
+                <button type="button" onClick={() => addNodeAfter(nodes[nodes.length - 1].id, "condition")} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">+ Add condition</button>
+              </div>}
+            </div>
+          </div>}
 
           {/* Configuration Panel */}
           <div className="w-full sm:w-[320px] lg:w-[360px] shrink-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
-            <h2 className="mb-3 text-base font-semibold text-slate-900">Configuration</h2>
+            <h2 className="text-base font-semibold text-slate-900">{selectedNode?.type === "trigger" ? "When this happens" : selectedNode ? "Configure this step" : "Step details"}</h2>
+            <p className="mb-4 mt-1 text-xs text-slate-500">Changes are reflected in your workflow immediately.</p>
             {renderConfigPanel()}
           </div>
         </div>
