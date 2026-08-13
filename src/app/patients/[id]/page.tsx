@@ -29,7 +29,6 @@ import PatientPageClientWrapper from "./PatientPageClientWrapper";
 import PatientFormsTab from "./PatientFormsTab";
 import PatientTabRegistrar from "./PatientTabRegistrar";
 import PatientStatusWidgets from "./PatientStatusWidgets";
-import PatientNotesDrawer from "@/components/PatientNotesDrawer";
 
 export const dynamic = "force-dynamic";
 
@@ -373,7 +372,7 @@ export default async function PatientPage({
         playerId={crPlayerIdRaw ?? null}
         reconstructionType={crType}
       />
-      <div className="relative">
+      <div className="sticky -top-4 z-30 -mx-4 border-b border-slate-200 bg-white/95 px-4 pb-3 pt-4 shadow-sm backdrop-blur-xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="flex items-baseline justify-between gap-3 relative z-10">
           <div>
             <div className="flex items-center gap-3">
@@ -759,8 +758,6 @@ export default async function PatientPage({
         ) : null}
       </PatientPageClientWrapper>
 
-      {/* Notes drawer - available on all tabs */}
-      <PatientNotesDrawer patientId={patient.id} />
     </div>
   );
 }

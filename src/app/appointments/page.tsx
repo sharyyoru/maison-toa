@@ -897,6 +897,23 @@ export default function CalendarPage() {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => initialDate);
+
+  // Keep the active calendar day in the current browser history entry. Patient
+  // links navigate away from this page, so Back can then reconstruct the same
+  // day from the existing `date` query parameter instead of defaulting to today.
+  // replaceState is intentional: changing calendar days should not add a new
+  // browser Back stop for every previous/next or mini-calendar click.
+  useEffect(() => {
+    if (!selectedDate) return;
+
+    const url = new URL(window.location.href);
+    const date = formatSwissYmd(selectedDate);
+    if (url.searchParams.get("date") === date) return;
+
+    url.searchParams.set("date", date);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [selectedDate]);
+
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
   const [appointmentsReloadVersion, setAppointmentsReloadVersion] = useState(0);
   const appointmentRealtimeDebounceRef = useRef<number | null>(null);
