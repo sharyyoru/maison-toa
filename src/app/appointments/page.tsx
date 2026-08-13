@@ -5375,9 +5375,9 @@ export default function CalendarPage() {
                                 {appt.patient?.is_vip ? (
                                   <span
                                     title={t("badges.vipTooltip")}
-                                    className="flex-shrink-0 rounded-full bg-amber-400/90 px-1.5 text-[8px] font-bold leading-tight text-white"
+                                    className="flex-shrink-0 text-[16px] leading-none text-amber-500"
                                   >
-                                    {t("badges.vip")}
+                                    ★
                                   </span>
                                 ) : null}
                                 {appt.patient?.is_member ? (
@@ -5774,9 +5774,9 @@ export default function CalendarPage() {
                                             {appt.patient?.is_vip ? (
                                               <span
                                                 title={t("badges.vipTooltip")}
-                                                className="flex-shrink-0 rounded-full bg-amber-400/90 px-1.5 text-[8px] font-bold leading-tight text-white"
+                                                className="flex-shrink-0 text-[16px] leading-none text-amber-500"
                                               >
-                                                {t("badges.vip")}
+                                                ★
                                               </span>
                                             ) : null}
                                             {appt.patient?.is_member ? (
@@ -5796,8 +5796,15 @@ export default function CalendarPage() {
                                                 {t("badges.newPatient")}
                                               </span>
                                             ) : null}
-                                            <span className="truncate font-bold">{patientName || serviceLabel}</span>
+                                            {selectedDoctorCalendars.length <= 1 ? (
+                                              <span className="truncate font-bold">{patientName || serviceLabel}</span>
+                                            ) : null}
                                           </div>
+                                          {selectedDoctorCalendars.length > 1 ? (
+                                            <div className="relative z-10 truncate font-bold text-slate-800">
+                                              {patientName || serviceLabel}
+                                            </div>
+                                          ) : null}
                                           <div className="relative z-10 truncate text-[10px] font-medium text-slate-600">
                                             {timeLabel} {serviceLabel ? `• ${serviceLabel}` : ""}
                                             {appt.recurrence_series_id ? <span className="ml-1 text-[9px] text-sky-600" title="Recurring appointment">↻</span> : null}
