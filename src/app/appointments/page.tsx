@@ -5743,6 +5743,17 @@ export default function CalendarPage() {
                                     const tooltipPositionClass = isRightSide 
                                       ? "right-full mr-2" 
                                       : "left-full ml-2";
+                                    // The day grid is a scrollable, clipped container. Anchoring a
+                                    // late appointment's tooltip at its top makes the card extend
+                                    // below the grid (and appear cut off). Align those tooltips to
+                                    // the appointment's visible bottom edge so short and long events
+                                    // use the same positioning behavior.
+                                    const dayViewDurationMinutes =
+                                      DAY_VIEW_END_MINUTES - DAY_VIEW_START_MINUTES;
+                                    const tooltipVerticalPositionClass =
+                                      topMinutes >= dayViewDurationMinutes - 180
+                                        ? "bottom-0"
+                                        : "top-0";
 
                                     return (
                                       <div
@@ -5853,7 +5864,7 @@ export default function CalendarPage() {
                                           </div>
                                         </div>
                                         {/* Hover tooltip - position based on column location */}
-                                        <div className={`pointer-events-none absolute top-0 z-[100] hidden min-w-[300px] max-w-[360px] rounded-xl border border-slate-200 bg-white p-3.5 text-xs leading-relaxed shadow-xl group-hover:block ${tooltipPositionClass}`}>
+                                        <div className={`pointer-events-none absolute z-[100] hidden min-w-[300px] max-w-[360px] rounded-xl border border-slate-200 bg-white p-3.5 text-xs leading-relaxed shadow-xl group-hover:block ${tooltipPositionClass} ${tooltipVerticalPositionClass}`}>
                                           <div className="mb-2 flex items-center gap-2 border-b border-slate-100 pb-2 font-semibold text-slate-800">
                                             <span>{formatYmd(date)} · {timeLabel}</span>
                                             {durationLabel && (
