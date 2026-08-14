@@ -67,18 +67,15 @@ export function PatientTabsProvider({ children }: { children: ReactNode }) {
 
   const addTab = useCallback((patient: PatientTab) => {
     setTabs((prev) => {
-      // Check if tab already exists
+      // Keep the most recently opened patient first.
       const existingIndex = prev.findIndex((t) => t.id === patient.id);
       if (existingIndex !== -1) {
-        // Update existing tab info in place (keep position)
-        const updated = [...prev];
-        updated[existingIndex] = patient;
-        return updated;
+        return [patient, ...prev.filter((t) => t.id !== patient.id)];
       }
-      // Add new tab, respecting max limit
-      const newTabs = [...prev, patient];
+      // Add new tabs at the front, respecting the maximum.
+      const newTabs = [patient, ...prev];
       if (newTabs.length > MAX_TABS) {
-        return newTabs.slice(-MAX_TABS);
+        return newTabs.slice(0, MAX_TABS);
       }
       return newTabs;
     });

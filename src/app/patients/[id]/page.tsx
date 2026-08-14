@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { getPatientColor } from "@/lib/patientColor";
+import { PATIENT_COLOR } from "@/lib/patientColor";
 import CollapseSidebarOnMount from "@/components/CollapseSidebarOnMount";
 
 import EditPatientDetailsButton from "./EditPatientDetailsButton";
@@ -358,7 +358,7 @@ export default async function PatientPage({
   };
 
   return (
-    <div className={`-m-4 min-h-[calc(100%+2rem)] space-y-6 p-4 sm:-m-6 sm:p-6 lg:-m-8 lg:p-8 ${getPatientColor(patient.id).page}`}>
+    <div className={`-m-4 min-h-[calc(100%+2rem)] space-y-6 p-4 sm:-m-6 sm:p-6 lg:-m-8 lg:p-8 ${PATIENT_COLOR.page}`}>
       <CollapseSidebarOnMount />
       <PatientModeInitializer patientId={patient.id} />
       <PatientTabRegistrar

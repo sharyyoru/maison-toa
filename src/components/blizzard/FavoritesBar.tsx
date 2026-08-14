@@ -6,7 +6,7 @@ import { ReactNode, useEffect, useState, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/AuthContext";
 import { usePatientTabs } from "@/components/PatientTabsContext";
-import { getPatientColor } from "@/lib/patientColor";
+import { PATIENT_COLOR } from "@/lib/patientColor";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type Favorite = {
@@ -558,19 +558,21 @@ export default function FavoritesBar() {
               const patientName =
                 [patient.lastName?.trim(), patient.firstName?.trim()].filter(Boolean).join(" ") ||
                 "Unknown patient";
-              const color = getPatientColor(patient.id);
+              const isCurrentPatient = patient.id === activePatientId;
 
               return (
                 <div
                   key={patient.id}
-                  className={`inline-flex shrink-0 items-center rounded-full border text-xs font-medium transition-colors ${color.chip}`}
+                  className={`inline-flex shrink-0 items-center rounded-full border text-xs font-medium transition-all ${PATIENT_COLOR.chip} ${isCurrentPatient ? PATIENT_COLOR.active : PATIENT_COLOR.inactive}`}
+                  aria-current={isCurrentPatient ? "page" : undefined}
+                  style={isCurrentPatient ? undefined : { backgroundColor: "#EAEEF4" }}
                 >
                   <Link
                     href={`/patients/${patient.id}`}
                     title={`Open patient file: ${patientName}`}
                     className="inline-flex min-w-0 items-center gap-2 py-1 pl-2.5 pr-1"
                   >
-                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white ${color.avatar}`}>
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white ${isCurrentPatient ? PATIENT_COLOR.activeAvatar : PATIENT_COLOR.avatar}`}>
                       {`${patient.firstName?.[0] ?? ""}${patient.lastName?.[0] ?? ""}`.toUpperCase() || "?"}
                     </span>
                     <span className="max-w-48 truncate">{patientName}</span>
