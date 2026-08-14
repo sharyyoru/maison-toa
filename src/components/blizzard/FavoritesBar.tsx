@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/AuthContext";
+import { usePatientTabs } from "@/components/PatientTabsContext";
+import { getPatientColor } from "@/lib/patientColor";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type Favorite = {
@@ -456,12 +458,15 @@ function EditFavoritesModal({
 
 export default function FavoritesBar() {
   const pathname = usePathname();
+  const router = useRouter();
   const tNav = useTranslations("nav");
   const { user, loading } = useAuth();
+  const { tabs, activePatientId, removeTab } = usePatientTabs();
   const [favorites, setFavorites] = useState<Favorite[]>(DEFAULT_FAVORITES);
   const [loaded, setLoaded] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const skipDbSyncRef = useRef(true);
+  const openPatients = tabs;
 
   useEffect(() => {
     if (loading) return;
@@ -531,8 +536,64 @@ export default function FavoritesBar() {
     setFavorites((prev) => prev.filter((f) => f.href !== href));
   }
 
+  function closePatient(patientId: string) {
+    const tabIndex = tabs.findIndex((tab) => tab.id === patientId);
+    const nextPatient = tabs[tabIndex - 1] ?? tabs[tabIndex + 1] ?? null;
+    removeTab(patientId);
+
+    if (patientId === activePatientId) {
+      router.push(nextPatient ? `/patients/${nextPatient.id}` : "/patients");
+    }
+  }
+
   return (
-    <div className="flex items-center gap-3 border-b border-[var(--blz-border)] bg-[var(--blz-surface)] px-4 py-2">
+    <div className="border-b border-[var(--blz-border)] bg-[var(--blz-surface)]">
+      {openPatients.length > 0 && (
+        <div className="flex min-w-0 items-center gap-3 border-b border-[var(--blz-border)] px-4 py-2">
+          <span className="mr-2 shrink-0 text-[10px] font-semibold uppercase tracking-widest text-[var(--blz-text-muted)]">
+            Open patients
+          </span>
+          <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-0.5">
+            {openPatients.map((patient) => {
+              const patientName =
+                [patient.lastName?.trim(), patient.firstName?.trim()].filter(Boolean).join(" ") ||
+                "Unknown patient";
+              const color = getPatientColor(patient.id);
+
+              return (
+                <div
+                  key={patient.id}
+                  className={`inline-flex shrink-0 items-center rounded-full border text-xs font-medium transition-colors ${color.chip}`}
+                >
+                  <Link
+                    href={`/patients/${patient.id}`}
+                    title={`Open patient file: ${patientName}`}
+                    className="inline-flex min-w-0 items-center gap-2 py-1 pl-2.5 pr-1"
+                  >
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white ${color.avatar}`}>
+                      {`${patient.firstName?.[0] ?? ""}${patient.lastName?.[0] ?? ""}`.toUpperCase() || "?"}
+                    </span>
+                    <span className="max-w-48 truncate">{patientName}</span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => closePatient(patient.id)}
+                    aria-label={`Close patient file: ${patientName}`}
+                    title={`Close ${patientName}`}
+                    className="mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full opacity-50 transition hover:bg-black/10 hover:opacity-100"
+                  >
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                      <path d="M6 6l12 12M18 6 6 18" />
+                    </svg>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 px-4 py-2">
       <span className="mr-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--blz-text-muted)]">
         Favorites
       </span>
@@ -562,6 +623,7 @@ export default function FavoritesBar() {
           <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
         </svg>
       </button>
+      </div>
 
       {isEditModalOpen && (
         <EditFavoritesModal
