@@ -563,7 +563,7 @@ export default function FavoritesBar() {
               return (
                 <div
                   key={patient.id}
-                  className={`inline-flex shrink-0 items-center rounded-full border text-xs font-medium transition-all ${PATIENT_COLOR.chip} ${isCurrentPatient ? PATIENT_COLOR.active : PATIENT_COLOR.inactive}`}
+                  className={`inline-flex shrink-0 items-center rounded-full border text-xs font-medium transition-all ${isCurrentPatient ? PATIENT_COLOR.active : PATIENT_COLOR.inactive}`}
                   aria-current={isCurrentPatient ? "page" : undefined}
                   style={isCurrentPatient ? undefined : { backgroundColor: "#EAEEF4" }}
                 >

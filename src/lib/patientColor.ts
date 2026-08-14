@@ -1,8 +1,7 @@
 export const PATIENT_COLOR = {
-  chip: "text-black",
-  inactive: "border-slate-300 hover:border-blue-300",
+  inactive: "border-slate-300 text-black hover:border-sky-400",
   avatar: "bg-slate-500",
-  activeAvatar: "bg-blue-600",
+  activeAvatar: "bg-sky-500",
   page: "bg-[#EAEEF4]",
-  active: "border-blue-400 bg-blue-100 ring-2 ring-blue-400 shadow-sm",
+  active: "border-sky-400/60 bg-sky-500/10 text-sky-500",
 } as const;
