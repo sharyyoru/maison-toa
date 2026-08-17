@@ -170,6 +170,7 @@
       },
       "moreOptions": "Plus d'options",
       "copy": "Copier",
+      "reschedule": "Déplacer",
       "delete": "Supprimer",
       "yesDelete": "Oui, supprimer",
       "deleting": "Suppression...",
@@ -196,6 +197,18 @@
       },
       "conflict": "CONFLIT",
       "consultationFor": "Consultation pour {name}"
+    },
+    "reschedule": {
+      "active": "Mode déplacement activé",
+      "instructions": "Naviguez vers une date et cliquez sur un créneau disponible.",
+      "confirmTitle": "Déplacer le rendez-vous",
+      "confirmQuestion": "Déplacer ce rendez-vous vers le créneau sélectionné ?",
+      "from": "De",
+      "to": "Vers",
+      "confirm": "Confirmer le déplacement",
+      "saving": "Déplacement...",
+      "failed": "Impossible de déplacer le rendez-vous.",
+      "noProvider": "Sélectionnez le calendrier d'un médecin avant de choisir une heure."
     },
     "workflow": {
       "pending": "En attente",
