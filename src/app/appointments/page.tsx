@@ -2498,22 +2498,24 @@ export default function CalendarPage() {
 
   const filteredEditCategoryOptions = useMemo(() => {
     const search = editCategorySearch.trim().toLowerCase();
-    if (!search) return categoryOptionNames;
+    if (!search || search === editCategory.trim().toLowerCase()) return categoryOptionNames;
     return categoryOptionNames.filter((opt) => opt.toLowerCase().includes(search));
-  }, [editCategorySearch, categoryOptionNames]);
+  }, [editCategorySearch, editCategory, categoryOptionNames]);
 
   const filteredEditServiceOptions = useMemo(() => {
     const search = editServiceSearch.trim().toLowerCase();
-    if (!search) return serviceOptions;
+    const selectedService = serviceOptions.find((opt) => opt.id === editServiceId);
+    if (!search || search === selectedService?.name.trim().toLowerCase()) return serviceOptions;
     return serviceOptions.filter((opt) => opt.name.toLowerCase().includes(search));
-  }, [serviceOptions, editServiceSearch]);
+  }, [serviceOptions, editServiceSearch, editServiceId]);
 
   const filteredEditProviderOptions = useMemo(() => {
     const search = editProviderSearch.trim().toLowerCase();
     const list = providers.filter((p) => (p.name ?? "").length > 0);
-    if (!search) return list;
+    const selectedProvider = list.find((provider) => provider.id === editProviderId);
+    if (!search || search === selectedProvider?.name?.trim().toLowerCase()) return list;
     return list.filter((p) => (p.name ?? "").toLowerCase().includes(search));
-  }, [providers, editProviderSearch]);
+  }, [providers, editProviderSearch, editProviderId]);
 
   const filteredLocationOptions = useMemo(() => {
     const search = locationSearch.trim().toLowerCase();
@@ -2559,9 +2561,10 @@ export default function CalendarPage() {
 
   const filteredEditDurationOptions = useMemo(() => {
     const search = editDurationSearch.trim().toLowerCase();
-    if (!search) return editDurationOptionsList;
+    const selectedDuration = editDurationOptionsList.find((opt) => opt.value === editConsultationDuration);
+    if (!search || search === selectedDuration?.label.toLowerCase()) return editDurationOptionsList;
     return editDurationOptionsList.filter((opt) => opt.label.toLowerCase().includes(search));
-  }, [editDurationSearch, editDurationOptionsList]);
+  }, [editDurationSearch, editDurationOptionsList, editConsultationDuration]);
 
   // Generate all time options using the selected doctor's interval (or default 15 min)
   const allTimeOptions = useMemo(() => {
@@ -6308,6 +6311,7 @@ export default function CalendarPage() {
                           setEditServiceDropdownOpen(true);
                           setEditProviderDropdownOpen(false);
                         }}
+                        onClick={() => setEditServiceDropdownOpen(true)}
                         placeholder={t("modal.searchService")}
                         className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                       />
@@ -6368,6 +6372,7 @@ export default function CalendarPage() {
                           setEditProviderDropdownOpen(true);
                           setEditServiceDropdownOpen(false);
                         }}
+                        onClick={() => setEditProviderDropdownOpen(true)}
                         placeholder={t("modal.searchDoctor")}
                         className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                       />
@@ -6419,6 +6424,7 @@ export default function CalendarPage() {
                           setEditCategoryDropdownOpen(true);
                         }}
                         onFocus={() => setEditCategoryDropdownOpen(true)}
+                        onClick={() => setEditCategoryDropdownOpen(true)}
                         placeholder="Search category..."
                         className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                       />
@@ -6467,6 +6473,7 @@ export default function CalendarPage() {
                           setEditBookingStatusDropdownOpen(true);
                         }}
                         onFocus={() => setEditBookingStatusDropdownOpen(true)}
+                        onClick={() => setEditBookingStatusDropdownOpen(true)}
                         placeholder="Search status..."
                         className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                       />
@@ -6484,9 +6491,10 @@ export default function CalendarPage() {
                       )}
                       {editBookingStatusDropdownOpen && (
                         <div className="absolute z-50 mt-1 max-h-40 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
-                          {bookingStatusOptions.filter((opt) =>
-                            opt.toLowerCase().includes(editBookingStatusSearch.toLowerCase())
-                          ).map((opt) => (
+                          {bookingStatusOptions.filter((opt) => {
+                            const search = editBookingStatusSearch.trim().toLowerCase();
+                            return !search || search === editBookingStatus.trim().toLowerCase() || opt.toLowerCase().includes(search);
+                          }).map((opt) => (
                             <button
                               key={opt}
                               type="button"
@@ -6612,6 +6620,7 @@ export default function CalendarPage() {
                         setEditDurationDropdownOpen(true);
                       }}
                       onFocus={() => setEditDurationDropdownOpen(true)}
+                      onClick={() => setEditDurationDropdownOpen(true)}
                       placeholder={t("modal.searchDuration")}
                       className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     />
