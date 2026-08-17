@@ -24,6 +24,10 @@
     {
       "path": "/api/cron/process-workflow-jobs",
       "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/generate-workflow-events",
+      "schedule": "0 * * * *"
     }
   ],
   "headers": [
