@@ -615,6 +615,7 @@
       "category": "Category",
       "bookingStatus": "Booking Status",
       "actions": "Actions",
+      "view": "View",
       "edit": "Edit",
       "editAppointment": "Edit appointment",
       "patientInformation": "Patient Information",

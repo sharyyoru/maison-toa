@@ -615,6 +615,7 @@
       "category": "Catégorie",
       "bookingStatus": "Statut de réservation",
       "actions": "Actions",
+      "view": "Voir",
       "edit": "Modifier",
       "editAppointment": "Modifier le rendez-vous",
       "patientInformation": "Informations du patient",

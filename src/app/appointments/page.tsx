@@ -892,6 +892,10 @@ export default function CalendarPage() {
     return searchParams.get("doctorName");
   }, [searchParams]);
 
+  const focusedAppointmentId = useMemo(() => {
+    return searchParams.get("appointment");
+  }, [searchParams]);
+
   const [visibleMonth, setVisibleMonth] = useState<Date>(() => {
     const d = initialDate;
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -915,6 +919,8 @@ export default function CalendarPage() {
   }, [selectedDate]);
 
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
+  const dayViewScrollRef = useRef<HTMLDivElement | null>(null);
+  const focusedAppointmentScrolledRef = useRef<string | null>(null);
   const [appointmentsReloadVersion, setAppointmentsReloadVersion] = useState(0);
   const appointmentRealtimeDebounceRef = useRef<number | null>(null);
   const pendingAppointmentRealtimeReloadRef = useRef(false);
@@ -2287,6 +2293,24 @@ export default function CalendarPage() {
   const selectedDoctorCalendars = useMemo(() => {
     return doctorCalendars.filter((calendar) => calendar.selected);
   }, [doctorCalendars]);
+
+  useEffect(() => {
+    if (!focusedAppointmentId || view !== "day" || loading) return;
+    if (focusedAppointmentScrolledRef.current === focusedAppointmentId) return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      const container = dayViewScrollRef.current;
+      const appointmentElement = container?.querySelector<HTMLElement>(
+        `[data-appointment-id="${focusedAppointmentId}"]`,
+      );
+      if (!appointmentElement) return;
+
+      appointmentElement.scrollIntoView({ block: "center", inline: "center" });
+      focusedAppointmentScrolledRef.current = focusedAppointmentId;
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [focusedAppointmentId, view, loading, appointments, selectedDoctorCalendars]);
 
   const activeRangeDates = useMemo(() => {
     if (!selectedDate) return [] as Date[];
@@ -5578,7 +5602,7 @@ export default function CalendarPage() {
                 ))}
               </div>
               {/* Scrollable content area with time axis and day columns */}
-              <div className="flex-1 overflow-auto">
+              <div ref={dayViewScrollRef} className="flex-1 overflow-auto">
                 <div className="flex">
                   {/* Time axis - scrolls with content */}
                   <div className="w-16 border-r border-slate-100 bg-slate-50/80 shrink-0">
@@ -5868,7 +5892,8 @@ export default function CalendarPage() {
                                     return (
                                       <div
                                         key={`${ymd}-${doctorCol?.id ?? "all"}-${appt.id}`}
-                                        className={`absolute ${resizingAppointment?.id === appt.id ? '' : 'group'} ${draggedAppointment?.id === appt.id ? 'opacity-50' : ''}`}
+                                        data-appointment-id={appt.id}
+                                        className={`absolute ${resizingAppointment?.id === appt.id ? '' : 'group'} ${draggedAppointment?.id === appt.id ? 'opacity-50' : ''} ${focusedAppointmentId === appt.id ? 'z-30 rounded-md ring-2 ring-sky-500 ring-offset-2' : ''}`}
                                         style={{
                                           top,
                                           height,
