@@ -94,6 +94,13 @@ export async function PATCH(
     const proposedEnd = new Date(
       typeof updateData.end_time === "string" ? updateData.end_time : currentAppointment.end_time,
     );
+    const proposedProviderId = typeof updateData.provider_id === "string"
+      ? updateData.provider_id
+      : currentAppointment.provider_id;
+    const scheduleChanged =
+      proposedStart.getTime() !== new Date(currentAppointment.start_time).getTime() ||
+      proposedEnd.getTime() !== new Date(currentAppointment.end_time).getTime() ||
+      proposedProviderId !== currentAppointment.provider_id;
 
     const recurrenceScope = body.recurrence_scope;
     if (recurrenceScope === "this_and_future") {
@@ -251,12 +258,9 @@ export async function PATCH(
     }
 
     if (
-      (updateData.start_time !== undefined || updateData.end_time !== undefined) &&
+      scheduleChanged &&
       proposedStatus !== "cancelled" && proposedStatus !== "no_show"
     ) {
-      const proposedProviderId = typeof updateData.provider_id === "string"
-        ? updateData.provider_id
-        : currentAppointment.provider_id;
       if (proposedProviderId) {
         const { data: providerConflicts, error: providerConflictError } = await supabase
           .from("appointments")
