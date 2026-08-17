@@ -461,11 +461,13 @@ export default function FavoritesBar() {
   const router = useRouter();
   const tNav = useTranslations("nav");
   const { user, loading } = useAuth();
-  const { tabs, activePatientId, removeTab } = usePatientTabs();
+  const { tabs, activePatientId, removeTab, clearAllTabs } = usePatientTabs();
   const [favorites, setFavorites] = useState<Favorite[]>(DEFAULT_FAVORITES);
   const [loaded, setLoaded] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [patientTabsOverflow, setPatientTabsOverflow] = useState({ left: false, right: false });
   const skipDbSyncRef = useRef(true);
+  const patientTabsRef = useRef<HTMLDivElement>(null);
   const openPatients = tabs;
 
   useEffect(() => {
@@ -546,6 +548,39 @@ export default function FavoritesBar() {
     }
   }
 
+  function closeAllPatients() {
+    clearAllTabs();
+    if (activePatientId) router.push("/patients");
+  }
+
+  const updatePatientTabsOverflow = useCallback(() => {
+    const element = patientTabsRef.current;
+    if (!element) return;
+
+    setPatientTabsOverflow({
+      left: element.scrollLeft > 1,
+      right: element.scrollLeft + element.clientWidth < element.scrollWidth - 1,
+    });
+  }, []);
+
+  useEffect(() => {
+    const element = patientTabsRef.current;
+    if (!element) return;
+
+    updatePatientTabsOverflow();
+    const resizeObserver = new ResizeObserver(updatePatientTabsOverflow);
+    resizeObserver.observe(element);
+
+    return () => resizeObserver.disconnect();
+  }, [openPatients, updatePatientTabsOverflow]);
+
+  function scrollPatientTabs(direction: -1 | 1) {
+    patientTabsRef.current?.scrollBy({
+      left: direction * Math.max(220, patientTabsRef.current.clientWidth * 0.65),
+      behavior: "smooth",
+    });
+  }
+
   return (
     <div className="border-b border-[var(--blz-border)] bg-[var(--blz-surface)]">
       {openPatients.length > 0 && (
@@ -553,7 +588,30 @@ export default function FavoritesBar() {
           <span className="mr-2 shrink-0 text-[10px] font-semibold uppercase tracking-widest text-[var(--blz-text-muted)]">
             Open patients
           </span>
-          <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-0.5">
+          <button
+            type="button"
+            onClick={closeAllPatients}
+            className="shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold text-[var(--blz-text-secondary)] transition hover:bg-red-50 hover:text-red-600"
+            title="Close all open patient files"
+          >
+            Clear All
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollPatientTabs(-1)}
+            disabled={!patientTabsOverflow.left}
+            aria-label="Show previously visible patient files"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--blz-border)] text-[var(--blz-text-secondary)] transition hover:bg-[var(--blz-hover)] disabled:cursor-default disabled:opacity-30"
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </button>
+          <div
+            ref={patientTabsRef}
+            onScroll={updatePatientTabsOverflow}
+            className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-0.5"
+          >
             {openPatients.map((patient) => {
               const patientName =
                 [patient.lastName?.trim(), patient.firstName?.trim()].filter(Boolean).join(" ") ||
@@ -592,6 +650,17 @@ export default function FavoritesBar() {
               );
             })}
           </div>
+          <button
+            type="button"
+            onClick={() => scrollPatientTabs(1)}
+            disabled={!patientTabsOverflow.right}
+            aria-label="Show earlier opened patient files"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--blz-border)] text-[var(--blz-text-secondary)] transition hover:bg-[var(--blz-hover)] disabled:cursor-default disabled:opacity-30"
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+          </button>
         </div>
       )}
 
