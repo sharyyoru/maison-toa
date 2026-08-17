@@ -3560,7 +3560,7 @@ export default function CalendarPage() {
     console.log('[Paste] Reason field:', copiedAppointment.reason);
 
     // Extract data from copied appointment
-    const { serviceLabel, statusLabel } = getServiceAndStatusFromReason(copiedAppointment.reason);
+    const { serviceLabel } = getServiceAndStatusFromReason(copiedAppointment.reason);
     const categoryFromReason = getCategoryFromReason(copiedAppointment.reason);
     const copiedStart = new Date(copiedAppointment.start_time);
     const copiedEnd = copiedAppointment.end_time ? new Date(copiedAppointment.end_time) : null;
@@ -3663,8 +3663,10 @@ export default function CalendarPage() {
       console.log('[Paste] No service match found, keeping search text:', serviceLabel);
     }
 
-    setBookingStatus(statusLabel ?? "");
-    setStatusSearch(statusLabel ?? "");
+    // A pasted appointment is a new appointment, so its workflow status must be
+    // selected independently instead of inheriting the copied appointment's status.
+    setBookingStatus("");
+    setStatusSearch("");
     setAppointmentCategory(categoryFromReason ?? "");
     setCategorySearch(categoryFromReason ?? "");
     setDraftLocation(copiedAppointment.location ?? "Lausanne");
