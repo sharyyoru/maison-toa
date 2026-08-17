@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { debounce } from "lodash";
+import RichTextEditor from "@/components/RichTextEditor";
 
 type Props = { patientId: string };
 
@@ -10,7 +11,7 @@ export default function PatientMedicalNotes({ patientId }: Props) {
   const [notesContent, setNotesContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [editingField, setEditingField] = useState<"ap" | "notes" | null>(null);
+  const [editingField, setEditingField] = useState<"ap" | null>(null);
 
   // Load initial data
   useEffect(() => {
@@ -57,8 +58,7 @@ export default function PatientMedicalNotes({ patientId }: Props) {
     saveToServer("ap_content", value, patientId);
   };
 
-  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
+  const handleNotesChange = (value: string) => {
     setNotesContent(value);
     saveToServer("notes_content", value, patientId);
   };
@@ -96,14 +96,12 @@ export default function PatientMedicalNotes({ patientId }: Props) {
         {/* Notes */}
         <div>
           <label className="text-[10px] font-medium text-slate-500 mb-1 block">Notes</label>
-          <textarea
-            dir="ltr"
+          <RichTextEditor
             value={notesContent}
-            onFocus={() => setEditingField("notes")}
-            onBlur={() => setEditingField(null)}
             onChange={handleNotesChange}
             placeholder="Click to add notes..."
-            className={`${fieldStyle} ${editingField === "notes" ? "border-sky-400 ring-1 ring-sky-400 bg-white" : "cursor-text hover:border-slate-300"} focus:outline-none transition-colors placeholder:text-slate-400 placeholder:italic`}
+            editorClassName="min-h-[80px] max-h-[250px] overflow-y-auto"
+            className="rounded-md bg-slate-50/60 transition-colors hover:border-slate-300 focus-within:border-sky-400 focus-within:ring-1 focus-within:ring-sky-400 focus-within:bg-white"
           />
         </div>
       </div>

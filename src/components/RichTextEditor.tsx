@@ -7,6 +7,7 @@ type RichTextEditorProps = {
   onChange: (html: string) => void;
   placeholder?: string;
   className?: string;
+  editorClassName?: string;
 };
 
 type DropdownType = "textColor" | "highlight" | "fontSize" | null;
@@ -16,6 +17,7 @@ export default function RichTextEditor({
   onChange,
   placeholder = "Write your content...",
   className = "",
+  editorClassName = "min-h-[200px]",
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const isInternalChange = useRef(false);
@@ -385,7 +387,7 @@ export default function RichTextEditor({
         contentEditable
         onInput={handleInput}
         onPaste={handlePaste}
-        className="min-h-[200px] px-3 py-2 text-xs text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_a]:text-sky-600 [&_a]:underline"
+        className={`${editorClassName} px-3 py-2 text-xs text-slate-900 focus:outline-none [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_a]:text-sky-600 [&_a]:underline`}
         style={{ whiteSpace: "pre-wrap" }}
         data-placeholder={placeholder}
         suppressContentEditableWarning
