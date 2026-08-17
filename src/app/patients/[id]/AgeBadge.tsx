@@ -11,6 +11,26 @@ type AgeBadgeProps = {
   age: number | null;
 };
 
+function formatDob(dob: string | null) {
+  if (!dob) return null;
+
+  const dateParts = dob.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateParts) {
+    const [, year, month, day] = dateParts;
+    return `${day}/${month}/${year}`;
+  }
+
+  const date = new Date(dob);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
 export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
   const router = useRouter();
   const t = useTranslations("patient.age");
@@ -23,13 +43,7 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   // Format DOB for display
-  const formattedDob = dob
-    ? new Date(dob).toLocaleDateString("fr-CH", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      })
-    : t("notSet");
+  const formattedDob = formatDob(dob);
 
   // Close popover when clicking outside
   useEffect(() => {
@@ -96,6 +110,9 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
       >
         <span className="opacity-80">{t("label")}</span>
         <span className="ml-1 font-semibold">{age ?? "?"}</span>
+        {formattedDob && (
+          <span className="ml-2 font-semibold">–&nbsp;&nbsp;{formattedDob}</span>
+        )}
       </button>
 
       {isOpen && (
@@ -153,7 +170,7 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
               </div>
             ) : (
               <div className="space-y-1">
-                <p className="text-sm font-medium text-slate-900">{formattedDob}</p>
+                <p className="text-sm font-medium text-slate-900">{formattedDob ?? t("notSet")}</p>
                 {age !== null && (
                   <p className="text-xs text-slate-500">{t("yearsOld", { age })}</p>
                 )}

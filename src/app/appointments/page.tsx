@@ -6740,7 +6740,7 @@ export default function CalendarPage() {
                     disabled={savingEdit}
                     className="inline-flex items-center rounded-full border border-sky-500/80 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {tCommon("saveChanges")}
+                    {tCommon("save")}
                   </button>
                 </div>
               </div>
