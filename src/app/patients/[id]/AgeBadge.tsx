@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { Check, Copy } from "lucide-react";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 type AgeBadgeProps = {
@@ -39,11 +40,24 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
   const [editDob, setEditDob] = useState(dob || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   // Format DOB for display
   const formattedDob = formatDob(dob);
+
+  const handleCopyDob = async () => {
+    if (!formattedDob) return;
+
+    try {
+      await navigator.clipboard.writeText(formattedDob);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   // Close popover when clicking outside
   useEffect(() => {
@@ -95,7 +109,7 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
   };
 
   return (
-    <div className="relative inline-block">
+    <div className="relative inline-flex items-center gap-1">
       <button
         ref={buttonRef}
         type="button"
@@ -114,6 +128,17 @@ export default function AgeBadge({ patientId, dob, age }: AgeBadgeProps) {
           <span className="ml-2 font-semibold">–&nbsp;&nbsp;{formattedDob}</span>
         )}
       </button>
+      {formattedDob && (
+        <button
+          type="button"
+          onClick={handleCopyDob}
+          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+          aria-label="Copy date of birth"
+          title={copied ? "Copied" : "Copy date of birth"}
+        >
+          {copied ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+        </button>
+      )}
 
       {isOpen && (
         <div
