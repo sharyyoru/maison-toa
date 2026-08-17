@@ -196,6 +196,8 @@
         }
       },
       "conflict": "CONFLIT",
+      "resourceUnavailableWarning": "Une des cabines n’est pas disponible a cet horaire",
+      "confirmResourceOverride": "Confirmer quand même",
       "consultationFor": "Consultation pour {name}"
     },
     "reschedule": {

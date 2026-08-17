@@ -196,6 +196,8 @@
         }
       },
       "conflict": "CONFLICT",
+      "resourceUnavailableWarning": "One of the required resources is not available at this time.",
+      "confirmResourceOverride": "Confirm anyway",
       "consultationFor": "Consultation for {name}"
     },
     "reschedule": {

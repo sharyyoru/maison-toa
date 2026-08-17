@@ -22,6 +22,7 @@ export async function POST(request: Request) {
       channel,
       notes,
       allowOverlap = false,
+      allowResourceOverlap = false,
       machineIds = null,
       sendEmailNotification = false,
     } = await request.json();
@@ -229,9 +230,12 @@ export async function POST(request: Request) {
         }),
       );
 
-      if (hasMirrorConflict) {
+      if (hasMirrorConflict && !allowResourceOverlap) {
         return NextResponse.json(
-          { error: `${mirrorProviderName} is not available for the configured mirrored appointment.` },
+          {
+            error: 'One of the required resources is not available at this time.',
+            code: 'REQUIRED_RESOURCE_UNAVAILABLE',
+          },
           { status: 409 },
         );
       }

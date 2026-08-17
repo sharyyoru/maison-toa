@@ -1065,6 +1065,7 @@ export default function CalendarPage() {
   const [savingNewPatient, setSavingNewPatient] = useState(false);
   const [newPatientError, setNewPatientError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [resourceOverrideRequired, setResourceOverrideRequired] = useState(false);
   const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
   const [serviceOptionsLoading, setServiceOptionsLoading] = useState(false);
   const [serviceOptionsError, setServiceOptionsError] = useState<string | null>(
@@ -1102,6 +1103,10 @@ export default function CalendarPage() {
   const [timeSearch, setTimeSearch] = useState("");
   const [timeDropdownOpen, setTimeDropdownOpen] = useState(false);
   const [createDoctorCalendarId, setCreateDoctorCalendarId] = useState("");
+
+  useEffect(() => {
+    if (!createModalOpen) setResourceOverrideRequired(false);
+  }, [createModalOpen]);
 
   // Machine resource state
   const [machines, setMachines] = useState<{ id: string; name: string; max_concurrent: number }[]>([]);
@@ -3144,7 +3149,7 @@ export default function CalendarPage() {
     }
   }
 
-  async function handleSaveAppointment() {
+  async function handleSaveAppointment(allowResourceOverlap = false) {
     if (savingCreate) return;
 
     setCreateError(null);
@@ -3169,6 +3174,20 @@ export default function CalendarPage() {
 
     if (!draftDate || !draftTime) {
       setCreateError("Please select a date and time.");
+      return;
+    }
+
+    const selectedIds = selectedServiceIds.length > 0
+      ? selectedServiceIds
+      : selectedServiceId ? [selectedServiceId] : [];
+    const isManualOverrideService = selectedIds.some((serviceId) => {
+      const name = serviceOptions.find((service) => service.id === serviceId)?.name ?? "";
+      return /\b(?:IV\s*Infusion|PRP)\b/i.test(name);
+    });
+    const hasDoctorConflict = Object.values(doctorConflicts).some((conflict) => conflict.hasConflict);
+
+    if (isManualOverrideService && hasDoctorConflict && !allowResourceOverlap) {
+      setResourceOverrideRequired(true);
       return;
     }
 
@@ -3301,6 +3320,7 @@ export default function CalendarPage() {
             channel: bookingStatus || null,
             notes: draftDescription.trim() || null,
             allowOverlap: true,
+            allowResourceOverlap,
             machineIds: selectedMachineIds.length > 0 ? selectedMachineIds : null,
             sendEmailNotification: shouldSendEmailNotification,
           })
@@ -3308,6 +3328,11 @@ export default function CalendarPage() {
         
         if (!response.ok) {
           const errorData = await response.json();
+          if (response.status === 409 && errorData.code === 'REQUIRED_RESOURCE_UNAVAILABLE') {
+            setResourceOverrideRequired(true);
+            setSavingCreate(false);
+            return;
+          }
           setCreateError(errorData.error || 'Failed to create appointment.');
           setSavingCreate(false);
           return;
@@ -3476,6 +3501,7 @@ export default function CalendarPage() {
       setMachineConflictWarning("");
       resetCreateRecurrence();
       setCreateError(null);
+      setResourceOverrideRequired(false);
       setCreateDoctorCalendarId("");
       // Reset multi-select state
       setSelectedDoctorIds([]);
@@ -7934,6 +7960,28 @@ export default function CalendarPage() {
               {createError ? (
                 <p className="mt-2 text-[11px] text-red-600">{createError}</p>
               ) : null}
+              {resourceOverrideRequired ? (
+                <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-900">
+                  <p>{t("modal.resourceUnavailableWarning")}</p>
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setResourceOverrideRequired(false)}
+                      className="rounded-full border border-amber-300 bg-white px-3 py-1 font-medium hover:bg-amber-100"
+                    >
+                      {tCommon("cancel")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveAppointment(true)}
+                      disabled={savingCreate}
+                      className="rounded-full bg-amber-600 px-3 py-1 font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                    >
+                      {t("modal.confirmResourceOverride")}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <div className="mt-4 flex items-center justify-between gap-2">
                 <button
                   type="button"
@@ -7954,7 +8002,7 @@ export default function CalendarPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void handleSaveAppointment()}
+                    onClick={() => void handleSaveAppointment(false)}
                     disabled={savingCreate}
                     className="inline-flex items-center rounded-full border border-sky-500/80 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
