@@ -110,25 +110,38 @@ async function fetchFavoritesFromDb(userId: string): Promise<Favorite[] | null> 
   return data.map((row) => ({ href: row.href as string, icon: row.icon as string }));
 }
 
-async function syncFavoritesToDb(userId: string, favorites: Favorite[]) {
+async function seedFavoritesInDb(userId: string, favorites: Favorite[]) {
   const rows = favorites.map((f, i) => ({
     user_id: userId,
     href: f.href,
     icon: f.icon,
     sort_order: i,
   }));
-  const { error: deleteError } = await supabaseClient
+  if (rows.length > 0) {
+    const { error } = await supabaseClient
+      .from("favorites")
+      .upsert(rows, { onConflict: "user_id,href" });
+    if (error) console.error("Failed to seed favorites:", error);
+  }
+}
+
+async function addFavoriteToDb(userId: string, favorite: Favorite, sortOrder: number) {
+  const { error } = await supabaseClient.from("favorites").upsert({
+    user_id: userId,
+    href: favorite.href,
+    icon: favorite.icon,
+    sort_order: sortOrder,
+  }, { onConflict: "user_id,href" });
+  if (error) console.error("Failed to add favorite:", error);
+}
+
+async function removeFavoriteFromDb(userId: string, href: string) {
+  const { error } = await supabaseClient
     .from("favorites")
     .delete()
-    .eq("user_id", userId);
-  if (deleteError) {
-    console.error("Failed to delete favorites:", deleteError);
-    return;
-  }
-  if (rows.length > 0) {
-    const { error: insertError } = await supabaseClient.from("favorites").insert(rows);
-    if (insertError) console.error("Failed to insert favorites:", insertError);
-  }
+    .eq("user_id", userId)
+    .eq("href", href);
+  if (error) console.error("Failed to remove favorite:", error);
 }
 
 function FavoriteIcon({ icon, className }: { icon: string; className?: string }) {
@@ -466,7 +479,6 @@ export default function FavoritesBar() {
   const [loaded, setLoaded] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [patientTabsOverflow, setPatientTabsOverflow] = useState({ left: false, right: false });
-  const skipDbSyncRef = useRef(true);
   const patientTabsRef = useRef<HTMLDivElement>(null);
   const openPatients = tabs;
 
@@ -499,7 +511,7 @@ export default function FavoritesBar() {
         // Seed DB with defaults when both localStorage and DB are empty
         setFavorites(DEFAULT_FAVORITES);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_FAVORITES));
-        await syncFavoritesToDb(user.id, DEFAULT_FAVORITES);
+        await seedFavoritesInDb(user.id, DEFAULT_FAVORITES);
       }
 
       setLoaded(true);
@@ -513,15 +525,6 @@ export default function FavoritesBar() {
     }
   }, [favorites, loaded]);
 
-  useEffect(() => {
-    if (!loaded || !user) return;
-    if (skipDbSyncRef.current) {
-      skipDbSyncRef.current = false;
-      return;
-    }
-    void syncFavoritesToDb(user.id, favorites);
-  }, [favorites, loaded, user]);
-
   const isActive = useCallback(
     (href: string) => {
       if (href === "/") return pathname === "/";
@@ -531,11 +534,17 @@ export default function FavoritesBar() {
   );
 
   function addFavorite(page: Favorite) {
-    setFavorites((prev) => (prev.some((f) => f.href === page.href) ? prev : [...prev, page]));
+    if (favorites.some((favorite) => favorite.href === page.href)) return;
+    if (user) void addFavoriteToDb(user.id, page, favorites.length);
+    setFavorites((prev) => {
+      if (prev.some((f) => f.href === page.href)) return prev;
+      return [...prev, page];
+    });
   }
 
   function removeFavorite(href: string) {
     setFavorites((prev) => prev.filter((f) => f.href !== href));
+    if (user) void removeFavoriteFromDb(user.id, href);
   }
 
   function closePatient(patientId: string) {
