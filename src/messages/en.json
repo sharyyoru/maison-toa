@@ -170,6 +170,7 @@
       },
       "moreOptions": "More options",
       "copy": "Copy",
+      "reschedule": "Reschedule / Move",
       "delete": "Delete",
       "yesDelete": "Yes, delete",
       "deleting": "Deleting...",
@@ -196,6 +197,18 @@
       },
       "conflict": "CONFLICT",
       "consultationFor": "Consultation for {name}"
+    },
+    "reschedule": {
+      "active": "Move mode active",
+      "instructions": "Navigate to a date and click an available time slot.",
+      "confirmTitle": "Move appointment",
+      "confirmQuestion": "Move this appointment to the selected time?",
+      "from": "From",
+      "to": "To",
+      "confirm": "Confirm move",
+      "saving": "Moving...",
+      "failed": "Could not move the appointment.",
+      "noProvider": "Select a practitioner calendar before choosing a time."
     },
     "workflow": {
       "pending": "Pending",

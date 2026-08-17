@@ -254,6 +254,23 @@ export async function PATCH(
       (updateData.start_time !== undefined || updateData.end_time !== undefined) &&
       proposedStatus !== "cancelled" && proposedStatus !== "no_show"
     ) {
+      const proposedProviderId = typeof updateData.provider_id === "string"
+        ? updateData.provider_id
+        : currentAppointment.provider_id;
+      if (proposedProviderId) {
+        const { data: providerConflicts, error: providerConflictError } = await supabase
+          .from("appointments")
+          .select("id")
+          .eq("provider_id", proposedProviderId)
+          .lt("start_time", proposedEnd.toISOString())
+          .gt("end_time", proposedStart.toISOString())
+          .not("status", "in", "(cancelled,no_show)")
+          .neq("id", id)
+          .limit(1);
+        if (providerConflictError) return NextResponse.json({ error: "Failed to verify practitioner availability." }, { status: 500 });
+        if (providerConflicts?.length) return NextResponse.json({ error: "The practitioner is not available at the requested time." }, { status: 409 });
+      }
+
       const reservations: Array<{
         id: string;
         provider_id: string | null;

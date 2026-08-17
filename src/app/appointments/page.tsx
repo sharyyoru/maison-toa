@@ -974,6 +974,15 @@ export default function CalendarPage() {
   const [draggedAppointment, setDraggedAppointment] = useState<CalendarAppointment | null>(null);
   const [dropTargetDoctorId, setDropTargetDoctorId] = useState<string | null>(null);
   const [dropTargetMinutes, setDropTargetMinutes] = useState<number | null>(null);
+  const [reschedulingAppointment, setReschedulingAppointment] = useState<CalendarAppointment | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<{
+    providerId: string;
+    providerName: string;
+    startTime: string;
+    endTime: string;
+  } | null>(null);
+  const [savingReschedule, setSavingReschedule] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
   
   // Context menu for paste
   const [pasteContextMenu, setPasteContextMenu] = useState<{
@@ -3975,6 +3984,84 @@ export default function CalendarPage() {
     }
   }
 
+  function beginReschedule(appt: CalendarAppointment) {
+    setReschedulingAppointment(appt);
+    setRescheduleTarget(null);
+    setRescheduleError(null);
+    closeEditModal();
+    setView("day");
+  }
+
+  function cancelReschedule() {
+    if (savingReschedule) return;
+    setReschedulingAppointment(null);
+    setRescheduleTarget(null);
+    setRescheduleError(null);
+  }
+
+  function selectRescheduleTarget(targetCalendarId: string, targetDate: Date, targetMinutes: number) {
+    if (!reschedulingAppointment) return;
+    const targetCalendar = doctorCalendars.find((calendar) => calendar.id === targetCalendarId);
+    const providerId = targetCalendar?.providerId || reschedulingAppointment.provider_id;
+    if (!providerId) {
+      setRescheduleError(t("reschedule.noProvider"));
+      return;
+    }
+
+    const originalStart = new Date(reschedulingAppointment.start_time);
+    const originalEnd = reschedulingAppointment.end_time ? new Date(reschedulingAppointment.end_time) : null;
+    const durationMinutes = originalEnd
+      ? Math.max(15, Math.round((originalEnd.getTime() - originalStart.getTime()) / 60000))
+      : 30;
+    const date = formatSwissYmd(targetDate);
+    const start = createSwissDateTime(date, Math.floor(targetMinutes / 60), targetMinutes % 60);
+    setRescheduleError(null);
+    setRescheduleTarget({
+      providerId,
+      providerName: targetCalendar?.name || reschedulingAppointment.provider?.name || "",
+      startTime: start.toISOString(),
+      endTime: new Date(start.getTime() + durationMinutes * 60000).toISOString(),
+    });
+  }
+
+  async function confirmReschedule() {
+    if (!reschedulingAppointment || !rescheduleTarget || savingReschedule) return;
+    setSavingReschedule(true);
+    setRescheduleError(null);
+    try {
+      const response = await fetch(`/api/appointments/${reschedulingAppointment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider_id: rescheduleTarget.providerId,
+          start_time: rescheduleTarget.startTime,
+          end_time: rescheduleTarget.endTime,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error || t("reschedule.failed"));
+
+      const movedAppointment: CalendarAppointment = payload?.appointment || payload || {
+        ...reschedulingAppointment,
+        provider_id: rescheduleTarget.providerId,
+        start_time: rescheduleTarget.startTime,
+        end_time: rescheduleTarget.endTime,
+      };
+      setAppointments((previous) => previous.map((appointment) =>
+        appointment.id === movedAppointment.id ? movedAppointment : appointment
+      ));
+      await syncPendingAppointmentReminder(movedAppointment);
+      setReschedulingAppointment(null);
+      setRescheduleTarget(null);
+      setAppointmentsReloadVersion((version) => version + 1);
+      openModificationEmailPrompt(movedAppointment);
+    } catch (moveError) {
+      setRescheduleError(moveError instanceof Error ? moveError.message : t("reschedule.failed"));
+    } finally {
+      setSavingReschedule(false);
+    }
+  }
+
   // Context menu handler for paste
   function handleSlotContextMenu(e: React.MouseEvent, doctorId: string, date: Date, minutes: number) {
     if (!copiedAppointment) return;
@@ -5307,6 +5394,17 @@ export default function CalendarPage() {
             </Link>
           </div>
         </div>
+        {reschedulingAppointment ? (
+          <div className="mt-2 flex flex-shrink-0 items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-800">
+            <div>
+              <span className="font-semibold">{t("reschedule.active")}</span>
+              <span className="ml-2">{t("reschedule.instructions")}</span>
+            </div>
+            <button type="button" onClick={cancelReschedule} className="rounded-full border border-emerald-300 bg-white px-3 py-1 font-medium hover:bg-emerald-100">
+              {tCommon("cancel")}
+            </button>
+          </div>
+        ) : null}
         {view === "month" ? (
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
             <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/80 text-[11px] font-medium uppercase tracking-wide text-slate-500 sticky top-0 z-10">
@@ -5597,6 +5695,10 @@ export default function CalendarPage() {
                                       key={totalMinutes}
                                       onMouseDown={(e) => {
                                         e.preventDefault();
+                                        if (reschedulingAppointment) {
+                                          selectRescheduleTarget(doctorCol?.id ?? "", date, totalMinutes);
+                                          return;
+                                        }
                                         handleDragCreateStart(date, totalMinutes, doctorCol?.id);
                                       }}
                                       onMouseEnter={() => {
@@ -5605,11 +5707,17 @@ export default function CalendarPage() {
                                         }
                                       }}
                                       onTouchStart={(e) => {
+                                        if (reschedulingAppointment) {
+                                          e.preventDefault();
+                                          selectRescheduleTarget(doctorCol?.id ?? "", date, totalMinutes);
+                                          return;
+                                        }
                                         handleTouchStart(e, date, totalMinutes, doctorCol?.id ?? null, e.currentTarget);
                                       }}
                                       onContextMenu={(e) => handleSlotContextMenu(e, doctorCol?.id ?? "", date, totalMinutes)}
                                       className={`block w-full border-t border-slate-100 cursor-pointer hover:bg-sky-50 transition-colors ${
                                         isInDragRange ? "bg-sky-100" : ""
+                                      } ${reschedulingAppointment ? "hover:bg-emerald-100" : ""
                                       } ${
                                         dropTargetDoctorId === (doctorCol?.id ?? "") && dropTargetMinutes === totalMinutes
                                           ? "bg-sky-200 ring-2 ring-sky-400 ring-inset"
@@ -5962,6 +6070,25 @@ export default function CalendarPage() {
             </button>
           </div>
         )}
+
+        {reschedulingAppointment && rescheduleTarget ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
+            <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
+              <h2 className="text-sm font-semibold text-slate-900">{t("reschedule.confirmTitle")}</h2>
+              <p className="mt-3 text-xs text-slate-600">{t("reschedule.confirmQuestion")}</p>
+              <div className="mt-4 space-y-2 rounded-lg bg-slate-50 p-4 text-xs">
+                <div><span className="font-medium text-slate-500">{t("reschedule.from")}: </span>{new Date(reschedulingAppointment.start_time).toLocaleString(SWISS_LOCALE, { dateStyle: "full", timeStyle: "short", timeZone: SWISS_TIMEZONE })}</div>
+                <div><span className="font-medium text-emerald-700">{t("reschedule.to")}: </span>{new Date(rescheduleTarget.startTime).toLocaleString(SWISS_LOCALE, { dateStyle: "full", timeStyle: "short", timeZone: SWISS_TIMEZONE })}</div>
+                {rescheduleTarget.providerName ? <div><span className="font-medium text-slate-500">{t("modal.fields.doctor")}: </span>{rescheduleTarget.providerName}</div> : null}
+              </div>
+              {rescheduleError ? <p className="mt-3 text-xs text-red-600">{rescheduleError}</p> : null}
+              <div className="mt-5 flex justify-end gap-2">
+                <button type="button" disabled={savingReschedule} onClick={() => { setRescheduleTarget(null); setRescheduleError(null); }} className="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">{tCommon("cancel")}</button>
+                <button type="button" disabled={savingReschedule} onClick={() => void confirmReschedule()} className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60">{savingReschedule ? t("reschedule.saving") : t("reschedule.confirm")}</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {editModalOpen && editingAppointment ? (
           <div 
@@ -6589,6 +6716,16 @@ export default function CalendarPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                     {t("modal.copy")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => editingAppointment && beginReschedule(editingAppointment)}
+                    className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-3 py-1.5 text-[11px] font-medium text-emerald-700 shadow-sm hover:bg-emerald-50"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8m0 0-3-3m3 3-3 3m3 7H8m0 0 3 3m-3-3 3-3" />
+                    </svg>
+                    {t("modal.reschedule")}
                   </button>
                   <button
                     type="button"
