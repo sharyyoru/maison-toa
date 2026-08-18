@@ -844,7 +844,6 @@ async function syncPendingAppointmentReminder(appointment: CalendarAppointment):
     .from("scheduled_emails")
     .update({
       scheduled_for: reminderDate.toISOString(),
-      updated_at: new Date().toISOString(),
     })
     .in("id", reminderIds);
 }

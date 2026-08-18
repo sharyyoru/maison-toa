@@ -42,7 +42,6 @@ async function synchronizePendingReminders(
       .from("scheduled_emails")
       .update({
         scheduled_for: new Date(scheduledFor.getTime() + options.startDeltaMs).toISOString(),
-        updated_at: new Date().toISOString(),
       })
       .eq("id", reminder.id);
     if (updateError) throw updateError;
