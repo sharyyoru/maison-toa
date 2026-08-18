@@ -50,6 +50,14 @@ function patientSearchText(patient: PatientResult) {
   ].filter(Boolean).join(" "));
 }
 
+function formatDob(dob: string) {
+  const match = dob.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return dob;
+
+  const [, year, month, day] = match;
+  return `${day}.${month}.${year}`;
+}
+
 export default function GlobalPatientSearch() {
   const router = useRouter();
   const t = useTranslations("header");
@@ -119,8 +127,8 @@ export default function GlobalPatientSearch() {
         const hasDigits = /\d/.test(trimmed);
         let dobQuery = null;
         if (hasDigits) {
-          // Try DD/MM/YYYY format first (e.g. "28/10/1985")
-          const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          // Try DD.MM.YYYY or DD/MM/YYYY (e.g. "28.10.1985")
+          const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
           if (ddmmyyyyMatch) {
             const day = ddmmyyyyMatch[1].padStart(2, "0");
             const month = ddmmyyyyMatch[2].padStart(2, "0");
@@ -343,7 +351,7 @@ export default function GlobalPatientSearch() {
                     )}
                     {patient.dob && (
                       <p className="text-xs text-slate-400">
-                        {t("dob")}: {new Date(patient.dob).toLocaleDateString()}
+                        {t("dob")}: {formatDob(patient.dob)}
                       </p>
                     )}
                   </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { usePatientTabs } from "../PatientTabsContext";
@@ -12,6 +12,7 @@ type PatientResult = {
   last_name: string | null;
   email: string | null;
   phone: string | null;
+  dob: string | null;
 };
 
 type Props = {
@@ -37,11 +38,21 @@ export default function RightPanel({ collapsed, onToggle }: Props) {
     searchTimeoutRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const { data } = await supabaseClient
+        const trimmedQuery = query.trim();
+        const dobMatch = trimmedQuery.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+        const isoDob = dobMatch
+          ? `${dobMatch[3]}-${dobMatch[2].padStart(2, "0")}-${dobMatch[1].padStart(2, "0")}`
+          : null;
+
+        let patientQuery = supabaseClient
           .from("patients")
-          .select("id, first_name, last_name, email, phone")
-          .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,phone.ilike.%${query}%`)
-          .limit(8);
+          .select("id, first_name, last_name, email, phone, dob");
+
+        patientQuery = isoDob
+          ? patientQuery.eq("dob", isoDob)
+          : patientQuery.or(`first_name.ilike.%${trimmedQuery}%,last_name.ilike.%${trimmedQuery}%,email.ilike.%${trimmedQuery}%,phone.ilike.%${trimmedQuery}%`);
+
+        const { data } = await patientQuery.limit(8);
         setSearchResults((data || []) as PatientResult[]);
       } catch {
         setSearchResults([]);
@@ -149,7 +160,14 @@ export default function RightPanel({ collapsed, onToggle }: Props) {
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-500/20 text-sky-500 dark:text-sky-400 text-[10px] font-semibold flex-shrink-0">
                     {(p.first_name?.[0] || "").toUpperCase()}{(p.last_name?.[0] || "").toUpperCase()}
                   </span>
-                  <span className="truncate">{p.first_name} {p.last_name}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{p.first_name} {p.last_name}</span>
+                    {p.dob && (
+                      <span className="block text-[10px] text-[var(--blz-text-muted)]">
+                        {p.dob.replace(/^(\d{4})-(\d{2})-(\d{2}).*$/, "$3.$2.$1")}
+                      </span>
+                    )}
+                  </span>
                 </button>
               ))
             ) : (
