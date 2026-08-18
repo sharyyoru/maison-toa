@@ -6,7 +6,6 @@ import {
   mapLawType as mapSumexLaw,
   mapTiersMode as mapSumexTiers,
   mapSex as mapSumexSex,
-  TiersMode,
   RoleType,
   PlaceType,
   RequestType,
@@ -14,11 +13,11 @@ import {
   DiagnosisType,
   EsrType,
   YesNo,
-  GenerationAttribute,
   type SumexInvoiceInput,
   type InvoiceServiceInput as SumexServiceInput,
   type InvoiceDiagnosis as SumexDiagnosis,
 } from "@/lib/sumexInvoice";
+import { computeInvoicePdfPaymentPresentation } from "@/lib/invoicePdfPaymentPresentation";
 import { deriveTariffType } from "@/lib/tariffType";
 import { PDFDocument, rgb } from "pdf-lib";
 
@@ -486,45 +485,23 @@ export async function POST(request: NextRequest) {
       // --- Payment status remark & generation attributes ---
       const paidAmt = Number(invoiceData.paid_amount) || 0;
       const totalAmt = Number(invoiceData.total_amount) || 0;
-      const isFullyPaid = invoiceData.status === "PAID" || invoiceData.status === "OVERPAID" || (paidAmt > 0 && paidAmt >= totalAmt - 0.01);
-      const isPartialPaid = invoiceData.status === "PARTIAL_PAID" || (paidAmt > 0 && paidAmt < totalAmt - 0.01);
-
-      let paymentRemark = "";
-      let pdfGenAttrs = GenerationAttribute.None;
-      if (isFullyPaid) {
-        paymentRemark = `ACQUITTÉ / BEZAHLT — Montant acquitté: ${totalAmt.toFixed(2)} CHF`;
-        // Remove QR payment slip for fully paid invoices (nothing to pay)
-        pdfGenAttrs = GenerationAttribute.ExcludeESRInPrint;
-      } else if (isPartialPaid) {
-        const remaining = totalAmt - paidAmt;
-        paymentRemark = `Acompte reçu / Anzahlung erhalten: ${paidAmt.toFixed(2)} CHF — Solde / Restbetrag: ${remaining.toFixed(2)} CHF`;
-      }
-
-      // Hide the ESR/QR slip when no valid QR-IBAN is available, so Sumex does
-      // not print an incorrect default/fallback IBAN on the PDF.
+      const tiersMode1 = mapSumexTiers(effectiveTiersMode);
+      const {
+        pdfGenAttrs,
+        combinedRemark,
+        amountPrepaid: amountPrepaid1,
+      } = computeInvoicePdfPaymentPresentation({
+        status: invoiceData.status,
+        totalAmount: totalAmt,
+        paidAmount: paidAmt,
+        tiersMode: tiersMode1,
+        hasValidQrIban: !!provIban,
+        invoiceNotes: invoiceData.notes,
+        rawProviderIban,
+      });
       if (!provIban) {
         console.warn(`[GeneratePDF] No valid QR-IBAN for invoice ${invoiceData.invoice_number}; hiding ESR/QR slip.`);
-        pdfGenAttrs = GenerationAttribute.ExcludeESRInPrint;
       }
-
-      // Combine accountant-visible invoice notes with any payment status remark.
-      // When no valid QR-IBAN exists, show the provider's regular IBAN so the
-      // patient can still pay by bank transfer (the QR/ESR slip remains hidden).
-      const invoiceNotes = (invoiceData.notes || "").trim();
-      let combinedRemark = invoiceNotes && paymentRemark
-        ? `${invoiceNotes}\n${paymentRemark}`
-        : invoiceNotes || paymentRemark || undefined;
-
-      if (!provIban && !isFullyPaid && rawProviderIban) {
-        const ibanNote = `Virement / Überweisung: ${rawProviderIban}`;
-        combinedRemark = combinedRemark
-          ? `${combinedRemark}\n${ibanNote}`
-          : ibanNote;
-      }
-
-      const tiersMode1 = mapSumexTiers(effectiveTiersMode);
-      // amountPrepaid is only allowed in Tiers Garant (TG) — error [926] if sent for TP/TS
-      const amountPrepaid1 = tiersMode1 === TiersMode.Garant ? paidAmt : 0;
 
       const sumexInput: SumexInvoiceInput = {
         language: 2,
@@ -796,44 +773,23 @@ export async function POST(request: NextRequest) {
       // --- Payment status remark & generation attributes (non-insurance path) ---
       const paidAmt2 = Number(invoiceData.paid_amount) || 0;
       const totalAmt2 = Number(invoiceData.total_amount) || 0;
-      const isFullyPaid2 = invoiceData.status === "PAID" || invoiceData.status === "OVERPAID" || (paidAmt2 > 0 && paidAmt2 >= totalAmt2 - 0.01);
-      const isPartialPaid2 = invoiceData.status === "PARTIAL_PAID" || (paidAmt2 > 0 && paidAmt2 < totalAmt2 - 0.01);
-
-      let paymentRemark2 = "";
-      let pdfGenAttrs2 = GenerationAttribute.None;
-      if (isFullyPaid2) {
-        paymentRemark2 = `ACQUITTÉ / BEZAHLT — Montant acquitté: ${totalAmt2.toFixed(2)} CHF`;
-        pdfGenAttrs2 = GenerationAttribute.ExcludeESRInPrint;
-      } else if (isPartialPaid2) {
-        const remaining2 = totalAmt2 - paidAmt2;
-        paymentRemark2 = `Acompte reçu / Anzahlung erhalten: ${paidAmt2.toFixed(2)} CHF — Solde / Restbetrag: ${remaining2.toFixed(2)} CHF`;
-      }
-
-      // Hide the ESR/QR slip when no valid QR-IBAN is available, so Sumex does
-      // not print an incorrect default/fallback IBAN on the PDF.
+      const tiersMode2 = mapSumexTiers("TG");
+      const {
+        pdfGenAttrs: pdfGenAttrs2,
+        combinedRemark: combinedRemark2,
+        amountPrepaid: amountPrepaid2,
+      } = computeInvoicePdfPaymentPresentation({
+        status: invoiceData.status,
+        totalAmount: totalAmt2,
+        paidAmount: paidAmt2,
+        tiersMode: tiersMode2,
+        hasValidQrIban: !!provIbanSumex,
+        invoiceNotes: invoiceData.notes,
+        rawProviderIban: rawProviderIban2,
+      });
       if (!provIbanSumex) {
         console.warn(`[GeneratePDF] No valid QR-IBAN for invoice ${invoiceData.invoice_number}; hiding ESR/QR slip.`);
-        pdfGenAttrs2 = GenerationAttribute.ExcludeESRInPrint;
       }
-
-      // Combine accountant-visible invoice notes with any payment status remark.
-      // When no valid QR-IBAN exists, show the provider's regular IBAN so the
-      // patient can still pay by bank transfer (the QR/ESR slip remains hidden).
-      const invoiceNotes2 = (invoiceData.notes || "").trim();
-      let combinedRemark2 = invoiceNotes2 && paymentRemark2
-        ? `${invoiceNotes2}\n${paymentRemark2}`
-        : invoiceNotes2 || paymentRemark2 || undefined;
-
-      if (!provIbanSumex && !isFullyPaid2 && rawProviderIban2) {
-        const ibanNote2 = `Virement / Überweisung: ${rawProviderIban2}`;
-        combinedRemark2 = combinedRemark2
-          ? `${combinedRemark2}\n${ibanNote2}`
-          : ibanNote2;
-      }
-
-      const tiersMode2 = mapSumexTiers("TG");
-      // amountPrepaid only allowed in TG — keep consistent even though this path is always TG
-      const amountPrepaid2 = tiersMode2 === TiersMode.Garant ? paidAmt2 : 0;
 
       const sumexInput2: SumexInvoiceInput = {
         language: 2,
