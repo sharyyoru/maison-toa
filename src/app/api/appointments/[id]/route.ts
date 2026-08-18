@@ -11,7 +11,7 @@ const supabase = createClient(
 
 const INTERNAL_ROLES = new Set(["admin", "doctor", "nurse", "technician", "staff"]);
 
-async function authorizePractitionerOverlap(request: NextRequest) {
+async function authorizeInternalOverlap(request: NextRequest) {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) return false;
   const { data: authData, error: authError } = await supabase.auth.getUser(token);
@@ -71,7 +71,8 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const allowPractitionerOverlap = body.allow_practitioner_overlap === true;
-    if (allowPractitionerOverlap && !(await authorizePractitionerOverlap(request))) {
+    const allowResourceOverlap = body.allow_resource_overlap === true;
+    if ((allowPractitionerOverlap || allowResourceOverlap) && !(await authorizeInternalOverlap(request))) {
       return NextResponse.json({ error: "Internal clinic access required" }, { status: 403 });
     }
 
@@ -170,8 +171,11 @@ export async function PATCH(
             .neq("id", reservation.id)
             .limit(1);
           if (linkedConflictError) return NextResponse.json({ error: "Failed to verify linked calendar availability" }, { status: 500 });
-          if (linkedConflicts?.length) {
-            return NextResponse.json({ error: "A room or linked calendar is not available for one or more future appointments" }, { status: 409 });
+          if (linkedConflicts?.length && !allowResourceOverlap) {
+            return NextResponse.json({
+              error: "A room or linked calendar is not available for one or more future appointments",
+              code: "REQUIRED_RESOURCE_UNAVAILABLE",
+            }, { status: 409 });
           }
         }
         const targetProviderId = typeof updateData.provider_id === "string"
@@ -360,9 +364,12 @@ export async function PATCH(
         if (conflictError) {
           return NextResponse.json({ error: "Failed to verify the mirrored calendar." }, { status: 500 });
         }
-        if (conflicts && conflicts.length > 0) {
+        if (conflicts && conflicts.length > 0 && !allowResourceOverlap) {
           return NextResponse.json(
-            { error: "The mirrored calendar is not available at the requested time." },
+            {
+              error: "The mirrored calendar is not available at the requested time.",
+              code: "REQUIRED_RESOURCE_UNAVAILABLE",
+            },
             { status: 409 },
           );
         }

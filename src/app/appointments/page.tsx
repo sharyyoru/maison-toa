@@ -1286,7 +1286,10 @@ export default function CalendarPage() {
   const [editNotes, setEditNotes] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
   const [editOverlapConfirmation, setEditOverlapConfirmation] = useState<{
+    type: "practitioner" | "resource";
     recurrenceScope?: "this" | "this_and_future";
+    allowPractitionerOverlap: boolean;
+    allowResourceOverlap: boolean;
   } | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingAppointment, setDeletingAppointment] = useState(false);
@@ -4506,6 +4509,7 @@ export default function CalendarPage() {
   async function handleSaveEditAppointment(
     recurrenceScope?: "this" | "this_and_future",
     allowPractitionerOverlap = false,
+    allowResourceOverlap = false,
   ) {
     if (!editingAppointment || savingEdit) return;
 
@@ -4618,13 +4622,29 @@ export default function CalendarPage() {
           machine_ids: editMachineIds,
           recurrence_scope: recurrenceScope,
           allow_practitioner_overlap: allowPractitionerOverlap,
+          allow_resource_overlap: allowResourceOverlap,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         if (response.status === 409 && errorData?.code === "PRACTITIONER_UNAVAILABLE") {
-          setEditOverlapConfirmation({ recurrenceScope });
+          setEditOverlapConfirmation({
+            type: "practitioner",
+            recurrenceScope,
+            allowPractitionerOverlap: true,
+            allowResourceOverlap,
+          });
+          setSavingEdit(false);
+          return;
+        }
+        if (response.status === 409 && errorData?.code === "REQUIRED_RESOURCE_UNAVAILABLE") {
+          setEditOverlapConfirmation({
+            type: "resource",
+            recurrenceScope,
+            allowPractitionerOverlap,
+            allowResourceOverlap: true,
+          });
           setSavingEdit(false);
           return;
         }
@@ -6769,7 +6789,11 @@ export default function CalendarPage() {
               ) : null}
               {editOverlapConfirmation ? (
                 <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-900">
-                  <p>{t("modal.practitionerOverlapWarning")}</p>
+                  <p>
+                    {editOverlapConfirmation.type === "practitioner"
+                      ? t("modal.practitionerOverlapWarning")
+                      : t("modal.resourceUnavailableWarning")}
+                  </p>
                   <div className="mt-2 flex justify-end gap-2">
                     <button
                       type="button"
@@ -6782,7 +6806,8 @@ export default function CalendarPage() {
                       type="button"
                       onClick={() => void handleSaveEditAppointment(
                         editOverlapConfirmation.recurrenceScope,
-                        true,
+                        editOverlapConfirmation.allowPractitionerOverlap,
+                        editOverlapConfirmation.allowResourceOverlap,
                       )}
                       disabled={savingEdit}
                       className="rounded-full bg-amber-600 px-3 py-1 font-medium text-white hover:bg-amber-700 disabled:opacity-60"
