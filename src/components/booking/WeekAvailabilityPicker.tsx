@@ -220,19 +220,19 @@ export default function WeekAvailabilityPicker({
   const headerFormatter = new Intl.DateTimeFormat(dateLocale, { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Zurich" });
 
   return (
-    <div className="rounded-2xl bg-[#1b2130] p-3 sm:p-5 text-slate-200">
+    <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-3 sm:p-5 text-slate-900">
       {/* Treatment summary */}
-      <div className="rounded-xl bg-[#252c3d] p-4">
+      <div className="rounded-xl bg-slate-50 p-4">
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+          <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </span>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-white">{serviceName}</p>
+            <p className="font-semibold text-slate-900">{serviceName}</p>
             {(servicePriceLabel || serviceDurationMinutes) && (
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500">
                 {servicePriceLabel}
                 {servicePriceLabel && serviceDurationMinutes ? " / " : ""}
                 {serviceDurationMinutes ? `${serviceDurationMinutes} min` : ""}
@@ -243,8 +243,8 @@ export default function WeekAvailabilityPicker({
       </div>
 
       {/* Practitioner row */}
-      <div className="mt-2 flex items-center gap-2 rounded-xl bg-[#252c3d] px-4 py-3 text-sm text-slate-300">
-        <svg className="h-4 w-4 flex-shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <div className="mt-2 flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+        <svg className="h-4 w-4 flex-shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 20a6 6 0 0 1 8-5.29A6 6 0 0 1 20 20" />
         </svg>
@@ -258,13 +258,13 @@ export default function WeekAvailabilityPicker({
           onClick={() => goToWeek(addDaysToYmd(windowStart, -DAY_WINDOW_SIZE))}
           disabled={!canGoBack}
           aria-label="Previous week"
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#252c3d] text-slate-300 transition-colors hover:bg-[#2f3750] disabled:opacity-30 disabled:cursor-not-allowed"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <span className="rounded-full bg-[#252c3d] px-4 py-1.5 text-sm font-medium text-white">
+        <span className="rounded-full bg-slate-100 px-4 py-1.5 text-sm font-medium text-slate-900">
           {headerFormatter.format(parseSwissDate(windowStart))}
         </span>
         <button
@@ -272,7 +272,7 @@ export default function WeekAvailabilityPicker({
           onClick={() => goToWeek(addDaysToYmd(windowStart, DAY_WINDOW_SIZE))}
           disabled={!canGoForward}
           aria-label="Next week"
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#252c3d] text-slate-300 transition-colors hover:bg-[#2f3750] disabled:opacity-30 disabled:cursor-not-allowed"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -282,7 +282,7 @@ export default function WeekAvailabilityPicker({
 
       {/* Day columns */}
       {isBusy ? (
-        <div className="mt-5 flex items-center justify-center gap-2 py-10 text-sm text-slate-400">
+        <div className="mt-5 flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
           <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-slate-400" />
           {checkingAvailabilityLabel}
         </div>
@@ -295,10 +295,10 @@ export default function WeekAvailabilityPicker({
             return (
               <div key={date} className="min-w-0">
                 <div className="mb-2 text-center">
-                  <p className="truncate text-[11px] font-medium text-slate-400 sm:text-xs">
+                  <p className="truncate text-[11px] font-medium text-slate-600 sm:text-xs">
                     {isToday ? "Aujourd'hui" : weekdayFormatter.format(parseSwissDate(date))}
                   </p>
-                  <p className="text-[11px] text-slate-500 sm:text-xs">{dayMonthFormatter.format(parseSwissDate(date))}</p>
+                  <p className="text-[11px] text-slate-400 sm:text-xs">{dayMonthFormatter.format(parseSwissDate(date))}</p>
                 </div>
                 <div className="space-y-1.5">
                   {times.length > 0 ? (
@@ -312,8 +312,8 @@ export default function WeekAvailabilityPicker({
                           aria-pressed={isSelected}
                           className={`flex w-full items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-center text-[11px] font-semibold transition-all sm:text-xs ${
                             isSelected
-                              ? "bg-emerald-400 text-[#0f2a20] shadow-[0_0_0_2px_rgba(52,211,153,0.35)] ring-2 ring-emerald-300 scale-[1.04]"
-                              : "bg-[#e7e6e2] text-[#1b2130] font-medium hover:bg-white"
+                              ? "bg-emerald-500 text-white shadow-[0_0_0_2px_rgba(16,185,129,0.25)] ring-2 ring-emerald-300 scale-[1.04]"
+                              : "bg-slate-100 text-slate-900 font-medium hover:bg-slate-200"
                           }`}
                         >
                           {isSelected && (
@@ -327,12 +327,12 @@ export default function WeekAvailabilityPicker({
                     })
                   ) : (
                     <div className="text-center">
-                      <p className="text-[10px] leading-tight text-slate-500 sm:text-[11px]">{noSlotsLabel}</p>
+                      <p className="text-[10px] leading-tight text-slate-400 sm:text-[11px]">{noSlotsLabel}</p>
                       {isLastColumn && nextJumpSlot && (
                         <button
                           type="button"
                           onClick={jumpToNextAvailable}
-                          className="mt-2 w-full rounded-lg bg-[#252c3d] px-1.5 py-1.5 text-[10px] font-medium text-slate-200 transition-colors hover:bg-[#2f3750] sm:text-[11px]"
+                          className="mt-2 w-full rounded-lg bg-slate-100 px-1.5 py-1.5 text-[10px] font-medium text-slate-700 transition-colors hover:bg-slate-200 sm:text-[11px]"
                         >
                           » {nextAvailableLabel}
                         </button>
