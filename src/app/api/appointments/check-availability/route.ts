@@ -91,7 +91,8 @@ export async function GET(request: NextRequest) {
 
     const secondaryCalendar = bookingContext.secondaryCalendar;
     const primaryDurationMinutes = bookingContext.primaryDurationMinutes;
-    const doctorStartOffsetMinutes = secondaryCalendar?.position === "end"
+    const doctorStartOffsetMinutes = 0;
+    const secondaryReleaseOffsetMinutes = secondaryCalendar?.position === "end"
       ? secondaryCalendar.durationMinutes - primaryDurationMinutes
       : 0;
 
@@ -344,7 +345,7 @@ export async function GET(request: NextRequest) {
       );
     });
     secondaryIntervals.forEach((interval) => {
-      addReleaseBoundary(candidateMap, interval.end, 0, rangeStart, rangeEnd);
+      addReleaseBoundary(candidateMap, interval.end, secondaryReleaseOffsetMinutes, rangeStart, rangeEnd);
     });
 
     const unavailableStarts = new Set<string>();

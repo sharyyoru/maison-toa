@@ -1065,10 +1065,11 @@ export default function CalendarPage() {
   const [newPatientError, setNewPatientError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [overlapConfirmation, setOverlapConfirmation] = useState<{
-    type: "practitioner" | "resource";
+    type: "practitioner" | "resource" | "combined";
     allowPractitionerOverlap: boolean;
     allowResourceOverlap: boolean;
   } | null>(null);
+  const duplicateEmailDecisionRef = useRef<boolean | null>(null);
   const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
   const [serviceOptionsLoading, setServiceOptionsLoading] = useState(false);
   const [serviceOptionsError, setServiceOptionsError] = useState<string | null>(
@@ -1108,7 +1109,10 @@ export default function CalendarPage() {
   const [createDoctorCalendarId, setCreateDoctorCalendarId] = useState("");
 
   useEffect(() => {
-    if (!createModalOpen) setOverlapConfirmation(null);
+    if (!createModalOpen) {
+      setOverlapConfirmation(null);
+      duplicateEmailDecisionRef.current = null;
+    }
   }, [createModalOpen]);
 
   // Machine resource state
@@ -3202,17 +3206,6 @@ export default function CalendarPage() {
       return;
     }
 
-    const hasDoctorConflict = Object.values(doctorConflicts).some((conflict) => conflict.hasConflict);
-
-    if (hasDoctorConflict && !allowPractitionerOverlap) {
-      setOverlapConfirmation({
-        type: "practitioner",
-        allowPractitionerOverlap: true,
-        allowResourceOverlap,
-      });
-      return;
-    }
-
     // Parse time as Swiss timezone (not browser local time)
     const [hourStr, minuteStr] = draftTime.split(":");
     const hour = parseInt(hourStr, 10);
@@ -3283,6 +3276,80 @@ export default function CalendarPage() {
     try {
       setSavingCreate(true);
 
+      // Resolve the multi-booking payload before any email prompt so calendar
+      // conflicts can be confirmed first without creating the appointment.
+      const useMultiAPI = repeatAppointment || selectedDoctorIds.length > 0 || selectedServiceIds.length > 0 || Boolean(selectedServiceId);
+      const providerIds = selectedDoctorIds.length > 0
+        ? selectedDoctorIds.map(calId => {
+            const calendar = doctorCalendars.find(c => c.id === calId);
+            return calendar?.providerId ?? calId;
+          }).filter(Boolean)
+        : (createDoctorCalendarId ? [doctorCalendars.find(c => c.id === createDoctorCalendarId)?.providerId ?? createDoctorCalendarId].filter(Boolean) : []);
+      const serviceIds = selectedServiceIds.length > 0
+        ? selectedServiceIds
+        : (selectedServiceId ? [selectedServiceId] : []);
+      const multiRequestBody = {
+        patientId: createNoPatient ? null : createPatientId,
+        noPatient: createNoPatient,
+        providerIds,
+        serviceIds,
+        serviceQuantities,
+        customServiceText: serviceIds.length === 0 ? serviceSearch.trim() : undefined,
+        startTime: startIso,
+        endTime: endIso,
+        occurrences: repeatAppointment ? occurrences : undefined,
+        location: draftLocation || null,
+        status: 'scheduled',
+        category: appointmentCategory && appointmentCategory !== 'No selection' ? appointmentCategory : null,
+        channel: bookingStatus || null,
+        notes: draftDescription.trim() || null,
+        allowOverlap: allowPractitionerOverlap,
+        allowResourceOverlap,
+        machineIds: selectedMachineIds.length > 0 ? selectedMachineIds : null,
+      };
+      let accessToken: string | null = null;
+
+      if (useMultiAPI) {
+        const { data: sessionData } = await supabaseClient.auth.getSession();
+        accessToken = sessionData.session?.access_token ?? null;
+        if (!accessToken) {
+          setCreateError('Your session has expired. Please sign in again.');
+          setSavingCreate(false);
+          return;
+        }
+
+        const preflightResponse = await fetch('/api/appointments/create-multi', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ ...multiRequestBody, checkOnly: true }),
+        });
+
+        if (!preflightResponse.ok) {
+          const errorData = await preflightResponse.json();
+          if (preflightResponse.status === 409 && errorData.code === 'OVERLAP_CONFIRMATION_REQUIRED') {
+            setOverlapConfirmation({ type: "combined", allowPractitionerOverlap: true, allowResourceOverlap: true });
+            setSavingCreate(false);
+            return;
+          }
+          if (preflightResponse.status === 409 && errorData.code === 'PRACTITIONER_UNAVAILABLE') {
+            setOverlapConfirmation({ type: "practitioner", allowPractitionerOverlap: true, allowResourceOverlap });
+            setSavingCreate(false);
+            return;
+          }
+          if (preflightResponse.status === 409 && errorData.code === 'REQUIRED_RESOURCE_UNAVAILABLE') {
+            setOverlapConfirmation({ type: "resource", allowPractitionerOverlap, allowResourceOverlap: true });
+            setSavingCreate(false);
+            return;
+          }
+          setCreateError(errorData.error || 'Failed to verify appointment availability.');
+          setSavingCreate(false);
+          return;
+        }
+      }
+
       let shouldSendEmailNotification = createNoPatient ? false : sendEmailNotification;
       if (sendEmailNotification && createPatientId) {
         const dateStr = formatSwissYmd(startLocal);
@@ -3302,35 +3369,14 @@ export default function CalendarPage() {
         }
 
         if ((count ?? 0) > 0) {
-          shouldSendEmailNotification = await promptDuplicateAppointmentEmail();
+          if (duplicateEmailDecisionRef.current === null) {
+            duplicateEmailDecisionRef.current = await promptDuplicateAppointmentEmail();
+          }
+          shouldSendEmailNotification = duplicateEmailDecisionRef.current;
         }
       }
 
-      // Use multi-doctor/multi-service API if multiple doctors or services selected
-      const useMultiAPI = repeatAppointment || selectedDoctorIds.length > 0 || selectedServiceIds.length > 0 || Boolean(selectedServiceId);
-      
       if (useMultiAPI) {
-        // Use new multi-appointment creation API
-        // Convert calendar IDs to provider IDs
-        const providerIds = selectedDoctorIds.length > 0 
-          ? selectedDoctorIds.map(calId => {
-              const calendar = doctorCalendars.find(c => c.id === calId);
-              return calendar?.providerId ?? calId;
-            }).filter(Boolean)
-          : (createDoctorCalendarId ? [doctorCalendars.find(c => c.id === createDoctorCalendarId)?.providerId ?? createDoctorCalendarId].filter(Boolean) : []);
-        
-        const serviceIds = selectedServiceIds.length > 0 
-          ? selectedServiceIds 
-          : (selectedServiceId ? [selectedServiceId] : []);
-        
-        const { data: sessionData } = await supabaseClient.auth.getSession();
-        const accessToken = sessionData.session?.access_token;
-        if (!accessToken) {
-          setCreateError('Your session has expired. Please sign in again.');
-          setSavingCreate(false);
-          return;
-        }
-
         const response = await fetch('/api/appointments/create-multi', {
           method: 'POST',
           headers: {
@@ -3338,29 +3384,22 @@ export default function CalendarPage() {
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
-            patientId: createNoPatient ? null : createPatientId,
-            noPatient: createNoPatient,
-            providerIds,
-            serviceIds,
-            serviceQuantities,
-            customServiceText: serviceIds.length === 0 ? serviceSearch.trim() : undefined,
-            startTime: startIso,
-            endTime: endIso,
-            occurrences: repeatAppointment ? occurrences : undefined,
-            location: draftLocation || null,
-            status: 'scheduled',
-            category: appointmentCategory && appointmentCategory !== 'No selection' ? appointmentCategory : null,
-            channel: bookingStatus || null,
-            notes: draftDescription.trim() || null,
-            allowOverlap: allowPractitionerOverlap,
-            allowResourceOverlap,
-            machineIds: selectedMachineIds.length > 0 ? selectedMachineIds : null,
+            ...multiRequestBody,
             sendEmailNotification: shouldSendEmailNotification,
           })
         });
         
         if (!response.ok) {
           const errorData = await response.json();
+          if (response.status === 409 && errorData.code === 'OVERLAP_CONFIRMATION_REQUIRED') {
+            setOverlapConfirmation({
+              type: "combined",
+              allowPractitionerOverlap: true,
+              allowResourceOverlap: true,
+            });
+            setSavingCreate(false);
+            return;
+          }
           if (response.status === 409 && errorData.code === 'PRACTITIONER_UNAVAILABLE') {
             setOverlapConfirmation({
               type: "practitioner",
@@ -3548,6 +3587,7 @@ export default function CalendarPage() {
       resetCreateRecurrence();
       setCreateError(null);
       setOverlapConfirmation(null);
+      duplicateEmailDecisionRef.current = null;
       setCreateDoctorCalendarId("");
       // Reset multi-select state
       setSelectedDoctorIds([]);
@@ -8078,14 +8118,19 @@ export default function CalendarPage() {
               {overlapConfirmation ? (
                 <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-900">
                   <p>
-                    {overlapConfirmation.type === "practitioner"
-                      ? t("modal.practitionerOverlapWarning")
-                      : t("modal.resourceUnavailableWarning")}
+                    {overlapConfirmation.type === "combined"
+                      ? t("modal.combinedOverlapWarning")
+                      : overlapConfirmation.type === "practitioner"
+                        ? t("modal.practitionerOverlapWarning")
+                        : t("modal.resourceUnavailableWarning")}
                   </p>
                   <div className="mt-2 flex justify-end gap-2">
                     <button
                       type="button"
-                      onClick={() => setOverlapConfirmation(null)}
+                      onClick={() => {
+                        setOverlapConfirmation(null);
+                        duplicateEmailDecisionRef.current = null;
+                      }}
                       className="rounded-full border border-amber-300 bg-white px-3 py-1 font-medium hover:bg-amber-100"
                     >
                       {tCommon("cancel")}

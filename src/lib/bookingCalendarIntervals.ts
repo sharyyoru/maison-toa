@@ -22,9 +22,9 @@ export type BookingCalendarIntervals = {
 const minutesToMs = (minutes: number) => minutes * 60_000;
 
 /**
- * Builds every interval from the time selected by the patient. The selected
- * time always anchors the additional calendar. With an end-positioned rule,
- * the clinical appointment is shifted to finish with that reservation.
+ * Builds every interval from the selected appointment time. The selected time
+ * always anchors the doctor's appointment. An end-positioned secondary
+ * reservation is shifted earlier so that it ends with the doctor appointment.
  */
 export function getBookingCalendarIntervals({
   bookingStart,
@@ -36,21 +36,25 @@ export function getBookingCalendarIntervals({
 }: BookingCalendarIntervalParams): BookingCalendarIntervals {
   const hasSecondary = Number.isFinite(secondaryDurationMinutes) && Number(secondaryDurationMinutes) > 0;
   const secondaryMinutes = hasSecondary ? Number(secondaryDurationMinutes) : 0;
-  const doctorOffsetMinutes = hasSecondary && secondaryPosition === "end"
-    ? secondaryMinutes - primaryDurationMinutes
-    : 0;
-  const doctorServiceStart = new Date(bookingStart.getTime() + minutesToMs(doctorOffsetMinutes));
+  const doctorServiceStart = new Date(bookingStart);
   const doctorServiceEnd = new Date(doctorServiceStart.getTime() + minutesToMs(primaryDurationMinutes));
+  const secondaryStart = hasSecondary
+    ? secondaryPosition === "end"
+      ? new Date(doctorServiceEnd.getTime() - minutesToMs(secondaryMinutes))
+      : new Date(bookingStart)
+    : null;
 
   return {
-    patientStart: new Date(bookingStart),
+    patientStart: secondaryPosition === "end" && secondaryStart
+      ? new Date(secondaryStart)
+      : new Date(bookingStart),
     doctorServiceStart,
     doctorServiceEnd,
     doctorCalendarStart: new Date(doctorServiceStart.getTime() - minutesToMs(bufferBeforeMinutes)),
     doctorCalendarEnd: new Date(doctorServiceEnd.getTime() + minutesToMs(bufferAfterMinutes)),
-    secondaryCalendarStart: hasSecondary ? new Date(bookingStart) : null,
-    secondaryCalendarEnd: hasSecondary
-      ? new Date(bookingStart.getTime() + minutesToMs(secondaryMinutes))
+    secondaryCalendarStart: secondaryStart,
+    secondaryCalendarEnd: secondaryStart
+      ? new Date(secondaryStart.getTime() + minutesToMs(secondaryMinutes))
       : null,
   };
 }

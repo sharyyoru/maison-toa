@@ -45,6 +45,7 @@ export async function POST(request: Request) {
       notes,
       allowOverlap = false,
       allowResourceOverlap = false,
+      checkOnly = false,
       machineIds = null,
       sendEmailNotification = false,
     } = await request.json();
@@ -183,6 +184,7 @@ export async function POST(request: Request) {
     const mirrorDurationMinutes = mirroredService?.mirror_duration_minutes ?? null;
     const mirrorPosition = mirroredService?.mirror_position ?? 'start';
     let mirrorProviderName: string | null = null;
+    let hasMirrorConflict = false;
 
     const getIntervals = (occurrence: { startTime: string; endTime: string }) => {
       const bookingStart = new Date(occurrence.startTime);
@@ -224,14 +226,13 @@ export async function POST(request: Request) {
       }
       mirrorProviderName = mirrorProvider.name;
 
-      const earliestMirrorStart = appointmentTimes.reduce(
-        (earliest, occurrence) => occurrence.startTime < earliest ? occurrence.startTime : earliest,
-        appointmentTimes[0].startTime,
-      );
-      const latestMirrorEnd = appointmentTimes.reduce((latest, occurrence) => {
-        const end = new Date(new Date(occurrence.startTime).getTime() + mirrorDurationMinutes * 60 * 1000).toISOString();
-        return end > latest ? end : latest;
-      }, new Date(new Date(appointmentTimes[0].startTime).getTime() + mirrorDurationMinutes * 60 * 1000).toISOString());
+      const mirrorIntervals = appointmentTimes.map((occurrence) => getIntervals(occurrence));
+      const earliestMirrorStart = mirrorIntervals.reduce((earliest, intervals) =>
+        intervals.secondaryCalendarStart! < earliest ? intervals.secondaryCalendarStart! : earliest,
+      mirrorIntervals[0].secondaryCalendarStart!).toISOString();
+      const latestMirrorEnd = mirrorIntervals.reduce((latest, intervals) =>
+        intervals.secondaryCalendarEnd! > latest ? intervals.secondaryCalendarEnd! : latest,
+      mirrorIntervals[0].secondaryCalendarEnd!).toISOString();
 
       const { data: possibleConflicts, error: mirrorConflictError } = await supabase
         .from('appointments')
@@ -245,22 +246,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Failed to verify the mirrored calendar.' }, { status: 500 });
       }
 
-      const hasMirrorConflict = (possibleConflicts || []).some((existing) =>
-        appointmentTimes.some((occurrence) => {
-          const mirrorEnd = new Date(new Date(occurrence.startTime).getTime() + mirrorDurationMinutes * 60 * 1000);
-          return new Date(existing.start_time) < mirrorEnd && new Date(existing.end_time) > new Date(occurrence.startTime);
-        }),
+      hasMirrorConflict = (possibleConflicts || []).some((existing) =>
+        mirrorIntervals.some((intervals) =>
+          new Date(existing.start_time) < intervals.secondaryCalendarEnd!
+            && new Date(existing.end_time) > intervals.secondaryCalendarStart!,
+        ),
       );
-
-      if (hasMirrorConflict && !allowResourceOverlap) {
-        return NextResponse.json(
-          {
-            error: 'One of the required resources is not available at this time.',
-            code: 'REQUIRED_RESOURCE_UNAVAILABLE',
-          },
-          { status: 409 },
-        );
-      }
     }
 
     const { data: patient } = !noPatient && patientId
@@ -273,6 +264,8 @@ export async function POST(request: Request) {
 
     // Internal users must explicitly confirm a practitioner overlap. This endpoint is
     // authenticated above; public/online booking flows must never send this override.
+    let hasPractitionerConflict = false;
+    let conflictingNames = '';
     if (!allowOverlap) {
       const doctorIntervals = appointmentTimes.map((appointmentTime) => ({
         appointmentTime,
@@ -298,19 +291,41 @@ export async function POST(request: Request) {
           && new Date(existing.end_time) > intervals.doctorCalendarStart
       ));
       if (exactOverlaps.length > 0) {
+        hasPractitionerConflict = true;
         const conflictingProviderIds = new Set(exactOverlaps.map((a: { provider_id: string }) => a.provider_id));
-        const conflictingNames = (providers || [])
+        conflictingNames = (providers || [])
           .filter((p: { id: string }) => conflictingProviderIds.has(p.id))
           .map((p: { name: string }) => p.name)
           .join(', ');
-        return NextResponse.json(
-          {
-            error: `Scheduling conflict: ${conflictingNames} already has an appointment during this time.`,
-            code: 'PRACTITIONER_UNAVAILABLE',
-          },
-          { status: 409 }
-        );
       }
+    }
+
+    const unapprovedConflicts = [
+      ...(hasPractitionerConflict && !allowOverlap ? ['practitioner'] : []),
+      ...(hasMirrorConflict && !allowResourceOverlap ? ['resource'] : []),
+    ];
+    if (unapprovedConflicts.length > 0) {
+      const hasBothConflicts = unapprovedConflicts.length === 2;
+      return NextResponse.json(
+        {
+          error: hasBothConflicts
+            ? 'The practitioner and one of the required resources are not available at this time.'
+            : unapprovedConflicts[0] === 'practitioner'
+              ? `Scheduling conflict: ${conflictingNames} already has an appointment during this time.`
+              : 'One of the required resources is not available at this time.',
+          code: hasBothConflicts
+            ? 'OVERLAP_CONFIRMATION_REQUIRED'
+            : unapprovedConflicts[0] === 'practitioner'
+              ? 'PRACTITIONER_UNAVAILABLE'
+              : 'REQUIRED_RESOURCE_UNAVAILABLE',
+          conflicts: unapprovedConflicts,
+        },
+        { status: 409 },
+      );
+    }
+
+    if (checkOnly) {
+      return NextResponse.json({ success: true, conflicts: [] });
     }
 
     // Create each logical occurrence and at most one linked mirror for it.
@@ -351,7 +366,7 @@ export async function POST(request: Request) {
           ...(serviceIds && serviceIds.length > 0 ? { service_ids: serviceIds } : {}),
           ...(machineIds && machineIds.length > 0 ? { machine_ids: machineIds } : {}),
           tracking_params: {
-            patient_appointment_start: appointmentTime.startTime,
+            patient_appointment_start: intervals.patientStart.toISOString(),
             appointment_duration_minutes: String(doctorDurationMinutes),
             doctor_calendar_position: mirrorPosition,
           },
@@ -380,7 +395,7 @@ export async function POST(request: Request) {
           machine_ids: [],
           linked_parent_appointment_id: anchorAppointmentId,
           tracking_params: {
-            patient_appointment_start: appointmentTime.startTime,
+            patient_appointment_start: intervals.patientStart.toISOString(),
             appointment_duration_minutes: String(doctorDurationMinutes),
             doctor_calendar_position: mirrorPosition,
           },

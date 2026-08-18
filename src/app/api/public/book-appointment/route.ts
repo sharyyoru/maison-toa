@@ -354,6 +354,7 @@ export async function POST(request: Request) {
       secondaryDurationMinutes: secondaryCalendar?.durationMinutes,
       secondaryPosition: secondaryCalendar?.position,
     });
+    const patientAppointmentDate = calendarIntervals.patientStart;
     const sameCalendar = secondaryCalendar?.providerId === providerId;
     const apptStart = sameCalendar && calendarIntervals.secondaryCalendarStart
       ? new Date(Math.min(calendarIntervals.doctorCalendarStart.getTime(), calendarIntervals.secondaryCalendarStart.getTime()))
@@ -695,8 +696,8 @@ export async function POST(request: Request) {
       patient_id: patientId,
       deal_id: deal.id,
       provider_id: providerId,
-      // The internal calendar spans the hidden pre-appointment buffer. Patient
-      // communications continue to use appointmentDateObj (the selected time).
+      // The doctor's calendar remains anchored to the selected time. Patient
+      // communications use the earlier mirrored-resource start when applicable.
       start_time: apptStart.toISOString(),
       end_time: apptEnd.toISOString(),
       reason,
@@ -710,7 +711,7 @@ export async function POST(request: Request) {
       booking_treatment_id: bookingContext.treatmentId,
       tracking_params: {
         ...(trackingParams || {}),
-        patient_appointment_start: appointmentDateObj.toISOString(),
+        patient_appointment_start: patientAppointmentDate.toISOString(),
         appointment_duration_minutes: String(durationMinutes),
         buffer_before_minutes: String(bookingContext.bufferBeforeMinutes),
         buffer_after_minutes: String(bookingContext.bufferAfterMinutes),
@@ -740,7 +741,7 @@ export async function POST(request: Request) {
         linked_parent_appointment_id: primaryAppointmentId,
         tracking_params: {
           ...(trackingParams || {}),
-          patient_appointment_start: appointmentDateObj.toISOString(),
+          patient_appointment_start: patientAppointmentDate.toISOString(),
           doctor_calendar_position: secondaryCalendar.position,
         },
       });
@@ -865,7 +866,7 @@ export async function POST(request: Request) {
             gender: patientGender,
           },
           appointment: {
-            date: appointmentDateObj.toISOString(),
+            date: patientAppointmentDate.toISOString(),
             service,
             doctorName,
             doctorEmail,
@@ -896,7 +897,7 @@ export async function POST(request: Request) {
           lastName,
           patientGender,
           doctorName,
-          appointmentDateObj,
+          patientAppointmentDate,
           service,
           location || null,
           language,
@@ -933,7 +934,7 @@ export async function POST(request: Request) {
     }
 
     let reminderScheduled = false;
-    const reminderDate = new Date(appointmentDateObj);
+    const reminderDate = new Date(patientAppointmentDate);
     reminderDate.setDate(reminderDate.getDate() - 1);
 
     if (!handledByWorkflow && reminderDate.getTime() > Date.now()) {
@@ -941,7 +942,7 @@ export async function POST(request: Request) {
         const reminderHtml = generatePatientReminderEmail(
           lastName,
           patientGender,
-          appointmentDateObj,
+          patientAppointmentDate,
           service,
           language,
           appointment.id

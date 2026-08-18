@@ -197,6 +197,7 @@
       },
       "conflict": "CONFLICT",
       "practitionerOverlapWarning": "This practitioner already has an appointment at this time. Do you still want to book this appointment?",
+      "combinedOverlapWarning": "This practitioner and one of the required resources already have an appointment at this time. Do you still want to book this appointment?",
       "resourceUnavailableWarning": "One of the required resources is not available at this time.",
       "confirmOverlap": "Confirm anyway",
       "consultationFor": "Consultation for {name}"

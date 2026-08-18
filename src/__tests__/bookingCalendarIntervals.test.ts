@@ -14,6 +14,7 @@ assert.equal(beginning.doctorServiceStart.toISOString(), "2026-07-22T09:30:00.00
 assert.equal(beginning.doctorServiceEnd.toISOString(), "2026-07-22T09:50:00.000Z");
 assert.equal(beginning.secondaryCalendarStart?.toISOString(), "2026-07-22T09:30:00.000Z");
 assert.equal(beginning.secondaryCalendarEnd?.toISOString(), "2026-07-22T10:30:00.000Z");
+assert.equal(beginning.patientStart.toISOString(), "2026-07-22T09:30:00.000Z");
 
 const ending = getBookingCalendarIntervals({
   bookingStart,
@@ -21,10 +22,11 @@ const ending = getBookingCalendarIntervals({
   secondaryDurationMinutes: 60,
   secondaryPosition: "end",
 });
-assert.equal(ending.doctorServiceStart.toISOString(), "2026-07-22T10:10:00.000Z");
-assert.equal(ending.doctorServiceEnd.toISOString(), "2026-07-22T10:30:00.000Z");
-assert.equal(ending.secondaryCalendarStart?.toISOString(), "2026-07-22T09:30:00.000Z");
-assert.equal(ending.secondaryCalendarEnd?.toISOString(), "2026-07-22T10:30:00.000Z");
+assert.equal(ending.doctorServiceStart.toISOString(), "2026-07-22T09:30:00.000Z");
+assert.equal(ending.doctorServiceEnd.toISOString(), "2026-07-22T09:50:00.000Z");
+assert.equal(ending.secondaryCalendarStart?.toISOString(), "2026-07-22T08:50:00.000Z");
+assert.equal(ending.secondaryCalendarEnd?.toISOString(), "2026-07-22T09:50:00.000Z");
+assert.equal(ending.patientStart.toISOString(), "2026-07-22T08:50:00.000Z");
 
 const manualServiceEnding = getBookingCalendarIntervals({
   bookingStart,
@@ -32,10 +34,10 @@ const manualServiceEnding = getBookingCalendarIntervals({
   secondaryDurationMinutes: 75,
   secondaryPosition: "end",
 });
-assert.equal(manualServiceEnding.doctorServiceStart.toISOString(), "2026-07-22T10:25:00.000Z");
-assert.equal(manualServiceEnding.doctorServiceEnd.toISOString(), "2026-07-22T10:45:00.000Z");
-assert.equal(manualServiceEnding.secondaryCalendarStart?.toISOString(), "2026-07-22T09:30:00.000Z");
-assert.equal(manualServiceEnding.secondaryCalendarEnd?.toISOString(), "2026-07-22T10:45:00.000Z");
+assert.equal(manualServiceEnding.doctorServiceStart.toISOString(), "2026-07-22T09:30:00.000Z");
+assert.equal(manualServiceEnding.doctorServiceEnd.toISOString(), "2026-07-22T09:50:00.000Z");
+assert.equal(manualServiceEnding.secondaryCalendarStart?.toISOString(), "2026-07-22T08:35:00.000Z");
+assert.equal(manualServiceEnding.secondaryCalendarEnd?.toISOString(), "2026-07-22T09:50:00.000Z");
 
 const bufferedEnding = getBookingCalendarIntervals({
   bookingStart,
@@ -45,18 +47,18 @@ const bufferedEnding = getBookingCalendarIntervals({
   secondaryDurationMinutes: 60,
   secondaryPosition: "end",
 });
-assert.equal(bufferedEnding.doctorCalendarStart.toISOString(), "2026-07-22T10:00:00.000Z");
-assert.equal(bufferedEnding.doctorCalendarEnd.toISOString(), "2026-07-22T10:35:00.000Z");
+assert.equal(bufferedEnding.doctorCalendarStart.toISOString(), "2026-07-22T09:20:00.000Z");
+assert.equal(bufferedEnding.doctorCalendarEnd.toISOString(), "2026-07-22T09:55:00.000Z");
 
 assert.equal(fitsWithinDailyAvailability(
   "09:30",
-  { start: "10:00", end: "10:30" },
-  { durationMinutes: 20, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, startOffsetMinutes: 40 },
+  { start: "09:30", end: "10:30" },
+  { durationMinutes: 20, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, startOffsetMinutes: 0 },
 ), true);
 assert.equal(fitsWithinDailyAvailability(
   "09:30",
-  { start: "10:15", end: "11:00" },
-  { durationMinutes: 20, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, startOffsetMinutes: 40 },
+  { start: "09:45", end: "11:00" },
+  { durationMinutes: 20, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, startOffsetMinutes: 0 },
 ), false);
 
 console.log("Booking calendar interval tests passed");
