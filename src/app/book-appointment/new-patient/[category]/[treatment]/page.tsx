@@ -6,9 +6,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
-import { findMultipleEarliestSlots, EarliestDoctorResult } from "@/lib/bookingEarliestDoctor";
 import { getLocalizedBookingName } from "@/lib/bookingLocalization";
 import { DescriptionReadMore } from "@/components/booking/DescriptionReadMore";
+import { EarliestSlotPicker } from "@/components/booking/EarliestSlotPicker";
 import { pushToDataLayer } from "@/components/GoogleTagManager";
 
 interface BookingDoctor {
@@ -26,6 +26,8 @@ interface Treatment {
   name: string;
   name_en?: string | null;
   duration_minutes?: number;
+  display_price?: number | null;
+  display_duration_minutes?: number | null;
 }
 
 export default function SelectDoctorPage() {
@@ -38,11 +40,6 @@ export default function SelectDoctorPage() {
   const [treatment, setTreatment] = useState<Treatment | null>(null);
   const [doctors, setDoctors] = useState<BookingDoctor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [autoSelecting, setAutoSelecting] = useState(false);
-  const [autoSelectError, setAutoSelectError] = useState<string | null>(null);
-  const [earliestSlots, setEarliestSlots] = useState<EarliestDoctorResult[]>([]);
-  const [showSlotPicker, setShowSlotPicker] = useState(false);
-  const [selectedDoctorSlug, setSelectedDoctorSlug] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -74,66 +71,16 @@ export default function SelectDoctorPage() {
     fetchData();
   }, [treatmentId, categorySlug]);
 
-  const handleFindEarliestSlots = async () => {
-    setAutoSelecting(true);
-    setAutoSelectError(null);
-    setEarliestSlots([]);
-    setSelectedDoctorSlug(null);
-
-    try {
-      const slots = await findMultipleEarliestSlots(
-        doctors,
-        treatment?.duration_minutes ?? 60,
-        15,
-        90,
-        treatmentId,
-        categorySlug,
-        "new",
-      );
-      if (slots.length === 0) {
-        setAutoSelectError(t("doctor.noEarliestAvailable"));
-        return;
-      }
-
-      setEarliestSlots(slots);
-      setSelectedDoctorSlug(slots[0].doctor.slug);
-      setShowSlotPicker(true);
-    } catch (error) {
-      console.error("Failed to find earliest slots:", error);
-      setAutoSelectError(t("doctor.autoSelectFailed"));
-    } finally {
-      setAutoSelecting(false);
-    }
-  };
-
-  const handleSelectSlot = (slot: EarliestDoctorResult) => {
+  const handleSelectEarliestSlot = (doctorSlug: string, date: string, time: string) => {
+    const doctor = doctors.find((d) => d.slug === doctorSlug);
     pushToDataLayer("SELECT_AGENDA", {
-      agenda_name: slot.doctor.name,
-      practitioner_name: slot.doctor.name,
-      practitioner_id: slot.doctor.slug,
+      agenda_name: doctor?.name,
+      practitioner_name: doctor?.name,
+      practitioner_id: doctorSlug,
     });
     // Navigate to doctor page with pre-selected date and time
-    router.push(`/book-appointment/new-patient/${categorySlug}/${treatmentId}/${slot.doctor.slug}?date=${slot.date}&time=${slot.time}`);
+    router.push(`/book-appointment/new-patient/${categorySlug}/${treatmentId}/${doctorSlug}?date=${date}&time=${time}`);
   };
-
-  const formatSlotDate = (dateStr: string) => {
-    const date = new Date(dateStr + "T00:00:00");
-    return date.toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-    });
-  };
-
-  const earliestSlotsByDoctor = doctors
-    .map((doctor) => ({
-      doctor,
-      slots: earliestSlots.filter((slot) => slot.doctor.slug === doctor.slug),
-    }))
-    .filter((group) => group.slots.length > 0);
-
-  const activeDoctorSlug = selectedDoctorSlug ?? earliestSlotsByDoctor[0]?.doctor.slug;
-  const activeSlotGroup = earliestSlotsByDoctor.find((group) => group.doctor.slug === activeDoctorSlug);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 relative">
@@ -299,114 +246,14 @@ export default function SelectDoctorPage() {
               ))}
             </div>
             {/* Earliest Slots Button and Picker */}
-            <div className="mt-8 flex flex-col items-center gap-4">
-              {!showSlotPicker ? (
-                <button
-                  type="button"
-                  onClick={handleFindEarliestSlots}
-                  disabled={autoSelecting || doctors.length === 0}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {autoSelecting && (
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  )}
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  {autoSelecting ? t("doctor.findingEarliest") : t("doctor.autoSelectEarliest")}
-                </button>
-              ) : (
-                <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-slate-900">
-                      {t("doctor.earliestSlotsTitle")}
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => setShowSlotPicker(false)}
-                      className="text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      {earliestSlotsByDoctor.map(({ doctor, slots }) => {
-                        const selected = doctor.slug === activeDoctorSlug;
-
-                        return (
-                          <button
-                            key={doctor.slug}
-                            type="button"
-                            onClick={() => setSelectedDoctorSlug(doctor.slug)}
-                            className={`w-full flex items-center justify-between gap-4 rounded-xl border p-4 text-left transition-all ${
-                              selected
-                                ? "border-slate-900 bg-slate-50"
-                                : "border-slate-200 hover:border-slate-400 hover:bg-slate-50"
-                            }`}
-                          >
-                            <div>
-                              <p className="font-medium text-slate-900">{doctor.name}</p>
-                              <p className="text-sm text-slate-500">{doctor.specialty}</p>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-slate-500">
-                              <span>{slots.length} {slots.length === 1 ? t("booking.slot") : t("booking.slots")}</span>
-                              <svg className={`w-5 h-5 transition-transform ${selected ? "rotate-90 text-slate-900" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {activeSlotGroup && (
-                      <div className="max-h-[46vh] space-y-2 overflow-y-auto pr-1">
-                        {activeSlotGroup.slots.map((slot, index) => (
-                          <button
-                            key={`${slot.doctor.slug}-${slot.date}-${slot.time}-${index}`}
-                            type="button"
-                            onClick={() => handleSelectSlot(slot)}
-                            className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition-all group"
-                          >
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
-                                <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                              </div>
-                              <div className="text-left">
-                                <p className="font-medium text-slate-900">
-                                  {formatSlotDate(slot.date)} • {slot.time}
-                                </p>
-                                <p className="text-sm text-slate-500">{activeSlotGroup.doctor.name}</p>
-                              </div>
-                            </div>
-                            <svg className="w-5 h-5 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-slate-100">
-                    <button
-                      type="button"
-                      onClick={() => setShowSlotPicker(false)}
-                      className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
-                    >
-                      ← {t("doctor.backToAllDoctors")}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {autoSelectError && (
-                <p className="text-center text-sm text-amber-700">{autoSelectError}</p>
-              )}
-            </div>
+            <EarliestSlotPicker
+              doctors={doctors}
+              treatment={treatment}
+              treatmentId={treatmentId}
+              categorySlug={categorySlug}
+              patientType="new"
+              onSelectSlot={handleSelectEarliestSlot}
+            />
           </>
         )}
       </main>
