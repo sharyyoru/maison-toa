@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendEmail } from "@/lib/email";
+import { generateInvoiceEmailContent } from "@/lib/invoiceEmailContent";
 
 // Map documentType to the corresponding pdf_path column
 const DOC_TYPE_COLUMN: Record<string, string> = {
@@ -76,46 +77,17 @@ export async function POST(request: NextRequest) {
 
     // Build email content
     const providerName = invoice.provider_name || "Maison TOA";
-    const isPaid = invoice.status === "PAID" || invoice.status === "OVERPAID";
-    const isPartial = invoice.status === "PARTIAL_PAID" || invoice.status === "PARTIAL_LOSS";
-    const totalAmt = Number(invoice.total_amount) || 0;
-    const paidAmt = Number(invoice.paid_amount) || 0;
-
-    const isReminder = documentType === "reminder";
-    const isReceipt = documentType === "receipt" || isPaid;
-    // A reminder should always chase what's actually still owed, not the
-    // original invoice total — otherwise a patient who already paid a
-    // deposit gets asked to pay the full amount all over again.
-    const remainingAmt = Math.max(totalAmt - paidAmt, 0);
-    let subject = `Invoice ${invoice.invoice_number} — ${providerName}`;
-    if (isReceipt) subject = `Receipt ${invoice.invoice_number} — ${providerName}`;
-    else if (isReminder) subject = `Rappel de paiement — Facture ${invoice.invoice_number} — ${providerName}`;
-    else if (isPartial) subject = `Invoice ${invoice.invoice_number} (Partial Payment) — ${providerName}`;
-
-    const docLabel = isReceipt ? "Payment Receipt" : isReminder ? "Rappel de paiement" : "Invoice";
-    const bodyHtml = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #1e293b; font-size: 18px; margin-bottom: 16px;">${docLabel} ${invoice.invoice_number}</h2>
-        <p style="color: #475569; font-size: 14px; line-height: 1.6;">${isReminder ? "Bonjour Madame / Monsieur" : `Dear ${patientName}`},</p>
-        <p style="color: #475569; font-size: 14px; line-height: 1.6;">
-          ${isReceipt
-            ? `Please find attached the receipt for your fully paid invoice of <strong>CHF ${totalAmt.toFixed(2)}</strong>.`
-            : isReminder
-              ? paidAmt > 0
-                ? `Veuillez trouver ci-joint un rappel de paiement concernant la facture <strong>${invoice.invoice_number}</strong>. Montant déjà réglé : <strong>CHF ${paidAmt.toFixed(2)}</strong>. Solde restant dû : <strong>CHF ${remainingAmt.toFixed(2)}</strong>.<br/><br/>Nous vous remercions de bien vouloir procéder au règlement du solde dans les meilleurs délais.`
-                : `Veuillez trouver ci-joint un rappel de paiement concernant la facture <strong>${invoice.invoice_number}</strong> d'un montant de <strong>CHF ${remainingAmt.toFixed(2)}</strong>.<br/><br/>Nous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.`
-              : isPartial
-                ? `Please find attached your invoice. Amount paid so far: <strong>CHF ${paidAmt.toFixed(2)}</strong>. Remaining balance: <strong>CHF ${remainingAmt.toFixed(2)}</strong>.`
-                : `Please find attached your invoice for <strong>CHF ${totalAmt.toFixed(2)}</strong>.`
-          }
-        </p>
-        <p style="color: #475569; font-size: 14px; line-height: 1.6;">${isReminder ? "Nous vous remercions de votre confiance." : "Thank you for your trust."}</p>
-        <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">${isReminder ? "Meilleures salutations" : "Kind regards"},<br/>${providerName}</p>
-      </div>
-    `;
+    const { subject, html: bodyHtml, pdfFilePrefix } = generateInvoiceEmailContent({
+      invoiceNumber: invoice.invoice_number,
+      providerName,
+      patientName,
+      documentType,
+      status: invoice.status,
+      totalAmount: Number(invoice.total_amount) || 0,
+      paidAmount: Number(invoice.paid_amount) || 0,
+    });
 
     // Convert PDF blob to base64 for Resend attachment
-    const pdfFilePrefix = isReceipt ? "receipt" : isReminder ? "reminder" : documentType === "tp" ? "invoice-tp" : "invoice";
     const pdfFileName = `${pdfFilePrefix}-${invoice.invoice_number}.pdf`;
     const pdfArrayBuffer = await pdfBlob.arrayBuffer();
     const pdfBase64 = Buffer.from(pdfArrayBuffer).toString("base64");
