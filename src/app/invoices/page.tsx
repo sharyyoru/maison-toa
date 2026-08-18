@@ -55,6 +55,14 @@ type InvoiceRow = {
   // BILL-004.2: manual opt-out — no further reminder letters/emails should
   // be generated for this invoice once set.
   stop_reminders: boolean;
+  // Populated server-side by the `get_invoices_page` RPC (see
+  // supabase/migrations/20260822_invoices_page_rpc.sql) — the latest
+  // MediData submission status/response and the latest failed async job
+  // for this invoice, computed in SQL instead of two full-table lookups.
+  latest_insurance_status: string | null;
+  latest_insurance_created_at: string | null;
+  latest_insurance_response_date: string | null;
+  latest_job_issue: "pdf_failed" | "insurance_failed" | null;
 };
 
 type PatientInfo = { id: string; first_name: string | null; last_name: string | null; email: string | null };
@@ -152,13 +160,28 @@ export default function InvoicesPage() {
   const { user } = useAuth();
   const pdfNotifications = usePDFJobNotifications();
   const insuranceNotifications = useInsuranceSubmissionNotifications();
+  // Holds only the current page's rows — filtering, search, and pagination
+  // are all done server-side by the `get_invoices_page` RPC (see
+  // supabase/migrations/20260822_invoices_page_rpc.sql). Previously this
+  // held every non-archived invoice (47k+ rows) fetched in one unbounded
+  // query, which was both slow (tens of MB per load) and silently
+  // truncated at PostgREST's 10,000-row cap.
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [patientsById, setPatientsById] = useState<PatientsById>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Totals across the ENTIRE filtered set (not just the current page) —
+  // computed server-side alongside the page query.
+  const [totalCount, setTotalCount] = useState(0);
+  const [summary, setSummary] = useState({ total: 0, paid: 0, unpaid: 0, count: 0 });
+  const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
+
   // Filters
   const [search, setSearch] = useState("");
+  // Debounced ~400ms after typing stops, so we don't fire a server round
+  // trip on every keystroke.
+  const [searchDebounced, setSearchDebounced] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>("all");
   const [billingTypeFilter, setBillingTypeFilter] = useState<string>("all");
@@ -168,14 +191,10 @@ export default function InvoicesPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  type LatestInsurance = {
-    status: string;
-    created_at: string;
-    has_response: boolean;
-  };
-  type JobIssue = "pdf_failed" | "insurance_failed";
-  const [latestInsByInvoice, setLatestInsByInvoice] = useState<Record<string, LatestInsurance>>({});
-  const [latestJobIssueByInvoice, setLatestJobIssueByInvoice] = useState<Record<string, JobIssue>>({});
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchDebounced(search), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Pagination
   const ROWS_PER_PAGE = 50;
@@ -227,6 +246,25 @@ export default function InvoicesPage() {
   // Load data
   // ---------------------------------------------------------------------------
 
+  // Bumping this re-runs the page query below in place (used by the
+  // realtime subscription and by manual "invoice was updated" actions).
+  const [reloadVersion, setReloadVersion] = useState(0);
+
+  const invoiceFilterParams = useMemo(
+    () => ({
+      p_search: searchDebounced.trim() || null,
+      p_status: statusFilter,
+      p_payment_method: paymentMethodFilter,
+      p_billing_type: billingTypeFilter,
+      p_date_from: dateFrom || null,
+      p_date_to: dateTo || null,
+      p_insurance_filter: insuranceFilter,
+      p_job_issue_filter: jobIssueFilter,
+      p_reminder_filter: reminderFilter,
+    }),
+    [searchDebounced, statusFilter, paymentMethodFilter, billingTypeFilter, dateFrom, dateTo, insuranceFilter, jobIssueFilter, reminderFilter],
+  );
+
   useEffect(() => {
     let isMounted = true;
 
@@ -235,102 +273,71 @@ export default function InvoicesPage() {
         setLoading(true);
         setError(null);
 
-        const { data, error: err } = await supabaseClient
-          .from("invoices")
-          .select("id, patient_id, invoice_number, invoice_date, due_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, paid_amount, status, is_complimentary, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, pdf_generated_at, updated_at, created_by_user_id, created_by_name, is_archived, health_insurance_law, billing_type, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at, medidata_processed_at, medidata_processed_by, stop_reminders")
-          .eq("is_archived", false)
-          .is("parent_invoice_id", null)
-          .order("invoice_date", { ascending: false });
+        // Filtering, search and pagination all happen server-side in the
+        // `get_invoices_page` RPC (see supabase/migrations/20260822_invoices_page_rpc.sql).
+        // Previously this page fetched every non-archived invoice (47k+ rows)
+        // in one unbounded query — slow (tens of MB per load) and silently
+        // truncated at PostgREST's 10,000-row cap.
+        const { data, error: rpcError } = await supabaseClient.rpc("get_invoices_page", {
+          ...invoiceFilterParams,
+          p_page: page,
+          p_limit: ROWS_PER_PAGE,
+        });
 
         if (!isMounted) return;
-        if (err || !data) { setError(err?.message ?? "Failed to load"); setInvoices([]); setLoading(false); return; }
+        if (rpcError || !data) {
+          setError(rpcError?.message ?? "Failed to load invoices.");
+          setInvoices([]);
+          setTotalCount(0);
+          setLoading(false);
+          return;
+        }
 
-        const rows = data as InvoiceRow[];
+        const rows = (data.rows ?? []) as InvoiceRow[];
         setInvoices(rows);
+        setTotalCount(Number(data.totalCount) || 0);
+        setSummary({
+          count: Number(data.summary?.count) || 0,
+          total: Number(data.summary?.total) || 0,
+          paid: Number(data.summary?.paid) || 0,
+          unpaid: Number(data.summary?.unpaid) || 0,
+        });
+        setPaymentMethods(((data.paymentMethods ?? []) as string[]).slice().sort());
 
-        // Fetch patients in batches
-        const patientIds = Array.from(new Set(rows.map(r => r.patient_id).filter(Boolean) as string[]));
+        // Only fetch names for patients referenced on this page (at most
+        // ROWS_PER_PAGE ids) instead of the whole patients table.
+        const patientIds = Array.from(new Set(rows.map((r) => r.patient_id).filter(Boolean) as string[]));
         if (patientIds.length > 0) {
-          const map: PatientsById = {};
-          const BATCH = 50;
-          for (let i = 0; i < patientIds.length; i += BATCH) {
-            if (!isMounted) return;
-            const batch = patientIds.slice(i, i + BATCH);
-            const { data: pd } = await supabaseClient.from("patients").select("id, first_name, last_name, email").in("id", batch);
-            if (pd) for (const p of pd as any[]) map[p.id] = { id: p.id, first_name: p.first_name, last_name: p.last_name, email: p.email };
+          const { data: pd } = await supabaseClient
+            .from("patients")
+            .select("id, first_name, last_name, email")
+            .in("id", patientIds);
+          if (isMounted && pd) {
+            setPatientsById((prev) => {
+              const next = { ...prev };
+              for (const p of pd as any[]) next[p.id] = { id: p.id, first_name: p.first_name, last_name: p.last_name, email: p.email };
+              return next;
+            });
           }
-          if (isMounted) setPatientsById(map);
-        }
-
-        // Fetch the latest medidata submission per invoice (newest first → first seen wins)
-        {
-          const latestMap: Record<string, LatestInsurance> = {};
-          const { data: subs } = await supabaseClient
-            .from("medidata_submissions")
-            .select("invoice_id, status, created_at, insurance_response_date")
-            .not("invoice_id", "is", null)
-            .order("created_at", { ascending: false });
-          if (subs) {
-            for (const s of subs as any[]) {
-              if (!s.invoice_id) continue;
-              if (!latestMap[s.invoice_id]) {
-                latestMap[s.invoice_id] = {
-                  status: String(s.status || "draft"),
-                  created_at: String(s.created_at || ""),
-                  has_response: !!s.insurance_response_date,
-                };
-              }
-            }
-          }
-          if (isMounted) setLatestInsByInvoice(latestMap);
-        }
-
-        // Fetch the latest failed async job per invoice (PDF or insurance submission)
-        {
-          const issueMap: Record<string, "pdf_failed" | "insurance_failed"> = {};
-          const { data: pdfJobs } = await supabaseClient
-            .from("pdf_generation_jobs")
-            .select("invoice_id, status, created_at")
-            .eq("status", "failed")
-            .order("created_at", { ascending: false });
-          if (pdfJobs) {
-            for (const j of pdfJobs as any[]) {
-              if (!j.invoice_id || issueMap[j.invoice_id]) continue;
-              issueMap[j.invoice_id] = "pdf_failed";
-            }
-          }
-          const { data: insJobs } = await supabaseClient
-            .from("medidata_submission_jobs")
-            .select("invoice_id, status, created_at")
-            .eq("status", "failed")
-            .order("created_at", { ascending: false });
-          if (insJobs) {
-            for (const j of insJobs as any[]) {
-              if (!j.invoice_id || issueMap[j.invoice_id]) continue;
-              issueMap[j.invoice_id] = "insurance_failed";
-            }
-          }
-          if (isMounted) setLatestJobIssueByInvoice(issueMap);
         }
 
         setLoading(false);
       } catch {
-        if (isMounted) { setError("Failed to load invoices."); setInvoices([]); setLoading(false); }
+        if (isMounted) { setError("Failed to load invoices."); setInvoices([]); setTotalCount(0); setLoading(false); }
       }
     }
 
     void load();
     return () => { isMounted = false; };
-  }, []);
+  }, [invoiceFilterParams, page, reloadVersion]);
 
   // ---------------------------------------------------------------------------
-  // Realtime: patch rows in-place instead of re-querying the whole table.
-  // UPDATE → merge changed fields into the matching row.
-  // INSERT → prepend new row (only top-level invoices, no sub-invoices).
-  // DELETE → remove the row.
+  // Realtime: re-run the current page query ~3s after any invoice change
+  // (debounced so bulk updates collapse into a single reload).
   // ---------------------------------------------------------------------------
   const loadedRef = useRef(false);
   useEffect(() => { loadedRef.current = !loading; }, [loading]);
+  const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const channel = supabaseClient
@@ -338,23 +345,12 @@ export default function InvoicesPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "invoices" },
-        (payload) => {
+        () => {
           if (!loadedRef.current) return; // ignore events that arrive before initial load
-
-          if (payload.eventType === "UPDATE") {
-            const updated = payload.new as InvoiceRow;
-            // Skip sub-invoices (they have a parent_invoice_id which we filter out in the query)
-            setInvoices((prev) =>
-              prev.map((row) => (row.id === updated.id ? { ...row, ...updated } : row))
-            );
-          } else if (payload.eventType === "INSERT") {
-            const inserted = payload.new as InvoiceRow & { parent_invoice_id?: string | null };
-            if (inserted.is_archived || inserted.parent_invoice_id) return;
-            setInvoices((prev) => [inserted, ...prev]);
-          } else if (payload.eventType === "DELETE") {
-            const deleted = payload.old as { id: string };
-            setInvoices((prev) => prev.filter((row) => row.id !== deleted.id));
-          }
+          if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+          realtimeDebounceRef.current = setTimeout(() => {
+            setReloadVersion((v) => v + 1);
+          }, 3000);
         },
       )
       .subscribe();
@@ -378,11 +374,9 @@ export default function InvoicesPage() {
     return patientsById[pid]?.email ?? null;
   }, [patientsById]);
 
-  const paymentMethods = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of invoices) if (r.payment_method) s.add(r.payment_method);
-    return Array.from(s).sort();
-  }, [invoices]);
+  // `paymentMethods` (the filter dropdown's options) comes from the
+  // `get_invoices_page` RPC response now — see the `paymentMethods` state
+  // above, populated in the load effect.
 
   // ---------------------------------------------------------------------------
   // Reminder helpers
@@ -445,138 +439,16 @@ export default function InvoicesPage() {
     return null;
   }
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    return invoices.filter(r => {
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
-      if (paymentMethodFilter !== "all" && r.payment_method !== paymentMethodFilter) return false;
-      if (billingTypeFilter !== "all" && (r.billing_type ?? "").toUpperCase() !== billingTypeFilter) return false;
-      if (dateFrom && r.invoice_date && r.invoice_date < dateFrom) return false;
-      if (dateTo && r.invoice_date && r.invoice_date > dateTo) return false;
-      if (insuranceFilter !== "all") {
-        const latest = latestInsByInvoice[r.id];
-        const st = latest?.status?.toLowerCase();
-        const invoicePaid = (Number(r.paid_amount) || 0) > 0;
-        const isInsuranceInvoice = (r.payment_method ?? "").toLowerCase() === "insurance";
-        const isNotSubmitted = !latest && isInsuranceInvoice;
-        const isRejectedUnpaid = st === "rejected" && !invoicePaid;
-        // BILL-004.1: "Processed" is a workflow-only flag on the invoice
-        // row itself (never on the MediData/Sumex status). It only makes
-        // sense to look at it for rejected-and-unpaid invoices — paid ones
-        // are already resolved regardless of the flag.
-        const isProcessed = !!r.medidata_processed_at;
-        switch (insuranceFilter) {
-          case "needs_action":
-            if (!isNotSubmitted && !isRejectedUnpaid) return false;
-            break;
-          case "not_submitted":
-            if (!isNotSubmitted) return false;
-            break;
-          case "in_flight":
-            if (!st || !["pending","transmitted","draft","delivered"].includes(st)) return false;
-            break;
-          case "rejected":
-            if (st !== "rejected") return false;
-            break;
-          case "rejected_unpaid":
-            if (!isRejectedUnpaid) return false;
-            break;
-          case "rejected_unprocessed":
-            if (!isRejectedUnpaid || isProcessed) return false;
-            break;
-          case "rejected_processed":
-            if (!isRejectedUnpaid || !isProcessed) return false;
-            break;
-          case "rejected_paid":
-            if (st !== "rejected" || !invoicePaid) return false;
-            break;
-          case "accepted":
-            if (!st || !["accepted","paid","partially_paid"].includes(st)) return false;
-            break;
-        }
-      }
-      if (jobIssueFilter !== "all") {
-        const issue = latestJobIssueByInvoice[r.id];
-        switch (jobIssueFilter) {
-          case "any_failed":
-            if (!issue) return false;
-            break;
-          case "pdf_failed":
-            if (issue !== "pdf_failed") return false;
-            break;
-          case "insurance_failed":
-            if (issue !== "insurance_failed") return false;
-            break;
-        }
-      }
-      if (reminderFilter !== "all") {
-        const rl = r.reminder_level ?? 0;
-        const isPaid = r.status === "PAID" || r.status === "CANCELLED";
-        switch (reminderFilter) {
-          case "r1_due":
-            // 1st reminder due: overdue ≥35d, no reminder sent yet, not paid, not stopped
-            if (isPaid || r.stop_reminders || rl !== 0 || overdueBaseDays(r) < 35) return false;
-            break;
-          case "r2_due":
-            // 2nd reminder due: ≥25d since 1st reminder
-            if (isPaid || r.stop_reminders || rl !== 1 || daysSince(r.reminder_1_sent_at) < 25) return false;
-            break;
-          case "r3_due":
-            // 3rd reminder due: ≥20d since 2nd reminder
-            if (isPaid || r.stop_reminders || rl !== 2 || daysSince(r.reminder_2_sent_at) < 20) return false;
-            break;
-          case "r1_sent":
-            if (rl < 1) return false;
-            break;
-          case "r2_sent":
-            if (rl < 2) return false;
-            break;
-          case "r3_sent":
-            if (rl < 3) return false;
-            break;
-          case "any_due":
-            if (isPaid || nextReminderLevel(r) === null) return false;
-            break;
-          case "stopped":
-            // BILL-004.2: invoices where reminders were manually stopped.
-            if (!r.stop_reminders) return false;
-            break;
-        }
-      }
-      if (q) {
-        const pName = patientName(r.patient_id).toLowerCase();
-        const invNum = (r.invoice_number || "").toLowerCase();
-        const docName = (r.doctor_name || "").toLowerCase();
-        if (!pName.includes(q) && !invNum.includes(q) && !docName.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [invoices, search, statusFilter, paymentMethodFilter, billingTypeFilter, insuranceFilter, jobIssueFilter, reminderFilter, latestInsByInvoice, latestJobIssueByInvoice, dateFrom, dateTo, patientName]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE));
-  const paginated = useMemo(() => {
-    const start = page * ROWS_PER_PAGE;
-    return filtered.slice(start, start + ROWS_PER_PAGE);
-  }, [filtered, page]);
-
-  const summary = useMemo(() => {
-    let total = 0, paid = 0, unpaid = 0, count = 0;
-    for (const r of filtered) {
-      if (r.is_complimentary) continue;
-      if (r.status === "CANCELLED") continue;
-      const amt = Number(r.total_amount) || 0;
-      if (amt <= 0) continue;
-      count++;
-      total += amt;
-      const pa = Number(r.paid_amount) || 0;
-      paid += pa;
-      unpaid += amt - pa;
-    }
-    return { total, paid, unpaid, count };
-  }, [filtered]);
+  // Filtering, search, pagination and the `summary` totals above are all
+  // computed server-side by the `get_invoices_page` RPC now (see the load
+  // effect above) — `invoices` already holds exactly the current page's
+  // matching rows, so no further client-side filtering/slicing is needed.
+  const filtered = invoices;
+  const paginated = invoices;
+  const totalPages = Math.max(1, Math.ceil(totalCount / ROWS_PER_PAGE));
 
   // Reset page + selection on filter change
-  useEffect(() => { setPage(0); setSelected(new Set()); }, [search, statusFilter, paymentMethodFilter, billingTypeFilter, insuranceFilter, dateFrom, dateTo]);
+  useEffect(() => { setPage(0); setSelected(new Set()); }, [searchDebounced, statusFilter, paymentMethodFilter, billingTypeFilter, insuranceFilter, jobIssueFilter, reminderFilter, dateFrom, dateTo]);
 
   // ---------------------------------------------------------------------------
   // Selection helpers
@@ -1402,7 +1274,9 @@ export default function InvoicesPage() {
                     <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{row.payment_method || "-"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {(() => {
-                        const latest = latestInsByInvoice[row.id];
+                        const latest = row.latest_insurance_status
+                          ? { status: row.latest_insurance_status, created_at: row.latest_insurance_created_at, has_response: !!row.latest_insurance_response_date }
+                          : null;
                         const b = insuranceBadge(latest?.status, row.billing_type);
                         const isRejectedUnpaid = latest?.status?.toLowerCase() === "rejected" && (Number(row.paid_amount) || 0) <= 0;
                         const isProcessed = !!row.medidata_processed_at;

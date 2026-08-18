@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { formatSwissYmd } from "@/lib/swissTimezone";
 
 type InvoiceRow = {
   id: string;
@@ -90,6 +91,52 @@ type OwnerSummaryRow = {
   totalPaid: number;
   totalUnpaid: number;
   totalComplimentary: number;
+};
+
+// Result shape of the `financials_summary` Postgres RPC (see
+// supabase/migrations/20260822_financials_summary_rpc.sql). Computes the
+// Overview totals + per-patient/per-owner breakdowns entirely server-side
+// (SUM/GROUP BY) so the browser never has to download every matching
+// invoice row just to add them up — previously this could mean tens of
+// thousands of rows fetched in sequential batches on every filter change.
+type SummaryOverviewRpc = {
+  invoice_count: number;
+  total_amount: number;
+  total_paid: number;
+  total_unpaid: number;
+  total_complimentary: number;
+};
+
+type SummaryPatientRowRpc = {
+  patient_id: string;
+  invoice_count: number;
+  total_amount: number;
+  total_paid: number;
+  total_unpaid: number;
+  total_complimentary: number;
+};
+
+type SummaryOwnerRowRpc = {
+  owner_key: string;
+  sample_provider_id: string | null;
+  owner_label_fallback: string | null;
+  invoice_count: number;
+  total_amount: number;
+  total_paid: number;
+  total_unpaid: number;
+  total_complimentary: number;
+};
+
+type SummaryRpcResult = {
+  overview: SummaryOverviewRpc | null;
+  byPatient: SummaryPatientRowRpc[];
+  byOwner: SummaryOwnerRowRpc[];
+};
+
+const EMPTY_SUMMARY_RPC_RESULT: SummaryRpcResult = {
+  overview: { invoice_count: 0, total_amount: 0, total_paid: 0, total_unpaid: 0, total_complimentary: 0 },
+  byPatient: [],
+  byOwner: [],
 };
 
 function formatCurrency(amount: number): string {
@@ -310,38 +357,70 @@ function applyInvoiceFilters(query: any, filters: InvoiceFilterParams): any {
 const INVOICE_SELECT_COLUMNS =
   "id, patient_id, invoice_number, invoice_date, treatment_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, paid_at, health_insurance_law, billing_type, insurance_name, total_amount, paid_amount, vat_amount, status, is_complimentary, created_by_user_id, created_by_name, is_archived";
 
-// Fetches every invoice matching the given filters (looping through pages
-// server-side), not just one page — used for the Overview aggregates (totals,
-// per-patient and per-owner breakdowns) so they reflect the whole filtered
-// dataset instead of a single page of results.
+// Fetches every invoice matching the given filters — used for the Excel
+// export, which needs the actual rows (not just sums). Gets the total count
+// first, then fetches all the range batches concurrently instead of one
+// after another, so it doesn't take (numBatches * roundTripTime) to finish.
 async function fetchAllFilteredInvoices(filters: InvoiceFilterParams): Promise<InvoiceRow[]> {
   const BATCH_SIZE = 1000;
-  const all: InvoiceRow[] = [];
-  for (let from = 0; ; from += BATCH_SIZE) {
-    let query = supabaseClient.from("invoices").select(INVOICE_SELECT_COLUMNS).eq("is_archived", false);
-    query = applyInvoiceFilters(query, filters);
-    const { data, error } = await query
-      .order("invoice_date", { ascending: false, nullsFirst: false })
-      .range(from, from + BATCH_SIZE - 1);
 
-    if (error || !data) break;
-    all.push(...(data as InvoiceRow[]));
-    if (data.length < BATCH_SIZE) break;
-  }
-  return all;
+  let countQuery = supabaseClient
+    .from("invoices")
+    .select("id", { count: "exact", head: true })
+    .eq("is_archived", false);
+  countQuery = applyInvoiceFilters(countQuery, filters);
+  const { count, error: countError } = await countQuery;
+  const total = countError || !count ? 0 : count;
+  if (total === 0) return [];
+
+  const batchStarts: number[] = [];
+  for (let from = 0; from < total; from += BATCH_SIZE) batchStarts.push(from);
+
+  const batches = await Promise.all(
+    batchStarts.map(async (from) => {
+      let query = supabaseClient.from("invoices").select(INVOICE_SELECT_COLUMNS).eq("is_archived", false);
+      query = applyInvoiceFilters(query, filters);
+      const { data, error } = await query
+        .order("invoice_date", { ascending: false, nullsFirst: false })
+        .range(from, from + BATCH_SIZE - 1);
+      if (error || !data) return [];
+      return data as InvoiceRow[];
+    }),
+  );
+
+  return batches.flat();
+}
+
+// Converts the page's filter state into the parameters expected by the
+// `financials_summary` RPC (see supabase/migrations/20260822_financials_summary_rpc.sql).
+function toSummaryRpcParams(filters: InvoiceFilterParams) {
+  return {
+    p_date_from: filters.dateFromFilter || null,
+    p_date_to: filters.dateToFilter ? `${filters.dateToFilter}T23:59:59.999Z` : null,
+    p_date_field: filters.dateField,
+    p_patient_id: filters.patientFilter,
+    p_owner_ids:
+      filters.ownerFilter === "all" || !filters.ownerFilter
+        ? null
+        : filters.ownerFilter.split("|"),
+    p_invoice_type: filters.invoiceTypeFilter,
+    p_status: filters.statusFilter,
+    p_only_unpaid: filters.showOnlyUnpaid,
+  };
 }
 
 export default function FinancialsPage() {
   const t = useTranslations("financialsPage");
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
-  // Full set of invoices matching the current filters (not just the current
-  // page) — used exclusively to compute the Overview aggregates (totals,
-  // per-patient and per-owner breakdowns). Without this, those numbers only
-  // reflected the first ROWS_PER_PAGE invoices, which silently under-reported
-  // totals whenever a filter matched more rows than one page (see the
-  // "Invoices" page's own totals for comparison — those were always correct
-  // because they aggregate over the full, unpaginated result set client-side).
-  const [summaryInvoices, setSummaryInvoices] = useState<InvoiceRow[]>([]);
+  // Overview aggregates (totals, per-patient and per-owner breakdowns) for
+  // the current filters, computed server-side by the `financials_summary`
+  // RPC — not derived from `invoices` above, which only holds one page.
+  // Without this, those numbers only reflected the first ROWS_PER_PAGE
+  // invoices, which silently under-reported totals whenever a filter
+  // matched more rows than one page (see the "Invoices" page's own totals
+  // for comparison — those were always correct because they aggregate over
+  // the full, unpaginated result set client-side).
+  const [summaryData, setSummaryData] = useState<SummaryRpcResult>(EMPTY_SUMMARY_RPC_RESULT);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [patientsById, setPatientsById] = useState<PatientsById>({});
   const [providersById, setProvidersById] = useState<ProvidersById>({});
@@ -350,8 +429,10 @@ export default function FinancialsPage() {
 
   const [patientFilter, setPatientFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
-  const [dateFromFilter, setDateFromFilter] = useState<string>("");
-  const [dateToFilter, setDateToFilter] = useState<string>("");
+  // Default to today so an unfiltered page load only scans a small slice of
+  // the table instead of the entire invoice history by default.
+  const [dateFromFilter, setDateFromFilter] = useState<string>(() => formatSwissYmd(new Date()));
+  const [dateToFilter, setDateToFilter] = useState<string>(() => formatSwissYmd(new Date()));
   const [dateField, setDateField] = useState<"invoice_date" | "paid_at">("invoice_date");
   const [invoiceTypeFilter, setInvoiceTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -534,24 +615,32 @@ export default function FinancialsPage() {
     };
   }, [invoiceFilterParams, invoicePage, reloadVersion]);
 
-  // Full, unpaginated fetch — feeds the Overview aggregates (totals cards,
-  // per-patient and per-owner breakdowns) so they always reflect every
-  // invoice matching the current filters, not just the visible page.
+  // Overview aggregates (totals cards, per-patient and per-owner breakdowns)
+  // for the current filters — computed server-side by the `financials_summary`
+  // RPC in a single round trip instead of downloading every matching invoice
+  // row to the browser just to sum them.
   useEffect(() => {
     let isMounted = true;
 
-    async function loadSummaryInvoices() {
+    async function loadSummary() {
       setSummaryLoading(true);
       try {
-        const rows = await fetchAllFilteredInvoices(invoiceFilterParams);
+        const { data, error: rpcError } = await supabaseClient.rpc(
+          "financials_summary",
+          toSummaryRpcParams(invoiceFilterParams),
+        );
         if (!isMounted) return;
-        setSummaryInvoices(rows);
+        if (rpcError || !data) {
+          setSummaryData(EMPTY_SUMMARY_RPC_RESULT);
+          return;
+        }
+        setSummaryData(data as SummaryRpcResult);
       } finally {
         if (isMounted) setSummaryLoading(false);
       }
     }
 
-    void loadSummaryInvoices();
+    void loadSummary();
 
     return () => {
       isMounted = false;
@@ -562,14 +651,6 @@ export default function FinancialsPage() {
     if (!invoices || invoices.length === 0) return [];
     return invoices.map((row) => normalizeInvoiceRow(row, patientsById, providersById, t));
   }, [invoices, patientsById, providersById, t]);
-
-  // Normalized version of the FULL filtered dataset (see summaryInvoices
-  // above) — this, not normalizedInvoices, is what the Overview aggregates
-  // must be computed from.
-  const normalizedSummaryInvoices = useMemo<NormalizedInvoice[]>(() => {
-    if (!summaryInvoices || summaryInvoices.length === 0) return [];
-    return summaryInvoices.map((row) => normalizeInvoiceRow(row, patientsById, providersById, t));
-  }, [summaryInvoices, patientsById, providersById, t]);
 
   const patientOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -603,13 +684,15 @@ export default function FinancialsPage() {
       map.set(provider.id, label);
     }
 
-    // Third pass: add any doctor/user keys from invoices not covered above.
-    // Uses the full filtered dataset (not just the current page) so options
-    // aren't silently missing when a match only occurs beyond page 1.
+    // Third pass: add any owner keys from the current summary breakdown not
+    // covered above (e.g. doctors/users with invoices but no `providers` row).
     const seenLabels = new Set(Array.from(map.values()).map((l) => l.toLowerCase().trim()));
-    for (const row of normalizedSummaryInvoices) {
-      const key = row.ownerKey || "unknown";
-      const label = row.ownerLabel || "Unassigned";
+    for (const row of summaryData.byOwner) {
+      const key = row.owner_key || "unknown";
+      const label =
+        (row.sample_provider_id ? providersById[row.sample_provider_id]?.name : null) ||
+        row.owner_label_fallback ||
+        (key === "unknown" ? t("unassigned") : key);
       if (!map.has(key) && !seenLabels.has(label.toLowerCase().trim())) {
         map.set(key, label);
         seenLabels.add(label.toLowerCase().trim());
@@ -617,7 +700,7 @@ export default function FinancialsPage() {
     }
 
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [normalizedSummaryInvoices, providersById]);
+  }, [summaryData.byOwner, providersById, t]);
 
   const invoiceTypeOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -628,24 +711,12 @@ export default function FinancialsPage() {
     map.set("IVG", "IVG");
     map.set("TP", "TP");
     map.set("TG", "TG");
-    for (const row of normalizedSummaryInvoices) {
-      if (!map.has(row.invoiceType)) {
-        map.set(row.invoiceType, row.invoiceTypeLabel);
-      }
-    }
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [normalizedSummaryInvoices, t]);
+  }, [t]);
 
   const filteredInvoices = useMemo(() => {
     return normalizedInvoices;
   }, [normalizedInvoices]);
-
-  // Full filtered dataset — the Overview aggregates below (totals cards,
-  // per-patient and per-owner breakdowns) must be computed from this, not
-  // from `filteredInvoices`, which only holds the current page.
-  const filteredSummaryInvoices = useMemo(() => {
-    return normalizedSummaryInvoices;
-  }, [normalizedSummaryInvoices]);
 
   // Reset pages when filters change
   useEffect(() => {
@@ -668,74 +739,37 @@ export default function FinancialsPage() {
   }, [filteredInvoices]);
 
   const summary: Summary = useMemo(() => {
-    let totalAmount = 0;
-    let totalPaid = 0;
-    let totalUnpaid = 0;
-    let totalComplimentary = 0;
-    let invoiceCount = 0;
-
-    for (const row of filteredSummaryInvoices) {
-      const amount = row.amount;
-      if (!Number.isFinite(amount) || amount <= 0) continue;
-
-      invoiceCount += 1;
-
-      if (row.is_complimentary) {
-        totalComplimentary += amount;
-        continue;
-      }
-
-      totalAmount += amount;
-
-      if (row.isPaid) {
-        totalPaid += amount;
-      } else {
-        totalUnpaid += amount;
-      }
-    }
-
-    return { totalAmount, totalPaid, totalUnpaid, totalComplimentary, invoiceCount };
-  }, [filteredSummaryInvoices]);
+    const overview = summaryData.overview;
+    if (!overview) return { totalAmount: 0, totalPaid: 0, totalUnpaid: 0, totalComplimentary: 0, invoiceCount: 0 };
+    return {
+      totalAmount: Number(overview.total_amount) || 0,
+      totalPaid: Number(overview.total_paid) || 0,
+      totalUnpaid: Number(overview.total_unpaid) || 0,
+      totalComplimentary: Number(overview.total_complimentary) || 0,
+      invoiceCount: Number(overview.invoice_count) || 0,
+    };
+  }, [summaryData.overview]);
 
   const patientSummaryRows: PatientSummaryRow[] = useMemo(() => {
-    const byPatient = new Map<string, PatientSummaryRow>();
-
-    for (const row of filteredSummaryInvoices) {
-      if (!row.patient_id) continue;
-
-      const existing = byPatient.get(row.patient_id) || {
-        patientId: row.patient_id,
-        patientName: row.patientName,
-        invoiceCount: 0,
-        totalAmount: 0,
-        totalPaid: 0,
-        totalUnpaid: 0,
-        totalComplimentary: 0,
-      };
-
-      const amount = row.amount;
-      if (Number.isFinite(amount) && amount > 0) {
-        existing.invoiceCount += 1;
-
-        if (row.is_complimentary) {
-          existing.totalComplimentary += amount;
-        } else {
-          existing.totalAmount += amount;
-          if (row.isPaid) {
-            existing.totalPaid += amount;
-          } else {
-            existing.totalUnpaid += amount;
-          }
-        }
-      }
-
-      byPatient.set(row.patient_id, existing);
-    }
-
-    return Array.from(byPatient.values()).sort(
-      (a, b) => b.totalAmount - a.totalAmount,
-    );
-  }, [filteredSummaryInvoices]);
+    return summaryData.byPatient
+      .map((row) => {
+        const patient = patientsById[row.patient_id];
+        const nameParts = [
+          patient?.first_name ? patient.first_name.trim() : "",
+          patient?.last_name ? patient.last_name.trim() : "",
+        ].filter(Boolean);
+        return {
+          patientId: row.patient_id,
+          patientName: nameParts.join(" ") || row.patient_id || t("unknownPatient"),
+          invoiceCount: Number(row.invoice_count) || 0,
+          totalAmount: Number(row.total_amount) || 0,
+          totalPaid: Number(row.total_paid) || 0,
+          totalUnpaid: Number(row.total_unpaid) || 0,
+          totalComplimentary: Number(row.total_complimentary) || 0,
+        };
+      })
+      .sort((a, b) => b.totalAmount - a.totalAmount);
+  }, [summaryData.byPatient, patientsById, t]);
 
   const totalPatientPages = Math.max(1, Math.ceil(patientSummaryRows.length / ROWS_PER_PAGE));
   const paginatedPatientRows = useMemo(() => {
@@ -744,48 +778,25 @@ export default function FinancialsPage() {
   }, [patientSummaryRows, patientPage, ROWS_PER_PAGE]);
 
   const ownerSummaryRows: OwnerSummaryRow[] = useMemo(() => {
-    const byOwner = new Map<string, OwnerSummaryRow>();
-
-    for (const row of filteredSummaryInvoices) {
-      const key = row.ownerKey || "unknown";
-      const label = row.ownerLabel || "Unassigned";
-
-      let existing = byOwner.get(key);
-      if (!existing) {
-        existing = {
+    return summaryData.byOwner
+      .map((row) => {
+        const key = row.owner_key || "unknown";
+        const label =
+          (row.sample_provider_id ? providersById[row.sample_provider_id]?.name : null) ||
+          row.owner_label_fallback ||
+          (key === "unknown" ? t("unassigned") : key);
+        return {
           ownerKey: key,
           ownerLabel: label,
-          invoiceCount: 0,
-          totalAmount: 0,
-          totalPaid: 0,
-          totalUnpaid: 0,
-          totalComplimentary: 0,
+          invoiceCount: Number(row.invoice_count) || 0,
+          totalAmount: Number(row.total_amount) || 0,
+          totalPaid: Number(row.total_paid) || 0,
+          totalUnpaid: Number(row.total_unpaid) || 0,
+          totalComplimentary: Number(row.total_complimentary) || 0,
         };
-      }
-
-      const amount = row.amount;
-      if (Number.isFinite(amount) && amount > 0) {
-        existing.invoiceCount += 1;
-
-        if (row.is_complimentary) {
-          existing.totalComplimentary += amount;
-        } else {
-          existing.totalAmount += amount;
-          if (row.isPaid) {
-            existing.totalPaid += amount;
-          } else {
-            existing.totalUnpaid += amount;
-          }
-        }
-      }
-
-      byOwner.set(key, existing);
-    }
-
-    return Array.from(byOwner.values()).sort(
-      (a, b) => b.totalAmount - a.totalAmount,
-    );
-  }, [filteredSummaryInvoices]);
+      })
+      .sort((a, b) => b.totalAmount - a.totalAmount);
+  }, [summaryData.byOwner, providersById, t]);
 
   const [activeTab, setActiveTab] = useState<"overview" | "receipts" | "import_history">("overview");
 
