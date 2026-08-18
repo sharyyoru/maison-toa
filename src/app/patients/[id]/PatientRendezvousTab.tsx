@@ -746,7 +746,7 @@ export default function PatientRendezvousTab({
                     <td className="py-3">
                       <div className="flex items-center gap-1.5">
                         <Link
-                          href={`/appointments?date=${formatSwissYmd(new Date(appt.start_time))}&appointment=${encodeURIComponent(appt.id)}${appt.provider_id ? `&doctor=${encodeURIComponent(appt.provider_id)}` : ""}`}
+                          href={`/appointments?date=${formatSwissYmd(new Date(appt.start_time))}&appointment=${encodeURIComponent(appt.id)}${appt.provider_id ? `&doctor=${encodeURIComponent(appt.provider_id)}` : doctor !== "—" ? `&doctorName=${encodeURIComponent(doctor)}` : ""}`}
                           className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-medium text-sky-700 transition-colors hover:bg-sky-100 hover:text-sky-900"
                         >
                           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">

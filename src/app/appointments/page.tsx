@@ -1657,8 +1657,9 @@ export default function CalendarPage() {
       let savedSelectedIds: string[] | null = null;
       try {
         const saved = localStorage.getItem("appointments_selected_calendars");
-        if (saved && !initialDoctorId && !initialDoctorName) {
-          // Only use localStorage if no doctor param is specified
+        if (saved && ((!initialDoctorId && !initialDoctorName) || focusedAppointmentId)) {
+          // Appointment-focused links merge the saved calendars with the
+          // appointment's practitioner instead of replacing the selection.
           const parsed = JSON.parse(saved) as string[];
           // Validate that at least some saved IDs match current provider IDs
           const providerIds = uniqueProviders.map(p => p.id);
@@ -1676,18 +1677,29 @@ export default function CalendarPage() {
         const rawName = provider.name ?? "Unnamed doctor";
         const trimmedName = rawName.trim() || "Unnamed doctor";
 
-        // Priority: 1) URL doctor ID, 2) URL doctor name, 3) saved selection, 4) calendar defaults, 5) current user, 6) all
+        const matchesUrlDoctor = initialDoctorId
+          ? provider.id === initialDoctorId
+          : initialDoctorName
+            ? (() => {
+                const nameLower = trimmedName.toLowerCase();
+                const targetLower = initialDoctorName.toLowerCase();
+                return nameLower === targetLower ||
+                  nameLower.includes(targetLower) ||
+                  targetLower.includes(nameLower);
+              })()
+            : false;
+
+        // Appointment links preserve saved calendars and add the appointment's
+        // practitioner. Other doctor links continue to isolate that practitioner.
         let selected: boolean;
-        if (initialDoctorId) {
+        if (focusedAppointmentId && savedSelectedIds !== null) {
+          selected = savedSelectedIds.includes(provider.id) || matchesUrlDoctor;
+        } else if (initialDoctorId) {
           // If doctor ID param is specified, match by ID
-          selected = provider.id === initialDoctorId;
+          selected = matchesUrlDoctor;
         } else if (initialDoctorName) {
           // If doctor name param is specified, match by name (case-insensitive, partial match)
-          const nameLower = trimmedName.toLowerCase();
-          const targetLower = initialDoctorName.toLowerCase();
-          selected = nameLower === targetLower || 
-                     nameLower.includes(targetLower) || 
-                     targetLower.includes(nameLower);
+          selected = matchesUrlDoctor;
         } else if (savedSelectedIds !== null) {
           selected = savedSelectedIds.includes(provider.id);
         } else if (calendarDefaultIds !== null) {
@@ -1730,7 +1742,7 @@ export default function CalendarPage() {
 
       return baseCalendars;
     });
-  }, [providers, currentUserId, initialDoctorId, initialDoctorName, calendarDefaultIds]);
+  }, [providers, currentUserId, initialDoctorId, initialDoctorName, focusedAppointmentId, calendarDefaultIds]);
 
   useEffect(() => {
     let isMounted = true;
