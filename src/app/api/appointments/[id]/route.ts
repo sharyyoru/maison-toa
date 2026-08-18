@@ -9,6 +9,21 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const INTERNAL_ROLES = new Set(["admin", "doctor", "nurse", "technician", "staff"]);
+
+async function authorizePractitionerOverlap(request: NextRequest) {
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (!token) return false;
+  const { data: authData, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !authData.user) return false;
+  const { data: internalUser } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", authData.user.id)
+    .maybeSingle();
+  return Boolean(internalUser?.role && INTERNAL_ROLES.has(internalUser.role));
+}
+
 function appointmentDisplayStatus(reason: unknown): string {
   if (typeof reason !== "string") return "Aucune sélection";
   return reason.match(/\[Status:\s*([^\]]+)\]/i)?.[1]?.trim() || "Aucune sélection";
@@ -55,6 +70,10 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
+    const allowPractitionerOverlap = body.allow_practitioner_overlap === true;
+    if (allowPractitionerOverlap && !(await authorizePractitionerOverlap(request))) {
+      return NextResponse.json({ error: "Internal clinic access required" }, { status: 403 });
+    }
 
     // Only allow updating specific fields
     const allowedFields = [
@@ -169,8 +188,11 @@ export async function PATCH(
           .not("id", "in", `(${targetIds.join(",")})`)
           .limit(1);
         if (conflictError) return NextResponse.json({ error: "Failed to verify practitioner availability" }, { status: 500 });
-        if (conflicts?.length) {
-          return NextResponse.json({ error: "A practitioner is not available for one or more future appointments" }, { status: 409 });
+        if (conflicts?.length && !allowPractitionerOverlap) {
+          return NextResponse.json({
+            error: "A practitioner is not available for one or more future appointments",
+            code: "PRACTITIONER_UNAVAILABLE",
+          }, { status: 409 });
         }
 
         const targetMachineIds = Array.isArray(updateData.machine_ids)
@@ -271,7 +293,12 @@ export async function PATCH(
           .neq("id", id)
           .limit(1);
         if (providerConflictError) return NextResponse.json({ error: "Failed to verify practitioner availability." }, { status: 500 });
-        if (providerConflicts?.length) return NextResponse.json({ error: "The practitioner is not available at the requested time." }, { status: 409 });
+        if (providerConflicts?.length && !allowPractitionerOverlap) {
+          return NextResponse.json({
+            error: "The practitioner is not available at the requested time.",
+            code: "PRACTITIONER_UNAVAILABLE",
+          }, { status: 409 });
+        }
       }
 
       const reservations: Array<{

@@ -1064,7 +1064,11 @@ export default function CalendarPage() {
   const [savingNewPatient, setSavingNewPatient] = useState(false);
   const [newPatientError, setNewPatientError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [resourceOverrideRequired, setResourceOverrideRequired] = useState(false);
+  const [overlapConfirmation, setOverlapConfirmation] = useState<{
+    type: "practitioner" | "resource";
+    allowPractitionerOverlap: boolean;
+    allowResourceOverlap: boolean;
+  } | null>(null);
   const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
   const [serviceOptionsLoading, setServiceOptionsLoading] = useState(false);
   const [serviceOptionsError, setServiceOptionsError] = useState<string | null>(
@@ -1104,7 +1108,7 @@ export default function CalendarPage() {
   const [createDoctorCalendarId, setCreateDoctorCalendarId] = useState("");
 
   useEffect(() => {
-    if (!createModalOpen) setResourceOverrideRequired(false);
+    if (!createModalOpen) setOverlapConfirmation(null);
   }, [createModalOpen]);
 
   // Machine resource state
@@ -1281,6 +1285,9 @@ export default function CalendarPage() {
   const [editLocation, setEditLocation] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
+  const [editOverlapConfirmation, setEditOverlapConfirmation] = useState<{
+    recurrenceScope?: "this" | "this_and_future";
+  } | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingAppointment, setDeletingAppointment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -1343,6 +1350,7 @@ export default function CalendarPage() {
     setEditPatientSearch("");
     setEditPatientOptions([]);
     setEditPatientOptionsError(null);
+    setEditOverlapConfirmation(null);
     setShowDeleteConfirm(false);
     closeEditModalDropdowns();
   };
@@ -3160,7 +3168,10 @@ export default function CalendarPage() {
     }
   }
 
-  async function handleSaveAppointment(allowResourceOverlap = false) {
+  async function handleSaveAppointment(
+    allowPractitionerOverlap = false,
+    allowResourceOverlap = false,
+  ) {
     if (savingCreate) return;
 
     setCreateError(null);
@@ -3188,17 +3199,14 @@ export default function CalendarPage() {
       return;
     }
 
-    const selectedIds = selectedServiceIds.length > 0
-      ? selectedServiceIds
-      : selectedServiceId ? [selectedServiceId] : [];
-    const isManualOverrideService = selectedIds.some((serviceId) => {
-      const name = serviceOptions.find((service) => service.id === serviceId)?.name ?? "";
-      return /\b(?:IV\s*Infusion|PRP)\b/i.test(name);
-    });
     const hasDoctorConflict = Object.values(doctorConflicts).some((conflict) => conflict.hasConflict);
 
-    if (isManualOverrideService && hasDoctorConflict && !allowResourceOverlap) {
-      setResourceOverrideRequired(true);
+    if (hasDoctorConflict && !allowPractitionerOverlap) {
+      setOverlapConfirmation({
+        type: "practitioner",
+        allowPractitionerOverlap: true,
+        allowResourceOverlap,
+      });
       return;
     }
 
@@ -3312,9 +3320,20 @@ export default function CalendarPage() {
           ? selectedServiceIds 
           : (selectedServiceId ? [selectedServiceId] : []);
         
+        const { data: sessionData } = await supabaseClient.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) {
+          setCreateError('Your session has expired. Please sign in again.');
+          setSavingCreate(false);
+          return;
+        }
+
         const response = await fetch('/api/appointments/create-multi', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
           body: JSON.stringify({
             patientId: createNoPatient ? null : createPatientId,
             noPatient: createNoPatient,
@@ -3330,7 +3349,7 @@ export default function CalendarPage() {
             category: appointmentCategory && appointmentCategory !== 'No selection' ? appointmentCategory : null,
             channel: bookingStatus || null,
             notes: draftDescription.trim() || null,
-            allowOverlap: true,
+            allowOverlap: allowPractitionerOverlap,
             allowResourceOverlap,
             machineIds: selectedMachineIds.length > 0 ? selectedMachineIds : null,
             sendEmailNotification: shouldSendEmailNotification,
@@ -3339,8 +3358,21 @@ export default function CalendarPage() {
         
         if (!response.ok) {
           const errorData = await response.json();
+          if (response.status === 409 && errorData.code === 'PRACTITIONER_UNAVAILABLE') {
+            setOverlapConfirmation({
+              type: "practitioner",
+              allowPractitionerOverlap: true,
+              allowResourceOverlap,
+            });
+            setSavingCreate(false);
+            return;
+          }
           if (response.status === 409 && errorData.code === 'REQUIRED_RESOURCE_UNAVAILABLE') {
-            setResourceOverrideRequired(true);
+            setOverlapConfirmation({
+              type: "resource",
+              allowPractitionerOverlap,
+              allowResourceOverlap: true,
+            });
             setSavingCreate(false);
             return;
           }
@@ -3512,7 +3544,7 @@ export default function CalendarPage() {
       setMachineConflictWarning("");
       resetCreateRecurrence();
       setCreateError(null);
-      setResourceOverrideRequired(false);
+      setOverlapConfirmation(null);
       setCreateDoctorCalendarId("");
       // Reset multi-select state
       setSelectedDoctorIds([]);
@@ -3529,6 +3561,7 @@ export default function CalendarPage() {
     setEditingAppointment(appt);
     editOriginalPatientIdRef.current = appt.patient_id ?? appt.patient?.id ?? null;
     setEditError(null);
+    setEditOverlapConfirmation(null);
     setSavingEdit(false);
     setEditPatientId(appt.patient_id ?? appt.patient?.id ?? null);
     setEditNoPatient(appt.no_patient === true);
@@ -4470,7 +4503,10 @@ export default function CalendarPage() {
     });
   }
 
-  async function handleSaveEditAppointment(recurrenceScope?: "this" | "this_and_future") {
+  async function handleSaveEditAppointment(
+    recurrenceScope?: "this" | "this_and_future",
+    allowPractitionerOverlap = false,
+  ) {
     if (!editingAppointment || savingEdit) return;
 
     setEditError(null);
@@ -4551,9 +4587,20 @@ export default function CalendarPage() {
       if (editCategory && editCategory !== "No selection") updatedReason += ` [Category: ${editCategory}]`;
       if (editBookingStatus && editBookingStatus !== "Aucune sélection") updatedReason += ` [Status: ${editBookingStatus}]`;
 
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        setEditError("Your session has expired. Please sign in again.");
+        setSavingEdit(false);
+        return;
+      }
+
       const response = await fetch(`/api/appointments/${editingAppointment.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           patient_id: editNoPatient ? null : editPatientId,
           no_patient: editNoPatient,
@@ -4570,11 +4617,17 @@ export default function CalendarPage() {
             : editProviderId || null,
           machine_ids: editMachineIds,
           recurrence_scope: recurrenceScope,
+          allow_practitioner_overlap: allowPractitionerOverlap,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
+        if (response.status === 409 && errorData?.code === "PRACTITIONER_UNAVAILABLE") {
+          setEditOverlapConfirmation({ recurrenceScope });
+          setSavingEdit(false);
+          return;
+        }
         setEditError(errorData?.error ?? "Failed to update appointment.");
         setSavingEdit(false);
         return;
@@ -4633,6 +4686,7 @@ export default function CalendarPage() {
       setRecurringAction(null);
       setRecurringActionScope(null);
       setEditModalOpen(false);
+      setEditOverlapConfirmation(null);
       setEditingAppointment(null);
       editOriginalPatientIdRef.current = null;
       setEditPatientId(null);
@@ -6713,6 +6767,31 @@ export default function CalendarPage() {
               {editError ? (
                 <p className="mt-2 text-[11px] text-red-600">{editError}</p>
               ) : null}
+              {editOverlapConfirmation ? (
+                <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-900">
+                  <p>{t("modal.practitionerOverlapWarning")}</p>
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditOverlapConfirmation(null)}
+                      className="rounded-full border border-amber-300 bg-white px-3 py-1 font-medium hover:bg-amber-100"
+                    >
+                      {tCommon("cancel")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveEditAppointment(
+                        editOverlapConfirmation.recurrenceScope,
+                        true,
+                      )}
+                      disabled={savingEdit}
+                      className="rounded-full bg-amber-600 px-3 py-1 font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                    >
+                      {t("modal.confirmOverlap")}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               
               {/* Delete confirmation */}
               {showDeleteConfirm && (
@@ -7971,24 +8050,31 @@ export default function CalendarPage() {
               {createError ? (
                 <p className="mt-2 text-[11px] text-red-600">{createError}</p>
               ) : null}
-              {resourceOverrideRequired ? (
+              {overlapConfirmation ? (
                 <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-900">
-                  <p>{t("modal.resourceUnavailableWarning")}</p>
+                  <p>
+                    {overlapConfirmation.type === "practitioner"
+                      ? t("modal.practitionerOverlapWarning")
+                      : t("modal.resourceUnavailableWarning")}
+                  </p>
                   <div className="mt-2 flex justify-end gap-2">
                     <button
                       type="button"
-                      onClick={() => setResourceOverrideRequired(false)}
+                      onClick={() => setOverlapConfirmation(null)}
                       className="rounded-full border border-amber-300 bg-white px-3 py-1 font-medium hover:bg-amber-100"
                     >
                       {tCommon("cancel")}
                     </button>
                     <button
                       type="button"
-                      onClick={() => void handleSaveAppointment(true)}
+                      onClick={() => void handleSaveAppointment(
+                        overlapConfirmation.allowPractitionerOverlap,
+                        overlapConfirmation.allowResourceOverlap,
+                      )}
                       disabled={savingCreate}
                       className="rounded-full bg-amber-600 px-3 py-1 font-medium text-white hover:bg-amber-700 disabled:opacity-60"
                     >
-                      {t("modal.confirmResourceOverride")}
+                      {t("modal.confirmOverlap")}
                     </button>
                   </div>
                 </div>
@@ -8013,7 +8099,7 @@ export default function CalendarPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void handleSaveAppointment(false)}
+                    onClick={() => void handleSaveAppointment(false, false)}
                     disabled={savingCreate}
                     className="inline-flex items-center rounded-full border border-sky-500/80 bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >

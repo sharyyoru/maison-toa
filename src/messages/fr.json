@@ -196,8 +196,9 @@
         }
       },
       "conflict": "CONFLIT",
-      "resourceUnavailableWarning": "Une des cabines n’est pas disponible a cet horaire",
-      "confirmResourceOverride": "Confirmer quand même",
+      "practitionerOverlapWarning": "Ce praticien a déjà un rendez-vous à cette heure. Souhaitez-vous quand même réserver ce rendez-vous ?",
+      "resourceUnavailableWarning": "Une des cabines n’est pas disponible à cet horaire",
+      "confirmOverlap": "Confirmer quand même",
       "consultationFor": "Consultation pour {name}"
     },
     "reschedule": {

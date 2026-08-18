@@ -3,9 +3,31 @@ import { createClient } from '@supabase/supabase-js';
 import { generatePatientReminderEmail } from '@/lib/appointmentEmails';
 import { normalizePatientLanguage } from '@/lib/languagePreference';
 import { getBookingCalendarIntervals, type SecondaryCalendarPosition } from '@/lib/bookingCalendarIntervals';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
+
+const INTERNAL_ROLES = new Set(['admin', 'doctor', 'nurse', 'technician', 'staff']);
 
 export async function POST(request: Request) {
   try {
+    const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !authData.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: internalUser } = await supabaseAdmin
+      .from('users')
+      .select('role')
+      .eq('id', authData.user.id)
+      .maybeSingle();
+    if (!internalUser?.role || !INTERNAL_ROLES.has(internalUser.role)) {
+      return NextResponse.json({ error: 'Internal clinic access required' }, { status: 403 });
+    }
+
     const {
       patientId,
       noPatient = false,
@@ -249,8 +271,8 @@ export async function POST(request: Request) {
           .maybeSingle()
       : { data: null };
 
-    // Check for overlapping appointments for each provider (future bookings only)
-    // Skip this check for internal calendar bookings (allowOverlap = true)
+    // Internal users must explicitly confirm a practitioner overlap. This endpoint is
+    // authenticated above; public/online booking flows must never send this override.
     if (!allowOverlap) {
       const doctorIntervals = appointmentTimes.map((appointmentTime) => ({
         appointmentTime,
@@ -263,9 +285,6 @@ export async function POST(request: Request) {
         occurrence.intervals.doctorCalendarEnd > latest ? occurrence.intervals.doctorCalendarEnd : latest,
       doctorIntervals[0].intervals.doctorCalendarEnd);
 
-      if (earliestStart <= new Date()) {
-        // Existing behavior only checks future bookings. Skip past ranges.
-      } else {
       const { data: overlapping } = await supabase
         .from('appointments')
         .select('id, provider_id, reason, start_time, end_time')
@@ -285,10 +304,12 @@ export async function POST(request: Request) {
           .map((p: { name: string }) => p.name)
           .join(', ');
         return NextResponse.json(
-          { error: `Scheduling conflict: ${conflictingNames} already has an appointment during this time.` },
+          {
+            error: `Scheduling conflict: ${conflictingNames} already has an appointment during this time.`,
+            code: 'PRACTITIONER_UNAVAILABLE',
+          },
           { status: 409 }
         );
-      }
       }
     }
 

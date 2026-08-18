@@ -196,8 +196,9 @@
         }
       },
       "conflict": "CONFLICT",
+      "practitionerOverlapWarning": "This practitioner already has an appointment at this time. Do you still want to book this appointment?",
       "resourceUnavailableWarning": "One of the required resources is not available at this time.",
-      "confirmResourceOverride": "Confirm anyway",
+      "confirmOverlap": "Confirm anyway",
       "consultationFor": "Consultation for {name}"
     },
     "reschedule": {
