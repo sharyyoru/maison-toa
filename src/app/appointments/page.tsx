@@ -4098,18 +4098,27 @@ export default function CalendarPage() {
 
     // Save to database
     try {
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error("Unable to authenticate appointment move");
+
       const response = await fetch(`/api/appointments/${appt.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           provider_id: effectiveProviderId,
           start_time: newStartTime,
           end_time: newEndTime,
+          allow_practitioner_overlap: true,
         }),
       });
 
       if (!response.ok) {
-        console.error("Failed to move appointment");
+        const errorData = await response.json().catch(() => null);
+        console.error("Failed to move appointment:", errorData?.error || response.statusText);
         // Revert on failure
         setAppointments(prev => prev.map(a => 
           a.id === appt.id 
@@ -4191,13 +4200,23 @@ export default function CalendarPage() {
     setSavingReschedule(true);
     setRescheduleError(null);
     try {
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error(t("reschedule.failed"));
+
       const response = await fetch(`/api/appointments/${reschedulingAppointment.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           provider_id: rescheduleTarget.providerId,
           start_time: rescheduleTarget.startTime,
           end_time: rescheduleTarget.endTime,
+          // Calendar moves are an internal scheduling action and may
+          // intentionally place multiple appointments with one practitioner.
+          allow_practitioner_overlap: true,
         }),
       });
       const payload = await response.json().catch(() => null);
