@@ -227,6 +227,7 @@ export default function TaskCreateModal({
           status: "not_started" as TaskStatus,
           assigned_user_id: taskAssignedUserId || authUser.id,
           assigned_user_name: taskAssignedUserSearch || createdByName,
+          created_by_user_id: authUser.id,
           created_by_name: createdByName,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),

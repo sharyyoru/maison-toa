@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { useTasksNotifications } from "@/components/TasksNotificationsContext";
 import TaskEditModal from "@/components/TaskEditModal";
+import { completeTask } from "@/lib/completeTask";
 
 type NotificationPatient = {
   id: string;
@@ -210,23 +211,7 @@ export default function NotificationsPage() {
 
       const nowIso = new Date().toISOString();
 
-      const { data, error } = await supabaseClient
-        .from("tasks")
-        .update({
-          status: "completed",
-          updated_at: nowIso,
-          assigned_read_at: task.assigned_read_at ?? nowIso,
-        })
-        .eq("id", task.id)
-        .select(
-          "id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_name, assigned_read_at, assigned_user_id, assigned_user_name",
-        )
-        .single();
-
-      if (error || !data) {
-        setUpdatingTaskIds((prev) => prev.filter((id) => id !== task.id));
-        return;
-      }
+      const data = await completeTask(task.id);
 
       const updated = data as any;
 

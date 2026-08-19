@@ -35,18 +35,39 @@ export function TasksNotificationsProvider({
     }
 
     try {
-      const { count, error } = await supabaseClient
-        .from("tasks")
-        .select("id", { count: "exact", head: true })
-        .eq("assigned_user_id", user.id)
-        .is("assigned_read_at", null);
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
 
-      if (error) {
+      const [unreadResult, overdueResult, taskCommentsResult] = await Promise.all([
+        supabaseClient
+          .from("tasks")
+          .select("id")
+          .eq("assigned_user_id", user.id)
+          .neq("status", "completed")
+          .is("assigned_read_at", null),
+        supabaseClient
+          .from("tasks")
+          .select("id")
+          .eq("assigned_user_id", user.id)
+          .neq("status", "completed")
+          .lt("activity_date", startOfToday.toISOString()),
+        supabaseClient
+          .from("task_comment_mentions")
+          .select("id", { count: "exact", head: true })
+          .eq("mentioned_user_id", user.id)
+          .is("read_at", null),
+      ]);
+
+      if (unreadResult.error && overdueResult.error) {
         setOpenTasksCount(0);
         return;
       }
 
-      setOpenTasksCount(count ?? 0);
+      const notificationIds = new Set([
+        ...(unreadResult.data ?? []).map((task) => task.id),
+        ...(overdueResult.data ?? []).map((task) => task.id),
+      ]);
+      setOpenTasksCount(notificationIds.size + (taskCommentsResult.count ?? 0));
     } catch {
       setOpenTasksCount(0);
     }

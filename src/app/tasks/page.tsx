@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
@@ -8,6 +8,7 @@ import TaskEditModal from "@/components/TaskEditModal";
 import TaskCreateModal from "@/components/TaskCreateModal";
 import SmartTaskScannerModal from "@/components/SmartTaskScannerModal";
 import { useTasksNotifications } from "@/components/TasksNotificationsContext";
+import { completeTask } from "@/lib/completeTask";
 
 type TaskStatus = "not_started" | "in_progress" | "completed";
 
@@ -91,6 +92,7 @@ export default function TasksPage() {
   // Task edit modal
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null);
+  const openedTaskFromUrlRef = useRef<string | null>(null);
 
   // Task create modal
   const [createTaskModalOpen, setCreateTaskModalOpen] = useState(false);
@@ -170,6 +172,26 @@ export default function TasksPage() {
       isMounted = false;
     };
   }, [selectedUserId, refreshKey]);
+
+  // A task notification links here with ?task=<id>. Reveal that task directly,
+  // regardless of the table's current date or status filters.
+  useEffect(() => {
+    if (loading || tasks.length === 0 || typeof window === "undefined") return;
+    const taskId = new URLSearchParams(window.location.search).get("task");
+    if (!taskId || openedTaskFromUrlRef.current === taskId) return;
+
+    const linkedTask = tasks.find((task) => task.id === taskId);
+    if (!linkedTask) return;
+
+    openedTaskFromUrlRef.current = taskId;
+    setDateFilter("all");
+    setPriorityFilter("all");
+    setStatusFilter(linkedTask.status === "completed" ? "completed" : "open");
+    setSearchQuery("");
+    setPatientFilterId(null);
+    setSelectedTask(linkedTask);
+    setTaskModalOpen(true);
+  }, [loading, tasks]);
 
   // Load all users for admin selector
   useEffect(() => {
@@ -319,23 +341,8 @@ export default function TasksPage() {
     try {
       setUpdatingTaskIds((prev) => [...prev, task.id]);
 
-      const nowIso = new Date().toISOString();
-
-      const { data, error } = await supabaseClient
-        .from("tasks")
-        .update({ status: "completed" satisfies TaskStatus, updated_at: nowIso })
-        .eq("id", task.id)
-        .select(
-          "id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_name, assigned_user_name, patient:patients(id, first_name, last_name, email, phone)",
-        )
-        .single();
-
-      if (error || !data) {
-        setUpdatingTaskIds((prev) => prev.filter((id) => id !== task.id));
-        return;
-      }
-
-      const updated = data as unknown as TaskRow;
+      const data = await completeTask(task.id);
+      const updated = { ...task, ...data } as TaskRow;
       setTasks((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
       setUpdatingTaskIds((prev) => prev.filter((id) => id !== task.id));
     } catch {

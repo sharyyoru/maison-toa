@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { completeTask } from "@/lib/completeTask";
 
 type TaskStatus = "not_started" | "in_progress" | "completed";
 type TaskPriority = "low" | "medium" | "high";
@@ -355,21 +356,7 @@ export default function TaskEditModal({
       setCompleting(true);
       setError(null);
 
-      const { data, error: updateError } = await supabaseClient
-        .from("tasks")
-        .update({
-          status: "completed" as TaskStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", task.id)
-        .select("id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_name, assigned_user_id, assigned_user_name")
-        .single();
-
-      if (updateError || !data) {
-        setError(updateError?.message ?? "Failed to mark task as complete.");
-        setCompleting(false);
-        return;
-      }
+      const data = await completeTask(task.id);
 
       if (onTaskUpdated) {
         onTaskUpdated(data as Task);

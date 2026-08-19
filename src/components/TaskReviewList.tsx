@@ -275,6 +275,7 @@ export default function TaskReviewList({
               activity_date: task.dueDate ? task.dueDate : null,
               assigned_user_id: task.assignedUserId || authUser.id,
               assigned_user_name: task.assignedUserName || createdByName,
+              created_by_user_id: authUser.id,
               created_by_name: createdByName,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
