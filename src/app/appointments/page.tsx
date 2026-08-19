@@ -3309,6 +3309,32 @@ export default function CalendarPage() {
       };
       let accessToken: string | null = null;
 
+      const postMultiAppointment = async (body: Record<string, unknown>) => {
+        const sendRequest = (token: string) => fetch('/api/appointments/create-multi', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        });
+
+        let response = await sendRequest(accessToken!);
+        if (response.status !== 401) return response;
+
+        // getSession() reads the cached browser session. If its access token has
+        // expired or was revoked, refresh it once and retry the authenticated API
+        // request instead of surfacing the endpoint's raw "Unauthorized" error.
+        const { data: refreshedSession, error: refreshError } =
+          await supabaseClient.auth.refreshSession();
+        const refreshedAccessToken = refreshedSession.session?.access_token ?? null;
+        if (refreshError || !refreshedAccessToken) return response;
+
+        accessToken = refreshedAccessToken;
+        response = await sendRequest(refreshedAccessToken);
+        return response;
+      };
+
       if (useMultiAPI) {
         const { data: sessionData } = await supabaseClient.auth.getSession();
         accessToken = sessionData.session?.access_token ?? null;
@@ -3318,17 +3344,15 @@ export default function CalendarPage() {
           return;
         }
 
-        const preflightResponse = await fetch('/api/appointments/create-multi', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ ...multiRequestBody, checkOnly: true }),
-        });
+        const preflightResponse = await postMultiAppointment({ ...multiRequestBody, checkOnly: true });
 
         if (!preflightResponse.ok) {
           const errorData = await preflightResponse.json();
+          if (preflightResponse.status === 401) {
+            setCreateError('Your session has expired. Please sign in again.');
+            setSavingCreate(false);
+            return;
+          }
           if (preflightResponse.status === 409 && errorData.code === 'OVERLAP_CONFIRMATION_REQUIRED') {
             setOverlapConfirmation({ type: "combined", allowPractitionerOverlap: true, allowResourceOverlap: true });
             setSavingCreate(false);
@@ -3377,20 +3401,18 @@ export default function CalendarPage() {
       }
 
       if (useMultiAPI) {
-        const response = await fetch('/api/appointments/create-multi', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            ...multiRequestBody,
-            sendEmailNotification: shouldSendEmailNotification,
-          })
+        const response = await postMultiAppointment({
+          ...multiRequestBody,
+          sendEmailNotification: shouldSendEmailNotification,
         });
         
         if (!response.ok) {
           const errorData = await response.json();
+          if (response.status === 401) {
+            setCreateError('Your session has expired. Please sign in again.');
+            setSavingCreate(false);
+            return;
+          }
           if (response.status === 409 && errorData.code === 'OVERLAP_CONFIRMATION_REQUIRED') {
             setOverlapConfirmation({
               type: "combined",
