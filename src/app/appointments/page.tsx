@@ -405,6 +405,7 @@ function getLogicalPatientAppointmentStart(appointment: {
 const DAY_VIEW_START_MINUTES = 6 * 60;
 const DAY_VIEW_END_MINUTES = 20 * 60; // 8 PM
 const DAY_VIEW_SLOT_MINUTES = 15;
+const DAY_VIEW_INTERACTION_MINUTES = 5;
 const DAY_VIEW_RESIZE_MINUTES = 5;
 const DAY_VIEW_SLOT_HEIGHT = 28;
 
@@ -2915,17 +2916,30 @@ export default function CalendarPage() {
   }
 
   // Handle drag-to-create appointment
+  function getMinutesFromSlotPointer(
+    clientY: number,
+    slotElement: HTMLDivElement,
+    slotStartMinutes: number,
+  ): number {
+    const rect = slotElement.getBoundingClientRect();
+    const relativeY = Math.max(0, Math.min(clientY - rect.top, rect.height - 1));
+    const minutesIntoSlot = Math.floor(
+      ((relativeY / rect.height) * DAY_VIEW_SLOT_MINUTES) / DAY_VIEW_INTERACTION_MINUTES,
+    ) * DAY_VIEW_INTERACTION_MINUTES;
+    return slotStartMinutes + minutesIntoSlot;
+  }
+
   function handleDragCreateStart(date: Date, totalMinutes: number, doctorCalendarId?: string | null) {
     setIsDraggingCreate(true);
     setDragDate(date);
     setDragStartMinutes(totalMinutes);
-    setDragEndMinutes(totalMinutes + DAY_VIEW_SLOT_MINUTES);
+    setDragEndMinutes(totalMinutes + DAY_VIEW_INTERACTION_MINUTES);
     setDragDoctorCalendarId(doctorCalendarId ?? null);
   }
 
   function handleDragCreateMove(totalMinutes: number) {
     if (!isDraggingCreate || dragStartMinutes === null) return;
-    setDragEndMinutes(totalMinutes + DAY_VIEW_SLOT_MINUTES);
+    setDragEndMinutes(totalMinutes + DAY_VIEW_INTERACTION_MINUTES);
   }
 
   function handleDragCreateEnd() {
@@ -3029,7 +3043,11 @@ export default function CalendarPage() {
       startMinutesOffset: DAY_VIEW_START_MINUTES,
     };
     
-    handleDragCreateStart(date, totalMinutes, doctorCalendarId);
+    const touch = e.touches[0];
+    const preciseMinutes = touch
+      ? getMinutesFromSlotPointer(touch.clientY, slotElement, totalMinutes)
+      : totalMinutes;
+    handleDragCreateStart(date, preciseMinutes, doctorCalendarId);
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
@@ -3042,15 +3060,17 @@ export default function CalendarPage() {
     
     const { containerTop, slotHeight, startMinutesOffset } = touchDragInfoRef.current;
     
-    // Calculate which time slot the touch is over
+    // Keep touch interactions aligned to five-minute increments while the
+    // visible calendar grid remains at fifteen-minute intervals.
     const relativeY = touch.clientY - containerTop;
-    const slotIndex = Math.floor(relativeY / slotHeight);
-    const totalMinutes = startMinutesOffset + (slotIndex * DAY_VIEW_SLOT_MINUTES);
+    const rawMinutes = startMinutesOffset + (relativeY / slotHeight) * DAY_VIEW_SLOT_MINUTES;
+    const totalMinutes = Math.floor(rawMinutes / DAY_VIEW_INTERACTION_MINUTES)
+      * DAY_VIEW_INTERACTION_MINUTES;
     
     // Clamp to valid range
     const clampedMinutes = Math.max(
       DAY_VIEW_START_MINUTES,
-      Math.min(totalMinutes, DAY_VIEW_END_MINUTES - DAY_VIEW_SLOT_MINUTES)
+      Math.min(totalMinutes, DAY_VIEW_END_MINUTES - DAY_VIEW_INTERACTION_MINUTES)
     );
     
     handleDragCreateMove(clampedMinutes);
@@ -4021,12 +4041,15 @@ export default function CalendarPage() {
   function getDropTargetMinutes(e: React.DragEvent, column: HTMLDivElement): number {
     const rect = column.getBoundingClientRect();
     const relativeY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
-    const slotIndex = Math.floor(relativeY / DAY_VIEW_SLOT_HEIGHT);
+    const rawMinutes = DAY_VIEW_START_MINUTES
+      + (relativeY / DAY_VIEW_SLOT_HEIGHT) * DAY_VIEW_SLOT_MINUTES;
+    const snappedMinutes = Math.floor(rawMinutes / DAY_VIEW_INTERACTION_MINUTES)
+      * DAY_VIEW_INTERACTION_MINUTES;
     return Math.max(
       DAY_VIEW_START_MINUTES,
       Math.min(
-        DAY_VIEW_START_MINUTES + slotIndex * DAY_VIEW_SLOT_MINUTES,
-        DAY_VIEW_END_MINUTES - DAY_VIEW_SLOT_MINUTES,
+        snappedMinutes,
+        DAY_VIEW_END_MINUTES - DAY_VIEW_INTERACTION_MINUTES,
       ),
     );
   }
@@ -5914,21 +5937,38 @@ export default function CalendarPage() {
                                       key={totalMinutes}
                                       onMouseDown={(e) => {
                                         e.preventDefault();
+                                        const preciseMinutes = getMinutesFromSlotPointer(
+                                          e.clientY,
+                                          e.currentTarget,
+                                          totalMinutes,
+                                        );
                                         if (reschedulingAppointment) {
-                                          selectRescheduleTarget(doctorCol?.id ?? "", date, totalMinutes);
+                                          selectRescheduleTarget(doctorCol?.id ?? "", date, preciseMinutes);
                                           return;
                                         }
-                                        handleDragCreateStart(date, totalMinutes, doctorCol?.id);
+                                        handleDragCreateStart(date, preciseMinutes, doctorCol?.id);
                                       }}
-                                      onMouseEnter={() => {
+                                      onMouseMove={(e) => {
                                         if (isDraggingCreate && dragDate && formatYmd(dragDate) === ymd) {
-                                          handleDragCreateMove(totalMinutes);
+                                          handleDragCreateMove(getMinutesFromSlotPointer(
+                                            e.clientY,
+                                            e.currentTarget,
+                                            totalMinutes,
+                                          ));
                                         }
                                       }}
                                       onTouchStart={(e) => {
                                         if (reschedulingAppointment) {
                                           e.preventDefault();
-                                          selectRescheduleTarget(doctorCol?.id ?? "", date, totalMinutes);
+                                          const touch = e.touches[0];
+                                          const preciseMinutes = touch
+                                            ? getMinutesFromSlotPointer(
+                                                touch.clientY,
+                                                e.currentTarget,
+                                                totalMinutes,
+                                              )
+                                            : totalMinutes;
+                                          selectRescheduleTarget(doctorCol?.id ?? "", date, preciseMinutes);
                                           return;
                                         }
                                         handleTouchStart(e, date, totalMinutes, doctorCol?.id ?? null, e.currentTarget);
