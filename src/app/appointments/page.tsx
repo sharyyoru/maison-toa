@@ -975,6 +975,11 @@ export default function CalendarPage() {
   const [dragEndMinutes, setDragEndMinutes] = useState<number | null>(null);
   const [dragDate, setDragDate] = useState<Date | null>(null);
   const [dragDoctorCalendarId, setDragDoctorCalendarId] = useState<string | null>(null);
+  const [hoveredSlot, setHoveredSlot] = useState<{
+    minutes: number;
+    x: number;
+    y: number;
+  } | null>(null);
   
   // Drag-to-move appointment between doctors state
   const [draggedAppointment, setDraggedAppointment] = useState<CalendarAppointment | null>(null);
@@ -2930,6 +2935,7 @@ export default function CalendarPage() {
   }
 
   function handleDragCreateStart(date: Date, totalMinutes: number, doctorCalendarId?: string | null) {
+    setHoveredSlot(null);
     setIsDraggingCreate(true);
     setDragDate(date);
     setDragStartMinutes(totalMinutes);
@@ -5949,14 +5955,23 @@ export default function CalendarPage() {
                                         handleDragCreateStart(date, preciseMinutes, doctorCol?.id);
                                       }}
                                       onMouseMove={(e) => {
+                                        const preciseMinutes = getMinutesFromSlotPointer(
+                                          e.clientY,
+                                          e.currentTarget,
+                                          totalMinutes,
+                                        );
                                         if (isDraggingCreate && dragDate && formatYmd(dragDate) === ymd) {
-                                          handleDragCreateMove(getMinutesFromSlotPointer(
-                                            e.clientY,
-                                            e.currentTarget,
-                                            totalMinutes,
-                                          ));
+                                          handleDragCreateMove(preciseMinutes);
+                                          setHoveredSlot(null);
+                                          return;
                                         }
+                                        setHoveredSlot({
+                                          minutes: preciseMinutes,
+                                          x: Math.min(e.clientX + 12, window.innerWidth - 72),
+                                          y: Math.max(e.clientY - 34, 8),
+                                        });
                                       }}
+                                      onMouseLeave={() => setHoveredSlot(null)}
                                       onTouchStart={(e) => {
                                         if (reschedulingAppointment) {
                                           e.preventDefault();
@@ -8655,6 +8670,16 @@ export default function CalendarPage() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {hoveredSlot && !isDraggingCreate && (
+          <div
+            role="tooltip"
+            className="pointer-events-none fixed z-[100] rounded-md bg-slate-900 px-2 py-1 text-[11px] font-semibold tabular-nums text-white shadow-lg"
+            style={{ left: hoveredSlot.x, top: hoveredSlot.y }}
+          >
+            {formatTimeOptionLabel(hoveredSlot.minutes)}
           </div>
         )}
 
