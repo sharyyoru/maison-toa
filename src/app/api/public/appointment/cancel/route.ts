@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     // Cancel the appointment
     const { error: updateError } = await supabase
       .from("appointments")
-      .update({ status: "cancelled" })
+      .update({ status: "cancelled", cancellation_source: "patient" })
       .eq("id", id);
 
     if (updateError) {

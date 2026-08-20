@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
         // Cancel the appointment
         await supabaseAdmin
           .from("appointments")
-          .update({ status: "cancelled" })
+          .update({ status: "cancelled", cancellation_source: "deposit_unpaid" })
           .eq("id", invoice.appointment_id);
 
         // Cancel the invoice

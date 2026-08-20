@@ -107,6 +107,11 @@ export async function PATCH(
     }
 
     const proposedStatus = typeof updateData.status === "string" ? updateData.status : currentAppointment.status;
+    if (proposedStatus === "cancelled" && currentAppointment.status !== "cancelled") {
+      updateData.cancellation_source = "clinic";
+    } else if (proposedStatus !== "cancelled") {
+      updateData.cancellation_source = null;
+    }
     const proposedStart = new Date(
       typeof updateData.start_time === "string" ? updateData.start_time : currentAppointment.start_time,
     );

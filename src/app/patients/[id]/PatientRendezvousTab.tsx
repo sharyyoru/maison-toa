@@ -23,6 +23,7 @@ type Appointment = {
   start_time: string;
   end_time: string | null;
   status: AppointmentStatus;
+  cancellation_source: "patient" | "clinic" | "deposit_unpaid" | null;
   reason: string | null;
   title?: string | null;
   notes?: string | null;
@@ -122,6 +123,15 @@ const STATUS_LABELS: Record<AppointmentStatus, string> = {
   no_show: "No Show",
 };
 
+function getStatusLabel(appointment: Appointment, t: ReturnType<typeof useTranslations>): string {
+  if (appointment.status !== "cancelled") {
+    return STATUS_LABELS[appointment.status] ?? appointment.status;
+  }
+  if (appointment.cancellation_source === "patient") return t("cancelledByPatient");
+  if (appointment.cancellation_source === "deposit_unpaid") return t("cancelledDepositUnpaid");
+  return t("cancelledByClinic");
+}
+
 function getServiceFromReason(reason: string | null): string {
   if (!reason) return "Appointment";
   const firstBracketIndex = reason.indexOf("[");
@@ -213,7 +223,7 @@ export default function PatientRendezvousTab({
         const { data, error: queryError } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, provider:providers(id, name)"
+            "id, patient_id, provider_id, start_time, end_time, status, cancellation_source, reason, title, notes, location, provider:providers(id, name)"
           )
           .eq("patient_id", patientId)
           .is("linked_parent_appointment_id", null)
@@ -455,7 +465,7 @@ export default function PatientRendezvousTab({
         })
         .eq("id", editingAppointment.id)
         .select(
-          "id, patient_id, provider_id, start_time, end_time, status, reason, title, notes, location, provider:providers(id, name)"
+          "id, patient_id, provider_id, start_time, end_time, status, cancellation_source, reason, title, notes, location, provider:providers(id, name)"
         )
         .single();
 
@@ -468,9 +478,6 @@ export default function PatientRendezvousTab({
       const updated = data as unknown as Appointment;
 
       setAppointments((prev) => {
-        if (updated.status === "cancelled") {
-          return prev.filter((appt) => appt.id !== updated.id);
-        }
         return prev.map((appt) => (appt.id === updated.id ? updated : appt));
       });
 
@@ -722,7 +729,7 @@ export default function PatientRendezvousTab({
                           STATUS_COLORS[appt.status] ?? "bg-slate-100 text-slate-600 border-slate-200"
                         }`}
                       >
-                        {STATUS_LABELS[appt.status] ?? appt.status}
+                        {getStatusLabel(appt, t)}
                       </span>
                     </td>
                     <td className="py-3 pr-4">
