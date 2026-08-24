@@ -96,12 +96,18 @@ export async function POST(req: NextRequest) {
         const paidAmount = (session.amount_total || 0) / 100;
         const fullPrice = parseFloat(session.metadata?.full_price || "0");
         const paymentIntentId = session.payment_intent as string;
+        const paidNowIso = new Date().toISOString();
 
         await supabase.from("invoices").update({
           status: "PAID",
           deposit_status: "paid",
           paid_amount: paidAmount,
-          paid_at: new Date().toISOString(),
+          paid_at: paidNowIso,
+          // BILL-011: the invoice was created (as OPEN) when the deposit link
+          // was generated, which can be well before the patient actually
+          // pays it. Once payment is confirmed, invoice_date must reflect
+          // the actual payment date, not the original creation date.
+          invoice_date: paidNowIso.split("T")[0],
           stripe_payment_intent_id: paymentIntentId,
           stripe_session_id: null,
           stripe_session_expires_at: null,
