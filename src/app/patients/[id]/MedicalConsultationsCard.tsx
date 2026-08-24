@@ -35,6 +35,7 @@ import AcfAccordionTree from "@/components/AcfAccordionTree";
 import { type MediDataInvoiceStatus } from "@/lib/medidata";
 import { usePatientRealtime } from "./PatientRealtimeContext";
 import { usePDFJobNotifications } from "@/components/PDFJobNotificationsContext";
+import { getSwissDayRange } from "@/lib/swissTimezone";
 
 type TaskPriority = "low" | "medium" | "high";
 
@@ -1910,6 +1911,7 @@ export default function MedicalConsultationsCard({
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [dateFrom, setDateFrom] = useState<string | "">("");
   const [dateTo, setDateTo] = useState<string | "">("");
+  const [consultationVisibleCount, setConsultationVisibleCount] = useState(20);
   const [consultationDurationSeconds, setConsultationDurationSeconds] =
     useState<number>(0);
   const [
@@ -2400,8 +2402,12 @@ export default function MedicalConsultationsCard({
   );
 
   const filteredSortedConsultations = useMemo(() => {
-    const fromDate = dateFrom ? new Date(dateFrom) : null;
-    const toDate = dateTo ? new Date(dateTo) : null;
+    // Use Swiss timezone day boundaries for date filtering so notes saved at
+    // midnight Swiss time (22:00 UTC the previous day) are not hidden.
+    const fromRange = dateFrom ? getSwissDayRange(dateFrom) : null;
+    const toRange = dateTo ? getSwissDayRange(dateTo) : null;
+    const fromDate = fromRange ? new Date(fromRange.start) : null;
+    const toDate = toRange ? new Date(toRange.end) : null;
 
     const filtered = consultations.filter((row) => {
       const scheduled = row.scheduled_at ? new Date(row.scheduled_at) : null;
@@ -2426,11 +2432,7 @@ export default function MedicalConsultationsCard({
       }
 
       if (fromDate && scheduled < fromDate) return false;
-      if (toDate) {
-        const toInclusive = new Date(toDate);
-        toInclusive.setHours(23, 59, 59, 999);
-        if (scheduled > toInclusive) return false;
-      }
+      if (toDate && scheduled > toDate) return false;
 
       return true;
     });
@@ -2439,6 +2441,16 @@ export default function MedicalConsultationsCard({
       .slice()
       .sort((a, b) => compareConsultationRows(a, b, sortOrder));
   }, [consultations, dateFrom, dateTo, sortOrder, recordTypeFilter, invoiceStatusFilter]);
+
+  // Reset visible count when filters change so the user always starts from the top.
+  useEffect(() => {
+    setConsultationVisibleCount(20);
+  }, [dateFrom, dateTo, sortOrder, recordTypeFilter, invoiceStatusFilter, showArchived]);
+
+  const visibleConsultations = useMemo(
+    () => filteredSortedConsultations.slice(0, consultationVisibleCount),
+    [filteredSortedConsultations, consultationVisibleCount],
+  );
 
   const unlockedDraftConsultations = useMemo(
     () =>
@@ -10849,7 +10861,7 @@ export default function MedicalConsultationsCard({
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredSortedConsultations.map((row) => {
+              {visibleConsultations.map((row) => {
                 const scheduled = row.scheduled_at
                   ? new Date(row.scheduled_at)
                   : null;
@@ -11910,6 +11922,17 @@ export default function MedicalConsultationsCard({
                   </div>
                 );
               })}
+              {visibleConsultations.length < filteredSortedConsultations.length && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setConsultationVisibleCount((prev) => prev + 20)
+                  }
+                  className="w-full rounded-lg border border-slate-200 bg-white py-2 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50"
+                >
+                  Load more ({filteredSortedConsultations.length - visibleConsultations.length} remaining)
+                </button>
+              )}
             </div>
           )}
         </div>
