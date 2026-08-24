@@ -124,6 +124,9 @@ type ConsultationRow = {
   medidata_status: string | null;
   collab_room_id?: string | null;
   is_draft?: boolean | null;
+  // BILL-012: billing entity short code (e.g. "AP_TOA", "SOINS_AP") for display
+  billing_entity_short_code?: string | null;
+  billing_entity_name?: string | null;
 };
 
 function compareConsultationRows(a: ConsultationRow, b: ConsultationRow, direction: SortOrder = "desc") {
@@ -195,6 +198,7 @@ type Provider = {
   vat_enabled?: boolean | null;
   vat_rate?: number | null;
   doctor_id?: string | null;
+  short_code?: string | null;
 };
 
 type PrescriptionLine = {
@@ -2506,7 +2510,7 @@ export default function MedicalConsultationsCard({
       try {
         const { data } = await supabaseClient
           .from("providers")
-          .select("id, name, specialty, email, phone, gln, zsr, canton, role, iban, billing_type, invoice_method, vat_enabled, vat_rate, doctor_id")
+          .select("id, name, specialty, email, phone, gln, zsr, canton, role, iban, billing_type, invoice_method, vat_enabled, vat_rate, doctor_id, short_code")
           .order("name");
         if (!isMounted) return;
         if (data) {
@@ -2697,7 +2701,12 @@ export default function MedicalConsultationsCard({
             content: null,
             record_type: "invoice" as ConsultationRecordType,
             doctor_user_id: inv.doctor_user_id ?? null,
-            doctor_name: inv.provider_name || inv.doctor_name || null,
+            doctor_name: inv.doctor_name ?? null,
+            billing_entity_name: inv.provider_name ?? null,
+            billing_entity_short_code: (() => {
+              const be = (providerOptions as Provider[]).find((p) => p.name === inv.provider_name && p.role === "billing_entity");
+              return be?.short_code ?? null;
+            })(),
             scheduled_at: inv.treatment_date || inv.invoice_date || new Date().toISOString(),
             payment_method: inv.payment_method ?? null,
             duration_seconds: null,
@@ -6046,7 +6055,10 @@ export default function MedicalConsultationsCard({
         doc.setFontSize(8);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(110, 110, 110);
-        doc.text(`Doctor: ${row.doctor_name}`, marginLeft, y);
+        const billingLabel = row.billing_entity_short_code
+          ? `Doctor: ${row.doctor_name}  |  Billing: ${row.billing_entity_short_code}`
+          : `Doctor: ${row.doctor_name}`;
+        doc.text(billingLabel, marginLeft, y);
         y += 4.5;
       }
 
@@ -7622,7 +7634,7 @@ export default function MedicalConsultationsCard({
                             doctor_user_id: consultationDoctorId || null,
                             doctor_name: doctorName,
                             provider_id: finalProviderId,
-                            provider_name: "TOA SA",
+                            provider_name: finalProviderName,
                             provider_gln: finalProviderGln,
                             provider_zsr: finalProviderZsr,
                             provider_iban: finalProviderIban,
@@ -10976,6 +10988,11 @@ export default function MedicalConsultationsCard({
                           {row.doctor_name && (
                             <div className={`text-[15px] font-semibold ${isLockedNote ? "text-slate-600" : "text-slate-900"}`}>
                               {row.doctor_name}
+                            </div>
+                          )}
+                          {row.billing_entity_short_code && (
+                            <div className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${isLockedNote ? "border-slate-300 bg-slate-200 text-slate-600" : "border-indigo-200 bg-indigo-50 text-indigo-700"}`}>
+                              {row.billing_entity_short_code}
                             </div>
                           )}
                           {scheduledLabel && (

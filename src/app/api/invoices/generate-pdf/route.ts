@@ -372,7 +372,7 @@ export async function POST(request: NextRequest) {
 
       const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
       const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
-      const provName = "TOA SA";
+      const provName = billingEntityData?.name || invoiceData.provider_name || "TOA SA";
       const provStreet = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Voie du Chariot 6";
       const provZip = billingEntityData?.zip_code || "1003";
       const provCity = billingEntityData?.city || "Lausanne";
@@ -698,7 +698,7 @@ export async function POST(request: NextRequest) {
 
       const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
       const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
-      const provName = "TOA SA";
+      const provName = billingEntityData?.name || invoiceData.provider_name || "TOA SA";
       const provStreetFull = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Voie du Chariot 6";
       const provZip = billingEntityData?.zip_code || "1003";
       const provCity = billingEntityData?.city || "Lausanne";
