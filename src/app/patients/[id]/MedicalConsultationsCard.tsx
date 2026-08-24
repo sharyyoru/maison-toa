@@ -124,8 +124,10 @@ type ConsultationRow = {
   medidata_status: string | null;
   collab_room_id?: string | null;
   is_draft?: boolean | null;
-  // BILL-012: billing entity short code (e.g. "AP_TOA", "SOINS_AP") for display
-  billing_entity_short_code?: string | null;
+  // BILL-012: billing entity (clinic) linked to the invoice, for display.
+  // The short_code (e.g. "AP_TOA", "SOINS_AP") is resolved at render time
+  // from `providerOptions` via `billing_entity_id` — see getBillingEntityShortCode.
+  billing_entity_id?: string | null;
   billing_entity_name?: string | null;
 };
 
@@ -2405,6 +2407,22 @@ export default function MedicalConsultationsCard({
     (option) => option.value !== "notes",
   );
 
+  // BILL-012: map of billing entity id -> short_code (e.g. "AP_TOA", "SOINS_AP").
+  // Computed from `providerOptions` at render time (not baked into consultation
+  // rows at fetch time) so the badge is always correct regardless of whether
+  // providers finish loading before or after consultations/invoices.
+  const billingEntityShortCodeById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of providerOptions) {
+      if (p.role === "billing_entity" && p.short_code) {
+        map.set(p.id, p.short_code);
+      }
+    }
+    return map;
+  }, [providerOptions]);
+  const getBillingEntityShortCode = (id: string | null | undefined): string | null =>
+    (id && billingEntityShortCodeById.get(id)) || null;
+
   const filteredSortedConsultations = useMemo(() => {
     // Use Swiss timezone day boundaries for date filtering so notes saved at
     // midnight Swiss time (22:00 UTC the previous day) are not hidden.
@@ -2679,7 +2697,7 @@ export default function MedicalConsultationsCard({
         const { data: invoiceData, error: invoiceError } = await supabaseClient
           .from("invoices")
           .select(
-            "id, patient_id, consultation_id, invoice_number, invoice_date, due_date, treatment_date, doctor_user_id, doctor_name, provider_name, payment_method, total_amount, subtotal, paid_amount, status, is_complimentary, cash_receipt_path, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, title, reference_number, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at, stop_reminders",
+            "id, patient_id, consultation_id, invoice_number, invoice_date, due_date, treatment_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, subtotal, paid_amount, status, is_complimentary, cash_receipt_path, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, title, reference_number, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at, stop_reminders",
           )
           .eq("patient_id", patientId)
           .eq("is_archived", showArchived ? true : false)
@@ -2702,11 +2720,8 @@ export default function MedicalConsultationsCard({
             record_type: "invoice" as ConsultationRecordType,
             doctor_user_id: inv.doctor_user_id ?? null,
             doctor_name: inv.doctor_name ?? null,
+            billing_entity_id: inv.provider_id ?? null,
             billing_entity_name: inv.provider_name ?? null,
-            billing_entity_short_code: (() => {
-              const be = (providerOptions as Provider[]).find((p) => p.name === inv.provider_name && p.role === "billing_entity");
-              return be?.short_code ?? null;
-            })(),
             scheduled_at: inv.treatment_date || inv.invoice_date || new Date().toISOString(),
             payment_method: inv.payment_method ?? null,
             duration_seconds: null,
@@ -6055,8 +6070,9 @@ export default function MedicalConsultationsCard({
         doc.setFontSize(8);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(110, 110, 110);
-        const billingLabel = row.billing_entity_short_code
-          ? `Doctor: ${row.doctor_name}  |  Billing: ${row.billing_entity_short_code}`
+        const rowBillingShortCode = getBillingEntityShortCode(row.billing_entity_id);
+        const billingLabel = rowBillingShortCode
+          ? `Doctor: ${row.doctor_name}  |  Billing: ${rowBillingShortCode}`
           : `Doctor: ${row.doctor_name}`;
         doc.text(billingLabel, marginLeft, y);
         y += 4.5;
@@ -10887,6 +10903,7 @@ export default function MedicalConsultationsCard({
                 const isInvoice = row.record_type === "invoice";
                 const is3d = row.record_type === "3d";
                 const isLockedNote = isNotes && row.is_draft === false;
+                const billingEntityShortCode = getBillingEntityShortCode(row.billing_entity_id);
 
                 const baseRecordTypeLabel =
                   consultationRecordTypeOptions.find(
@@ -10990,9 +11007,9 @@ export default function MedicalConsultationsCard({
                               {row.doctor_name}
                             </div>
                           )}
-                          {row.billing_entity_short_code && (
+                          {billingEntityShortCode && (
                             <div className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${isLockedNote ? "border-slate-300 bg-slate-200 text-slate-600" : "border-indigo-200 bg-indigo-50 text-indigo-700"}`}>
-                              {row.billing_entity_short_code}
+                              {billingEntityShortCode}
                             </div>
                           )}
                           {scheduledLabel && (
