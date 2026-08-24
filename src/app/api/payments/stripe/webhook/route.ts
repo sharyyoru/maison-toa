@@ -5,6 +5,8 @@ import { sendEmail, isEmailConfigured } from "@/lib/email";
 import { generatePatientConfirmationEmail } from "@/lib/appointmentEmails";
 import { formatDepositPaymentMethod, generateDepositConfirmationEmail } from "@/lib/depositConfirmationEmail";
 import { brandedEmail } from "@/utils/emailTemplate";
+import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
+import { resolveDepositBillingEntity } from "@/lib/depositBillingEntity";
 import Stripe from "stripe";
 
 const supabase = createClient(
@@ -287,19 +289,33 @@ export async function POST(req: NextRequest) {
           .limit(1);
         const patientId = patients?.[0]?.id ?? null;
 
-        // 3. Look up provider by doctor slug/name for billing
+        // 3. Look up the treating doctor via their booking slug (the same
+        // reliable mapping used to create the appointment above), then
+        // resolve the deposit's billing entity from that doctor (BILL-010:
+        // some doctors must get their medical/"Dr X" entity instead of the
+        // default aesthetic/"Soins X" entity).
         const doctorSlug = m.doctor_slug || "";
         const doctorName = m.doctor_name || "";
         let provider: any = null;
 
-        const { data: providerBySlug } = await supabase
-          .from("providers")
-          .select("id, name, iban, gln, zsr")
-          .ilike("name", `%${doctorName.replace(/^Dr\.\s*/i, "").split(" ")[0]}%`)
-          .in("role", ["provider", "billing_entity"])
-          .limit(1)
-          .single();
-        provider = providerBySlug;
+        const calendarLink = doctorSlug ? await resolveBookingDoctorCalendar(supabase, doctorSlug) : null;
+        if (calendarLink?.providerId) {
+          provider = await resolveDepositBillingEntity(supabase, calendarLink.providerId, doctorName);
+        }
+
+        // Fallback for the rare case the slug doesn't resolve to a known
+        // doctor — preserves prior behavior rather than leaving the deposit
+        // invoice with no billing entity at all.
+        if (!provider) {
+          const { data: providerByName } = await supabase
+            .from("providers")
+            .select("id, name, iban, gln, zsr")
+            .ilike("name", `%${doctorName.replace(/^Dr\.\s*/i, "").split(" ")[0]}%`)
+            .eq("role", "billing_entity")
+            .limit(1)
+            .single();
+          provider = providerByName;
+        }
 
         // 4. Create PARTIAL_PAID invoice with proper fields
         if (patientId && fullPrice > 0) {

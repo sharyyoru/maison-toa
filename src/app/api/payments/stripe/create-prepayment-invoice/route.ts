@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { resolveDepositBillingEntity } from "@/lib/depositBillingEntity";
 import { randomBytes } from "crypto";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
@@ -35,18 +36,10 @@ export async function POST(req: NextRequest) {
       doctor = data;
     }
 
-    // Auto-select billing entity: prefer aesthetic type linked to this doctor
-    let billingEntity: any = null;
-    if (doctorId) {
-      const { data: entities } = await supabaseAdmin
-        .from("providers")
-        .select("id, name, iban, gln, zsr, billing_type")
-        .eq("role", "billing_entity")
-        .eq("doctor_id", doctorId);
-      if (entities && entities.length > 0) {
-        billingEntity = entities.find((e: any) => e.billing_type === "aesthetic") ?? entities[0];
-      }
-    }
+    // Auto-select billing entity linked to this doctor (BILL-010: some
+    // doctors must get their medical/"Dr X" entity instead of the default
+    // aesthetic/"Soins X" entity — see resolveDepositBillingEntity).
+    let billingEntity: any = await resolveDepositBillingEntity(supabaseAdmin, doctorId, doctor?.name);
     // Fallback: first billing entity
     if (!billingEntity) {
       const { data: fallback } = await supabaseAdmin
