@@ -2764,13 +2764,18 @@ export default function MedicalConsultationsCard({
         // 4a) Link consultations to their invoices (invoices.consultation_id â†’ consultations.id)
         const consultationIdsForLinking = nonInvoiceRows.map((r) => r.id);
         if (consultationIdsForLinking.length > 0 && invoiceData && invoiceData.length > 0) {
-          const invoiceByConsultId = new Map<string, { id: string; status: string; invoice_number: string }>();
+          const invoiceByConsultId = new Map<
+            string,
+            { id: string; status: string; invoice_number: string; provider_id: string | null; provider_name: string | null }
+          >();
           for (const inv of invoiceData as any[]) {
             if (inv.consultation_id) {
               invoiceByConsultId.set(inv.consultation_id, {
                 id: inv.id,
                 status: inv.status || "OPEN",
                 invoice_number: inv.invoice_number || inv.id,
+                provider_id: inv.provider_id ?? null,
+                provider_name: inv.provider_name ?? null,
               });
             }
           }
@@ -2780,6 +2785,11 @@ export default function MedicalConsultationsCard({
               row.linked_invoice_id = linked.id;
               row.linked_invoice_status = linked.status as InvoiceStatus;
               row.linked_invoice_number = linked.invoice_number;
+              // BILL-012 follow-up: show the linked invoice's billing entity
+              // short-code badge on the consultation note itself, not just
+              // on the invoice row.
+              row.billing_entity_id = linked.provider_id;
+              row.billing_entity_name = linked.provider_name;
             }
           }
         }
