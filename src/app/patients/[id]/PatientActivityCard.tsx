@@ -3671,7 +3671,7 @@ export default function PatientActivityCard({
                             ) : null}
                             {task.document_path && task.document_bucket ? (
                               <a
-                                href={`/api/documents/download?bucket=${encodeURIComponent(task.document_bucket)}&path=${encodeURIComponent(task.document_path)}`}
+                                href={`/api/documents/download?bucket=${encodeURIComponent(task.document_bucket)}&path=${encodeURIComponent(task.document_path)}&patientId=${encodeURIComponent(patientId)}`}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="mt-1 inline-flex items-center gap-1 font-medium text-sky-700 hover:text-sky-800 hover:underline"

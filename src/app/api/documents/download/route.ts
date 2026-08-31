@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const bucket = searchParams.get("bucket") || "patient-documents";
     const path = searchParams.get("path");
+    const patientId = searchParams.get("patientId");
 
     if (!path) {
       return NextResponse.json(
@@ -21,9 +22,24 @@ export async function GET(request: NextRequest) {
 
     console.log(`Downloading from bucket: ${bucket}, path: ${path}`);
 
-    const { data, error } = await supabaseAdmin.storage
+    let downloadPath = path;
+    let { data, error } = await supabaseAdmin.storage
       .from(bucket)
-      .download(path);
+      .download(downloadPath);
+
+    if (
+      (error || !data) &&
+      bucket === "patient-documents" &&
+      patientId &&
+      !path.startsWith(`${patientId}/`)
+    ) {
+      downloadPath = [patientId, path].filter(Boolean).join("/");
+      const retry = await supabaseAdmin.storage
+        .from(bucket)
+        .download(downloadPath);
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error || !data) {
       console.error("Download error:", error);
@@ -38,8 +54,8 @@ export async function GET(request: NextRequest) {
     
     return new NextResponse(arrayBuffer, {
       headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': `attachment; filename="${path.split('/').pop()}"`,
+        'Content-Type': data.type || 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${downloadPath.split('/').pop()}"`,
       },
     });
   } catch (error) {

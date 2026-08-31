@@ -162,11 +162,16 @@ export default function PatientDocumentsTab({
 
   useEffect(() => {
     if (linkedDocumentHandled) return;
-    const linkedPath = searchParams.get("openDocumentPath");
+    let linkedPath = searchParams.get("openDocumentPath");
     const linkedBucket = searchParams.get("openDocumentBucket");
     if (!linkedPath || !linkedBucket) return;
 
     if (linkedBucket === BUCKET_NAME) {
+      const patientPrefix = `${patientId}/`;
+      if (linkedPath.startsWith(patientPrefix)) {
+        linkedPath = linkedPath.slice(patientPrefix.length);
+      }
+
       const slashIndex = linkedPath.lastIndexOf("/");
       const linkedPrefix = slashIndex >= 0 ? linkedPath.slice(0, slashIndex + 1) : "";
       if (currentPrefix !== linkedPrefix) {
@@ -188,13 +193,19 @@ export default function PatientDocumentsTab({
   }, [currentPrefix, items, linkedDocumentHandled, searchParams]);
 
   function handleCreateTask(item: ListedItem) {
+    const documentBucket = item.source === "patient-docs" ? "patient-docs" : BUCKET_NAME;
+    const documentPath =
+      documentBucket === BUCKET_NAME
+        ? [patientId, item.path].filter(Boolean).join("/")
+        : item.path;
+
     const params = new URLSearchParams({
       m_tab: "crm",
       tab: "tasks",
       createTask: "1",
       documentName: item.name,
-      documentPath: item.path,
-      documentBucket: item.source === "patient-docs" ? "patient-docs" : BUCKET_NAME,
+      documentPath,
+      documentBucket,
     });
     router.push(`/patients/${patientId}?${params.toString()}`);
   }

@@ -567,7 +567,7 @@ export default function TaskEditModal({
                 {t("relatedDocument")}
               </label>
               <a
-                href={`/api/documents/download?bucket=${encodeURIComponent(task.document_bucket)}&path=${encodeURIComponent(task.document_path)}`}
+                href={`/api/documents/download?bucket=${encodeURIComponent(task.document_bucket)}&path=${encodeURIComponent(task.document_path)}&patientId=${encodeURIComponent(task.patient_id)}`}
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-700 transition hover:border-sky-300 hover:bg-sky-100"
