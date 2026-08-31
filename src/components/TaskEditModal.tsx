@@ -46,6 +46,12 @@ type Task = {
   created_by_name: string | null;
   assigned_user_id: string | null;
   assigned_user_name: string | null;
+  document_name?: string | null;
+  document_path?: string | null;
+  document_bucket?: string | null;
+  completed_at?: string | null;
+  completed_by_user_id?: string | null;
+  completed_by_name?: string | null;
   patient?: TaskPatient | null;
 };
 
@@ -98,6 +104,7 @@ export default function TaskEditModal({
   const [taskName, setTaskName] = useState("");
   const [taskType, setTaskType] = useState<TaskType>("todo");
   const [taskPriority, setTaskPriority] = useState<TaskPriority>("medium");
+  const [taskStatus, setTaskStatus] = useState<TaskStatus>("not_started");
   const [taskContent, setTaskContent] = useState("");
   const [taskActivityDate, setTaskActivityDate] = useState("");
   const [taskAssignedUserId, setTaskAssignedUserId] = useState<string>("");
@@ -124,6 +131,7 @@ export default function TaskEditModal({
       setTaskName(task.name || "");
       setTaskType(task.type || "todo");
       setTaskPriority(task.priority || "medium");
+      setTaskStatus(task.status || "not_started");
       setTaskContent(task.content || "");
       setTaskAssignedUserId(task.assigned_user_id || "");
       setTaskAssignedUserSearch(task.assigned_user_name || "");
@@ -315,6 +323,8 @@ export default function TaskEditModal({
       setSaving(true);
       setError(null);
 
+      const completingNow = taskStatus === "completed" && task.status !== "completed";
+      const reopening = task.status === "completed" && taskStatus !== "completed";
       const { data, error: updateError } = await supabaseClient
         .from("tasks")
         .update({
@@ -325,10 +335,18 @@ export default function TaskEditModal({
           activity_date: taskActivityDate || null,
           assigned_user_id: taskAssignedUserId || null,
           assigned_user_name: taskAssignedUserSearch || null,
+          ...(!completingNow ? { status: taskStatus } : {}),
+          ...(reopening
+            ? {
+                completed_at: null,
+                completed_by_user_id: null,
+                completed_by_name: null,
+              }
+            : {}),
           updated_at: new Date().toISOString(),
         })
         .eq("id", task.id)
-        .select("id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_name, assigned_user_id, assigned_user_name")
+        .select("id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_name, assigned_user_id, assigned_user_name, document_name, document_path, document_bucket, completed_at, completed_by_user_id, completed_by_name")
         .single();
 
       if (updateError || !data) {
@@ -337,8 +355,14 @@ export default function TaskEditModal({
         return;
       }
 
+      const savedTask = completingNow ? await completeTask(task.id) : data;
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("task-status-changed"));
+      }
+
       if (onTaskUpdated) {
-        onTaskUpdated(data as Task);
+        onTaskUpdated(savedTask as Task);
       }
 
       onClose();
@@ -426,6 +450,18 @@ export default function TaskEditModal({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-700">{t("status")}</label>
+              <select
+                value={taskStatus}
+                onChange={(e) => setTaskStatus(e.target.value as TaskStatus)}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              >
+                <option value="not_started">{t("statusPending")}</option>
+                <option value="in_progress">{t("statusInProgress")}</option>
+                <option value="completed">{t("statusDone")}</option>
+              </select>
+            </div>
             <div className="space-y-2">
               <label className="block text-sm font-medium text-slate-700">{t("type")}</label>
               <select
@@ -524,6 +560,37 @@ export default function TaskEditModal({
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
           </div>
+
+          {task.document_path && task.document_bucket && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-700">
+                {t("relatedDocument")}
+              </label>
+              <a
+                href={`/api/documents/download?bucket=${encodeURIComponent(task.document_bucket)}&path=${encodeURIComponent(task.document_path)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-700 transition hover:border-sky-300 hover:bg-sky-100"
+              >
+                <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 3h7v7m0-7L10 14m-3-8H5a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-2" />
+                </svg>
+                <span className="min-w-0 flex-1 truncate">
+                  {task.document_name || t("openRelatedDocument")}
+                </span>
+                <span className="shrink-0 text-xs font-normal">{t("openRelatedDocument")}</span>
+              </a>
+            </div>
+          )}
+
+          {task.status === "completed" && task.completed_at ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              {t("completionDetails", {
+                name: task.completed_by_name || t("unknownAuthor"),
+                date: new Date(task.completed_at).toLocaleString(),
+              })}
+            </div>
+          ) : null}
 
           {/* Comments Section */}
           <div className="border-t border-slate-200 pt-4">

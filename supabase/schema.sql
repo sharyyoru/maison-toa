@@ -490,6 +490,12 @@ create table if not exists tasks (
   assigned_user_id uuid references users(id),
   assigned_user_name text,
   assigned_read_at timestamptz,
+  document_name text,
+  document_path text,
+  document_bucket text,
+  completed_at timestamptz,
+  completed_by_user_id uuid references users(id),
+  completed_by_name text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

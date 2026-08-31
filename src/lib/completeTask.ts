@@ -19,5 +19,9 @@ export async function completeTask(taskId: string) {
     throw new Error(payload.error || "Failed to mark task as complete.");
   }
 
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("task-status-changed"));
+  }
+
   return payload.task;
 }

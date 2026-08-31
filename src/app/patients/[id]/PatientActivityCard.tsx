@@ -11,6 +11,7 @@ import RichTextEditor from "@/components/RichTextEditor";
 import WhatsAppWebConversation from "@/components/WhatsAppWebConversation";
 import { formatSwissDateTime, formatSwissDate, formatSwissShortDate, formatSwissTime } from "@/lib/swissTimezone";
 import { usePatientRealtime } from "./PatientRealtimeContext";
+import { completeTask } from "@/lib/completeTask";
 
 type ActivityTab = "activity" | "notes" | "emails" | "whatsapp" | "tasks" | "deals";
 
@@ -104,6 +105,9 @@ type Task = {
   created_by_name: string | null;
   assigned_user_id: string | null;
   assigned_user_name: string | null;
+  document_name: string | null;
+  document_path: string | null;
+  document_bucket: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -421,6 +425,11 @@ export default function PatientActivityCard({
   const [composeFromQueryHandled, setComposeFromQueryHandled] = useState(false);
   const [createTaskFromQueryHandled, setCreateTaskFromQueryHandled] =
     useState(false);
+  const [taskDocument, setTaskDocument] = useState<{
+    name: string;
+    path: string;
+    bucket: string;
+  } | null>(null);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [taskIdFromQueryHandled, setTaskIdFromQueryHandled] = useState(false);
   const [highlightedDealId, setHighlightedDealId] = useState<string | null>(null);
@@ -714,7 +723,7 @@ export default function PatientActivityCard({
         const { data: userTasksData, error: userTasksError } = await supabaseClient
           .from("tasks")
           .select(`
-            id, patient_id, name, content, status, priority, type, activity_date, created_by_user_id, created_by_name, assigned_user_id, assigned_user_name, created_at, updated_at,
+            id, patient_id, name, content, status, priority, type, activity_date, created_by_user_id, created_by_name, assigned_user_id, assigned_user_name, document_name, document_path, document_bucket, created_at, updated_at,
             patients:patient_id (first_name, last_name)
           `)
           .eq("assigned_user_id", currentUserId)
@@ -763,7 +772,7 @@ export default function PatientActivityCard({
         const { data: tasksData, error: tasksErrorLatest } = await supabaseClient
           .from("tasks")
           .select(
-            "id, patient_id, name, content, status, priority, type, activity_date, created_by_user_id, created_by_name, assigned_user_id, assigned_user_name, created_at, updated_at",
+            "id, patient_id, name, content, status, priority, type, activity_date, created_by_user_id, created_by_name, assigned_user_id, assigned_user_name, document_name, document_path, document_bucket, created_at, updated_at",
           )
           .eq("patient_id", patientId)
           .order("activity_date", { ascending: false });
@@ -919,6 +928,14 @@ export default function PatientActivityCard({
       setTaskAssignedUserDropdownOpen(false);
       setTaskPriority("medium");
       setTaskType("todo");
+      const documentName = searchParams.get("documentName");
+      const documentPath = searchParams.get("documentPath");
+      const documentBucket = searchParams.get("documentBucket");
+      setTaskDocument(
+        documentName && documentPath && documentBucket
+          ? { name: documentName, path: documentPath, bucket: documentBucket }
+          : null,
+      );
       setTaskSaveError(null);
       setCreateTaskModalOpen(true);
       setCreateTaskFromQueryHandled(true);
@@ -1634,11 +1651,14 @@ export default function PatientActivityCard({
             activity_date: activityDateIso,
             assigned_user_id: assignedUserId,
             assigned_user_name: assignedUserName,
+            document_name: taskDocument?.name ?? null,
+            document_path: taskDocument?.path ?? null,
+            document_bucket: taskDocument?.bucket ?? null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", editTask.id)
           .select(
-            "id, patient_id, name, content, status, priority, type, activity_date, created_by_user_id, created_by_name, assigned_user_id, assigned_user_name, created_at, updated_at",
+            "id, patient_id, name, content, status, priority, type, activity_date, created_by_user_id, created_by_name, assigned_user_id, assigned_user_name, document_name, document_path, document_bucket, created_at, updated_at",
           )
           .single();
 
@@ -1665,9 +1685,12 @@ export default function PatientActivityCard({
             created_by_name: fullName,
             assigned_user_id: assignedUserId,
             assigned_user_name: assignedUserName,
+            document_name: taskDocument?.name ?? null,
+            document_path: taskDocument?.path ?? null,
+            document_bucket: taskDocument?.bucket ?? null,
           })
           .select(
-            "id, patient_id, name, content, status, priority, type, activity_date, created_by_user_id, created_by_name, assigned_user_id, assigned_user_name, created_at, updated_at",
+            "id, patient_id, name, content, status, priority, type, activity_date, created_by_user_id, created_by_name, assigned_user_id, assigned_user_name, document_name, document_path, document_bucket, created_at, updated_at",
           )
           .single();
 
@@ -1689,6 +1712,7 @@ export default function PatientActivityCard({
       setTaskAssignedUserDropdownOpen(false);
       setTaskPriority("medium");
       setTaskType("todo");
+      setTaskDocument(null);
       setEditTask(null);
       setCreateTaskModalOpen(false);
       setTaskSaving(false);
@@ -1701,15 +1725,28 @@ export default function PatientActivityCard({
 
   async function handleTaskStatusToggle(task: Task, nextStatus: TaskStatus) {
     try {
+      if (nextStatus === "completed") {
+        const completed = await completeTask(task.id);
+        setTasks((prev) =>
+          prev.map((item) =>
+            item.id === task.id ? ({ ...item, ...completed } as Task) : item,
+          ),
+        );
+        return;
+      }
+
       const { data, error } = await supabaseClient
         .from("tasks")
         .update({
           status: nextStatus,
+          completed_at: null,
+          completed_by_user_id: null,
+          completed_by_name: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", task.id)
         .select(
-          "id, patient_id, name, content, status, priority, type, activity_date, created_by_user_id, created_by_name, assigned_user_id, assigned_user_name, created_at, updated_at",
+          "id, patient_id, name, content, status, priority, type, activity_date, created_by_user_id, created_by_name, assigned_user_id, assigned_user_name, document_name, document_path, document_bucket, created_at, updated_at",
         )
         .single();
 
@@ -3487,6 +3524,7 @@ export default function PatientActivityCard({
                     setTaskAssignedUserId("");
                     setTaskPriority("medium");
                     setTaskType("todo");
+                    setTaskDocument(null);
                     setTaskSaveError(null);
                     setCreateTaskModalOpen(true);
                   }}
@@ -3631,6 +3669,19 @@ export default function PatientActivityCard({
                                 {t("activityDate")}: <span className="font-medium">{activityLabel}</span>
                               </p>
                             ) : null}
+                            {task.document_path && task.document_bucket ? (
+                              <a
+                                href={`/api/documents/download?bucket=${encodeURIComponent(task.document_bucket)}&path=${encodeURIComponent(task.document_path)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-1 inline-flex items-center gap-1 font-medium text-sky-700 hover:text-sky-800 hover:underline"
+                              >
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 3h7v7m0-7L10 14m-3-8H5a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-2" />
+                                </svg>
+                                {task.document_name || "Related document"}
+                              </a>
+                            ) : null}
                             <p className="mt-0.5 text-[10px] text-slate-500">
                               {t("createdBy")}{" "}
                               <span className="font-medium">
@@ -3692,6 +3743,15 @@ export default function PatientActivityCard({
                                   setTaskContent(task.content ?? "");
                                   setTaskPriority(task.priority);
                                   setTaskType(task.type);
+                                  setTaskDocument(
+                                    task.document_path && task.document_bucket
+                                      ? {
+                                          name: task.document_name || "Related document",
+                                          path: task.document_path,
+                                          bucket: task.document_bucket,
+                                        }
+                                      : null,
+                                  );
                                   const assignedUser = Array.isArray(userOptions)
                                     ? userOptions.find((u) => u.id === task.assigned_user_id)
                                     : null;
@@ -4150,6 +4210,11 @@ export default function PatientActivityCard({
               {editTask ? t("editTask") : t("createTask")}
             </h2>
             <form onSubmit={handleTaskSubmit} className="mt-3 space-y-3">
+              {taskDocument ? (
+                <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] text-sky-800">
+                  <span className="font-medium">Related document:</span> {taskDocument.name}
+                </div>
+              ) : null}
               <div className="space-y-1">
                 <label className="block text-[11px] font-medium text-slate-700">
                   {t("name")}

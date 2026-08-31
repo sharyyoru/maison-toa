@@ -11,6 +11,7 @@ import EmailShareModal from "./EmailShareModal";
 import { convertDocxBlobToPdf } from "@/lib/docxToPdf";
 import { formatSwissTime, formatSwissDateTime, SWISS_TIMEZONE } from "@/lib/swissTimezone";
 import { useTranslations } from "next-intl";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from 'next/dynamic';
 import { useDocumentPreviewTabs } from "./DocumentPreviewTabsWrapper";
 import { decodeStorageFileName, encodeStorageFileName } from "@/utils/storageFileName";
@@ -130,6 +131,8 @@ export default function PatientDocumentsTab({
   patientName = "Patient",
 }: PatientDocumentsTabProps) {
   const t = useTranslations("patient.documentsTab");
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const documentPreviewTabs = useDocumentPreviewTabs();
 
   const [items, setItems] = useState<ListedItem[]>([]);
@@ -155,6 +158,46 @@ export default function PatientDocumentsTab({
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [downloadingPdfPaths, setDownloadingPdfPaths] = useState<Set<string>>(new Set());
   const [moreMenuOpenPath, setMoreMenuOpenPath] = useState<string | null>(null);
+  const [linkedDocumentHandled, setLinkedDocumentHandled] = useState(false);
+
+  useEffect(() => {
+    if (linkedDocumentHandled) return;
+    const linkedPath = searchParams.get("openDocumentPath");
+    const linkedBucket = searchParams.get("openDocumentBucket");
+    if (!linkedPath || !linkedBucket) return;
+
+    if (linkedBucket === BUCKET_NAME) {
+      const slashIndex = linkedPath.lastIndexOf("/");
+      const linkedPrefix = slashIndex >= 0 ? linkedPath.slice(0, slashIndex + 1) : "";
+      if (currentPrefix !== linkedPrefix) {
+        setCurrentPrefix(linkedPrefix);
+        return;
+      }
+    }
+
+    const linkedItem = items.find(
+      (item) => item.kind === "file" && item.path === linkedPath,
+    );
+    if (!linkedItem) return;
+
+    setSelectedFile(linkedItem);
+    setSearchQuery("");
+    setFilterType("all");
+    setCurrentPage(1);
+    setLinkedDocumentHandled(true);
+  }, [currentPrefix, items, linkedDocumentHandled, searchParams]);
+
+  function handleCreateTask(item: ListedItem) {
+    const params = new URLSearchParams({
+      m_tab: "crm",
+      tab: "tasks",
+      createTask: "1",
+      documentName: item.name,
+      documentPath: item.path,
+      documentBucket: item.source === "patient-docs" ? "patient-docs" : BUCKET_NAME,
+    });
+    router.push(`/patients/${patientId}?${params.toString()}`);
+  }
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<{ name: string; size: number }[]>([]);
@@ -1525,7 +1568,7 @@ export default function PatientDocumentsTab({
                               </Tooltip>
                             </>
                           )}
-                          {item.source !== "patient-docs" && (
+                          {(
                             <div className="relative">
                               <Tooltip label="More options">
                                 <button
@@ -1546,6 +1589,21 @@ export default function PatientDocumentsTab({
                                   className="absolute right-0 top-full z-50 mt-1 w-36 rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
                                   onClick={(e) => e.stopPropagation()}
                                 >
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setMoreMenuOpenPath(null);
+                                      handleCreateTask(item);
+                                    }}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
+                                  >
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m6-6H6" />
+                                    </svg>
+                                    Create Task
+                                  </button>
+                                  {item.source !== "patient-docs" ? <>
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -1574,6 +1632,7 @@ export default function PatientDocumentsTab({
                                     </svg>
                                     Delete
                                   </button>
+                                  </> : null}
                                 </div>
                               )}
                             </div>

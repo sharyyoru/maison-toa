@@ -35,22 +35,12 @@ export function TasksNotificationsProvider({
     }
 
     try {
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-
-      const [unreadResult, overdueResult, taskCommentsResult] = await Promise.all([
+      const [unfinishedResult, taskCommentsResult] = await Promise.all([
         supabaseClient
           .from("tasks")
-          .select("id")
+          .select("id", { count: "exact", head: true })
           .eq("assigned_user_id", user.id)
-          .neq("status", "completed")
-          .is("assigned_read_at", null),
-        supabaseClient
-          .from("tasks")
-          .select("id")
-          .eq("assigned_user_id", user.id)
-          .neq("status", "completed")
-          .lt("activity_date", startOfToday.toISOString()),
+          .neq("status", "completed"),
         supabaseClient
           .from("task_comment_mentions")
           .select("id", { count: "exact", head: true })
@@ -58,16 +48,14 @@ export function TasksNotificationsProvider({
           .is("read_at", null),
       ]);
 
-      if (unreadResult.error && overdueResult.error) {
+      if (unfinishedResult.error && taskCommentsResult.error) {
         setOpenTasksCount(0);
         return;
       }
 
-      const notificationIds = new Set([
-        ...(unreadResult.data ?? []).map((task) => task.id),
-        ...(overdueResult.data ?? []).map((task) => task.id),
-      ]);
-      setOpenTasksCount(notificationIds.size + (taskCommentsResult.count ?? 0));
+      setOpenTasksCount(
+        (unfinishedResult.count ?? 0) + (taskCommentsResult.count ?? 0),
+      );
     } catch {
       setOpenTasksCount(0);
     }
@@ -90,10 +78,13 @@ export function TasksNotificationsProvider({
       if (!isMounted) return;
       void refreshOpenTasksCount();
     }, 30000);
+    const handleTaskStatusChanged = () => void refreshOpenTasksCount();
+    window.addEventListener("task-status-changed", handleTaskStatusChanged);
 
     return () => {
       isMounted = false;
       window.clearInterval(intervalId);
+      window.removeEventListener("task-status-changed", handleTaskStatusChanged);
     };
   }, [authLoading, refreshOpenTasksCount]);
 

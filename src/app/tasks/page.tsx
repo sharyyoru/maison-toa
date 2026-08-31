@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { supabaseClient } from "@/lib/supabaseClient";
@@ -34,9 +34,16 @@ type TaskRow = {
   type: TaskType;
   activity_date: string | null;
   created_at: string;
+  created_by_user_id: string | null;
   created_by_name: string | null;
   assigned_user_name: string | null;
   assigned_user_id: string | null;
+  document_name: string | null;
+  document_path: string | null;
+  document_bucket: string | null;
+  completed_at: string | null;
+  completed_by_user_id: string | null;
+  completed_by_name: string | null;
   patient: TaskPatient | null;
 };
 
@@ -52,7 +59,7 @@ type DateFilter = "today" | "all" | "past" | "future";
 
 type PriorityFilter = "all" | "high" | "medium" | "low";
 
-type StatusFilter = "open" | "completed";
+type TasksTab = "progress" | "all";
 
 export default function TasksPage() {
   const t = useTranslations("tasksPage");
@@ -81,9 +88,9 @@ export default function TasksPage() {
   const [patientFilterId, setPatientFilterId] = useState<string | null>(null);
   const [showPatientSuggestions, setShowPatientSuggestions] = useState(false);
 
-  const [dateFilter, setDateFilter] = useState<DateFilter>("today");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
+  const [tasksTab, setTasksTab] = useState<TasksTab>("progress");
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -131,15 +138,11 @@ export default function TasksPage() {
           setCurrentUserId(user.id);
         }
 
-        // Use selectedUserId if set (admin viewing another user), otherwise use current user
-        const targetUserId = selectedUserId ?? user.id;
-
         const { data, error } = await supabaseClient
           .from("tasks")
           .select(
-            "id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_name, assigned_user_name, assigned_user_id, patient:patients(id, first_name, last_name, email, phone)",
+            "id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_user_id, created_by_name, assigned_user_name, assigned_user_id, document_name, document_path, document_bucket, completed_at, completed_by_user_id, completed_by_name, patient:patients(id, first_name, last_name, email, phone)",
           )
-          .eq("assigned_user_id", targetUserId)
           .order("activity_date", { ascending: false });
 
         if (!isMounted) return;
@@ -186,7 +189,7 @@ export default function TasksPage() {
     openedTaskFromUrlRef.current = taskId;
     setDateFilter("all");
     setPriorityFilter("all");
-    setStatusFilter(linkedTask.status === "completed" ? "completed" : "open");
+    setTasksTab(linkedTask.status === "completed" ? "all" : "progress");
     setSearchQuery("");
     setPatientFilterId(null);
     setSelectedTask(linkedTask);
@@ -288,10 +291,6 @@ export default function TasksPage() {
     const todayYmd = today.toISOString().slice(0, 10);
 
     return tasks.filter((task) => {
-      if (statusFilter === "open" && task.status === "completed") return false;
-      if (statusFilter === "completed" && task.status !== "completed")
-        return false;
-
       if (patientFilterId && task.patient?.id !== patientFilterId) return false;
 
       if (priorityFilter !== "all" && task.priority !== priorityFilter)
@@ -333,7 +332,49 @@ export default function TasksPage() {
         tContent.includes(term)
       );
     });
-  }, [tasks, statusFilter, patientFilterId, priorityFilter, dateFilter, searchQuery]);
+  }, [tasks, patientFilterId, priorityFilter, dateFilter, searchQuery]);
+
+  const taskSections = useMemo(() => {
+    const targetUserId = selectedUserId ?? currentUserId;
+
+    if (tasksTab === "all") {
+      return [
+        {
+          key: "uncompleted",
+          title: t("sections.uncompleted"),
+          tasks: filteredTasks.filter((task) => task.status !== "completed"),
+        },
+        {
+          key: "completed",
+          title: t("sections.completed"),
+          tasks: filteredTasks.filter((task) => task.status === "completed"),
+        },
+      ];
+    }
+
+    const inProgress = filteredTasks.filter((task) => task.status !== "completed");
+    return [
+      {
+        key: "assigned",
+        title: t("sections.assignedToMe"),
+        tasks: inProgress.filter((task) => task.assigned_user_id === targetUserId),
+      },
+      {
+        key: "created",
+        title: t("sections.myCreated"),
+        tasks: inProgress.filter(
+          (task) =>
+            task.created_by_user_id === targetUserId &&
+            task.assigned_user_id !== targetUserId,
+        ),
+      },
+    ];
+  }, [currentUserId, filteredTasks, selectedUserId, t, tasksTab]);
+
+  const visibleTaskCount = taskSections.reduce(
+    (count, section) => count + section.tasks.length,
+    0,
+  );
 
   async function handleMarkTaskCompleted(task: TaskRow) {
     if (task.status === "completed") return;
@@ -344,6 +385,7 @@ export default function TasksPage() {
       const data = await completeTask(task.id);
       const updated = { ...task, ...data } as TaskRow;
       setTasks((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
+      await refreshOpenTasksCount();
       setUpdatingTaskIds((prev) => prev.filter((id) => id !== task.id));
     } catch {
       setUpdatingTaskIds((prev) => prev.filter((id) => id !== task.id));
@@ -355,6 +397,17 @@ export default function TasksPage() {
     const d = new Date(raw);
     if (Number.isNaN(d.getTime())) return "—";
     return d.toLocaleDateString();
+  }
+
+  function taskStatusLabel(status: TaskStatus): string {
+    if (status === "completed") return t("statuses.done");
+    if (status === "in_progress") return t("statuses.inProgress");
+    return t("statuses.pending");
+  }
+
+  function isTaskOverdue(task: TaskRow): boolean {
+    if (task.status === "completed" || !task.activity_date) return false;
+    return new Date(task.activity_date).getTime() < Date.now();
   }
 
   return (
@@ -576,27 +629,27 @@ export default function TasksPage() {
             <div className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50/80 p-0.5 text-[11px] text-slate-600">
               <button
                 type="button"
-                onClick={() => setStatusFilter("open")}
+                onClick={() => setTasksTab("progress")}
                 className={
                   "rounded-full px-3 py-0.5 " +
-                  (statusFilter === "open"
+                  (tasksTab === "progress"
                     ? "bg-slate-900 text-white shadow-sm"
                     : "hover:text-slate-900")
                 }
               >
-                {t("statusFilter.open")}
+                {t("tabs.inProgress")}
               </button>
               <button
                 type="button"
-                onClick={() => setStatusFilter("completed")}
+                onClick={() => setTasksTab("all")}
                 className={
                   "rounded-full px-3 py-0.5 " +
-                  (statusFilter === "completed"
+                  (tasksTab === "all"
                     ? "bg-slate-900 text-white shadow-sm"
                     : "hover:text-slate-900")
                 }
               >
-                {t("statusFilter.completed")}
+                {t("tabs.allTasks")}
               </button>
             </div>
           </div>
@@ -606,7 +659,7 @@ export default function TasksPage() {
           <p className="text-[11px] text-slate-500">{t("loadingTasks")}</p>
         ) : error ? (
           <p className="text-[11px] text-red-600">{error}</p>
-        ) : filteredTasks.length === 0 ? (
+        ) : visibleTaskCount === 0 ? (
           <p className="text-[11px] text-slate-500">{t("noMatching")}</p>
         ) : (
           <div className="overflow-x-auto">
@@ -622,7 +675,17 @@ export default function TasksPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredTasks.map((task) => {
+                {taskSections.map((section) => (
+                  <Fragment key={section.key}>
+                    <tr className="border-y border-slate-200 bg-slate-50/90">
+                      <td colSpan={6} className="px-2 py-2 text-[11px] font-semibold text-slate-800">
+                        {section.title}
+                        <span className="ml-2 rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-medium text-slate-600">
+                          {section.tasks.length}
+                        </span>
+                      </td>
+                    </tr>
+                    {section.tasks.map((task) => {
                   const patient = task.patient;
                   const patientName = patient
                     ? `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim() ||
@@ -677,7 +740,26 @@ export default function TasksPage() {
                         {task.priority}
                       </td>
                       <td className="py-2 pr-3 align-top text-slate-700 capitalize">
-                        {task.status.replace("_", " ")}
+                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          task.status === "completed"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : isTaskOverdue(task)
+                              ? "border-red-200 bg-red-50 text-red-700"
+                              : task.status === "in_progress"
+                                ? "border-sky-200 bg-sky-50 text-sky-700"
+                                : "border-amber-200 bg-amber-50 text-amber-700"
+                        }`}>
+                          {taskStatusLabel(task.status)}
+                          {isTaskOverdue(task) ? ` · ${t("overdue")}` : ""}
+                        </span>
+                        {task.status === "completed" && task.completed_at ? (
+                          <div className="mt-1 text-[9px] normal-case text-slate-500">
+                            {t("completedBy", {
+                              name: task.completed_by_name || t("unknown"),
+                              date: new Date(task.completed_at).toLocaleString(),
+                            })}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="py-2 pr-3 align-top text-slate-700">
                         <div className="flex flex-wrap items-center gap-2">
@@ -705,7 +787,9 @@ export default function TasksPage() {
                       </td>
                     </tr>
                   );
-                })}
+                    })}
+                  </Fragment>
+                ))}
               </tbody>
             </table>
           </div>

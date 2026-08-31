@@ -232,7 +232,7 @@ export default function TaskCreateModal({
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .select("id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_name, assigned_user_id, assigned_user_name, patient:patients(id, first_name, last_name, email, phone)")
+        .select("id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_user_id, created_by_name, assigned_user_id, assigned_user_name, patient:patients(id, first_name, last_name, email, phone)")
         .single();
 
       if (insertError || !data) {

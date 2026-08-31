@@ -11,7 +11,8 @@ type TaskNotification = {
   id: string; name: string | null; content: string | null; status: string;
   priority: string; activity_date: string | null; assigned_read_at: string | null;
   created_by_name: string | null;
-  patient: { first_name: string | null; last_name: string | null } | null;
+  document_name: string | null; document_path: string | null; document_bucket: string | null;
+  patient: { id: string; first_name: string | null; last_name: string | null } | null;
   notificationKey: string;
   notificationType: "assignment" | "comment";
   notificationId: string;
@@ -36,10 +37,10 @@ export default function HeaderTasksButton() {
     setLoading(true);
     const [tasksResult, commentsResult] = await Promise.all([
       supabaseClient.from("tasks")
-        .select("id, name, content, status, priority, activity_date, created_at, assigned_read_at, created_by_name, patient:patients(first_name, last_name)")
+        .select("id, name, content, status, priority, activity_date, created_at, assigned_read_at, created_by_name, document_name, document_path, document_bucket, patient:patients(id, first_name, last_name)")
         .eq("assigned_user_id", user.id).order("created_at", { ascending: false }),
       supabaseClient.from("task_comment_mentions")
-        .select("id, created_at, read_at, comment:task_comments(body, author_name), task:tasks(id, name, content, status, priority, activity_date, created_by_name, patient:patients(first_name, last_name))")
+        .select("id, created_at, read_at, comment:task_comments(body, author_name), task:tasks(id, name, content, status, priority, activity_date, created_by_name, document_name, document_path, document_bucket, patient:patients(id, first_name, last_name))")
         .eq("mentioned_user_id", user.id).order("created_at", { ascending: false }),
     ]);
     const assigned = (tasksResult.data ?? []).map((row: any) => ({
@@ -72,7 +73,9 @@ export default function HeaderTasksButton() {
     if (task.assigned_read_at) return;
     const readAt = new Date().toISOString();
     setNotifications((current) => current.map((item) => item.notificationKey === task.notificationKey ? { ...item, assigned_read_at: readAt } : item));
-    setOpenTasksCountOptimistic((current) => current - 1);
+    if (task.notificationType === "comment") {
+      setOpenTasksCountOptimistic((current) => current - 1);
+    }
     const { error } = task.notificationType === "comment"
       ? await supabaseClient.from("task_comment_mentions").update({ read_at: readAt }).eq("id", task.notificationId)
       : await supabaseClient.from("tasks").update({ assigned_read_at: readAt }).eq("id", task.id);
@@ -82,6 +85,20 @@ export default function HeaderTasksButton() {
   function viewTask(task: TaskNotification) {
     if (!task.assigned_read_at) void markAsRead(task);
     setDropdownOpen(false);
+    if (
+      task.notificationType === "comment" &&
+      task.patient?.id &&
+      task.document_path &&
+      task.document_bucket
+    ) {
+      const params = new URLSearchParams({
+        m_tab: "documents",
+        openDocumentPath: task.document_path,
+        openDocumentBucket: task.document_bucket,
+      });
+      router.push(`/patients/${task.patient.id}?${params.toString()}`);
+      return;
+    }
     router.push(`/tasks?task=${encodeURIComponent(task.id)}`);
   }
 
@@ -97,7 +114,7 @@ export default function HeaderTasksButton() {
     ]);
     if (!results.some((result) => result.error)) {
       setNotifications((current) => current.map((task) => !task.assigned_read_at ? { ...task, assigned_read_at: readAt } : task));
-      setOpenTasksCountOptimistic((current) => current - unreadAssignments.length - unreadComments.length);
+      setOpenTasksCountOptimistic((current) => current - unreadComments.length);
     }
     setMarkingAllRead(false);
   }

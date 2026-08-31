@@ -19,7 +19,7 @@ export async function POST(
   const { id } = await params;
   const { data: task, error: taskError } = await supabaseAdmin
     .from("tasks")
-    .select("id, name, status, created_by_user_id, assigned_read_at")
+    .select("id, name, status, created_by_user_id, assigned_read_at, document_name, document_path, document_bucket")
     .eq("id", id)
     .single();
 
@@ -33,13 +33,19 @@ export async function POST(
       .from("tasks")
       .update({
         status: "completed",
+        completed_at: nowIso,
+        completed_by_user_id: authData.user.id,
+        completed_by_name:
+          [authData.user.user_metadata?.first_name, authData.user.user_metadata?.last_name]
+            .filter(Boolean)
+            .join(" ") || authData.user.email || "A user",
         updated_at: nowIso,
         assigned_read_at: task.assigned_read_at ?? nowIso,
       })
       .eq("id", id)
       .neq("status", "completed")
       .select(
-        "id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_user_id, created_by_name, assigned_read_at, assigned_user_id, assigned_user_name",
+        "id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_user_id, created_by_name, assigned_read_at, assigned_user_id, assigned_user_name, document_name, document_path, document_bucket, completed_at, completed_by_user_id, completed_by_name",
       )
       .maybeSingle();
 
@@ -85,7 +91,7 @@ export async function POST(
   const { data: completedTask, error: completedTaskError } = await supabaseAdmin
     .from("tasks")
     .select(
-      "id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_user_id, created_by_name, assigned_read_at, assigned_user_id, assigned_user_name",
+      "id, patient_id, name, content, status, priority, type, activity_date, created_at, created_by_user_id, created_by_name, assigned_read_at, assigned_user_id, assigned_user_name, document_name, document_path, document_bucket, completed_at, completed_by_user_id, completed_by_name",
     )
     .eq("id", id)
     .single();

@@ -51,8 +51,7 @@ export default function NotificationsPage() {
   const [selectedPatient, setSelectedPatient] = useState<NotificationPatient | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const { refreshOpenTasksCount, setOpenTasksCountOptimistic } =
-    useTasksNotifications();
+  const { refreshOpenTasksCount } = useTasksNotifications();
 
   useEffect(() => {
     let isMounted = true;
@@ -153,8 +152,6 @@ export default function NotificationsPage() {
       ),
     );
 
-    setOpenTasksCountOptimistic((prev) => prev - 1);
-
     try {
       await supabaseClient
         .from("tasks")
@@ -195,7 +192,6 @@ export default function NotificationsPage() {
         ),
       );
 
-      setOpenTasksCountOptimistic((prev) => prev - unreadTaskIds.length);
     } catch {
     } finally {
       setMarkingAllRead(false);
@@ -244,9 +240,7 @@ export default function NotificationsPage() {
         ),
       );
 
-      if (!task.assigned_read_at) {
-        setOpenTasksCountOptimistic((prev) => prev - 1);
-      }
+      await refreshOpenTasksCount();
     } catch {
     } finally {
       setUpdatingTaskIds((prev) => prev.filter((id) => id !== task.id));
