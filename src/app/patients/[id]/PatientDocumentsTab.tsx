@@ -133,6 +133,9 @@ export default function PatientDocumentsTab({
   const t = useTranslations("patient.documentsTab");
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [openingLinkedDocument, setOpeningLinkedDocument] = useState(
+    () => searchParams.get("openDocumentMode") === "edit",
+  );
   const documentPreviewTabs = useDocumentPreviewTabs();
 
   const [items, setItems] = useState<ListedItem[]>([]);
@@ -580,6 +583,7 @@ export default function PatientDocumentsTab({
       searchParams.get("openDocumentBucket") !== BUCKET_NAME ||
       getExtension(selectedFile.name) !== "docx"
     ) {
+      setOpeningLinkedDocument(false);
       return;
     }
 
@@ -592,9 +596,15 @@ export default function PatientDocumentsTab({
         const response = await fetch(url);
         if (!response.ok) throw new Error("Failed to load document for editing");
         const blob = await response.blob();
-        if (!cancelled) setEditingDocx({ item: linkedFile, blob, url });
+        if (!cancelled) {
+          setOpeningLinkedDocument(false);
+          setEditingDocx({ item: linkedFile, blob, url });
+        }
       } catch (err: any) {
-        if (!cancelled) setError(err?.message || "Unable to open document for editing.");
+        if (!cancelled) {
+          setOpeningLinkedDocument(false);
+          setError(err?.message || "Unable to open document for editing.");
+        }
       } finally {
         if (!cancelled) setSelectedFilePreviewLoading(false);
       }
@@ -1909,6 +1919,19 @@ export default function PatientDocumentsTab({
             setRefreshKey((k) => k + 1);
           }}
         />
+      ) : null}
+      {openingLinkedDocument && !editingDocx ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 backdrop-blur-sm">
+          <div className="flex w-full max-w-sm flex-col items-center rounded-2xl border border-slate-200 bg-white px-8 py-10 text-center shadow-2xl">
+            <div className="h-11 w-11 animate-spin rounded-full border-4 border-sky-100 border-t-sky-600" />
+            <h2 className="mt-5 text-base font-semibold text-slate-900">
+              Opening document in edit mode
+            </h2>
+            <p className="mt-2 text-xs text-slate-500">
+              Loading the linked Word document securely…
+            </p>
+          </div>
+        </div>
       ) : null}
       {editingDocx && (
         <DocxPreviewEditor
