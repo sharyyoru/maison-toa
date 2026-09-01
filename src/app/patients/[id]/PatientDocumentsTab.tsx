@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import BeforeAfterEditorModal from "./BeforeAfterEditorModal";
 import PdfAnnotationEditor from "@/components/PdfAnnotationEditor";
@@ -159,7 +159,7 @@ export default function PatientDocumentsTab({
   const [downloadingPdfPaths, setDownloadingPdfPaths] = useState<Set<string>>(new Set());
   const [moreMenuOpenPath, setMoreMenuOpenPath] = useState<string | null>(null);
   const [linkedDocumentHandled, setLinkedDocumentHandled] = useState(false);
-  const [linkedDocumentEditHandled, setLinkedDocumentEditHandled] = useState(false);
+  const linkedDocumentEditLaunchingRef = useRef(false);
 
   useEffect(() => {
     if (linkedDocumentHandled) return;
@@ -567,7 +567,7 @@ export default function PatientDocumentsTab({
   useEffect(() => {
     if (
       !linkedDocumentHandled ||
-      linkedDocumentEditHandled ||
+      linkedDocumentEditLaunchingRef.current ||
       searchParams.get("openDocumentMode") !== "edit" ||
       !selectedFile ||
       selectedFile.kind !== "file"
@@ -575,7 +575,7 @@ export default function PatientDocumentsTab({
       return;
     }
 
-    setLinkedDocumentEditHandled(true);
+    linkedDocumentEditLaunchingRef.current = true;
     if (
       searchParams.get("openDocumentBucket") !== BUCKET_NAME ||
       getExtension(selectedFile.name) !== "docx"
@@ -606,7 +606,6 @@ export default function PatientDocumentsTab({
     };
   }, [
     getFileAccessUrl,
-    linkedDocumentEditHandled,
     linkedDocumentHandled,
     searchParams,
     selectedFile,
