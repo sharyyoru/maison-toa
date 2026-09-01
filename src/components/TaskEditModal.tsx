@@ -567,9 +567,14 @@ export default function TaskEditModal({
                 {t("relatedDocument")}
               </label>
               <a
-                href={`/api/documents/download?bucket=${encodeURIComponent(task.document_bucket)}&path=${encodeURIComponent(task.document_path)}&patientId=${encodeURIComponent(task.patient_id)}`}
-                target="_blank"
-                rel="noreferrer"
+                href={task.patient?.id
+                  ? `/patients/${task.patient.id}?${new URLSearchParams({
+                      m_tab: "documents",
+                      openDocumentPath: task.document_path,
+                      openDocumentBucket: task.document_bucket,
+                      openDocumentMode: "edit",
+                    }).toString()}`
+                  : `/api/documents/download?bucket=${encodeURIComponent(task.document_bucket)}&path=${encodeURIComponent(task.document_path)}&patientId=${encodeURIComponent(task.patient_id)}`}
                 className="flex items-center gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-700 transition hover:border-sky-300 hover:bg-sky-100"
               >
                 <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

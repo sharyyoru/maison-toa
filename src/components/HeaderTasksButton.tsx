@@ -95,6 +95,7 @@ export default function HeaderTasksButton() {
         m_tab: "documents",
         openDocumentPath: task.document_path,
         openDocumentBucket: task.document_bucket,
+        openDocumentMode: "edit",
       });
       router.push(`/patients/${task.patient.id}?${params.toString()}`);
       return;

@@ -7,6 +7,7 @@ import {
 } from "@eigenpal/docx-editor-react";
 import "@eigenpal/docx-editor-react/styles.css";
 import { removeNextFieldArtifacts } from "@/lib/docxFieldCleanup";
+import { convertDocxBlobToPdf } from "@/lib/docxToPdf";
 
 interface EditorPaneProps {
   documentBuffer: ArrayBuffer;
@@ -170,6 +171,7 @@ export default function DocxPreviewEditor({
   );
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [exportingAs, setExportingAs] = useState<"docx" | "pdf" | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [editedFileName, setEditedFileName] = useState(fileName || "");
   const [error, setError] = useState<string | null>(null);
@@ -231,21 +233,19 @@ export default function DocxPreviewEditor({
     setError("The document editor encountered an error");
   }, []);
 
+  const buildEditedDocument = async () => {
+    // Selective saving preserves untouched Word XML, including table borders.
+    const buffer = await editorRef.current?.save();
+    if (!buffer) throw new Error("The editor did not return a document");
+    return applyPlaceholders(buffer, placeholders);
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     setError(null);
 
     try {
-      // Selective (the default) preserves the original XML for anything the
-      // user didn't touch. A full repack (`selective: false`) re-serializes
-      // the whole document from the editor's internal model, which was
-      // found to drop explicit per-cell `<w:tcBorders w:val="none">`
-      // overrides - causing table borders that should stay invisible to
-      // reappear as stray horizontal/vertical lines after saving.
-      const buffer = await editorRef.current?.save();
-      if (!buffer) throw new Error("The editor did not return a document");
-
-      const blob = await applyPlaceholders(buffer, placeholders);
+      const blob = await buildEditedDocument();
       const targetFileName = fileName !== undefined && editedFileName.trim()
         ? editedFileName.trim()
         : undefined;
@@ -259,12 +259,57 @@ export default function DocxPreviewEditor({
     }
   };
 
+  const downloadEditedDocument = async (format: "docx" | "pdf") => {
+    setExportingAs(format);
+    setError(null);
+    try {
+      const blob = await buildEditedDocument();
+      const rawName = editedFileName.trim() || documentTitle || "document.docx";
+      const downloadName = rawName.split(/[\\/]/).pop() || "document.docx";
+
+      if (format === "pdf") {
+        await convertDocxBlobToPdf(blob, downloadName);
+        return;
+      }
+
+      const docxName = /\.docx$/i.test(downloadName)
+        ? downloadName
+        : `${downloadName}.docx`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = docxName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : "Failed to export document");
+    } finally {
+      setExportingAs(null);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
       <div className="flex shrink-0 flex-col gap-2 bg-slate-800 px-4 py-3 text-white">
         <div className="flex items-center justify-between">
           <h2 className="truncate text-lg font-semibold">{documentTitle}</h2>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => void downloadEditedDocument("docx")}
+              disabled={isSaving || isLoading || exportingAs !== null}
+              className="rounded bg-slate-600 px-3 py-2 text-sm text-white hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exportingAs === "docx" ? "Preparing..." : "Download DOCX"}
+            </button>
+            <button
+              onClick={() => void downloadEditedDocument("pdf")}
+              disabled={isSaving || isLoading || exportingAs !== null}
+              className="rounded bg-rose-600 px-3 py-2 text-sm text-white hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exportingAs === "pdf" ? "Preparing..." : "Download PDF"}
+            </button>
             <button
               onClick={handleSave}
               disabled={isSaving || isLoading || !hasChanges}

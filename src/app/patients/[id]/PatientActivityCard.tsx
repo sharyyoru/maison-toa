@@ -3671,9 +3671,12 @@ export default function PatientActivityCard({
                             ) : null}
                             {task.document_path && task.document_bucket ? (
                               <a
-                                href={`/api/documents/download?bucket=${encodeURIComponent(task.document_bucket)}&path=${encodeURIComponent(task.document_path)}&patientId=${encodeURIComponent(patientId)}`}
-                                target="_blank"
-                                rel="noreferrer"
+                                href={`/patients/${patientId}?${new URLSearchParams({
+                                  m_tab: "documents",
+                                  openDocumentPath: task.document_path,
+                                  openDocumentBucket: task.document_bucket,
+                                  openDocumentMode: "edit",
+                                }).toString()}`}
                                 className="mt-1 inline-flex items-center gap-1 font-medium text-sky-700 hover:text-sky-800 hover:underline"
                               >
                                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

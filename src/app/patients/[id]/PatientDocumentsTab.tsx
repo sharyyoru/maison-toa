@@ -159,6 +159,7 @@ export default function PatientDocumentsTab({
   const [downloadingPdfPaths, setDownloadingPdfPaths] = useState<Set<string>>(new Set());
   const [moreMenuOpenPath, setMoreMenuOpenPath] = useState<string | null>(null);
   const [linkedDocumentHandled, setLinkedDocumentHandled] = useState(false);
+  const [linkedDocumentEditHandled, setLinkedDocumentEditHandled] = useState(false);
 
   useEffect(() => {
     if (linkedDocumentHandled) return;
@@ -562,6 +563,54 @@ export default function PatientDocumentsTab({
 
     return payload.signedUrl as string;
   }, [patientId]);
+
+  useEffect(() => {
+    if (
+      !linkedDocumentHandled ||
+      linkedDocumentEditHandled ||
+      searchParams.get("openDocumentMode") !== "edit" ||
+      !selectedFile ||
+      selectedFile.kind !== "file"
+    ) {
+      return;
+    }
+
+    setLinkedDocumentEditHandled(true);
+    if (
+      searchParams.get("openDocumentBucket") !== BUCKET_NAME ||
+      getExtension(selectedFile.name) !== "docx"
+    ) {
+      return;
+    }
+
+    const linkedFile = selectedFile;
+    let cancelled = false;
+    async function openLinkedDocxEditor() {
+      try {
+        setSelectedFilePreviewLoading(true);
+        const url = await getFileAccessUrl(linkedFile);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Failed to load document for editing");
+        const blob = await response.blob();
+        if (!cancelled) setEditingDocx({ item: linkedFile, blob, url });
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message || "Unable to open document for editing.");
+      } finally {
+        if (!cancelled) setSelectedFilePreviewLoading(false);
+      }
+    }
+
+    void openLinkedDocxEditor();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    getFileAccessUrl,
+    linkedDocumentEditHandled,
+    linkedDocumentHandled,
+    searchParams,
+    selectedFile,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
