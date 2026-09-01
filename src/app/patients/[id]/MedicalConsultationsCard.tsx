@@ -203,6 +203,12 @@ type Provider = {
   short_code?: string | null;
 };
 
+type ColoredLineConfiguration = {
+  target_type: "user" | "billing_entity";
+  target_id: string;
+  hex_color: string;
+};
+
 type PrescriptionLine = {
   medicineId: string;
   dosageId: string;
@@ -1677,6 +1683,15 @@ export default function MedicalConsultationsCard({
   const [providerOptions, setProviderOptions] = useState<Provider[]>([]);
   const [billingEntityOptions, setBillingEntityOptions] = useState<Provider[]>([]);
   const [medicalStaffOptions, setMedicalStaffOptions] = useState<Provider[]>([]);
+  const [coloredLineConfigurations, setColoredLineConfigurations] = useState<ColoredLineConfiguration[]>([]);
+
+  const coloredLineByTarget = useMemo(
+    () => new Map(coloredLineConfigurations.map((configuration) => [
+      `${configuration.target_type}:${configuration.target_id}`,
+      configuration.hex_color,
+    ])),
+    [coloredLineConfigurations],
+  );
 
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [editingInvoiceNumber, setEditingInvoiceNumber] = useState<string | null>(null);
@@ -2551,6 +2566,17 @@ export default function MedicalConsultationsCard({
       } catch {}
     }
 
+    async function loadColoredLines() {
+      try {
+        const response = await fetch("/api/settings/colored-lines");
+        if (!response.ok) return;
+        const data = await response.json();
+        if (isMounted) {
+          setColoredLineConfigurations(Array.isArray(data.configurations) ? data.configurations : []);
+        }
+      } catch {}
+    }
+
     async function loadPatientDetails() {
       try {
         const { data } = await supabaseClient
@@ -2577,6 +2603,7 @@ export default function MedicalConsultationsCard({
 
     void loadUsers();
     void loadProviders();
+    void loadColoredLines();
     void loadExternalLabs();
     void loadPatientDetails();
     void loadMedTemplates();
@@ -10914,6 +10941,19 @@ export default function MedicalConsultationsCard({
                 const is3d = row.record_type === "3d";
                 const isLockedNote = isNotes && row.is_draft === false;
                 const billingEntityShortCode = getBillingEntityShortCode(row.billing_entity_id);
+                const linkedDoctorUserId = row.doctor_user_id
+                  ? userOptions.find((user) => user.provider_id === row.doctor_user_id)?.id
+                  : undefined;
+                const configuredLineColor =
+                  (row.billing_entity_id
+                    ? coloredLineByTarget.get(`billing_entity:${row.billing_entity_id}`)
+                    : undefined) ??
+                  (row.doctor_user_id
+                    ? coloredLineByTarget.get(`user:${row.doctor_user_id}`)
+                    : undefined) ??
+                  (linkedDoctorUserId
+                    ? coloredLineByTarget.get(`user:${linkedDoctorUserId}`)
+                    : undefined);
 
                 const baseRecordTypeLabel =
                   consultationRecordTypeOptions.find(
@@ -11266,6 +11306,14 @@ export default function MedicalConsultationsCard({
                         )}
                       </div>
                     </div>
+
+                    {configuredLineColor && (
+                      <div
+                        className="mt-3 h-[3px] w-full rounded-full"
+                        style={{ backgroundColor: configuredLineColor }}
+                        aria-hidden="true"
+                      />
+                    )}
 
                     {/* Content Section */}
                     <div className="mt-3.5 space-y-3">

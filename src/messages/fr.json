@@ -1436,7 +1436,8 @@
       "bookingCategories": "Catégories de réservation",
       "appointmentStatuses": "Statuts des rendez-vous",
       "providersBilling": "Prestataires & Facturation",
-      "tardocGroups": "Groupes TARDOC"
+      "tardocGroups": "Groupes TARDOC",
+      "systemConfiguration": "Configuration du système"
     },
     "blockedDates": {
       "blockTitle": "Bloquer une date",

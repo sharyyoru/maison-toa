@@ -17,6 +17,11 @@ const TardocGroupsTab = dynamic(
   { loading: () => <div className="text-xs text-slate-400 py-8 text-center">Loading…</div> },
 );
 
+const SystemConfigurationTab = dynamic(
+  () => import("@/components/SystemConfigurationTab"),
+  { loading: () => <div className="text-xs text-slate-400 py-8 text-center">Loading…</div> },
+);
+
 const BookingLinksView = dynamic(
   () => import("@/components/BookingLinksView"),
   { loading: () => <div className="text-xs text-slate-400 py-8 text-center">Loading…</div> },
@@ -37,6 +42,7 @@ const TABS = [
   { id: "appointment-statuses", label: "Appointment Statuses" },
   { id: "providers-billing", label: "Providers & Billing" },
   { id: "tardoc-groups", label: "TARDOC Groups" },
+  { id: "system-configuration", label: "System Configuration" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -76,6 +82,7 @@ export default function SettingsPage() {
     "appointment-statuses": t("tabs.appointmentStatuses"),
     "providers-billing": t("tabs.providersBilling"),
     "tardoc-groups": t("tabs.tardocGroups"),
+    "system-configuration": t("tabs.systemConfiguration"),
   };
 
   return (
@@ -116,6 +123,7 @@ export default function SettingsPage() {
         {activeTab === "appointment-statuses" && <AppointmentStatusesSettingsTab />}
         {activeTab === "providers-billing" && <ProvidersBillingSettingsTab />}
         {activeTab === "tardoc-groups" && <TardocGroupsTab />}
+        {activeTab === "system-configuration" && <SystemConfigurationTab />}
       </div>
     </div>
   );
