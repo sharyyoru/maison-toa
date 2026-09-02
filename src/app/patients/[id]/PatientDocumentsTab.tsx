@@ -568,26 +568,25 @@ export default function PatientDocumentsTab({
   }, [patientId]);
 
   useEffect(() => {
-    if (
-      !linkedDocumentHandled ||
-      linkedDocumentEditLaunchingRef.current ||
-      searchParams.get("openDocumentMode") !== "edit" ||
-      !selectedFile ||
-      selectedFile.kind !== "file"
-    ) {
-      return;
-    }
+    if (linkedDocumentEditLaunchingRef.current) return;
+
+    const linkedPath = searchParams.get("openDocumentPath");
+    const linkedBucket = searchParams.get("openDocumentBucket");
+    if (searchParams.get("openDocumentMode") !== "edit" || !linkedPath) return;
 
     linkedDocumentEditLaunchingRef.current = true;
-    if (
-      searchParams.get("openDocumentBucket") !== BUCKET_NAME ||
-      getExtension(selectedFile.name) !== "docx"
-    ) {
+    const linkedName = linkedPath.split("/").filter(Boolean).pop() || linkedPath;
+    if (linkedBucket !== BUCKET_NAME || getExtension(linkedName) !== "docx") {
       setOpeningLinkedDocument(false);
       return;
     }
 
-    const linkedFile = selectedFile;
+    const linkedFile: ListedItem = {
+      kind: "file",
+      name: linkedName,
+      path: linkedPath,
+      source: "patient_document",
+    };
     let cancelled = false;
     async function openLinkedDocxEditor() {
       try {
@@ -616,9 +615,7 @@ export default function PatientDocumentsTab({
     };
   }, [
     getFileAccessUrl,
-    linkedDocumentHandled,
     searchParams,
-    selectedFile,
   ]);
 
   useEffect(() => {
