@@ -185,6 +185,16 @@ function formatPatientFileName(firstName?: string | null, lastName?: string | nu
   return last || first || "";
 }
 
+function formatPatientDateOfBirth(dateOfBirth?: string | null) {
+  if (!dateOfBirth) return "";
+
+  const match = dateOfBirth.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return "";
+
+  const [, year, month, day] = match;
+  return `${day}.${month}.${year}`;
+}
+
 type ServiceOption = {
   id: string;
   name: string;
@@ -3494,7 +3504,7 @@ export default function CalendarPage() {
           const { data: fullApptData } = await supabaseClient
             .from("appointments")
             .select(
-              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, is_member, language_preference), provider:providers(id, name)",
+              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)",
             )
             .eq('id', firstAppt.id)
             .single();
@@ -3513,7 +3523,7 @@ export default function CalendarPage() {
         const { data: refreshedData } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, is_member, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -3564,7 +3574,7 @@ export default function CalendarPage() {
             source: "manual",
           })
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, is_vip, is_member, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)",
           )
           .single();
 
@@ -6102,6 +6112,7 @@ export default function CalendarPage() {
                                     );
                                     const patientPhone = formatSwissLocalPhoneDisplay(appt.patient?.phone);
                                     const patientEmail = appt.patient?.email ?? null;
+                                    const patientDateOfBirth = formatPatientDateOfBirth(appt.patient?.date_of_birth);
                                     const durationMins = end && !Number.isNaN(end.getTime()) 
                                       ? Math.round((end.getTime() - start.getTime()) / 60000) 
                                       : null;
@@ -6260,6 +6271,18 @@ export default function CalendarPage() {
                                           </div>
                                           <div className="text-[13px] font-bold text-slate-900">{patientName || "No Patient"}</div>
                                           {serviceLabel && <div className="mt-1 font-semibold text-slate-700">{serviceLabel}</div>}
+                                          {patientDateOfBirth && (
+                                            <div className="mt-1 text-slate-600">
+                                              <span className="font-semibold text-slate-500">Date de naissance:</span> {patientDateOfBirth}
+                                            </div>
+                                          )}
+                                          {dayStatusLabel && (
+                                            <div className="text-slate-600">
+                                              <span className="font-semibold text-slate-500">Statut:</span>{" "}
+                                              {dayStatusIcon && <span aria-hidden="true">{dayStatusIcon} </span>}
+                                              {dayStatusLabel}
+                                            </div>
+                                          )}
                                           {category && (
                                             <div className="text-slate-600">
                                               <span className="font-semibold text-slate-500">Catégorie:</span> {category}
