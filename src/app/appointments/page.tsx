@@ -751,9 +751,10 @@ async function sendAppointmentConfirmationEmail(
   appointment: CalendarAppointment,
   personalizedMessage?: string,
   emailType: "confirmation" | "modification" | "cancellation" = "confirmation",
-): Promise<void> {
+  sendWhatsappNotification = true,
+): Promise<boolean> {
   const patientEmail = appointment.patient?.email ?? null;
-  if (!patientEmail) return;
+  if (!patientEmail) return false;
 
   try {
     const trackedPatientStart = appointment.tracking_params?.patient_appointment_start;
@@ -778,7 +779,7 @@ async function sendAppointmentConfirmationEmail(
 
     // Send branded confirmation email via API
     try {
-      await fetch("/api/appointments/send-confirmation", {
+      const response = await fetch("/api/appointments/send-confirmation", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -797,16 +798,20 @@ async function sendAppointmentConfirmationEmail(
           emailType,
         }),
       });
+      if (!response.ok) {
+        throw new Error(`Confirmation email request failed with status ${response.status}`);
+      }
     } catch (error) {
       console.error(
         "Failed to send branded appointment confirmation email",
         error,
       );
+      return false;
     }
 
     // Send WhatsApp notification only for the original confirmation flow.
     const patientPhone = appointment.patient?.phone ?? null;
-    if (emailType === "confirmation" && patientPhone && patientPhone.trim().length > 0) {
+    if (sendWhatsappNotification && emailType === "confirmation" && patientPhone && patientPhone.trim().length > 0) {
       const whatsappText = `Appointment confirmation on ${dateTimeLabel} for ${serviceLabel} with ${doctorName} at ${location}`;
 
       try {
@@ -825,8 +830,10 @@ async function sendAppointmentConfirmationEmail(
         console.error("Failed to enqueue WhatsApp appointment notification", error);
       }
     }
+    return true;
   } catch (error) {
     console.error("Failed to prepare appointment confirmation email", error);
+    return false;
   }
 }
 
@@ -1312,6 +1319,11 @@ export default function CalendarPage() {
     allowResourceOverlap: boolean;
   } | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [resendingConfirmation, setResendingConfirmation] = useState(false);
+  const [resendConfirmationMessage, setResendConfirmationMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   const [deletingAppointment, setDeletingAppointment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [recurringAction, setRecurringAction] = useState<"modify" | "delete" | null>(null);
@@ -1330,6 +1342,7 @@ export default function CalendarPage() {
     savingCreate ||
     editModalOpen ||
     savingEdit ||
+    resendingConfirmation ||
     deletingAppointment ||
     isDraggingCreate ||
     draggedAppointment !== null ||
@@ -1364,7 +1377,7 @@ export default function CalendarPage() {
 
   // Helper to close edit modal and reset state
   const closeEditModal = () => {
-    if (savingEdit || deletingAppointment) return;
+    if (savingEdit || resendingConfirmation || deletingAppointment) return;
     setEditModalOpen(false);
     setEditingAppointment(null);
     editOriginalPatientIdRef.current = null;
@@ -1374,6 +1387,7 @@ export default function CalendarPage() {
     setEditPatientOptions([]);
     setEditPatientOptionsError(null);
     setEditOverlapConfirmation(null);
+    setResendConfirmationMessage(null);
     setShowDeleteConfirm(false);
     closeEditModalDropdowns();
   };
@@ -3663,6 +3677,8 @@ export default function CalendarPage() {
     editOriginalPatientIdRef.current = appt.patient_id ?? appt.patient?.id ?? null;
     setEditError(null);
     setEditOverlapConfirmation(null);
+    setResendingConfirmation(false);
+    setResendConfirmationMessage(null);
     setSavingEdit(false);
     setEditPatientId(appt.patient_id ?? appt.patient?.id ?? null);
     setEditNoPatient(appt.no_patient === true);
@@ -4580,6 +4596,27 @@ export default function CalendarPage() {
     if (appointment && shouldSend) {
       await sendAppointmentConfirmationEmail(appointment, message, modificationEmailPromptType);
     }
+  }
+
+  async function handleResendConfirmationEmail() {
+    if (!editingAppointment?.patient?.email || resendingConfirmation) return;
+
+    setResendingConfirmation(true);
+    setResendConfirmationMessage(null);
+
+    const sent = await sendAppointmentConfirmationEmail(
+      editingAppointment,
+      undefined,
+      "confirmation",
+      false,
+    );
+
+    setResendConfirmationMessage(
+      sent
+        ? { type: "success", text: "Confirmation email sent successfully." }
+        : { type: "error", text: "Unable to send the confirmation email. Please try again." },
+    );
+    setResendingConfirmation(false);
   }
 
   function openCancellationEmailPrompt(
@@ -6560,6 +6597,32 @@ export default function CalendarPage() {
                         {new Date(editingAppointment.patient.date_of_birth + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
                       </p>
                     )}
+                  </div>
+                  <div className="border-t border-slate-200 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleResendConfirmationEmail()}
+                      disabled={!editingAppointment.patient?.email || resendingConfirmation}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 shadow-sm hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8V6a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                      </svg>
+                      {resendingConfirmation ? "Sending..." : "Resend Confirmation Email"}
+                    </button>
+                    {!editingAppointment.patient?.email ? (
+                      <p className="mt-1 text-[10px] text-slate-500">Add a patient email address to resend the confirmation.</p>
+                    ) : null}
+                    {resendConfirmationMessage ? (
+                      <p
+                        role="status"
+                        className={`mt-1 text-[10px] font-medium ${
+                          resendConfirmationMessage.type === "success" ? "text-emerald-600" : "text-red-600"
+                        }`}
+                      >
+                        {resendConfirmationMessage.text}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
