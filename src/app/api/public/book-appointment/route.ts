@@ -13,6 +13,7 @@ import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
 import { resolveBookingSecondaryCalendar } from "@/lib/bookingSecondaryCalendar";
 import { getBookingCalendarIntervals } from "@/lib/bookingCalendarIntervals";
 import { hasCapacityConflict, intervalOverlaps, type BookingInterval } from "@/lib/exactBookingAvailability";
+import { formatSwissYmd, getSwissSlotString } from "@/lib/swissTimezone";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -312,6 +313,42 @@ export async function POST(request: Request) {
         treatmentData?.services?.service_categories?.name?.trim() ||
         treatmentData?.booking_categories?.name?.trim() ||
         null;
+    }
+
+    // A one-off opening is an allow-list: while that window is active, only
+    // its selected treatments may be booked. Enforce this on the server as
+    // well as in the calendar UI so a crafted request cannot bypass it.
+    const appointmentSwissDate = formatSwissYmd(appointmentDateObj);
+    const appointmentSwissTime = getSwissSlotString(appointmentDateObj);
+    const { data: bookingDoctor } = await supabase
+      .from("booking_doctors")
+      .select("id")
+      .eq("slug", doctorSlug)
+      .eq("enabled", true)
+      .maybeSingle();
+
+    if (bookingDoctor) {
+      const { data: exceptionalWindows, error: exceptionalError } = await supabase
+        .from("exceptional_booking_availability")
+        .select("start_time, end_time, treatment_ids")
+        .eq("booking_doctor_id", bookingDoctor.id)
+        .eq("exception_date", appointmentSwissDate)
+        .eq("enabled", true);
+
+      if (exceptionalError) {
+        console.error("[Booking] Failed to validate exceptional availability:", exceptionalError);
+        return NextResponse.json({ error: "Failed to verify exceptional availability" }, { status: 500 });
+      }
+
+      const activeExceptionalWindows = (exceptionalWindows || []).filter(
+        (window) => appointmentSwissTime >= window.start_time.slice(0, 5) && appointmentSwissTime < window.end_time.slice(0, 5),
+      );
+      if (activeExceptionalWindows.length > 0 && (!treatmentId || !activeExceptionalWindows.some((window) => window.treatment_ids.includes(treatmentId)))) {
+        return NextResponse.json(
+          { error: "This exceptional time is not available for the selected treatment." },
+          { status: 409 },
+        );
+      }
     }
 
     if (!treatmentServiceId) {

@@ -14,6 +14,7 @@ import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
 import { getLocalizedBookingName } from "@/lib/bookingLocalization";
 import { fetchAvailabilityWindow, getNextOpenSlots, type AvailabilityWindowResult, type AvailableSlot } from "@/lib/bookingAvailability";
 import WeekAvailabilityPicker from "@/components/booking/WeekAvailabilityPicker";
+import { generateExceptionalTimeSlots, getExceptionalWindowForTreatment, restrictSlotsToExceptionalRules, type ExceptionalBookingWindow } from "@/lib/exceptionalBookingAvailability";
 
 interface DoctorInfo {
   name: string;
@@ -261,6 +262,8 @@ function DoctorBookingContent() {
   const [dbAvailabilityLoaded, setDbAvailabilityLoaded] = useState(false);
   const [blockedDates, setBlockedDates] = useState<Set<string>>(new Set());
   const [blockedDatesLoaded, setBlockedDatesLoaded] = useState(false);
+  const [exceptionalWindows, setExceptionalWindows] = useState<ExceptionalBookingWindow[]>([]);
+  const [exceptionalWindowsLoaded, setExceptionalWindowsLoaded] = useState(false);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -383,6 +386,42 @@ function DoctorBookingContent() {
     fetchTreatment();
   }, [treatmentId]);
 
+  useEffect(() => {
+    setExceptionalWindowsLoaded(false);
+    fetch(`/api/public/exceptional-availability?doctorSlug=${encodeURIComponent(doctorSlug)}&treatmentId=${encodeURIComponent(treatmentId)}`)
+      .then((response) => response.ok ? response.json() : { windows: [] })
+      .then((data) => setExceptionalWindows(data.windows || []))
+      .catch(() => setExceptionalWindows([]))
+      .finally(() => setExceptionalWindowsLoaded(true));
+  }, [doctorSlug, treatmentId]);
+
+  function getBookingTimeSlots(date: string) {
+    const exceptional = getExceptionalWindowForTreatment(exceptionalWindows, date, treatmentId);
+    const regular = restrictSlotsToExceptionalRules(
+      generateTimeSlots(doctorSlug, locationId, date, dbAvailability),
+      exceptionalWindows,
+      date,
+      treatmentId,
+    );
+    return exceptional
+      ? [...new Set([...regular, ...generateExceptionalTimeSlots(exceptional)])].sort()
+      : regular;
+  }
+
+  function getBookingDayAvailability(date: string) {
+    const exceptional = getExceptionalWindowForTreatment(exceptionalWindows, date, treatmentId);
+    const day = getSwissDayOfWeek(parseLocalDate(date));
+    const regular = dbAvailability
+      ? dbAvailability[day]
+      : (DOCTOR_AVAILABILITY[doctorSlug]?.[locationId]?.[day]
+        ?? ALL_WEEK_SLOTS[day as keyof typeof ALL_WEEK_SLOTS]);
+    if (!exceptional) return regular;
+    const exceptionalRange = { start: exceptional.start_time.slice(0, 5), end: exceptional.end_time.slice(0, 5) };
+    return regular
+      ? { start: regular.start < exceptionalRange.start ? regular.start : exceptionalRange.start, end: regular.end > exceptionalRange.end ? regular.end : exceptionalRange.end }
+      : exceptionalRange;
+  }
+
   // Fetch blocked dates on mount
   useEffect(() => {
     async function fetchBlockedDates() {
@@ -405,10 +444,13 @@ function DoctorBookingContent() {
   }, []);
 
   useEffect(() => {
-    if (locationId && doctorSlug && !doctorLoading && doctor && treatment && dbAvailabilityLoaded && blockedDatesLoaded) {
+    if (locationId && doctorSlug && !doctorLoading && doctor && treatment && dbAvailabilityLoaded && blockedDatesLoaded && exceptionalWindowsLoaded) {
       setIsLoadingDates(true);
       setAvailabilityWindow(null);
-      const dates = getAvailableDates(doctorSlug, locationId, 90, dbAvailability);
+      const dates = [...new Set([
+        ...getAvailableDates(doctorSlug, locationId, 90, dbAvailability),
+        ...exceptionalWindows.map((window) => window.exception_date),
+      ])].sort();
       // Filter out blocked dates
       const filteredDates = dates.filter((d) => !blockedDates.has(d));
       setAvailableDatesSet(new Set(filteredDates));
@@ -444,14 +486,8 @@ function DoctorBookingContent() {
           const slotsToShow = getNextOpenSlots({
             dates: filteredDates,
             availabilityWindow: availabilityResult,
-            generateTimeSlots: (date) => generateTimeSlots(doctorSlug, locationId, date, dbAvailability),
-            getDayAvailability: (date) => {
-              const day = getSwissDayOfWeek(parseLocalDate(date));
-              return dbAvailability
-                ? dbAvailability[day]
-                : (DOCTOR_AVAILABILITY[doctorSlug]?.[locationId]?.[day]
-                  ?? ALL_WEEK_SLOTS[day as keyof typeof ALL_WEEK_SLOTS]);
-            },
+            generateTimeSlots: getBookingTimeSlots,
+            getDayAvailability: getBookingDayAvailability,
           });
 
           setAvailabilityWindow({
@@ -485,11 +521,11 @@ function DoctorBookingContent() {
         abortController.abort();
       };
     }
-  }, [locationId, doctorSlug, dbAvailability, dbAvailabilityLoaded, doctorLoading, doctor, blockedDates, blockedDatesLoaded, treatment, treatmentId, categorySlug]);
+  }, [locationId, doctorSlug, dbAvailability, dbAvailabilityLoaded, doctorLoading, doctor, blockedDates, blockedDatesLoaded, exceptionalWindows, exceptionalWindowsLoaded, treatment, treatmentId, categorySlug]);
 
   useEffect(() => {
     if (selectedDate && locationId && doctor) {
-      const slots = generateTimeSlots(doctorSlug, locationId, selectedDate, dbAvailability);
+      const slots = getBookingTimeSlots(selectedDate);
       setAvailableSlots(slots);
       checkAvailability(selectedDate);
     } else if (!doctor) {
@@ -544,15 +580,8 @@ function DoctorBookingContent() {
       const openSlots = getNextOpenSlots({
         dates: [date],
         availabilityWindow: availabilityResult,
-        generateTimeSlots: (slotDate) => (blockedDates.has(slotDate) ? [] : generateTimeSlots(doctorSlug, locationId || "", slotDate, dbAvailability)),
-        getDayAvailability: (slotDate) => {
-          if (blockedDates.has(slotDate)) return undefined;
-          const day = getSwissDayOfWeek(parseLocalDate(slotDate));
-          return dbAvailability
-            ? dbAvailability[day]
-            : (DOCTOR_AVAILABILITY[doctorSlug]?.[locationId || ""]?.[day]
-              ?? ALL_WEEK_SLOTS[day as keyof typeof ALL_WEEK_SLOTS]);
-        },
+        generateTimeSlots: (slotDate) => (blockedDates.has(slotDate) ? [] : getBookingTimeSlots(slotDate)),
+        getDayAvailability: (slotDate) => blockedDates.has(slotDate) ? undefined : getBookingDayAvailability(slotDate),
         limit: Number.MAX_SAFE_INTEGER,
       }).map((slot) => slot.time);
       setAvailableSlots(openSlots);
@@ -1037,17 +1066,13 @@ function DoctorBookingContent() {
                     });
                   }}
                   availabilityWindow={availabilityWindow}
-                  generateTimeSlots={(date) => (blockedDates.has(date) ? [] : generateTimeSlots(doctorSlug, locationId || "", date, dbAvailability))}
+                  generateTimeSlots={(date) => (blockedDates.has(date) ? [] : getBookingTimeSlots(date))}
                   getDayAvailability={(date) => {
                     // A clinic-wide closure (holiday, vacation, etc.) always wins over
                     // the doctor's normal weekly hours — otherwise the calendar happily
                     // generates slots for a day nobody is actually working.
                     if (blockedDates.has(date)) return undefined;
-                    const day = getSwissDayOfWeek(parseLocalDate(date));
-                    return dbAvailability
-                      ? dbAvailability[day]
-                      : (DOCTOR_AVAILABILITY[doctorSlug]?.[locationId || ""]?.[day]
-                        ?? ALL_WEEK_SLOTS[day as keyof typeof ALL_WEEK_SLOTS]);
+                    return getBookingDayAvailability(date);
                   }}
                   nextAvailableSlots={nextAvailableSlots}
                   isLoading={isLoadingDates}
