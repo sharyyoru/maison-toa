@@ -34,6 +34,7 @@ type TestPatient = {
   email: string | null;
   phone: string | null;
   gender: string | null;
+  dob: string | null;
 };
 
 type EmailTemplateBuilderProps = {
@@ -184,8 +185,11 @@ export default function EmailTemplateBuilder({
   const [testError, setTestError] = useState<string | null>(null);
   const [testSuccess, setTestSuccess] = useState<string | null>(null);
   const [testPatients, setTestPatients] = useState<TestPatient[]>([]);
-  const [selectedTestPatientId, setSelectedTestPatientId] = useState("");
   const [loadingTestPatients, setLoadingTestPatients] = useState(false);
+  const [testPatientSearch, setTestPatientSearch] = useState("");
+  const [testPatientSearchOpen, setTestPatientSearchOpen] = useState(false);
+  const testPatientRequestRef = useRef(0);
+  const testPatientSearchRef = useRef<HTMLDivElement>(null);
 
   // Image gallery state
   const [showImageGallery, setShowImageGallery] = useState(false);
@@ -203,6 +207,50 @@ export default function EmailTemplateBuilder({
       loadTemplates();
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!showTestModal) return;
+    const search = testPatientSearch.trim();
+    const requestId = ++testPatientRequestRef.current;
+    if (search.length < 2) {
+      setTestPatients([]);
+      setLoadingTestPatients(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setLoadingTestPatients(true);
+      const words = search.replace(/[,()%_]/g, " ").split(/\s+/).filter(Boolean);
+      let query = supabaseClient
+        .from("patients")
+        .select("id, first_name, last_name, email, phone, gender, dob");
+      for (const word of words) {
+        const term = `%${word}%`;
+        query = query.or(`first_name.ilike.${term},last_name.ilike.${term},email.ilike.${term},phone.ilike.${term}`);
+      }
+      const { data, error: patientError } = await query.limit(8);
+      if (requestId !== testPatientRequestRef.current) return;
+      setLoadingTestPatients(false);
+      if (patientError) {
+        setTestPatients([]);
+        setTestError(`Could not search patients: ${patientError.message}`);
+      } else {
+        setTestPatients((data ?? []) as TestPatient[]);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [showTestModal, testPatientSearch]);
+
+  useEffect(() => {
+    function closePatientSearch(event: MouseEvent) {
+      if (!testPatientSearchRef.current?.contains(event.target as Node)) {
+        setTestPatientSearchOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", closePatientSearch);
+    return () => document.removeEventListener("mousedown", closePatientSearch);
+  }, []);
 
   // Lock background scroll while the fullscreen editor is open.
   useEffect(() => {
@@ -616,30 +664,15 @@ export default function EmailTemplateBuilder({
       setTestError(null);
       setTestSuccess(null);
       setShowTestModal(true);
-      if (testPatients.length === 0) {
-        setLoadingTestPatients(true);
-        const { data, error: patientError } = await supabaseClient
-          .from("patients")
-          .select("id, first_name, last_name, email, phone, gender")
-          .order("last_name", { ascending: true })
-          .order("first_name", { ascending: true })
-          .limit(1000);
-        setLoadingTestPatients(false);
-        if (patientError) {
-          setTestError(`Could not load patients: ${patientError.message}`);
-        } else {
-          setTestPatients((data ?? []) as TestPatient[]);
-        }
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to read the email for testing.");
     }
   }
 
-  function selectTestPatient(patientId: string) {
-    setSelectedTestPatientId(patientId);
-    const patient = testPatients.find((item) => item.id === patientId);
+  function selectTestPatient(patient: TestPatient | null) {
+    setTestPatientSearchOpen(false);
     if (!patient) {
+      setTestPatientSearch("");
       setTestVariables(() => {
         const next: Record<string, string> = {};
         for (const path of detectedVars) next[path] = VARIABLE_SAMPLES[path] ?? "";
@@ -647,6 +680,10 @@ export default function EmailTemplateBuilder({
       });
       return;
     }
+
+    setTestPatientSearch(
+      [patient.first_name, patient.last_name].filter(Boolean).join(" ") || patient.email || "Unnamed patient",
+    );
 
     const values = withPatientTemplateVariables(patient);
     const patientVariables: Record<string, string> = {
@@ -1010,28 +1047,50 @@ export default function EmailTemplateBuilder({
 
             {/* Body */}
             <div className="flex-1 space-y-4 overflow-auto px-6 py-4">
-              <div>
+              <div ref={testPatientSearchRef} className="relative">
                 <label className="mb-1.5 block text-sm font-medium text-slate-700">
                   Select patient
                 </label>
-                <select
-                  value={selectedTestPatientId}
-                  onChange={(e) => selectTestPatient(e.target.value)}
-                  disabled={loadingTestPatients}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-50"
-                >
-                  <option value="">
-                    {loadingTestPatients ? "Loading patients..." : "Use sample values"}
-                  </option>
-                  {testPatients.map((patient) => {
-                    const name = [patient.last_name, patient.first_name].filter(Boolean).join(" ") || "Unnamed patient";
-                    return (
-                      <option key={patient.id} value={patient.id}>
-                        {patient.email ? `${name} — ${patient.email}` : name}
-                      </option>
-                    );
-                  })}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={testPatientSearch}
+                    onChange={(e) => {
+                      setTestPatientSearch(e.target.value);
+                      setTestPatientSearchOpen(true);
+                    }}
+                    onFocus={() => testPatientSearch.trim().length >= 2 && setTestPatientSearchOpen(true)}
+                    onKeyDown={(e) => e.key === "Escape" && setTestPatientSearchOpen(false)}
+                    placeholder="Search by name, email, or phone..."
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 pr-10 text-sm text-slate-900"
+                  />
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                    {loadingTestPatients ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : (
+                      <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
+                    )}
+                  </div>
+                </div>
+                {testPatientSearchOpen && testPatientSearch.trim().length >= 2 && (
+                  <div className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
+                    {!loadingTestPatients && testPatients.length === 0 && (
+                      <p className="px-4 py-3 text-sm text-slate-500">No patients found.</p>
+                    )}
+                    {testPatients.map((patient) => {
+                      const name = [patient.first_name, patient.last_name].filter(Boolean).join(" ") || "Unnamed patient";
+                      return (
+                        <button key={patient.id} type="button" onClick={() => selectTestPatient(patient)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-indigo-500 text-sm font-semibold text-white">
+                            {(patient.first_name?.[0] ?? patient.email?.[0] ?? "?").toUpperCase()}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-slate-900">{name}</p>
+                            <p className="truncate text-xs text-slate-500">{patient.email || patient.phone || "No contact details"}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <p className="mt-1 text-xs text-slate-500">
                   Patient variables below are filled from the selected patient profile.
                 </p>
@@ -1059,7 +1118,7 @@ export default function EmailTemplateBuilder({
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedTestPatientId("");
+                        setTestPatientSearch("");
                         setTestVariables(() => {
                           const next: Record<string, string> = {};
                           for (const v of detectedVars) next[v] = VARIABLE_SAMPLES[v] ?? "";
