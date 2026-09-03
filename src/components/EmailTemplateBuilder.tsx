@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { Image, Upload, Trash2, X, Loader2, Send } from "lucide-react";
+import { withPatientTemplateVariables } from "@/lib/patientTemplateVariables";
 
 // Dynamically import to avoid SSR issues
 const EmailEditor = dynamic(() => import("react-email-editor"), { ssr: false });
@@ -24,6 +25,15 @@ type GalleryImage = {
   name: string;
   url: string;
   created_at: string;
+};
+
+type TestPatient = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  gender: string | null;
 };
 
 type EmailTemplateBuilderProps = {
@@ -173,6 +183,9 @@ export default function EmailTemplateBuilder({
   const [sendingTest, setSendingTest] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
   const [testSuccess, setTestSuccess] = useState<string | null>(null);
+  const [testPatients, setTestPatients] = useState<TestPatient[]>([]);
+  const [selectedTestPatientId, setSelectedTestPatientId] = useState("");
+  const [loadingTestPatients, setLoadingTestPatients] = useState(false);
 
   // Image gallery state
   const [showImageGallery, setShowImageGallery] = useState(false);
@@ -603,9 +616,58 @@ export default function EmailTemplateBuilder({
       setTestError(null);
       setTestSuccess(null);
       setShowTestModal(true);
+      if (testPatients.length === 0) {
+        setLoadingTestPatients(true);
+        const { data, error: patientError } = await supabaseClient
+          .from("patients")
+          .select("id, first_name, last_name, email, phone, gender")
+          .order("last_name", { ascending: true })
+          .order("first_name", { ascending: true })
+          .limit(1000);
+        setLoadingTestPatients(false);
+        if (patientError) {
+          setTestError(`Could not load patients: ${patientError.message}`);
+        } else {
+          setTestPatients((data ?? []) as TestPatient[]);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to read the email for testing.");
     }
+  }
+
+  function selectTestPatient(patientId: string) {
+    setSelectedTestPatientId(patientId);
+    const patient = testPatients.find((item) => item.id === patientId);
+    if (!patient) {
+      setTestVariables(() => {
+        const next: Record<string, string> = {};
+        for (const path of detectedVars) next[path] = VARIABLE_SAMPLES[path] ?? "";
+        return next;
+      });
+      return;
+    }
+
+    const values = withPatientTemplateVariables(patient);
+    const patientVariables: Record<string, string> = {
+      "patient.first_name": values.first_name ?? "",
+      "patient.last_name": values.last_name ?? "",
+      "patient.email": values.email ?? "",
+      "patient.phone": values.phone ?? "",
+      "patient.full_name": values.full_name,
+      "patient.salutation_fr": values.salutation_fr,
+      "patient.salutation_en": values.salutation_en,
+    };
+
+    setTestVariables((previous) => {
+      const next = { ...previous };
+      for (const path of detectedVars) {
+        if (Object.prototype.hasOwnProperty.call(patientVariables, path)) {
+          next[path] = patientVariables[path];
+        }
+      }
+      return next;
+    });
   }
 
   async function handleSendTest() {
@@ -949,6 +1011,33 @@ export default function EmailTemplateBuilder({
             {/* Body */}
             <div className="flex-1 space-y-4 overflow-auto px-6 py-4">
               <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  Select patient
+                </label>
+                <select
+                  value={selectedTestPatientId}
+                  onChange={(e) => selectTestPatient(e.target.value)}
+                  disabled={loadingTestPatients}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-50"
+                >
+                  <option value="">
+                    {loadingTestPatients ? "Loading patients..." : "Use sample values"}
+                  </option>
+                  {testPatients.map((patient) => {
+                    const name = [patient.last_name, patient.first_name].filter(Boolean).join(" ") || "Unnamed patient";
+                    return (
+                      <option key={patient.id} value={patient.id}>
+                        {patient.email ? `${name} — ${patient.email}` : name}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  Patient variables below are filled from the selected patient profile.
+                </p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Send to
                 </label>
@@ -969,13 +1058,14 @@ export default function EmailTemplateBuilder({
                   {detectedVars.length > 0 && (
                     <button
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        setSelectedTestPatientId("");
                         setTestVariables(() => {
                           const next: Record<string, string> = {};
                           for (const v of detectedVars) next[v] = VARIABLE_SAMPLES[v] ?? "";
                           return next;
-                        })
-                      }
+                        });
+                      }}
                       className="text-xs font-medium text-sky-600 hover:underline"
                     >
                       Reset to samples
