@@ -11,6 +11,7 @@ import {
 import { normalizePatientLanguage } from "@/lib/languagePreference";
 import { formatSwissYmd } from "@/lib/swissTimezone";
 import { resolveLegacyWorkflowConfig } from "@/lib/workflows/legacyConfig";
+import { withPatientTemplateVariables } from "@/lib/patientTemplateVariables";
 
 export const runtime = "nodejs";
 
@@ -139,7 +140,7 @@ export async function POST(request: Request) {
     let location = body.appointment?.location || null;
 
     // Fill any missing context from the appointment + patient records.
-    if (!appointmentDateIso || !patientId || !patientEmail) {
+    if (!appointmentDateIso || !patientId || !patientEmail || !patientGender) {
       const { data: appt } = await supabaseAdmin
         .from("appointments")
         .select("id, patient_id, start_time, reason, location")
@@ -153,10 +154,10 @@ export async function POST(request: Request) {
         if (!service) service = (appt as any).reason || "";
       }
 
-      if (patientId && (!patientEmail || !firstName)) {
+      if (patientId && (!patientEmail || !firstName || !patientGender)) {
         const { data: pat } = await supabaseAdmin
           .from("patients")
-          .select("first_name, last_name, email, phone")
+          .select("first_name, last_name, email, phone, gender")
           .eq("id", patientId)
           .maybeSingle();
         if (pat) {
@@ -164,6 +165,7 @@ export async function POST(request: Request) {
           lastName = lastName || (pat as any).last_name || "";
           patientEmail = patientEmail || (pat as any).email || null;
           patientPhone = patientPhone || (pat as any).phone || null;
+          patientGender = patientGender || (pat as any).gender || undefined;
         }
       }
     }
@@ -189,14 +191,14 @@ export async function POST(request: Request) {
     }
 
     const templateContext = {
-      patient: {
+      patient: withPatientTemplateVariables({
         id: patientId,
         first_name: firstName,
         last_name: lastName,
         email: patientEmail,
         phone: patientPhone,
         gender: patientGender,
-      },
+      }),
       appointment: {
         id: appointmentId,
         status: body.appointmentStatus || "",

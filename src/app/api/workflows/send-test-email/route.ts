@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withPatientTemplateVariables } from "@/lib/patientTemplateVariables";
 
 export const runtime = "nodejs";
 
@@ -136,13 +137,14 @@ export async function POST(request: Request) {
     }
 
     const templateContext = {
-      patient: {
+      patient: withPatientTemplateVariables({
         id: "test-patient-id",
         first_name: "Test",
         last_name: "Patient",
         email: to,
         phone: "+41000000000",
-      },
+        gender: "female",
+      }),
       deal: {
         id: "test-deal-id",
         title: "Sample procedure",

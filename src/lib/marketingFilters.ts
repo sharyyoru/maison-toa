@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { withPatientTemplateVariables } from "@/lib/patientTemplateVariables";
 
 /**
  * Filter schema for marketing audience selection. Mirrors the `filter` jsonb
@@ -38,6 +39,7 @@ export type PatientRow = {
   contact_owner_name: string | null;
   created_at: string | null;
   marketing_opt_out?: boolean | null;
+  gender?: string | null;
 };
 
 /** Maximum recipients a single campaign may send to. Defence in depth. */
@@ -100,7 +102,7 @@ export async function fetchAudience(
   let query = supabase
     .from("patients")
     .select(
-      "id, first_name, last_name, email, phone, dob, source, contact_owner_name, created_at, marketing_opt_out",
+      "id, first_name, last_name, email, phone, gender, dob, source, contact_owner_name, created_at, marketing_opt_out",
       { count: opts.countOnly ? "exact" : "planned" },
     );
 
@@ -172,6 +174,7 @@ export function substitutePatientVariables(
 ): string {
   if (!input) return "";
   const fullName = [patient.first_name, patient.last_name].filter(Boolean).join(" ");
+  const computed = withPatientTemplateVariables(patient);
   const vars: Record<string, string> = {
     "patient.first_name": patient.first_name ?? "",
     "patient.last_name": patient.last_name ?? "",
@@ -179,6 +182,8 @@ export function substitutePatientVariables(
     "patient.name": fullName,
     "patient.email": patient.email ?? "",
     "patient.phone": patient.phone ?? "",
+    "patient.salutation_fr": computed.salutation_fr,
+    "patient.salutation_en": computed.salutation_en,
     // Friendly aliases
     "first_name": patient.first_name ?? "",
     "firstname": patient.first_name ?? "",

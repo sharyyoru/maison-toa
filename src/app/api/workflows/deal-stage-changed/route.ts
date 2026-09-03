@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
+import { withPatientTemplateVariables } from "@/lib/patientTemplateVariables";
 
 export const runtime = "nodejs";
 
@@ -128,7 +129,7 @@ export async function POST(request: Request) {
           .maybeSingle(),
         supabaseAdmin
           .from("patients")
-          .select("id, first_name, last_name, email, phone")
+          .select("id, first_name, last_name, email, phone, gender")
           .eq("id", patientId)
           .maybeSingle(),
       ]);
@@ -163,6 +164,7 @@ export async function POST(request: Request) {
       last_name: string | null;
       email: string | null;
       phone: string | null;
+      gender: string | null;
     };
 
     const stageIdsToFetch: string[] = [];
@@ -345,13 +347,14 @@ export async function POST(request: Request) {
     }
 
     const templateContext = {
-      patient: {
+      patient: withPatientTemplateVariables({
         id: safePatient.id,
         first_name: safePatient.first_name,
         last_name: safePatient.last_name,
         email: safePatient.email,
         phone: safePatient.phone,
-      },
+        gender: safePatient.gender,
+      }),
       deal: {
         id: safeDeal.id,
         title: safeDeal.title,

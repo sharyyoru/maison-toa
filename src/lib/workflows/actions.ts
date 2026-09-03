@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendEmail } from "@/lib/email";
 import type { ActionNode, WorkflowEvent } from "./types";
+import { withPatientTemplateVariables } from "@/lib/patientTemplateVariables";
 
 type ActionContext = { runId: string; patientId: string | null; event: WorkflowEvent };
 
@@ -26,7 +27,7 @@ async function hasMarketingConsent(patientId: string) {
 export async function executeWorkflowAction(node: ActionNode, context: ActionContext): Promise<{ result: Record<string, unknown>; stop?: boolean }> {
   const config = node.data.config as Record<string, any>;
   const patient = await getPatient(context.patientId);
-  const templateContext = { patient, event: context.event.payload };
+  const templateContext = { patient: patient ? withPatientTemplateVariables(patient) : null, event: context.event.payload };
 
   if (node.data.actionType === "stop_workflow") return { result: { reason: config.reason || "Stopped by workflow" }, stop: true };
   if (!context.patientId && ["send_email", "create_task", "add_internal_note", "add_tag", "remove_tag", "update_patient_property"].includes(node.data.actionType)) throw new Error("Action requires a patient");
