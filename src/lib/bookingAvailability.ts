@@ -25,6 +25,7 @@ type GetNextOpenSlotsParams = {
   availabilityWindow: AvailabilityWindowResult;
   generateTimeSlots: (date: string) => string[];
   getDayAvailability: (date: string) => { start: string; end: string } | undefined;
+  isTimeAllowed?: (date: string, time: string) => boolean;
   limit?: number;
 };
 
@@ -76,6 +77,7 @@ export function getNextOpenSlots({
   availabilityWindow,
   generateTimeSlots,
   getDayAvailability,
+  isTimeAllowed,
   limit = 15,
 }: GetNextOpenSlotsParams): AvailableSlot[] {
   const slotsToShow: AvailableSlot[] = [];
@@ -90,7 +92,7 @@ export function getNextOpenSlots({
       availabilityWindow.exactAvailableByDate[date] || [],
       dayAvailability,
       availabilityWindow.bookingWindow,
-    );
+    ).filter((time) => !isTimeAllowed || isTimeAllowed(date, time));
 
     for (const time of openSlots) {
       slotsToShow.push({ date, time });

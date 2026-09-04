@@ -14,7 +14,7 @@ import { useBookingPageConfig } from "@/hooks/useBookingPageConfig";
 import { getLocalizedBookingName } from "@/lib/bookingLocalization";
 import { fetchAvailabilityWindow, getNextOpenSlots, type AvailabilityWindowResult, type AvailableSlot } from "@/lib/bookingAvailability";
 import WeekAvailabilityPicker from "@/components/booking/WeekAvailabilityPicker";
-import { generateExceptionalTimeSlots, getExceptionalWindowForTreatment, restrictSlotsToExceptionalRules, type ExceptionalBookingWindow } from "@/lib/exceptionalBookingAvailability";
+import { generateExceptionalTimeSlots, getExceptionalWindowForTreatment, isTimeAllowedByExceptionalRules, restrictSlotsToExceptionalRules, type ExceptionalBookingWindow } from "@/lib/exceptionalBookingAvailability";
 
 interface DoctorInfo {
   name: string;
@@ -317,6 +317,10 @@ function DoctorBookingContent() {
       : exceptionalRange;
   }
 
+  function isBookingTimeAllowed(date: string, time: string) {
+    return isTimeAllowedByExceptionalRules(exceptionalWindows, date, treatmentId, time);
+  }
+
   // Fetch blocked dates on mount
   useEffect(() => {
     async function fetchBlockedDates() {
@@ -383,6 +387,7 @@ function DoctorBookingContent() {
             availabilityWindow: availabilityResult,
             generateTimeSlots: getBookingTimeSlots,
             getDayAvailability: getBookingDayAvailability,
+            isTimeAllowed: isBookingTimeAllowed,
           });
 
           setAvailabilityWindow({
@@ -477,6 +482,7 @@ function DoctorBookingContent() {
         availabilityWindow: availabilityResult,
         generateTimeSlots: (slotDate) => (blockedDates.has(slotDate) ? [] : getBookingTimeSlots(slotDate)),
         getDayAvailability: (slotDate) => blockedDates.has(slotDate) ? undefined : getBookingDayAvailability(slotDate),
+        isTimeAllowed: isBookingTimeAllowed,
         limit: Number.MAX_SAFE_INTEGER,
       }).map((slot) => slot.time);
       setAvailableSlots(openSlots);
@@ -939,6 +945,7 @@ function DoctorBookingContent() {
                     if (blockedDates.has(date)) return undefined;
                     return getBookingDayAvailability(date);
                   }}
+                  isTimeAllowed={isBookingTimeAllowed}
                   nextAvailableSlots={nextAvailableSlots}
                   isLoading={isLoadingDates}
                   dateLocale={dateLocale}

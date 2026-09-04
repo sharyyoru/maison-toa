@@ -19,6 +19,7 @@ type WeekAvailabilityPickerProps = {
   availabilityWindow: { startDate: string; endDate: string; result: AvailabilityWindowResult } | null;
   generateTimeSlots: (date: string) => string[];
   getDayAvailability: (date: string) => DayAvailability | undefined;
+  isTimeAllowed?: (date: string, time: string) => boolean;
   nextAvailableSlots: AvailableSlot[];
   isLoading: boolean;
   dateLocale: string;
@@ -52,6 +53,7 @@ export default function WeekAvailabilityPicker({
   availabilityWindow,
   generateTimeSlots,
   getDayAvailability,
+  isTimeAllowed,
   nextAvailableSlots,
   isLoading,
   dateLocale,
@@ -142,6 +144,7 @@ export default function WeekAvailabilityPicker({
       availabilityWindow: activeResult,
       generateTimeSlots,
       getDayAvailability,
+      isTimeAllowed,
       limit: Number.MAX_SAFE_INTEGER,
     });
     const grouped: Record<string, string[]> = {};
@@ -149,7 +152,7 @@ export default function WeekAvailabilityPicker({
       grouped[slot.date] = grouped[slot.date] ? [...grouped[slot.date], slot.time] : [slot.time];
     }
     return grouped;
-  }, [weekDates, activeResult, generateTimeSlots, getDayAvailability]);
+  }, [weekDates, activeResult, generateTimeSlots, getDayAvailability, isTimeAllowed]);
 
   const currentWeekHasSlots = weekDates.some((date) => slotsByDate[date]?.length);
 
@@ -176,6 +179,7 @@ export default function WeekAvailabilityPicker({
           availabilityWindow: result,
           generateTimeSlots,
           getDayAvailability,
+          isTimeAllowed,
           limit: 1,
         });
         if (earliest.length > 0) {
@@ -188,7 +192,7 @@ export default function WeekAvailabilityPicker({
         setIsSearchingForward(false);
       }
     })();
-  }, [isLoading, isFetchingWeek, activeResult, currentWeekHasSlots, nextAvailableSlots, windowStart, onFetchWeek, generateTimeSlots, getDayAvailability, onSelectSlot]);
+  }, [isLoading, isFetchingWeek, activeResult, currentWeekHasSlots, nextAvailableSlots, windowStart, onFetchWeek, generateTimeSlots, getDayAvailability, isTimeAllowed, onSelectSlot]);
 
   const nextJumpSlot = useMemo(() => {
     const lastVisible = weekDates[weekDates.length - 1];

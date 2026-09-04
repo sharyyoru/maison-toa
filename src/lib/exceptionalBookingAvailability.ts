@@ -39,11 +39,20 @@ export function restrictSlotsToExceptionalRules(
   date: string,
   treatmentId: string,
 ): string[] {
-  const windowsOnDate = windows.filter((window) => window.exception_date === date);
-  return slots.filter((time) => {
-    const activeWindows = windowsOnDate.filter(
-      (window) => time >= window.start_time.slice(0, 5) && time < window.end_time.slice(0, 5),
-    );
-    return activeWindows.length === 0 || activeWindows.some((window) => window.treatment_ids.includes(treatmentId));
-  });
+  return slots.filter((time) => isTimeAllowedByExceptionalRules(windows, date, treatmentId, time));
+}
+
+export function isTimeAllowedByExceptionalRules(
+  windows: ExceptionalBookingWindow[],
+  date: string,
+  treatmentId: string,
+  time: string,
+): boolean {
+  const activeWindows = windows.filter(
+    (window) =>
+      window.exception_date === date &&
+      time >= window.start_time.slice(0, 5) &&
+      time < window.end_time.slice(0, 5),
+  );
+  return activeWindows.length === 0 || activeWindows.some((window) => window.treatment_ids.includes(treatmentId));
 }
