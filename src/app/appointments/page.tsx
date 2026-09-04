@@ -9,6 +9,7 @@ import { getAppointmentNotes, getAppointmentTitle, getAppointmentDisplayName } f
 import { formatSwissLocalPhoneDisplay } from "@/lib/phoneFormatter";
 import { getCategoryColorPresentation } from "@/utils/categoryColor";
 import { useAppointmentStatusOptions } from "@/lib/appointmentStatuses";
+import ExceptionalAvailabilityModal, { type ExceptionalAvailabilitySelection } from "@/components/ExceptionalAvailabilityModal";
 import {
   formatSwissMonthYear,
   formatSwissYmd,
@@ -981,6 +982,8 @@ export default function CalendarPage() {
   }>>([]);
   const [view, setView] = useState<CalendarView>("day");
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [exceptionalSetupMode, setExceptionalSetupMode] = useState(false);
+  const [exceptionalSelection, setExceptionalSelection] = useState<ExceptionalAvailabilitySelection | null>(null);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rangeEndDate, setRangeEndDate] = useState<Date | null>(null);
   const [isDraggingRange, setIsDraggingRange] = useState(false);
@@ -2991,6 +2994,27 @@ export default function CalendarPage() {
     const hours = Math.floor(startMin / 60);
     const minutes = startMin % 60;
     const timeValue = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+
+    if (exceptionalSetupMode) {
+      const endHours = Math.floor(endMin / 60);
+      const endMinutesPart = endMin % 60;
+      const endTimeValue = `${endHours.toString().padStart(2, "0")}:${endMinutesPart.toString().padStart(2, "0")}`;
+      const calendarId = dragDoctorCalendarId || selectedDoctorCalendars[0]?.id || null;
+      const calendar = doctorCalendars.find((item) => item.id === calendarId);
+      setExceptionalSelection({
+        date: dateStr,
+        startTime: timeValue,
+        endTime: endTimeValue,
+        calendarProviderId: calendar?.providerId || null,
+      });
+      setIsDraggingCreate(false);
+      setDragStartMinutes(null);
+      setDragEndMinutes(null);
+      setDragDate(null);
+      setDragDoctorCalendarId(null);
+      touchDragInfoRef.current = null;
+      return;
+    }
 
     setDraftDate(dateStr);
     setDraftTime(timeValue);
@@ -5605,6 +5629,19 @@ export default function CalendarPage() {
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-600">
+            <button
+              type="button"
+              onClick={() => {
+                if (!exceptionalSetupMode && view === "month") handleSelectDayView();
+                setExceptionalSetupMode(!exceptionalSetupMode);
+              }}
+              aria-pressed={exceptionalSetupMode}
+              aria-label="Exceptional online availability setup"
+              title="Exceptional online availability"
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full border shadow-sm transition ${exceptionalSetupMode ? "border-sky-500 bg-sky-500 text-white" : "border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50"}`}
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.55V20h-3v-.09a1.7 1.7 0 0 0-1.1-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7 14.7a1.7 1.7 0 0 0-1.55-1H5v-3h.09A1.7 1.7 0 0 0 6.64 9.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.12-2.12.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 11.3 4.4V4h3v.09a1.7 1.7 0 0 0 1.1 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.55 1H21v3h-.09A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+            </button>
             <div className="relative">
               <button
                 type="button"
@@ -5700,6 +5737,12 @@ export default function CalendarPage() {
             </button>
           </div>
         ) : null}
+        {exceptionalSetupMode ? (
+          <div className="mt-2 flex flex-shrink-0 items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-xs text-sky-800">
+            <div><span className="font-semibold">Exceptional availability setup</span><span className="ml-2">Appointments are hidden. Drag across a practitioner’s calendar to open a one-off online slot.</span></div>
+            <button type="button" onClick={() => setExceptionalSetupMode(false)} className="rounded-full border border-sky-300 bg-white px-3 py-1 font-medium hover:bg-sky-100">Exit setup</button>
+          </div>
+        ) : null}
         {view === "month" ? (
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 text-xs shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
             <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/80 text-[11px] font-medium uppercase tracking-wide text-slate-500 sticky top-0 z-10">
@@ -5739,7 +5782,7 @@ export default function CalendarPage() {
                       </span>
                     </div>
                     <div className="space-y-0.5">
-                      {appointmentsByDay[ymd] &&
+                      {!exceptionalSetupMode && appointmentsByDay[ymd] &&
                         appointmentsByDay[ymd].map((appt) => {
                           const start = new Date(appt.start_time);
                           const end = appt.end_time ? new Date(appt.end_time) : null;
@@ -5920,7 +5963,7 @@ export default function CalendarPage() {
                     })()}
                     {activeRangeDates.map((date) => {
                       const ymd = formatYmd(date);
-                      const dayAppointments = appointmentsByDay[ymd] ?? [];
+                      const dayAppointments = exceptionalSetupMode ? [] : (appointmentsByDay[ymd] ?? []);
                       
                       // Determine columns to render - either multiple doctors or single column
                       const doctorColumns = selectedDoctorCalendars.length > 1 
@@ -5999,7 +6042,7 @@ export default function CalendarPage() {
                                           selectRescheduleTarget(doctorCol?.id ?? "", date, preciseMinutes);
                                           return;
                                         }
-                                        handleDragCreateStart(date, preciseMinutes, doctorCol?.id);
+                                        handleDragCreateStart(date, preciseMinutes, doctorCol?.id ?? selectedDoctorCalendars[0]?.id);
                                       }}
                                       onMouseMove={(e) => {
                                         const preciseMinutes = getMinutesFromSlotPointer(
@@ -6033,7 +6076,7 @@ export default function CalendarPage() {
                                           selectRescheduleTarget(doctorCol?.id ?? "", date, preciseMinutes);
                                           return;
                                         }
-                                        handleTouchStart(e, date, totalMinutes, doctorCol?.id ?? null, e.currentTarget);
+                                        handleTouchStart(e, date, totalMinutes, doctorCol?.id ?? selectedDoctorCalendars[0]?.id ?? null, e.currentTarget);
                                       }}
                                       onContextMenu={(e) => handleSlotContextMenu(e, doctorCol?.id ?? "", date, totalMinutes)}
                                       className={`block w-full border-t border-slate-100 cursor-pointer hover:bg-sky-50 transition-colors ${
@@ -8758,6 +8801,10 @@ export default function CalendarPage() {
             </div>
           </div>
         )}
+
+        {exceptionalSelection ? (
+          <ExceptionalAvailabilityModal selection={exceptionalSelection} onClose={() => setExceptionalSelection(null)} />
+        ) : null}
 
         {hoveredSlot && !isDraggingCreate && (
           <div

@@ -6,7 +6,7 @@ const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 async function loadOptions() {
   const [{ data: doctors, error: doctorError }, { data: treatments, error: treatmentError }] = await Promise.all([
-    supabaseAdmin.from("booking_doctors").select("id, name, slug").eq("enabled", true).order("order_index"),
+    supabaseAdmin.from("booking_doctors").select("id, name, slug, calendar_provider_id").eq("enabled", true).order("order_index"),
     supabaseAdmin.from("booking_treatments").select("id, name, category_id").eq("enabled", true).order("name"),
   ]);
   if (doctorError) throw new Error(doctorError.message);
