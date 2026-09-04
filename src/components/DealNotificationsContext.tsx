@@ -10,6 +10,20 @@ import {
 } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
+import { usePathname } from "next/navigation";
+
+const PUBLIC_STANDALONE_ROUTES = [
+  "/login",
+  "/book-appointment",
+  "/intake",
+  "/onboarding",
+  "/invoice/pay",
+  "/consultations",
+  "/embed",
+  "/form",
+  "/appointments/manage",
+  "/register",
+];
 
 type DealNotification = {
   id: string;
@@ -47,12 +61,16 @@ const DealNotificationsContext = createContext<DealNotificationsContextValue | u
 
 export function DealNotificationsProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
+  const pathname = usePathname();
+  const isPublicRoute = PUBLIC_STANDALONE_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
   const [unreadCount, setUnreadCount] = useState<number | null>(null);
   const [notifications, setNotifications] = useState<DealNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refreshNotifications = useCallback(async () => {
-    if (!user) {
+    if (!user || isPublicRoute) {
       setUnreadCount(0);
       setNotifications([]);
       setLoading(false);
@@ -132,7 +150,7 @@ export function DealNotificationsProvider({ children }: { children: ReactNode })
       setNotifications([]);
       setLoading(false);
     }
-  }, [user]);
+  }, [isPublicRoute, user]);
 
   const markAsRead = async (id: string) => {
     try {
