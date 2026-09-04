@@ -202,14 +202,36 @@ function ExceptionalAvailabilityPanel() {
     }));
   }
 
-  function duplicate() {
-    setSelectedId("__new__");
-    setForm((current) => ({
-      ...current,
-      treatmentIds: [...current.treatmentIds],
-      enabled: true,
-    }));
+  async function duplicate() {
+    if (!selectedId || selectedId === "__new__") return;
+    setSaving(true);
     setError(null);
+    try {
+      const response = await fetch("/api/settings/exceptional-availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          booking_doctor_id: form.doctorId,
+          exception_date: form.date,
+          start_time: form.startTime,
+          end_time: form.endTime,
+          treatment_ids: form.treatmentIds,
+          label: form.label,
+          enabled: true,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to duplicate exceptional availability");
+      const doctor = doctors.find((option) => option.id === form.doctorId);
+      const duplicated = { ...data.configuration, booking_doctors: doctor ? { name: doctor.name, slug: doctor.slug } : null } as ExceptionalConfiguration;
+      setItems((current) => [...current, duplicated].sort((a, b) => `${a.exception_date}${a.start_time}`.localeCompare(`${b.exception_date}${b.start_time}`)));
+      setSelectedId(duplicated.id);
+      setForm((current) => ({ ...current, treatmentIds: [...current.treatmentIds], enabled: true }));
+    } catch (duplicateError) {
+      setError(duplicateError instanceof Error ? duplicateError.message : "Failed to duplicate exceptional availability");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function save() {
