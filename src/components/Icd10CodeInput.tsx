@@ -41,6 +41,22 @@ export const COMMON_TARDOC_ICD10_CODES: Icd10Code[] = [
   { code: "Z48.8", label: "Contrôle postopératoire" },
   { code: "Z09", label: "Contrôle après traitement" },
   { code: "Z41.1", label: "Consultation / chirurgie à visée esthétique" },
+  // BILL-014 — codes added 09.2026 (liste de Mélissa)
+  { code: "L57.0", label: "Kératose actinique" },
+  { code: "C44.0", label: "Carcinome cutané malin de la lèvre" },
+  { code: "C44.1", label: "Carcinome cutané malin de la paupière" },
+  { code: "C44.2", label: "Carcinome cutané malin de l'oreille" },
+  { code: "C44.3", label: "Carcinome cutané malin du visage (nez, joue, front, menton…)" },
+  { code: "C44.4", label: "Carcinome cutané malin du cuir chevelu et du cou" },
+  { code: "C44.5", label: "Carcinome cutané malin du tronc" },
+  { code: "C44.6", label: "Carcinome cutané malin du membre supérieur / épaule" },
+  { code: "C44.7", label: "Carcinome cutané malin du membre inférieur / hanche" },
+  { code: "C44.9", label: "Carcinome cutané malin, localisation non précisée" },
+  { code: "D04.9", label: "Carcinome cutané in situ / maladie de Bowen, localisation non précisée" },
+  { code: "C43.9", label: "Mélanome malin cutané, localisation non précisée" },
+  { code: "D03.9", label: "Mélanome in situ, localisation non précisée" },
+  { code: "Z71.9", label: "Conseil médical, sans précision" },
+  { code: "Z76.0", label: "Renouvellement d'une prescription" },
 ];
 
 type Icd10CodeInputProps = {

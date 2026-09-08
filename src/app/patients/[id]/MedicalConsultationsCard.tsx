@@ -226,6 +226,12 @@ type InvoiceServiceLine = {
   acfExternalFactor?: number; // multiplier (default 1.0)
   acfRefCode?: string; // ICD-10 reference code
   acfBaseTP?: number; // original catalog TP before any modifications
+  // ACF/TMA session (grouping) number. Sumex uses lSessionNumber to bind TMA
+  // gestures to their flat-rate main code — a TMA line MUST carry the same
+  // session number as the flat rate it belongs to. Stamped once while the
+  // TMA→flat-rate adjacency from the accordion is still intact, and preserved
+  // through validation / edit reconstruction.
+  acfSessionNumber?: number;
   // TARDOC pricing variables (stored when code is added)
   tardocTpMT?: number; // medical tax points
   tardocTpTT?: number; // technical tax points
@@ -235,6 +241,51 @@ type InvoiceServiceLine = {
   tardocExternalFactor?: number; // multiplier (default 1.0)
   tardocRefCode?: string | null; // ICD-10 reference code
 };
+
+/**
+ * Assign ACF/TMA session (grouping) numbers.
+ * - Each ACF flat-rate line gets its own session (the Sumex ACF validator
+ *   rejects two flat-rate codes in the same session with error 431).
+ * - A TMA gesture MUST carry the same session as its flat-rate main code.
+ *   The ACF accordion adds the gesture immediately BEFORE its flat rate, so
+ *   a TMA line binds to the NEXT flat-rate line (fallback: last flat rate).
+ * - Previously stamped `acfSessionNumber` values (validator / stored invoice)
+ *   are authoritative.
+ * - Non-ACF/TMA lines keep session number 1.
+ */
+function computeAcfSessionNumbers(lines: InvoiceServiceLine[]): number[] {
+  const n = lines.length;
+  const result = new Array(n).fill(1);
+
+  const flatrateIndices: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (lines[i].serviceId.startsWith("flatrate-")) flatrateIndices.push(i);
+  }
+
+  const flatrateSessionNumbers = new Map<number, number>();
+  flatrateIndices.forEach((idx, order) => {
+    const sessionNumber = lines[idx].acfSessionNumber ?? order + 1;
+    flatrateSessionNumbers.set(idx, sessionNumber);
+    result[idx] = sessionNumber;
+  });
+
+  for (let i = 0; i < n; i++) {
+    if (!lines[i].serviceId.startsWith("tma-")) continue;
+    if (lines[i].acfSessionNumber != null) {
+      result[i] = lines[i].acfSessionNumber!;
+      continue;
+    }
+    if (flatrateIndices.length === 0) {
+      result[i] = 1;
+      continue;
+    }
+    const following = flatrateIndices.find((idx) => idx > i);
+    const boundIdx = following ?? flatrateIndices[flatrateIndices.length - 1];
+    result[i] = flatrateSessionNumbers.get(boundIdx) ?? 1;
+  }
+
+  return result;
+}
 
 type InvoiceService = {
   id: string;
@@ -2601,12 +2652,32 @@ export default function MedicalConsultationsCard({
       } catch {}
     }
 
+    async function loadInsuranceLawDefault() {
+      // Pre-fill the invoice law from the patient's primary insurance so
+      // VVG/LCA-insured services are not silently billed as KVG (LaMal).
+      try {
+        const { data } = await supabaseClient
+          .from("patient_insurances")
+          .select("law_type")
+          .eq("patient_id", patientId)
+          .order("is_primary", { ascending: false })
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        const law = (data?.law_type || "").toUpperCase();
+        if (isMounted && ["KVG", "UVG", "IVG", "MVG", "VVG"].includes(law)) {
+          setInvoiceLawType(law);
+        }
+      } catch {}
+    }
+
     void loadUsers();
     void loadProviders();
     void loadColoredLines();
     void loadExternalLabs();
     void loadPatientDetails();
     void loadMedTemplates();
+    void loadInsuranceLawDefault();
 
     return () => {
       isMounted = false;
@@ -5848,6 +5919,7 @@ export default function MedicalConsultationsCard({
               acfExternalFactor: li.external_factor_mt ?? 1,
               acfRefCode: li.ref_code || "",
               acfBaseTP: li.tp_al ?? li.unit_price ?? 0,
+              acfSessionNumber: li.session_number ?? undefined,
             } : {}),
           };
         });
@@ -7350,20 +7422,32 @@ export default function MedicalConsultationsCard({
                         // â”€â”€ ACF Validation: validate flat rate services before saving â”€â”€
                         let workingServiceLines = [...invoiceServiceLines];
                         if (hasAcfLines) {
+                          // Stamp session numbers NOW, while the TMA→flat-rate adjacency
+                          // from the accordion (gesture immediately before its flat rate)
+                          // is still intact. Each flat-rate code lives in its own session
+                          // and every TMA gesture MUST carry the same session number as
+                          // its flat-rate main code.
+                          const stampedSessions = computeAcfSessionNumbers(workingServiceLines);
+                          workingServiceLines = workingServiceLines.map((l, i) =>
+                            l.serviceId.startsWith("flatrate-") || l.serviceId.startsWith("tma-")
+                              ? { ...l, acfSessionNumber: l.acfSessionNumber ?? stampedSessions[i] }
+                              : l,
+                          );
+
                           const acfLines = workingServiceLines.filter(
                             (l) => l.serviceId.startsWith("flatrate-"),
                           );
 
                           if (acfLines.length > 0) {
                             // Build validation request from ACF lines
-                            const acfServicesToValidate = acfLines.map((line, i) => ({
+                            const acfServicesToValidate = acfLines.map((line) => ({
                               code: line.serviceId.replace("flatrate-", ""),
                               tp: line.acfBaseTP ?? line.unitPrice ?? 0,
                               date: scheduledAtIso || new Date().toISOString(),
                               side: (line.acfSideType ?? 0) as 0 | 1 | 2 | 3,
                               externalFactor: line.acfExternalFactor ?? 1.0,
                               quantity: line.quantity > 0 ? line.quantity : 1,
-                              sessionNumber: i + 1,
+                              sessionNumber: line.acfSessionNumber ?? 1,
                               referenceCode: line.acfRefCode || "",
                             }));
 
@@ -7445,6 +7529,10 @@ export default function MedicalConsultationsCard({
                                         acfExternalFactor: ef,
                                         acfRefCode: vs.referenceCode || "",
                                         acfBaseTP: vs.tp ?? 0,
+                                        // Keep the validator's session number so the TMA
+                                        // gestures stamped with the same session stay bound
+                                        // to this flat rate even after the list is reordered.
+                                        acfSessionNumber: vs.sessionNumber ?? undefined,
                                       };
                                     });
 
@@ -7460,6 +7548,10 @@ export default function MedicalConsultationsCard({
                             }
                           }
                         }
+
+                        // ACF/TMA session numbers: stamped values are authoritative;
+                        // recompute only as a fallback for unstamped lines.
+                        const acfSessionNumbers = computeAcfSessionNumbers(workingServiceLines);
 
                         const invoiceLines = workingServiceLines
                           .filter((line) => line.serviceId)
@@ -7485,11 +7577,32 @@ export default function MedicalConsultationsCard({
                             const tardocTpTT = isTardocLine ? (line.tardocTpTT ?? tardocSearchResults.find((r: any) => r.code === tardocCode)?.tpTT ?? 0) : 0;
                             const tardocRecordId = isTardocLine ? (line.tardocRecordId ?? tardocSearchResults.find((r: any) => r.code === tardocCode)?.recordId ?? null) : null;
                             const tardocSection = isTardocLine ? (line.tardocSection ?? tardocSearchResults.find((r: any) => r.code === tardocCode)?.section ?? null) : null;
+                            // Canonical TARDOC line total, rounded per component exactly like
+                            // the Sumex invoice manager (round(qty×tp×tpv×ext) per AL/TL;
+                            // AR.* codes have no billable AL component). Storing anything else
+                            // makes the insurance invoice differ from the patient file by a few
+                            // cents. A manually zeroed price (charge-free line) is respected.
+                            const tardocExt = line.tardocExternalFactor ?? 1;
+                            const isArTardoc = isTardocLine && (tardocCode || "").startsWith("AR.");
+                            const tardocCanonicalTotal = isTardocLine
+                              ? ((line.unitPrice ?? 0) === 0 && line.unitPrice !== null
+                                  ? 0
+                                  : (isArTardoc ? 0 : Math.round(quantity * tardocTpMT * taxPointValue * tardocExt * 100) / 100)
+                                    + Math.round(quantity * tardocTpTT * taxPointValue * tardocExt * 100) / 100)
+                              : null;
 
                             // Determine tariff code: 7=TARDOC, 5=ACF Flat Rate / TMA, null=regular
                             const tariffCode = isTardocLine ? 7 : isAcfRelated ? ACF_TARIFF_CODE : null;
-                            // Derive tariff type string from tariff code (zero-padded to 3 digits)
-                            const tariffType = tariffCode != null ? String(tariffCode).padStart(3, "0") : null;
+                            // Official Forum-Datenaustausch tariff type. `tariff_code` alone
+                            // CANNOT distinguish TMA gestures from ACF flat rates (both use 5) —
+                            // sending a TMA gesture as tariff "005" makes the insurer's validator
+                            // reject the invoice (cumulation violation 005/005). See
+                            // src/lib/tariffType.ts for the consume-side mirror of this rule.
+                            const tariffType =
+                              isTardocLine    ? "007" :
+                              isFlatRateLine  ? "005" :
+                              isTmaLine       ? "TMA" :
+                              null;
 
                             // â”€â”€ VAT computation (Rule 4: TARDOC/insurer invoices are always VAT-exempt) â”€â”€
                             // Otherwise use the service's vat_status/vat_rate_pct.
@@ -7514,7 +7627,7 @@ export default function MedicalConsultationsCard({
                               service_id: (isTardocLine || isAcfRelated) ? null : line.serviceId,
                               quantity,
                               unit_price: resolvedUnitPrice,
-                              total_price: resolvedUnitPrice * quantity,
+                              total_price: tardocCanonicalTotal ?? Math.round(resolvedUnitPrice * quantity * 100) / 100,
                               vat_rate: lineVatRateLabel,
                               vat_rate_value: lineVatRatePct,
                               vat_amount: lineVatAmount,
@@ -7537,7 +7650,11 @@ export default function MedicalConsultationsCard({
                               record_id: tardocRecordId,
                               ref_code: isAcfRelated ? (line.acfRefCode || null) : isTardocLine ? (line.tardocRefCode || null) : (null as string | null),
                               section_code: tardocSection,
-                              session_number: 1,
+                              // ACF flat-rate codes each get their own session number and
+                              // TMA gestures MUST carry the session of their flat-rate main
+                              // code — the stamped value (assigned while adjacency was
+                              // intact / returned by the validator) is authoritative.
+                              session_number: isAcfRelated ? (line.acfSessionNumber ?? acfSessionNumbers[idx] ?? 1) : 1,
                               service_attributes: 0,
                               side_type: isAcfRelated ? (line.acfSideType ?? 0) : isTardocLine ? (line.tardocSideType ?? 0) : 0,
                               date_begin: scheduledAtIso || null,
@@ -7580,6 +7697,13 @@ export default function MedicalConsultationsCard({
                             }
                           }
                         }
+
+                        // The invoice total MUST equal the sum of the stored line totals —
+                        // this is the amount Sumex prints on both the patient invoice and
+                        // the insurance XML (any divergence blocks sending).
+                        invoiceTotalAmountForInsert = Math.round(
+                          invoiceLines.reduce((sum, l) => sum + (Number(l.total_price) || 0), 0) * 100,
+                        ) / 100;
 
                         // Validate TARDOC services with Sumex before creating invoice
                         if (isTardocInvoice && !skipSumexValidation) {

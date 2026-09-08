@@ -34,6 +34,12 @@ import {
   type InvoiceDiagnosis as SumexDiagnosis,
 } from "@/lib/sumexInvoice";
 import { deriveTariffType } from "@/lib/tariffType";
+import { type TardocTaxPointCatalog } from "@/lib/tardocTaxPoints";
+import {
+  mapLineItemToSumexService,
+  reconcileInvoiceLines,
+  type SumexLineItemRow,
+} from "@/lib/sumexLineMapper";
 
 type ConsultationData = {
   id: string;
@@ -87,8 +93,10 @@ export async function POST(request: NextRequest) {
       invoiceId,
       consultationId, // legacy fallback
       patientId: bodyPatientId,
-      billingType: bodyBillingType = 'TP',
-      lawType: bodyLawType = 'KVG',
+      // No defaults here: an explicit body value wins, otherwise the values
+      // stored on the invoice record apply (see billingType/lawType below).
+      billingType: bodyBillingType,
+      lawType: bodyLawType,
       reminderLevel = 0,
       treatmentReason = 'disease',
       insurerGln,
@@ -355,7 +363,7 @@ export async function POST(request: NextRequest) {
 
     const lineItemsQuery = supabaseAdmin
       .from("invoice_line_items")
-      .select("code, name, quantity, unit_price, total_price, tariff_code, external_factor_mt, side_type, session_number, ref_code, date_begin, provider_gln, responsible_gln, catalog_name, tp_al, tp_tl, tp_al_value, tp_tl_value")
+      .select("code, name, quantity, unit_price, total_price, tariff_code, external_factor_mt, external_factor_tt, side_type, session_number, ref_code, date_begin, provider_gln, responsible_gln, catalog_name, tp_al, tp_tl, tp_al_value, tp_tl_value")
       .eq("invoice_id", lineItemLookupId)
       .order("sort_order", { ascending: true });
 
@@ -369,21 +377,20 @@ export async function POST(request: NextRequest) {
       console.log(`[SendInvoice] First line item:`, JSON.stringify(dbLineItems[0], null, 2));
     }
 
+    // TARDOC catalog tax points (keyed by code) — used to fill components that
+    // were not populated at creation (stored 0). Deliberately charge-free lines
+    // (total_price = 0) stay at 0 via external factor 0 in the shared mapper.
+    const tardocCatalogMap: Record<string, { tp_mt: number; tp_tt: number }> = {};
+
     if (dbLineItems && dbLineItems.length > 0) {
       // Include all line items (TMA gesture codes are kept as reference lines with amount=0)
       const billableLineItems = dbLineItems;
 
-      // ── TARDOC tax-point backfill ─────────────────────────────────────────
-      // Some TARDOC line items were stored with tp_al=0/tp_tl=0 (the columns
-      // were not populated when the line item was created). Sumex requires the
-      // raw AL/TL tax-point counts (tp_mt/tp_tt) — it rejects dUnitMT = 0 or
-      // the CHF total.  Look up missing values from tardoc_group_items.
+      // ── TARDOC tax-point backfill (unpopulated components only) ───────────
       const tardocCodesNeedingLookup = billableLineItems
         .filter((it: any) => it.tariff_code === 7 && (!(it.tp_al > 0) || !(it.tp_tl > 0)))
         .map((it: any) => it.code as string)
         .filter(Boolean);
-
-      const tardocCatalogMap: Record<string, { tp_mt: number; tp_tt: number }> = {};
       if (tardocCodesNeedingLookup.length > 0) {
         const uniqueCodes = [...new Set(tardocCodesNeedingLookup)];
         const { data: catalogRows } = await supabaseAdmin
@@ -488,45 +495,45 @@ export async function POST(request: NextRequest) {
     const resolvedReceiverGln = swissInsurer?.receiver_gln || resolvedInsurerGln;
     const resolvedInsurerName = insurerName || invoiceRecord?.insurance_name || insuranceData?.provider_name || "";
 
-    // Build Sumex1 input — Sumex1 server is the ONLY XML generation path
-    const sumexServices: SumexServiceInput[] = services.map(s => {
-      // For TARDOC (007) and ACF (005), use tp_al/tp_tl as MT/TT unit values.
-      // Both AL (physician) and TL (technical) components must be sent for correct insurance billing.
-      const isTardoc = s.tariffType === "007";
-      const isAcf = (s.tariffType || "590") === "005";
-      const usesTaxPoints = isTardoc || isAcf;
-      // IMPORTANT: tp_al=0 is a valid value for pure-TT codes (AK.*, AR.*).
-      // Do NOT fall back to unitPrice when tp_al is explicitly 0 — send 0 to Sumex.
-      // Only fall back to unitPrice when the service is NOT a tax-point service (590 etc.).
-      const unit = usesTaxPoints
-        ? (s.tpAl ?? 0)
-        : (s.unitPrice || 0);
-      const unitFactor = usesTaxPoints && s.tpAlValue != null && s.tpAlValue > 0 ? s.tpAlValue : 1;
-      // TT (technical) component — pass for TARDOC so insurance XML includes full billed amount
-      const unitTT = usesTaxPoints && s.tpTl != null && s.tpTl > 0 ? s.tpTl : undefined;
-      const unitFactorTT = usesTaxPoints && s.tpTlValue != null && s.tpTlValue > 0 ? s.tpTlValue : undefined;
-      return {
-        tariffType: s.tariffType || "590",
-        code: s.code,
-        referenceCode: s.refCode || "",
-        quantity: s.quantity,
-        sessionNumber: s.sessionNumber ?? 1,
-        dateBegin: s.date,
-        providerGln: s.providerGln || provGln,
-        responsibleGln: s.providerGln || provGln,
-        side: (s.sideType as 0 | 1 | 2 | 3) ?? 0,
-        serviceName: s.description || "",
-        unit,
-        unitFactor,
-        unitTT,
-        unitFactorTT,
-        externalFactor: s.externalFactor ?? 1,
-        amount: s.total || 0,
-        vatRate: 0,
-        // ACF 005: always skip validation — already grouped by standalone acfValidator.
-        ignoreValidate: (isAcf || skipValidation) ? YesNo.Yes : YesNo.No,
-      };
-    });
+    // Build Sumex1 input — Sumex1 server is the ONLY XML generation path.
+    // The mapping is shared with generate-pdf/check-xml (src/lib/sumexLineMapper.ts)
+    // so the insurance invoice can never diverge from the patient invoice.
+    const tardocCatalogForMapper: Record<string, TardocTaxPointCatalog> = {};
+    for (const [code, cat] of Object.entries(tardocCatalogMap)) {
+      tardocCatalogForMapper[code] = { tpMt: cat.tp_mt, tpTt: cat.tp_tt };
+    }
+    const mapperCtx = {
+      fallbackProviderGln: provGln,
+      fallbackTreatmentDate: treatmentDate,
+      skipValidation,
+      tardocCatalog: tardocCatalogForMapper,
+    };
+    const sumexServices: SumexServiceInput[] = (dbLineItems as SumexLineItemRow[]).map(
+      (item) => mapLineItemToSumexService(item, mapperCtx),
+    );
+
+    // ── Reconciliation guard ────────────────────────────────────────────────
+    // What Sumex will print must equal the stored patient-file amounts.
+    // Refuse to send otherwise — a diverging insurance invoice gets refused
+    // by the insurer and confuses the patient file.
+    const reconciliation = reconcileInvoiceLines(
+      dbLineItems as SumexLineItemRow[],
+      invoiceRecord?.total_amount ?? subtotal,
+      { tardocCatalog: tardocCatalogForMapper },
+    );
+    if (!reconciliation.ok) {
+      console.error(`[SendInvoice] ❌ Reconciliation failed for invoice ${invoiceNumber}:`, JSON.stringify(reconciliation, null, 2));
+      return NextResponse.json(
+        {
+          error: "Invoice amounts do not reconcile — sending blocked",
+          details:
+            "The amounts Sumex would print differ from the stored invoice. " +
+            "Fix the invoice line amounts (or tax points) before sending to insurance.",
+          reconciliation,
+        },
+        { status: 422 },
+      );
+    }
 
     const resolvedDiagCodes = resolveInsuranceDiagnosisCodes(invoiceRecord?.diagnosis_codes);
     if (resolvedDiagCodes.length === 0) {
@@ -786,6 +793,22 @@ export async function POST(request: NextRequest) {
       } else {
         pdfStoragePath = pdfPath;
         console.log(`[SendInvoice] PDF uploaded to storage: ${pdfPath}`);
+      }
+    }
+
+    // Persist a law/billing-type change made at send time back onto the
+    // invoice so the patient file stays consistent with what was sent.
+    if (resolvedInvoiceId && invoiceRecord) {
+      const invoiceFieldUpdates: Record<string, string> = {};
+      if (bodyLawType && bodyLawType !== invoiceRecord.health_insurance_law) {
+        invoiceFieldUpdates.health_insurance_law = bodyLawType;
+      }
+      if (bodyBillingType && bodyBillingType !== invoiceRecord.billing_type) {
+        invoiceFieldUpdates.billing_type = bodyBillingType;
+      }
+      if (Object.keys(invoiceFieldUpdates).length > 0) {
+        await supabaseAdmin.from("invoices").update(invoiceFieldUpdates).eq("id", resolvedInvoiceId);
+        console.log(`[SendInvoice] Updated invoice fields from send parameters:`, invoiceFieldUpdates);
       }
     }
 

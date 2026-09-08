@@ -297,6 +297,10 @@ export type InvoiceServiceInput = {
   unitTT?: number;       // tax points TT (technical) — for TARDOC
   unitFactorTT?: number; // tax point value TT — for TARDOC
   externalFactor?: number;
+  // External scaling factor for the TT component (TARDOC). Per the Sumex CHM
+  // an external factor of 0 is the official way to supply a charge-free
+  // service (it is NOT auto-expanded, unlike unit/amount fields).
+  externalFactorTT?: number;
   amount?: number;       // auto-expanded if 0
   vatRate?: number;
   remark?: string;
@@ -1202,7 +1206,10 @@ export async function buildInvoiceRequest(
           const unitMT = svc.unit ?? 0;
           const unitFactorMT = svc.unitFactor ?? 1;
           const extFactorMT = svc.externalFactor ?? 1;
-          const computedAmountMT = Math.round(svc.quantity * unitMT * unitFactorMT * 1 * extFactorMT * 100) / 100;
+          // The stored CHF amount is authoritative when provided; only fall
+          // back to unit×factor for callers that don't supply an amount.
+          const computedAmountMT = svc.amount
+            ?? Math.round(svc.quantity * unitMT * unitFactorMT * 1 * extFactorMT * 100) / 100;
           console.log(`${LOG_PREFIX} AddServiceEx TARMED ${svc.code}: qty=${svc.quantity} unitMT=${unitMT} factor=${unitFactorMT} ext=${extFactorMT} => amountMT=${computedAmountMT}`);
 
           const addRes = await reqPost<{ plID: number; pbStatus: boolean }>(
@@ -1468,7 +1475,7 @@ export async function buildInvoiceRequest(
           // TT (Technical) component — AR codes may have a non-zero TT (tp_tl), pass it through.
           const unitTT = svc.unitTT ?? 0;
           const unitFactorTT = (unitTT > 0) ? (svc.unitFactorTT ?? 1) : 0;
-          const extFactorTT = 1;
+          const extFactorTT = svc.externalFactorTT ?? 1;
           const computedAmountTT = Math.round(svc.quantity * unitTT * unitFactorTT * 1 * extFactorTT * 100) / 100;
 
           console.log(`${LOG_PREFIX} AddServiceEx ${svc.code}: isAR=${isArCode} dUnitMT=${unitMT} dAmountMT=${computedAmountMT} dUnitTT=${unitTT} dAmountTT=${computedAmountTT}`);

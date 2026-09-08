@@ -17,6 +17,12 @@ import {
   type InvoiceServiceInput as SumexServiceInput,
   type InvoiceDiagnosis as SumexDiagnosis,
 } from "@/lib/sumexInvoice";
+import { loadTardocCatalog } from "@/lib/tardocCatalog";
+import {
+  mapLineItemToSumexService,
+  reconcileInvoiceLines,
+  type SumexLineItemRow,
+} from "@/lib/sumexLineMapper";
 
 // No IBAN fallback — provider must have a valid QR-IBAN configured
 const FALLBACK_QR_IBAN = null;
@@ -237,46 +243,27 @@ export async function POST(request: NextRequest) {
     console.log(`[CheckXML] Line items: ${dbLineItems?.length || 0}`);
 
     // ── Map line items to Sumex service inputs ──
-    // GLN must be exactly 13 digits; fall back to billing entity GLN if invalid
-    const isValidGln = (g: string | null | undefined) => g != null && /^\d{13}$/.test(g);
+    // Shared mapping with send-invoice / generate-pdf (src/lib/sumexLineMapper.ts)
+    // so the preview validates exactly what would be sent.
+    const mapperCtx = {
+      fallbackProviderGln: provGln,
+      fallbackTreatmentDate: treatmentDate,
+      skipValidation,
+      tardocCatalog: await loadTardocCatalog(dbLineItems || []),
+    };
+    const sumexServices: SumexServiceInput[] = ((dbLineItems || []) as SumexLineItemRow[]).map(
+      (item) => mapLineItemToSumexService(item, mapperCtx),
+    );
 
-    const sumexServices: SumexServiceInput[] = (dbLineItems || []).map((item: any) => {
-      // Use stored tariff_type, or derive from tariff_code (zero-padded to 3 digits)
-      const tariffType = item.tariff_type || (item.tariff_code ? String(item.tariff_code).padStart(3, "0") : "999");
-      const svcGln = isValidGln(item.provider_gln) ? item.provider_gln : provGln;
-      const svcRespGln = isValidGln(item.responsible_gln) ? item.responsible_gln : svcGln;
-
-      // TARDOC (007) and ACF (005) use tax points (tp_al / tp_tl), not CHF unit_price.
-      // tp_al=0 is valid for pure-TT codes (AK.*, AR.*) — do NOT fall back to unit_price.
-      const isTardoc = tariffType === "007";
-      const isAcf = tariffType === "005";
-      const usesTaxPoints = isTardoc || isAcf;
-      const unit = usesTaxPoints ? (item.tp_al ?? 0) : (item.unit_price || 0);
-      const unitFactor = usesTaxPoints && item.tp_al_value > 0 ? item.tp_al_value : 1;
-      const unitTT = usesTaxPoints && item.tp_tl > 0 ? item.tp_tl : undefined;
-      const unitFactorTT = usesTaxPoints && item.tp_tl_value > 0 ? item.tp_tl_value : undefined;
-
-      return {
-        tariffType,
-        code: item.code || "",
-        referenceCode: item.ref_code || "",
-        quantity: item.quantity || 1,
-        sessionNumber: item.session_number ?? 1,
-        dateBegin: item.date_begin || treatmentDate,
-        providerGln: svcGln,
-        responsibleGln: svcRespGln,
-        side: (item.side_type as 0 | 1 | 2 | 3) ?? 0,
-        serviceName: item.name || "",
-        unit,
-        unitFactor,
-        unitTT,
-        unitFactorTT,
-        externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : 1,
-        amount: item.total_price || 0,
-        vatRate: 0,
-        ignoreValidate: skipValidation ? YesNo.Yes : YesNo.No,
-      };
-    });
+    // Reconciliation check — surfaced in the preview response.
+    const reconciliation = reconcileInvoiceLines(
+      (dbLineItems || []) as SumexLineItemRow[],
+      Number(invoice.total_amount) || 0,
+      { tardocCatalog: mapperCtx.tardocCatalog },
+    );
+    if (!reconciliation.ok) {
+      console.warn(`[CheckXML] ⚠ Reconciliation mismatch:`, JSON.stringify(reconciliation, null, 2));
+    }
 
     if (sumexServices.length === 0) {
       return NextResponse.json(
@@ -436,6 +423,7 @@ export async function POST(request: NextRequest) {
       xmlFilePath: result.xmlFilePath,
       total: invoice.total_amount,
       serviceCount: sumexServices.length,
+      reconciliation,
     });
   } catch (error) {
     console.error("[CheckXML] Error:", error);

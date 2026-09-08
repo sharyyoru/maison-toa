@@ -19,6 +19,12 @@ import {
 } from "@/lib/sumexInvoice";
 import { computeInvoicePdfPaymentPresentation } from "@/lib/invoicePdfPaymentPresentation";
 import { deriveTariffType } from "@/lib/tariffType";
+import { loadTardocCatalog } from "@/lib/tardocCatalog";
+import {
+  mapLineItemToSumexService,
+  reconcileInvoiceLines,
+  type SumexLineItemRow,
+} from "@/lib/sumexLineMapper";
 import { PDFDocument, rgb } from "pdf-lib";
 
 /**
@@ -400,78 +406,42 @@ export async function POST(request: NextRequest) {
 
       const treatmentDate = invoiceData.treatment_date || invoiceData.invoice_date || new Date().toISOString().split("T")[0];
 
-      // Map line items to Sumex1 services
-      // GLN must be exactly 13 digits; fall back to billing entity GLN if invalid
-      const isValidGln = (g: string | null | undefined) => g != null && /^\d{13}$/.test(g);
+      // Map line items to Sumex1 services — shared mapping with send-invoice /
+      // check-xml (src/lib/sumexLineMapper.ts) so the printed PDF can never
+      // diverge from the insurance XML or the stored invoice.
+      const mapperCtx = {
+        fallbackProviderGln: provGln,
+        fallbackTreatmentDate: treatmentDate,
+        skipValidation: true,
+        lenientTariffRemap: true,
+        includeVat: true,
+        // Same TARDOC catalog backfill as send-invoice so PDF amounts can
+        // never differ from the insurance XML for legacy zero-tp lines.
+        tardocCatalog: await loadTardocCatalog(lineItems),
+      };
+      const sumexServices: SumexServiceInput[] = (lineItems as unknown as SumexLineItemRow[]).map(
+        (item) => mapLineItemToSumexService(item, mapperCtx),
+      );
 
-      const sumexServices: SumexServiceInput[] = lineItems.map((item: any) => {
-        // Resolve tariff_type honoring `catalog_name` first so TMA gestures
-        // emit as "TMA". See src/lib/tariffType.ts.
-        // Remap unknown tariff types (e.g. "999", "TMA") to "590" — Sumex silently returns 204
-        // for unrecognised tariff types. Patient PDFs don't need strict tariff enforcement.
-        const rawTariffType = deriveTariffType(item);
-        const KNOWN_PDF_TARIFFS = new Set(["001","005","007","406","590"]);
-        const tariffType = KNOWN_PDF_TARIFFS.has(rawTariffType) ? rawTariffType : "590";
-        const svcGln = isValidGln(item.provider_gln) ? item.provider_gln : provGln;
-        const svcRespGln = isValidGln(item.responsible_gln) ? item.responsible_gln : svcGln;
-
-        // TARMED (tariff_code=1) vs TARDOC (tariff_code=7) vs ACF (005) vs other
-        const isTardoc = item.tariff_code === 7 || tariffType === "007";
-        const isTarmed = item.tariff_code === 1 || tariffType === "001";
-        const isAcf = tariffType === "005";
-
-        let unit: number;
-        let unitFactor: number;
-        let calculatedAmount: number;
-
-        if (isTarmed) {
-          // TARMED: unit = tp_al (medical technical points), Sumex handles Taxpunktwert internally
-          unit = item.tp_al || item.unit_price || 0;
-          unitFactor = 1;
-          calculatedAmount = unit * (item.quantity || 1);
-        } else if (isTardoc || isAcf) {
-          // TARDOC/ACF: tp_al = MT tax points, tp_tl = TT tax points (technical component).
-          // AR.* codes are pure-TT (tp_al=0) — must pass unitTT/unitFactorTT or Finalize
-          // gets a rounding mismatch and GetXML returns 204 silently.
-          unit = item.tp_al ?? 0;
-          unitFactor = item.tp_al_value || 1;
-          calculatedAmount = item.total_price || 0;
-        } else {
-          unit = item.unit_price || 0;
-          unitFactor = 1;
-          calculatedAmount = item.total_price || 0;
-        }
-
-        // TT (technical tariff) component for TARDOC/ACF — needed for AR.* codes.
-        const unitTT = (isTardoc || isAcf) && item.tp_tl > 0 ? item.tp_tl : undefined;
-        const unitFactorTT = (isTardoc || isAcf) && item.tp_tl_value > 0 ? item.tp_tl_value : undefined;
-
-        // For tariff "590" always use "0" — any other code causes Sumex to return 204 silently.
-        // For other tariffs use the real code.
-        const resolvedCode = tariffType === "590" ? "0" : (item.code || item.tardoc_code || "");
-
-        return {
-          tariffType,
-          code: resolvedCode,
-          referenceCode: item.ref_code || "",
-          quantity: item.quantity || 1,
-          sessionNumber: isAcf ? 1 : (item.session_number ?? 1),
-          dateBegin: item.date_begin || treatmentDate,
-          providerGln: svcGln,
-          responsibleGln: svcRespGln,
-          side: (item.side_type as 0 | 1 | 2 | 3) ?? 0,
-          serviceName: item.name || "",
-          unit,
-          unitFactor,
-          unitTT,
-          unitFactorTT,
-          externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
-          amount: calculatedAmount,
-          // TARDOC/ACF/TARMED and free-text (590) lines use VAT 0.
-          vatRate: (isTardoc || isTarmed || isAcf || tariffType === "590") ? 0 : (Number(item.vat_rate_value) || 0),
-          ignoreValidate: YesNo.Yes,
-        };
-      });
+      // Reconciliation guard: what Sumex prints must equal the stored invoice.
+      const reconciliation = reconcileInvoiceLines(
+        lineItems as unknown as SumexLineItemRow[],
+        Number(invoiceData.total_amount) || 0,
+        { tardocCatalog: mapperCtx.tardocCatalog },
+      );
+      if (!reconciliation.ok) {
+        console.error(`[GeneratePDF] ❌ Reconciliation failed for invoice ${invoiceData.invoice_number}:`, JSON.stringify(reconciliation, null, 2));
+        return NextResponse.json(
+          {
+            error: "Invoice amounts do not reconcile — PDF generation blocked",
+            details:
+              "The amounts Sumex would print differ from the stored invoice. " +
+              "Fix the invoice line amounts (or tax points) before regenerating the PDF.",
+            reconciliation,
+          },
+          { status: 422 },
+        );
+      }
 
       // Diagnosis codes from invoice
       const diagCodes: string[] = Array.isArray(invoiceData.diagnosis_codes)
@@ -724,51 +694,38 @@ export async function POST(request: NextRequest) {
       const ibanForSumex2 = provIbanSumex || FALLBACK_QR_IBAN;
       const treatmentDate = invoiceData.treatment_date || invoiceData.invoice_date || new Date().toISOString().split("T")[0];
 
-      // Map line items
-      const isValidGln2 = (g: string | null | undefined) => g != null && /^\d{13}$/.test(g);
-      const sumexServices2: SumexServiceInput[] = lineItems.map((item: any) => {
-        const svcGln = isValidGln2(item.provider_gln) ? item.provider_gln : provGln;
-        const svcRespGln = isValidGln2(item.responsible_gln) ? item.responsible_gln : svcGln;
-        // Resolve tariff_type. Remap unknown types to "590" — same logic as insurance path above.
-        const rawTariffType2 = deriveTariffType(item);
-        const KNOWN_PDF_TARIFFS2 = new Set(["001","005","007","406","590"]);
-        const tariffType = KNOWN_PDF_TARIFFS2.has(rawTariffType2) ? rawTariffType2 : "590";
-        const isTardoc2 = item.tariff_code === 7 || tariffType === "007";
-        const isTarmed2 = item.tariff_code === 1 || tariffType === "001";
-        const isAcf2 = tariffType === "005";
-        let unit2: number; let unitFactor2: number; let amt2: number;
-        if (isTarmed2) {
-          unit2 = item.tp_al || item.unit_price || 0; unitFactor2 = 1; amt2 = unit2 * (item.quantity || 1);
-        } else if (isTardoc2 || isAcf2) {
-          // TARDOC/ACF: use tp_al + tp_al_value only (matches aestheticclinic working pattern).
-          unit2 = item.tp_al || 0; unitFactor2 = item.tp_al_value || 1;
-          amt2 = item.total_price || 0;
-        } else {
-          unit2 = item.unit_price || 0; unitFactor2 = 1; amt2 = item.total_price || 0;
-        }
-        // For tariff "590" always use "0" — any other code causes Sumex to return 204 silently.
-        const resolvedCode2 = tariffType === "590" ? "0" : (item.code || item.tardoc_code || "");
+      // Map line items — shared mapping (src/lib/sumexLineMapper.ts)
+      const mapperCtx2 = {
+        fallbackProviderGln: provGln,
+        fallbackTreatmentDate: treatmentDate,
+        skipValidation: true,
+        lenientTariffRemap: true,
+        includeVat: true,
+        tardocCatalog: await loadTardocCatalog(lineItems),
+      };
+      const sumexServices2: SumexServiceInput[] = (lineItems as unknown as SumexLineItemRow[]).map(
+        (item) => mapLineItemToSumexService(item, mapperCtx2),
+      );
 
-        return {
-          tariffType,
-          code: resolvedCode2,
-          referenceCode: item.ref_code || "",
-          quantity: item.quantity || 1,
-          sessionNumber: isAcf2 ? 1 : (item.session_number ?? 1),
-          dateBegin: item.date_begin || treatmentDate,
-          providerGln: svcGln,
-          responsibleGln: svcRespGln,
-          side: (item.side_type as 0 | 1 | 2 | 3) ?? 0,
-          serviceName: item.name || "",
-          unit: unit2,
-          unitFactor: unitFactor2,
-          externalFactor: (item.tariff_code === 5 || item.tariff_code === 7) ? (item.external_factor_mt ?? 1) : (item.external_factor_mt ?? 1),
-          amount: amt2,
-          // Tariff 590 (free-text): VAT must be 0 — non-zero dVatRate causes GetXML to return 204.
-          vatRate: (isTardoc2 || isTarmed2 || isAcf2 || tariffType === "590") ? 0 : (Number(item.vat_rate_value) || 0),
-          ignoreValidate: YesNo.Yes,
-        };
-      });
+      // Reconciliation guard: what Sumex prints must equal the stored invoice.
+      const reconciliation2 = reconcileInvoiceLines(
+        lineItems as unknown as SumexLineItemRow[],
+        Number(invoiceData.total_amount) || 0,
+        { tardocCatalog: mapperCtx2.tardocCatalog },
+      );
+      if (!reconciliation2.ok) {
+        console.error(`[GeneratePDF] ❌ Reconciliation failed for invoice ${invoiceData.invoice_number}:`, JSON.stringify(reconciliation2, null, 2));
+        return NextResponse.json(
+          {
+            error: "Invoice amounts do not reconcile — PDF generation blocked",
+            details:
+              "The amounts Sumex would print differ from the stored invoice. " +
+              "Fix the invoice line amounts (or tax points) before regenerating the PDF.",
+            reconciliation: reconciliation2,
+          },
+          { status: 422 },
+        );
+      }
 
       // --- Payment status remark & generation attributes (non-insurance path) ---
       const paidAmt2 = Number(invoiceData.paid_amount) || 0;
