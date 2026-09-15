@@ -435,7 +435,8 @@
       "stopReminders": "Stopper les rappels",
       "stopRemindersTooltip": "Arrêter les lettres/e-mails de rappel pour cette facture",
       "downloadAllInvoices": "Télécharger toutes les factures",
-      "zippingInvoices": "Compression..."
+      "zippingInvoices": "Compression...",
+      "paidOn": "Réglé le"
     },
     "form": {
       "date": "Date",

@@ -90,6 +90,7 @@ type ConsultationRow = {
   invoice_is_paid: boolean | null;
   invoice_status: InvoiceStatus | null;
   invoice_paid_amount: number | null;
+  invoice_paid_at: string | null;
   cash_receipt_path: string | null;
   invoice_pdf_path: string | null;
   invoice_pdf_path_tg: string | null;
@@ -2795,7 +2796,7 @@ export default function MedicalConsultationsCard({
         const { data: invoiceData, error: invoiceError } = await supabaseClient
           .from("invoices")
           .select(
-            "id, patient_id, consultation_id, invoice_number, invoice_date, due_date, treatment_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, subtotal, paid_amount, status, is_complimentary, cash_receipt_path, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, title, reference_number, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at, stop_reminders",
+            "id, patient_id, consultation_id, invoice_number, invoice_date, due_date, treatment_date, doctor_user_id, doctor_name, provider_id, provider_name, payment_method, total_amount, subtotal, paid_amount, paid_at, status, is_complimentary, cash_receipt_path, pdf_path, pdf_path_tg, pdf_path_tp, pdf_path_reminder, pdf_path_receipt, payment_link_token, payrexx_payment_link, payrexx_payment_status, created_by_user_id, created_by_name, is_archived, title, reference_number, reminder_level, reminder_1_sent_at, reminder_2_sent_at, reminder_3_sent_at, stop_reminders",
           )
           .eq("patient_id", patientId)
           .eq("is_archived", showArchived ? true : false)
@@ -2829,6 +2830,7 @@ export default function MedicalConsultationsCard({
             invoice_is_paid: inv.status === "PAID" || inv.status === "OVERPAID" || inv.status === "PARTIAL_PAID",
             invoice_status: (inv.status as InvoiceStatus) ?? null,
             invoice_paid_amount: inv.paid_amount ?? null,
+            invoice_paid_at: inv.paid_at ?? null,
             cash_receipt_path: inv.cash_receipt_path ?? null,
             invoice_pdf_path: inv.pdf_path ?? null,
             invoice_pdf_path_tg: inv.pdf_path_tg ?? null,
@@ -4536,6 +4538,7 @@ export default function MedicalConsultationsCard({
                   invoice_paid_amount: totalPaidNow,
                   invoice_status: syncedStatus,
                   invoice_is_paid: syncedStatus === "PAID",
+                  ...(syncedStatus === "PAID" ? { invoice_paid_at: new Date().toISOString() } : {}),
                 }
               : row
           )
@@ -4648,6 +4651,7 @@ export default function MedicalConsultationsCard({
               invoice_paid_amount: totalPaid,
               invoice_status: invoiceStatus,
               invoice_is_paid: invoiceStatus === "PAID",
+              ...(invoiceStatus === "PAID" ? { invoice_paid_at: paidAt } : {}),
             }
           : row
       )
@@ -6067,6 +6071,7 @@ export default function MedicalConsultationsCard({
             invoice_is_paid: status === "PAID" || status === "OVERPAID" || status === "PARTIAL_PAID",
             invoice_status: status,
             invoice_paid_amount: resolvedPaidAmount,
+            invoice_paid_at: (status === "OPEN" || status === "CANCELLED") ? null : paidAt,
           } : c
         )
       );
@@ -8169,6 +8174,7 @@ export default function MedicalConsultationsCard({
                           invoice_is_paid: isCashOrCard,
                           invoice_status: isCashOrCard ? "PAID" : "OPEN",
                           invoice_paid_amount: isCashOrCard ? (invoiceTotalAmountForInsert || 0) : null,
+                          invoice_paid_at: isCashOrCard ? new Date().toISOString() : null,
                           cash_receipt_path: null,
                           invoice_pdf_path: null,
                           invoice_pdf_path_tg: null,
@@ -11705,6 +11711,14 @@ export default function MedicalConsultationsCard({
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-slate-500">Paid</span>
                                   <span className="font-semibold text-emerald-700">CHF {paidAmt.toFixed(2)}</span>
+                                </div>
+                              )}
+                              {hasPaidInfo && row.invoice_paid_at && (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-slate-500">{tc("paidOn")}</span>
+                                  <span className="font-semibold text-slate-700">
+                                    {new Date(row.invoice_paid_at).toLocaleDateString("fr-CH", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Zurich" })}
+                                  </span>
                                 </div>
                               )}
                               {lossAmt > 0 && (

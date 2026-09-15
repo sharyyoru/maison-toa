@@ -435,7 +435,8 @@
       "stopReminders": "Stop Reminder",
       "stopRemindersTooltip": "Stop reminder letters/emails for this invoice",
       "downloadAllInvoices": "Download All Invoices",
-      "zippingInvoices": "Zipping..."
+      "zippingInvoices": "Zipping...",
+      "paidOn": "Paid date"
     },
     "form": {
       "date": "Date",
