@@ -1,5 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+
+/**
+ * Kick the job processor immediately (fire-and-forget, runs after the
+ * response is sent). Without this, jobs sat waiting for the next 1-minute
+ * cron tick — the perceived 20-30s "generation time". The processor claims
+ * jobs atomically, so overlapping with the cron is safe.
+ */
+function kickProcessor() {
+  after(async () => {
+    try {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL;
+      if (!appUrl || !process.env.CRON_SECRET) return;
+      await fetch(`${appUrl}/api/cron/process-pdf-jobs`, {
+        headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+      });
+    } catch (err) {
+      console.warn("[QueuePDF] Immediate processor kick failed (cron will pick the job up):", err);
+    }
+  });
+}
 
 /**
  * POST /api/invoices/queue-pdf
@@ -93,6 +114,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    kickProcessor();
 
     return NextResponse.json({
       success: true,

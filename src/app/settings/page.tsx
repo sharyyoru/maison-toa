@@ -435,7 +435,7 @@ function DoctorSchedulingTab() {
 
   return (
     <div className="flex gap-6 min-h-[420px]">
-      {/* Left panel â€“ settings list */}
+      {/* Left panel – settings list */}
       <div className="w-80 shrink-0 rounded-2xl border border-slate-200/80 bg-white/80 shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-200/80 px-4 py-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -490,7 +490,7 @@ function DoctorSchedulingTab() {
         </div>
       </div>
 
-      {/* Right panel â€“ form */}
+      {/* Right panel – form */}
       <div className="flex-1 rounded-2xl border border-slate-200/80 bg-white/80 shadow-sm">
         {!selectedId ? (
           <div className="flex h-full items-center justify-center text-sm text-slate-400">
@@ -707,7 +707,7 @@ function ExternalLabsTab() {
 
   return (
     <div className="flex gap-6 min-h-[420px]">
-      {/* Left panel â€“ lab list */}
+      {/* Left panel – lab list */}
       <div className="w-80 shrink-0 rounded-2xl border border-slate-200/80 bg-white/80 shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-200/80 px-4 py-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -760,7 +760,7 @@ function ExternalLabsTab() {
         </div>
       </div>
 
-      {/* Right panel â€“ form */}
+      {/* Right panel – form */}
       <div className="flex-1 rounded-2xl border border-slate-200/80 bg-white/80 shadow-sm">
         {!selectedId ? (
           <div className="flex h-full items-center justify-center text-sm text-slate-400">
@@ -855,7 +855,7 @@ function ExternalLabsTab() {
                     value={form.password}
                     onChange={(e) => { setForm((f) => ({ ...f, password: e.target.value })); setErrors((prev) => ({ ...prev, password: undefined })); }}
                     className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-300 outline-none transition-colors ${errors.password ? "border-red-400 focus:border-red-400 focus:ring-1 focus:ring-red-400/30" : "border-slate-200 focus:border-sky-400 focus:ring-1 focus:ring-sky-400/30"}`}
-                    placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                    placeholder="••••••••"
                   />
                   {errors.password && <p className="mt-1 text-[11px] text-red-500">{errors.password}</p>}
                 </div>
