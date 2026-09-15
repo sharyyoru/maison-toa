@@ -68,7 +68,7 @@ update-patient-data.sql
 analyze-*.py
 generate-*.py
 detailed-*.py
-sumex_proxy.py
+/sumex_proxy.py
 PATIENT-*.md
 PAYMENT_FLOW_REFERENCE.md
 UPDATE-EXECUTION-SUMMARY.md
