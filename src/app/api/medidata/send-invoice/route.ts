@@ -314,20 +314,49 @@ export async function POST(request: NextRequest) {
       if (staffRow) staffEntity = staffRow;
     }
 
+    // ── BILL-015: insurance invoices must be billed by the clinic mandant ──
+    // Axenita billed 32k+ accepted invoices with biller = TOA SA (GLN
+    // 7601002932929, ZSR Z797322) and the treating doctor as care provider
+    // (personal GLN under the clinic ZSR). Billing with the doctor's row as
+    // biller makes MediData reject ("unknown mandant ean") and Helsana refuse
+    // every TARDOC line (eK6.2.1 "service spécialisé"). The mandant row is
+    // identified by GLN = medidata_config.clinic_gln.
+    let mandantEntity: Record<string, any> | null = null;
+    if (billingType === "TP" && senderGln) {
+      const { data: mandantRow } = await supabaseAdmin
+        .from("providers")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, vatuid, salutation, title, qual_dignities")
+        .eq("gln", senderGln)
+        .limit(1)
+        .maybeSingle();
+      if (mandantRow) {
+        mandantEntity = mandantRow;
+        // The doctor's row (previously acting as biller) becomes the service
+        // provider when no separate staff row was resolved.
+        if (!staffEntity && billingEntity?.gln && billingEntity.gln !== mandantRow.gln) {
+          staffEntity = billingEntity;
+        }
+        console.log(`[SendInvoice] BILL-015: billing as clinic mandant ${mandantRow.name} (${mandantRow.gln}/${mandantRow.zsr}); doctor stays service provider`);
+      } else {
+        console.warn(`[SendInvoice] BILL-015: no provider row found for mandant GLN ${senderGln} — falling back to invoice billing entity as biller`);
+      }
+    }
+    const billerEntity = mandantEntity ?? billingEntity;
+
     // ── Resolve provider fields with fallbacks (same pattern as check-xml) ──
     const pickValidGln = (...candidates: (string | null | undefined)[]) => {
       for (const c of candidates) if (c && /^\d{13}$/.test(c)) return c;
       return "7601003000115"; // fallback
     };
-    const provGln = pickValidGln(billingEntity?.gln, invoiceRecord?.provider_gln);
-    const provZsr = billingEntity?.zsr || invoiceRecord?.provider_zsr || "";
-    const provName = billingEntity?.name || invoiceRecord?.provider_name || "TOA SA";
-    const provStreet = billingEntity?.street
-      ? `${billingEntity.street}${billingEntity.street_no ? " " + billingEntity.street_no : ""}`
+    const provGln = pickValidGln(billerEntity?.gln, invoiceRecord?.provider_gln);
+    const provZsr = billerEntity?.zsr || invoiceRecord?.provider_zsr || "";
+    const provName = billerEntity?.name || invoiceRecord?.provider_name || "TOA SA";
+    const provStreet = billerEntity?.street
+      ? `${billerEntity.street}${billerEntity.street_no ? " " + billerEntity.street_no : ""}`
       : "Voie du Chariot 6";
-    const provZip = billingEntity?.zip_code || "1003";
-    const provCity = billingEntity?.city || "Lausanne";
-    const provCanton = normalizeCanton(invoiceRecord?.treatment_canton || billingEntity?.canton);
+    const provZip = billerEntity?.zip_code || "1003";
+    const provCity = billerEntity?.city || "Lausanne";
+    const provCanton = normalizeCanton(invoiceRecord?.treatment_canton || billerEntity?.canton);
     // QR-IBAN check: Sumex SetEsrQR requires IID 30000-31999 (error [638] for regular IBANs).
     const sanitizeQrIban = (raw: string | null | undefined): string | null => {
       if (!raw) return null;
@@ -340,7 +369,9 @@ export async function POST(request: NextRequest) {
       }
       return stripped;
     };
-    const provIban = sanitizeQrIban(billingEntity?.iban) || sanitizeQrIban(invoiceRecord?.provider_iban) || null;
+    // IBAN stays PER-DOCTOR (Axenita routed payments to doctor-specific TOA SA
+    // accounts); the clinic mandant's IBAN is only a last-resort fallback.
+    const provIban = sanitizeQrIban(billingEntity?.iban) || sanitizeQrIban(invoiceRecord?.provider_iban) || sanitizeQrIban(mandantEntity?.iban) || null;
 
     // Derive invoice metadata
     const invoiceNumber = invoiceRecord?.invoice_number || `INV-${Date.now().toString(36).toUpperCase()}`;
@@ -592,7 +623,7 @@ export async function POST(request: NextRequest) {
       requestSubtype: RequestSubtype.Normal,
       tiersMode,
       amountPrepaid: amountPrepaid || undefined,
-      vatNumber: billingEntity?.vatuid || "",
+      vatNumber: billerEntity?.vatuid || "",
       remark: (invoiceRecord?.notes || "").trim() || undefined,
       invoiceId: invoiceNumber,
       invoiceDate,

@@ -208,25 +208,48 @@ export async function POST(request: NextRequest) {
       receiverGln = insurerGln;
     }
 
+    // ── BILL-015: insurance invoices must be billed by the clinic mandant ──
+    // (biller = TOA SA, GLN 7601002932929 / ZSR Z797322; doctor = provider).
+    // Mirrors medidata/send-invoice — see comment there.
+    let mandantEntity: Record<string, any> | null = null;
+    if (billingType === "TP" && senderGln) {
+      const { data: mandantRow } = await supabaseAdmin
+        .from("providers")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, vatuid, salutation, title, qual_dignities")
+        .eq("gln", senderGln)
+        .limit(1)
+        .maybeSingle();
+      if (mandantRow) {
+        mandantEntity = mandantRow;
+        if (!staffEntity && billingEntity?.gln && billingEntity.gln !== mandantRow.gln) {
+          staffEntity = billingEntity;
+        }
+        console.log(`[CheckXML] BILL-015: billing as clinic mandant ${mandantRow.name} (${mandantRow.gln}/${mandantRow.zsr})`);
+      }
+    }
+    const billerEntity = mandantEntity ?? billingEntity;
+
     // ── Resolve provider fields with fallbacks ──
     // GLN must be exactly 13 digits
     const pickValidGln = (...candidates: (string | null | undefined)[]) => {
       for (const c of candidates) if (c && /^\d{13}$/.test(c)) return c;
       return "7601003000115"; // fallback
     };
-    const provGln = pickValidGln(billingEntity?.gln, invoice.provider_gln);
-    const provZsr = billingEntity?.zsr || invoice.provider_zsr || "";
-    const provName = billingEntity?.name || invoice.provider_name || "Maison Toa";
-    const provStreet = billingEntity?.street
-      ? `${billingEntity.street}${billingEntity.street_no ? " " + billingEntity.street_no : ""}`
+    const provGln = pickValidGln(billerEntity?.gln, invoice.provider_gln);
+    const provZsr = billerEntity?.zsr || invoice.provider_zsr || "";
+    const provName = billerEntity?.name || invoice.provider_name || "Maison Toa";
+    const provStreet = billerEntity?.street
+      ? `${billerEntity.street}${billerEntity.street_no ? " " + billerEntity.street_no : ""}`
       : "";
-    const provZip = billingEntity?.zip_code || "";
-    const provCity = billingEntity?.city || "";
-    const provCanton = billingEntity?.canton || invoice.treatment_canton || "VD";
+    const provZip = billerEntity?.zip_code || "";
+    const provCity = billerEntity?.city || "";
+    const provCanton = billerEntity?.canton || invoice.treatment_canton || "VD";
 
-    // IBAN: validate, strip spaces, fallback to QR-IBAN
+    // IBAN stays PER-DOCTOR (doctor-specific TOA SA accounts); mandant IBAN is
+    // only a last-resort fallback.
     const provIban = sanitizeIban(billingEntity?.iban)
       || sanitizeIban(invoice.provider_iban)
+      || sanitizeIban(mandantEntity?.iban)
       || FALLBACK_QR_IBAN;
 
     const treatmentDate = invoice.treatment_date?.split("T")[0]
@@ -292,7 +315,7 @@ export async function POST(request: NextRequest) {
       requestType: RequestType.Invoice,
       requestSubtype: RequestSubtype.Normal,
       tiersMode: mapSumexTiers(billingType),
-      vatNumber: billingEntity?.vatuid || "",
+      vatNumber: billerEntity?.vatuid || "",
       invoiceId: invoice.invoice_number || `INV-${resolvedInvoiceId.slice(0, 8)}`,
       invoiceDate: invoice.invoice_date || new Date().toISOString().split("T")[0],
       lawType: mapSumexLaw(invoice.health_insurance_law || "KVG"),

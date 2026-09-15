@@ -376,13 +376,43 @@ export async function POST(request: NextRequest) {
       if (!insurerGln && invoiceData.insurance_gln) insurerGln = invoiceData.insurance_gln;
       if (!insurerName && invoiceData.insurance_name) insurerName = invoiceData.insurance_name;
 
-      const provGln = billingEntityData?.gln || invoiceData.provider_gln || "7601003000115";
-      const provZsr = billingEntityData?.zsr || invoiceData.provider_zsr || "";
-      const provName = billingEntityData?.name || invoiceData.provider_name || "TOA SA";
-      const provStreet = billingEntityData?.street ? `${billingEntityData.street}${billingEntityData.street_no ? " " + billingEntityData.street_no : ""}` : "Voie du Chariot 6";
-      const provZip = billingEntityData?.zip_code || "1003";
-      const provCity = billingEntityData?.city || "Lausanne";
-      const provCanton = normalizeCanton(invoiceData.treatment_canton || billingEntityData?.canton);
+      // ── BILL-015: insurance invoices must be billed by the clinic mandant ──
+      // (biller = TOA SA, GLN 7601002932929 / ZSR Z797322; doctor = provider).
+      // Mirrors medidata/send-invoice — the printed TP invoice must show the
+      // same biller as the XML sent to the insurer.
+      let mandantEntity: ProviderData | null = null;
+      if (effectiveTiersMode === "TP") {
+        const { data: mdConfigRow } = await supabaseAdmin
+          .from("medidata_config")
+          .select("clinic_gln")
+          .limit(1)
+          .single();
+        const mandantGln = mdConfigRow?.clinic_gln || "";
+        if (mandantGln) {
+          const { data: mandantRow } = await supabaseAdmin
+            .from("providers")
+            .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid, qual_dignities")
+            .eq("gln", mandantGln)
+            .limit(1)
+            .maybeSingle();
+          if (mandantRow) {
+            mandantEntity = mandantRow as ProviderData;
+            if (!staffData && billingEntityData?.gln && billingEntityData.gln !== mandantRow.gln) {
+              staffData = billingEntityData;
+            }
+            console.log(`[GeneratePDF] BILL-015: billing as clinic mandant ${mandantRow.name} (${mandantRow.gln}/${mandantRow.zsr})`);
+          }
+        }
+      }
+      const billerEntity = mandantEntity ?? billingEntityData;
+
+      const provGln = billerEntity?.gln || invoiceData.provider_gln || "7601003000115";
+      const provZsr = billerEntity?.zsr || invoiceData.provider_zsr || "";
+      const provName = billerEntity?.name || invoiceData.provider_name || "TOA SA";
+      const provStreet = billerEntity?.street ? `${billerEntity.street}${billerEntity.street_no ? " " + billerEntity.street_no : ""}` : "Voie du Chariot 6";
+      const provZip = billerEntity?.zip_code || "1003";
+      const provCity = billerEntity?.city || "Lausanne";
+      const provCanton = normalizeCanton(invoiceData.treatment_canton || billerEntity?.canton);
       // IBAN: strip spaces, validate Swiss QR-IBAN (Sumex SetEsrQR requires IID 30000-31999).
       // When the provider has no valid QR-IBAN we use a fallback QR-IBAN only to
       // satisfy Sumex schema validation, but set ExcludeESRInPrint so it is not
@@ -482,7 +512,7 @@ export async function POST(request: NextRequest) {
         remark: combinedRemark,
         tiersMode: tiersMode1,
         amountPrepaid: amountPrepaid1 || undefined,
-        vatNumber: (billingEntityData as any)?.vatuid || "",
+        vatNumber: (billerEntity as any)?.vatuid || "",
         invoiceId: invoiceData.invoice_number || `INV-${invoiceId.slice(0, 8)}`,
         invoiceDate: invoiceData.invoice_date || new Date().toISOString().split("T")[0],
         lawType: mapSumexLaw(invoiceData.health_insurance_law || "KVG"),
@@ -499,8 +529,10 @@ export async function POST(request: NextRequest) {
           city: provCity,
           stateCode: provCanton,
         },
-        providerGln: provGln,
-        providerZsr: provZsr || undefined,
+        // BILL-015: the treating doctor stays the service provider (personal
+        // GLN under the clinic ZSR — matching the accepted Axenita structure).
+        providerGln: (staffData?.gln && /^\d{13}$/.test(staffData.gln)) ? staffData.gln : provGln,
+        providerZsr: staffData?.zsr || invoiceData.doctor_zsr || provZsr || undefined,
         providerAddress: {
           familyName: staffData?.name || invoiceData.doctor_name || provName,
           givenName: "",
