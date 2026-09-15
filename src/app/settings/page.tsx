@@ -1162,11 +1162,13 @@ function ServicePicker({
   value,
   onChange,
   label = "Linked service:",
+  depositPercentage = 100,
 }: {
   services: ServiceOption[];
   value: string | null;
   onChange: (id: string | null) => void;
   label?: string;
+  depositPercentage?: number;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -1276,7 +1278,7 @@ function ServicePicker({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span className="text-xs text-amber-700">
-            Full: <strong>CHF {selected.base_price}</strong> · Deposit: <strong>CHF {(selected.base_price * 0.5).toFixed(2)}</strong>
+            Full: <strong>CHF {selected.base_price}</strong> · Deposit ({depositPercentage}%): <strong>CHF {(selected.base_price * (depositPercentage / 100)).toFixed(2)}</strong>
           </span>
         </div>
       )}
@@ -1375,6 +1377,7 @@ function BookingCategoriesTab() {
   const [serviceCategories, setServiceCategories] = useState<ServiceCategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<"new" | "existing">("new");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedTreatmentId, setSelectedTreatmentId] = useState<string | null>(null);
@@ -1385,6 +1388,16 @@ function BookingCategoriesTab() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
 
   const fetchData = async () => {
     try {
@@ -1427,6 +1440,7 @@ function BookingCategoriesTab() {
         throw new Error(data.error || "Failed to save categories");
       }
       alert(t("categoriesSaved"));
+      setIsDirty(false);
     } catch (error) {
       alert(error instanceof Error ? error.message : t("categoriesSaveFailed"));
     } finally {
@@ -1447,6 +1461,7 @@ function BookingCategoriesTab() {
         throw new Error(data.error || "Failed to save treatments");
       }
       alert(t("treatmentsSaved"));
+      setIsDirty(false);
     } catch (error) {
       alert(error instanceof Error ? error.message : t("treatmentsSaveFailed"));
     } finally {
@@ -1516,16 +1531,19 @@ function BookingCategoriesTab() {
       consultation_deposit_percentage: 100,
     };
     setCategories([...categories, newCategory]);
+    setIsDirty(true);
   };
 
   const updateCategory = (id: string, field: keyof BookingCategory, value: any) => {
     setCategories((current) => current.map((cat) => (cat.id === id ? { ...cat, [field]: value } : cat)));
+    setIsDirty(true);
   };
 
   const deleteCategory = (id: string) => {
     if (confirm(t("confirmDeleteCategory"))) {
       setCategories(categories.filter((cat) => cat.id !== id));
       setTreatments(treatments.filter((t) => t.category_id !== id));
+      setIsDirty(true);
     }
   };
 
@@ -1555,20 +1573,24 @@ function BookingCategoriesTab() {
       secondary_calendar_position: null,
     };
     setTreatments([...treatments, newTreatment]);
+    setIsDirty(true);
   };
 
   const updateTreatment = (id: string, field: keyof BookingTreatment, value: any) => {
     setTreatments((current) => current.map((t) => (t.id === id ? { ...t, [field]: value } : t)));
+    setIsDirty(true);
   };
 
   const deleteTreatment = (id: string) => {
     if (confirm(t("confirmDeleteTreatment"))) {
       setTreatments(treatments.filter((t) => t.id !== id));
+      setIsDirty(true);
     }
   };
 
   const reorderCategory = (targetId: string) => {
     if (!draggedCategoryId || draggedCategoryId === targetId) return;
+    setIsDirty(true);
     setCategories((current) => {
       const ordered = current.filter((category) => category.patient_type === activeSubTab)
         .sort((a, b) => a.order_index - b.order_index);
@@ -1587,6 +1609,7 @@ function BookingCategoriesTab() {
 
   const reorderTreatment = (targetId: string, categoryId: string) => {
     if (!draggedTreatmentId || draggedTreatmentId === targetId) return;
+    setIsDirty(true);
     setTreatments((current) => {
       const ordered = current.filter((treatment) => treatment.category_id === categoryId)
         .sort((a, b) => a.order_index - b.order_index);
@@ -1621,6 +1644,7 @@ function BookingCategoriesTab() {
         }
       }
       alert(t("orderingSaved"));
+      setIsDirty(false);
     } catch (error) {
       alert(error instanceof Error ? error.message : t("orderingSaveFailed"));
     } finally {
@@ -1643,6 +1667,15 @@ function BookingCategoriesTab() {
 
   return (
     <div className="space-y-6">
+      {isDirty && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 flex items-center gap-2">
+          <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          You have unsaved changes. Save the current section before leaving this page.
+        </div>
+      )}
+
       {/* View Toggle */}
       <div className="flex items-center gap-4">
         <button
@@ -1937,6 +1970,7 @@ function BookingCategoriesTab() {
                           value={cat.consultation_service_id ?? null}
                           onChange={(id) => updateCategory(cat.id, "consultation_service_id", id)}
                           label="Consultation service:"
+                          depositPercentage={cat.consultation_deposit_percentage}
                         />
                       </div>
                     )}
@@ -2271,6 +2305,7 @@ function BookingCategoriesTab() {
                               services={services}
                               value={treat.linked_service_id ?? null}
                               onChange={(id) => updateTreatment(treat.id, "linked_service_id", id)}
+                              depositPercentage={treat.deposit_percentage}
                             />
                           )}
                         </div>
