@@ -937,6 +937,9 @@ export default function CalendarPage() {
   }, [selectedDate]);
 
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
+  // BILL-005.1: appointment ids whose deposit invoice is paid — drives the
+  // "🟢 Deposit Paid / Acompte réglé" note and 💵 badge on calendar cards.
+  const [depositPaidAppointmentIds, setDepositPaidAppointmentIds] = useState<Set<string>>(new Set());
   const dayViewScrollRef = useRef<HTMLDivElement | null>(null);
   const focusedAppointmentScrolledRef = useRef<string | null>(null);
   const [appointmentsReloadVersion, setAppointmentsReloadVersion] = useState(0);
@@ -1571,6 +1574,48 @@ export default function CalendarPage() {
     }
 
     void loadFirsts();
+    return () => {
+      cancelled = true;
+    };
+  }, [appointments]);
+
+  // BILL-005.1: load the deposit status for the visible appointments so the
+  // calendar cards can show "🟢 Deposit Paid / Acompte réglé" automatically.
+  useEffect(() => {
+    let cancelled = false;
+    const appointmentIds = appointments.map((a) => a.id).filter(Boolean);
+    if (appointmentIds.length === 0) {
+      setDepositPaidAppointmentIds(new Set());
+      return;
+    }
+
+    async function loadDepositStatuses() {
+      try {
+        // Chunk the id filter — month view can hold hundreds of appointments
+        // and a single .in() would exceed URL length limits.
+        const chunkSize = 150;
+        const paidIds = new Set<string>();
+        for (let i = 0; i < appointmentIds.length; i += chunkSize) {
+          const chunk = appointmentIds.slice(i, i + chunkSize);
+          const { data, error } = await supabaseClient
+            .from("invoices")
+            .select("appointment_id, deposit_status")
+            .in("appointment_id", chunk)
+            .in("deposit_status", ["paid", "applied"]);
+          if (cancelled) return;
+          if (error || !data) continue;
+          for (const row of data as { appointment_id: string | null }[]) {
+            if (row.appointment_id) paidIds.add(row.appointment_id);
+          }
+        }
+        if (!cancelled) setDepositPaidAppointmentIds(paidIds);
+      } catch {
+        if (cancelled) return;
+        setDepositPaidAppointmentIds(new Set());
+      }
+    }
+
+    void loadDepositStatuses();
     return () => {
       cancelled = true;
     };
@@ -5843,6 +5888,14 @@ export default function CalendarPage() {
                                     💎
                                   </span>
                                 ) : null}
+                                {depositPaidAppointmentIds.has(appt.id) ? (
+                                  <span
+                                    title={t("badges.depositPaidTooltip")}
+                                    className="flex-shrink-0 text-[13px] leading-none"
+                                  >
+                                    💵
+                                  </span>
+                                ) : null}
                                 {appt.patient_id &&
                                 firstAppointmentByPatient[appt.patient_id] === getLogicalPatientAppointmentStart(appt) ? (
                                   <span
@@ -5860,6 +5913,11 @@ export default function CalendarPage() {
                               {category && (
                                 <div className="truncate text-[10px] font-medium text-slate-400">
                                   {category}
+                                </div>
+                              )}
+                              {depositPaidAppointmentIds.has(appt.id) && (
+                                <div className="truncate text-[10px] font-semibold text-emerald-600">
+                                  🟢 {t("badges.depositPaid")}
                                 </div>
                               )}
                               {notes && (
@@ -6291,6 +6349,14 @@ export default function CalendarPage() {
                                                 💎
                                               </span>
                                             ) : null}
+                                            {depositPaidAppointmentIds.has(appt.id) ? (
+                                              <span
+                                                title={t("badges.depositPaidTooltip")}
+                                                className="flex-shrink-0 text-[13px] leading-none"
+                                              >
+                                                💵
+                                              </span>
+                                            ) : null}
                                             {appt.patient_id &&
                                             firstAppointmentByPatient[appt.patient_id] === getLogicalPatientAppointmentStart(appt) ? (
                                               <span
@@ -6314,6 +6380,11 @@ export default function CalendarPage() {
                                             {appt.recurrence_series_id ? <span className="ml-1 text-[9px] text-sky-600" title="Recurring appointment">↻</span> : null}
                                             {appt.machine_ids && appt.machine_ids.length > 0 && (() => { const m = machines.find((x) => x.id === appt.machine_ids[0]); return m ? <span className="ml-1 text-[8px] text-violet-600" title={appt.machine_ids.map((id) => machines.find((x) => x.id === id)?.name).filter(Boolean).join(", ")}>⚙</span> : null; })()}
                                           </div>
+                                          {depositPaidAppointmentIds.has(appt.id) && (
+                                            <div className="relative z-10 truncate text-[10px] font-semibold text-emerald-600">
+                                              🟢 {t("badges.depositPaid")}
+                                            </div>
+                                          )}
                                           {notes && (
                                             <div className="relative z-10 truncate text-[10px] font-medium text-slate-500 italic">
                                               {notes}
@@ -6379,6 +6450,11 @@ export default function CalendarPage() {
                                             </div>
                                           )}
                                           {appt.location && <div className="mt-1 font-medium text-slate-600">📍 {appt.location}</div>}
+                                          {depositPaidAppointmentIds.has(appt.id) && (
+                                            <div className="mt-2 border-t border-slate-100 pt-2 font-semibold text-emerald-600">
+                                              🟢 {t("badges.depositPaid")} 💵
+                                            </div>
+                                          )}
                                           {notes && (
                                             <div className="mt-2 border-t border-slate-100 pt-2 font-medium italic text-slate-600">
                                               📝 {notes}

@@ -109,7 +109,9 @@
       "vip": "VIP",
       "vipTooltip": "VIP patient",
       "newPatient": "NEW",
-      "newPatientTooltip": "New patient (first appointment)"
+      "newPatientTooltip": "New patient (first appointment)",
+      "depositPaid": "Deposit Paid",
+      "depositPaidTooltip": "Deposit has been paid"
     },
     "modal": {
       "addNotes": "Add notes for this appointment",

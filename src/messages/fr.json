@@ -109,7 +109,9 @@
       "vip": "VIP",
       "vipTooltip": "Patient VIP",
       "newPatient": "NOUV",
-      "newPatientTooltip": "Nouveau patient (premier rendez-vous)"
+      "newPatientTooltip": "Nouveau patient (premier rendez-vous)",
+      "depositPaid": "Acompte réglé",
+      "depositPaidTooltip": "L'acompte a été réglé"
     },
     "modal": {
       "addNotes": "Ajouter des notes pour ce rendez-vous",
