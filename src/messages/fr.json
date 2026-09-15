@@ -1435,6 +1435,7 @@
       "medidata": "Connexion MediData",
       "bookingCategories": "Catégories de réservation",
       "appointmentStatuses": "Statuts des rendez-vous",
+      "icd10Codes": "Codes ICD-10",
       "providersBilling": "Prestataires & Facturation",
       "tardocGroups": "Groupes TARDOC",
       "systemConfiguration": "Configuration du système"

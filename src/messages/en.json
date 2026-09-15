@@ -1435,6 +1435,7 @@
       "medidata": "MediData Connection",
       "bookingCategories": "Booking Categories",
       "appointmentStatuses": "Appointment Statuses",
+      "icd10Codes": "ICD-10 Codes",
       "providersBilling": "Providers & Billing",
       "tardocGroups": "TARDOC Groups",
       "systemConfiguration": "System Configuration"

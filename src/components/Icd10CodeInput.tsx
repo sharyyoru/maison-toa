@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { supabaseClient } from "@/lib/supabaseClient";
+
 export type Icd10Code = {
   code: string;
   label: string;
@@ -77,6 +80,25 @@ export default function Icd10CodeInput({
   className,
 }: Icd10CodeInputProps) {
   const datalistId = `${id}-options`;
+  const [codes, setCodes] = useState<Icd10Code[]>(COMMON_TARDOC_ICD10_CODES);
+
+  useEffect(() => {
+    let active = true;
+    supabaseClient
+      .from("icd10_code_options")
+      .select("code, label")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .then(({ data, error }) => {
+        if (!active || error) return;
+        if (data && data.length > 0) {
+          setCodes(data.map((row) => ({ code: row.code, label: row.label })));
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <>
@@ -95,7 +117,7 @@ export default function Icd10CodeInput({
         className={className}
       />
       <datalist id={datalistId}>
-        {COMMON_TARDOC_ICD10_CODES.map(({ code, label }) => (
+        {codes.map(({ code, label }) => (
           <option key={code} value={code} label={`${code} — ${label}`} />
         ))}
       </datalist>

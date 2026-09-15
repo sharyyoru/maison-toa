@@ -32,6 +32,11 @@ const AppointmentStatusesSettingsTab = dynamic(
   { loading: () => <div className="text-xs text-slate-400 py-8 text-center">Loading…</div> },
 );
 
+const Icd10CodesSettingsTab = dynamic(
+  () => import("@/components/Icd10CodesSettingsTab"),
+  { loading: () => <div className="text-xs text-slate-400 py-8 text-center">Loading…</div> },
+);
+
 const TABS = [
   { id: "external-labs", label: "External Labs" },
   { id: "doctor-scheduling", label: "Doctor Scheduling" },
@@ -40,6 +45,7 @@ const TABS = [
   { id: "medidata", label: "MediData Connection" },
   { id: "booking-categories", label: "Booking Categories" },
   { id: "appointment-statuses", label: "Appointment Statuses" },
+  { id: "icd10-codes", label: "ICD-10 Codes" },
   { id: "providers-billing", label: "Providers & Billing" },
   { id: "tardoc-groups", label: "TARDOC Groups" },
   { id: "system-configuration", label: "System Configuration" },
@@ -80,6 +86,7 @@ export default function SettingsPage() {
     "medidata": t("tabs.medidata"),
     "booking-categories": t("tabs.bookingCategories"),
     "appointment-statuses": t("tabs.appointmentStatuses"),
+    "icd10-codes": t("tabs.icd10Codes"),
     "providers-billing": t("tabs.providersBilling"),
     "tardoc-groups": t("tabs.tardocGroups"),
     "system-configuration": t("tabs.systemConfiguration"),
@@ -121,6 +128,7 @@ export default function SettingsPage() {
         {activeTab === "medidata" && <MediDataConnectionTab />}
         {activeTab === "booking-categories" && <BookingCategoriesTab />}
         {activeTab === "appointment-statuses" && <AppointmentStatusesSettingsTab />}
+        {activeTab === "icd10-codes" && <Icd10CodesSettingsTab />}
         {activeTab === "providers-billing" && <ProvidersBillingSettingsTab />}
         {activeTab === "tardoc-groups" && <TardocGroupsTab />}
         {activeTab === "system-configuration" && <SystemConfigurationTab />}
