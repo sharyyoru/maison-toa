@@ -4505,12 +4505,41 @@ export default function MedicalConsultationsCard({
         setInstallments(savedInstallments);
       }
 
-      // Update invoice payment_method to "Installment" if installments exist
+      // Update invoice payment_method to "Installment" if installments exist,
+      // and sync paid_amount/status from the installment totals (BUG-010: an
+      // out-of-sync parent invoice made bank payment imports mismatch the
+      // remaining balance).
       if (installments.length > 0) {
+        const totalPaidNow = savedInstallments.reduce((s, i) => s + Number(i.paid_amount || 0), 0);
+        const invoiceTotalNow = installmentsTarget.invoice_total_amount ?? 0;
+        let syncedStatus: InvoiceStatus = "OPEN";
+        if (invoiceTotalNow > 0 && totalPaidNow >= invoiceTotalNow - 0.01) {
+          syncedStatus = "PAID";
+        } else if (totalPaidNow > 0) {
+          syncedStatus = "PARTIAL_PAID";
+        }
         await supabaseClient
           .from("invoices")
-          .update({ payment_method: "Installment" })
+          .update({
+            payment_method: "Installment",
+            paid_amount: totalPaidNow,
+            status: syncedStatus,
+            ...(syncedStatus === "PAID" ? { paid_at: new Date().toISOString() } : {}),
+          })
           .eq("id", installmentsTarget.invoice_id);
+
+        setConsultations((prev) =>
+          prev.map((row) =>
+            row.invoice_id === installmentsTarget.invoice_id
+              ? {
+                  ...row,
+                  invoice_paid_amount: totalPaidNow,
+                  invoice_status: syncedStatus,
+                  invoice_is_paid: syncedStatus === "PAID",
+                }
+              : row
+          )
+        );
       }
 
       // Create Payrexx gateways for Online/Card/Cash installments that don't have one yet

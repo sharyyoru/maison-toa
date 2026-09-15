@@ -328,9 +328,25 @@ async function applyPaymentToInvoice(
   result.previousPaidAmount = Number(invoice.paid_amount) || 0;
 
   const totalDue = Number(invoice.total_amount) || 0;
+  const paymentAmount = Math.abs(tx.amount);
+
+  // BUG-010: if the invoice has installments (e.g. the first payment was split
+  // across cash + card as installments), the invoice's own paid_amount can be
+  // stale and the pending bank-transfer installment must be settled too —
+  // otherwise a later installment re-sync reverts the payment. Route the
+  // payment through the installments so everything stays consistent.
+  const { data: installments } = await supabaseAdmin
+    .from("invoice_installments")
+    .select("id, installment_number, amount, paid_amount, status")
+    .eq("invoice_id", invoice.id)
+    .order("installment_number", { ascending: true });
+
+  if (installments && installments.length > 0) {
+    return await applyPaymentToInvoiceWithInstallments(tx, invoice, installments, result);
+  }
+
   const alreadyPaid = Number(invoice.paid_amount) || 0;
   const remaining = totalDue - alreadyPaid;
-  const paymentAmount = Math.abs(tx.amount);
 
   // Already fully paid
   if (invoice.status === "PAID" || remaining <= 0.01) {
@@ -367,6 +383,100 @@ async function applyPaymentToInvoice(
     .update({
       paid_amount: newPaidAmount,
       status: newInvoiceStatus,
+    })
+    .eq("id", invoice.id);
+
+  if (updateError) {
+    result.matchStatus = "error";
+    result.matchNotes = `Failed to update invoice: ${updateError.message}`;
+  }
+
+  return result;
+}
+
+// BUG-010: apply a bank payment that references the parent invoice when the
+// invoice carries installments. The payment is allocated to the pending
+// installments (exact-amount match first, then oldest first) and the parent
+// invoice is re-synced from the installment totals.
+async function applyPaymentToInvoiceWithInstallments(
+  tx: ParsedTransaction,
+  invoice: { id: string; invoice_number: string; total_amount: number; paid_amount: number; status: string },
+  installments: { id: string; installment_number: number; amount: number; paid_amount: number; status: string }[],
+  result: MatchResult
+): Promise<MatchResult> {
+  const paymentAmount = Math.abs(tx.amount);
+  const invoiceTotal = Number(invoice.total_amount) || installments.reduce((s, i) => s + Number(i.amount || 0), 0);
+  const paidBefore = installments.reduce((s, i) => s + Number(i.paid_amount || 0), 0);
+  const remainingBefore = invoiceTotal - paidBefore;
+  result.previousPaidAmount = paidBefore;
+
+  if (invoice.status === "PAID" || remainingBefore <= 0.01) {
+    result.matchStatus = "already_paid";
+    result.matchNotes = `Invoice ${invoice.invoice_number} is already fully paid (${paidBefore.toFixed(2)}/${invoiceTotal.toFixed(2)} CHF)`;
+    result.newPaidAmount = paidBefore;
+    return result;
+  }
+
+  const nowIso = new Date().toISOString();
+  const pending = installments.filter((i) => i.status !== "PAID" && Number(i.amount || 0) - Number(i.paid_amount || 0) > 0.01);
+
+  // Prefer an installment whose outstanding balance matches the payment exactly
+  const exact = pending.find((i) => Math.abs((Number(i.amount || 0) - Number(i.paid_amount || 0)) - paymentAmount) <= 0.01);
+  const allocationOrder = exact ? [exact] : pending;
+
+  let toAllocate = paymentAmount;
+  const settledNumbers: number[] = [];
+  for (const inst of allocationOrder) {
+    if (toAllocate <= 0.01) break;
+    const outstanding = Number(inst.amount || 0) - Number(inst.paid_amount || 0);
+    const applied = Math.min(outstanding, toAllocate);
+    const instNewPaid = Number(inst.paid_amount || 0) + applied;
+    const instPaidInFull = instNewPaid >= Number(inst.amount || 0) - 0.01;
+
+    const { error: instError } = await supabaseAdmin
+      .from("invoice_installments")
+      .update({
+        paid_amount: instNewPaid,
+        status: instPaidInFull ? "PAID" : "PENDING",
+        paid_at: instPaidInFull ? nowIso : null,
+        ...(instPaidInFull ? { payment_method: "Bank Transfer" } : {}),
+      })
+      .eq("id", inst.id);
+
+    if (instError) {
+      result.matchStatus = "error";
+      result.matchNotes = `Failed to update installment #${inst.installment_number}: ${instError.message}`;
+      return result;
+    }
+    settledNumbers.push(inst.installment_number);
+    toAllocate -= applied;
+  }
+
+  const totalPaidWithOverage = paidBefore + paymentAmount;
+  result.newPaidAmount = totalPaidWithOverage;
+  result.matchedInstallmentId = exact ? exact.id : null;
+
+  let newInvoiceStatus: string;
+  if (totalPaidWithOverage >= invoiceTotal - 0.01 && totalPaidWithOverage <= invoiceTotal + 0.01) {
+    result.matchStatus = "matched";
+    result.matchNotes = `Matched via installments (#${settledNumbers.join(", #")}): ${paymentAmount.toFixed(2)} CHF. Invoice ${invoice.invoice_number} fully paid.`;
+    newInvoiceStatus = "PAID";
+  } else if (totalPaidWithOverage > invoiceTotal + 0.01) {
+    result.matchStatus = "overpaid";
+    result.matchNotes = `Overpaid by ${(totalPaidWithOverage - invoiceTotal).toFixed(2)} CHF. Payment: ${paymentAmount.toFixed(2)}, Total: ${invoiceTotal.toFixed(2)}, Already paid: ${paidBefore.toFixed(2)}`;
+    newInvoiceStatus = "OVERPAID";
+  } else {
+    result.matchStatus = "underpaid";
+    result.matchNotes = `Partial payment via installments: ${paymentAmount.toFixed(2)} CHF. Still owed: ${(invoiceTotal - totalPaidWithOverage).toFixed(2)} CHF.`;
+    newInvoiceStatus = "PARTIAL_PAID";
+  }
+
+  const { error: updateError } = await supabaseAdmin
+    .from("invoices")
+    .update({
+      paid_amount: totalPaidWithOverage,
+      status: newInvoiceStatus,
+      ...(newInvoiceStatus === "PAID" ? { paid_at: nowIso } : {}),
     })
     .eq("id", invoice.id);
 
