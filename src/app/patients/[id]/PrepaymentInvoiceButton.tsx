@@ -36,6 +36,7 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
   const [serviceId, setServiceId] = useState("");
   const [doctorId, setDoctorId] = useState("");
   const [appointmentId, setAppointmentId] = useState("");
+  const [depositPercentage, setDepositPercentage] = useState(100);
   const [serviceQuery, setServiceQuery] = useState("");
   const [serviceDropOpen, setServiceDropOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -61,7 +62,7 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
   }, [open, patientId]);
 
   const selectedService = services.find(s => s.id === serviceId);
-  const deposit = selectedService?.base_price ? selectedService.base_price * 0.5 : null;
+  const deposit = selectedService?.base_price ? selectedService.base_price * (depositPercentage / 100) : null;
 
   const filteredServices = serviceQuery.trim()
     ? services.filter(s =>
@@ -99,6 +100,7 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
           serviceId,
           doctorId: doctorId || null,
           appointmentId: appointmentId || null,
+          depositPercentage,
         }),
       });
       const data = await res.json();
@@ -135,6 +137,7 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
           invoiceNumber: result.invoiceNumber,
           serviceName: selectedService?.name,
           depositAmount: deposit,
+          depositPercentage,
           invoiceId: result.invoiceId,
         }),
       });
@@ -162,6 +165,7 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
     setServiceId("");
     setDoctorId("");
     setAppointmentId("");
+    setDepositPercentage(100);
     setServiceQuery("");
     setEmailSent(false);
     setDeadlineSet(false);
@@ -176,14 +180,14 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        Acompte 50%
+        Acompte
       </button>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-bold text-slate-900">Créer facture acompte 50%</h2>
+              <h2 className="text-base font-bold text-slate-900">Créer facture acompte</h2>
               <button onClick={reset} className="text-slate-400 hover:text-slate-600">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -231,7 +235,7 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
                               {s.base_price != null && (
                                 <div className="shrink-0 text-right">
                                   <div className="text-xs font-semibold text-slate-700">CHF {s.base_price}</div>
-                                  <div className="text-[10px] text-amber-600">50% = {(s.base_price * 0.5).toFixed(2)}</div>
+                                  <div className="text-[10px] text-amber-600">{depositPercentage}% = {(s.base_price * (depositPercentage / 100)).toFixed(2)}</div>
                                 </div>
                               )}
                             </button>
@@ -240,11 +244,23 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
                       </div>
                     )}
                   </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <label className="text-xs font-medium text-slate-600">Acompte %</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={depositPercentage}
+                      onChange={(e) => setDepositPercentage(Number(e.target.value))}
+                      className="w-20 px-2.5 py-1.5 text-sm border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-amber-400"
+                    />
+                  </div>
                   {deposit != null && (
                     <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
                       <span>Prix total: <strong>CHF {selectedService!.base_price}</strong></span>
                       <span>·</span>
-                      <span>Acompte 50%: <strong>CHF {deposit.toFixed(2)}</strong></span>
+                      <span>Acompte ({depositPercentage}%): <strong>CHF {deposit.toFixed(2)}</strong></span>
                     </div>
                   )}
                 </div>
@@ -311,7 +327,7 @@ export default function PrepaymentInvoiceButton({ patientId, patientEmail, patie
                   </svg>
                   <div>
                     <div className="text-sm font-semibold text-emerald-800">Facture #{result.invoiceNumber} créée</div>
-                    <div className="text-xs text-emerald-600">Acompte CHF {deposit?.toFixed(2)}</div>
+                    <div className="text-xs text-emerald-600">Acompte ({depositPercentage}%) CHF {deposit?.toFixed(2)}</div>
                     {result.appointmentId && (
                       <div className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">

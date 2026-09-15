@@ -4,7 +4,7 @@ import { sendEmail, isEmailConfigured } from "@/lib/email";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(req: NextRequest) {
-  const { patientEmail, patientFirstName, patientLastName, stripeUrl, invoiceNumber, serviceName, depositAmount, invoiceId } = await req.json();
+  const { patientEmail, patientFirstName, patientLastName, stripeUrl, invoiceNumber, serviceName, depositAmount, depositPercentage, invoiceId } = await req.json();
 
   if (!patientEmail || !stripeUrl) return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   if (!isEmailConfigured()) return NextResponse.json({ error: "Email service not configured" }, { status: 500 });
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     ${infoTable([
       infoRow("Facture", `#${invoiceNumber}`),
       infoRow("Service", serviceName || "Consultation"),
-      infoRow("Acompte (50%)", `CHF ${Number(depositAmount).toFixed(2)}`),
+      infoRow(`Acompte (${depositPercentage ?? 100}%)`, `CHF ${Number(depositAmount).toFixed(2)}`),
     ].join(""))}
     <p style="margin:24px 0 8px;font-size:13px;color:#64748b;">
       Le montant de la consultation est déductible de tout traitement réalisé dans les 3 mois suivants.

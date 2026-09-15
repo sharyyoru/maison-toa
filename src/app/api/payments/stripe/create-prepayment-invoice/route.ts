@@ -7,8 +7,13 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.verc
 
 export async function POST(req: NextRequest) {
   try {
-    const { patientId, serviceId, doctorId, appointmentId } = await req.json();
+    const { patientId, serviceId, doctorId, appointmentId, depositPercentage } = await req.json();
     if (!patientId || !serviceId) return NextResponse.json({ error: "Missing patientId or serviceId" }, { status: 400 });
+
+    const percentage = Number(depositPercentage ?? 100);
+    if (!Number.isInteger(percentage) || percentage < 0 || percentage > 100) {
+      return NextResponse.json({ error: "Invalid deposit percentage" }, { status: 400 });
+    }
 
     // Fetch service price
     const { data: service } = await supabaseAdmin
@@ -20,7 +25,7 @@ export async function POST(req: NextRequest) {
     if (!service?.base_price) return NextResponse.json({ error: "Service has no price" }, { status: 400 });
 
     const fullPrice = Number(service.base_price);
-    const depositAmount = Math.round(fullPrice * 0.5 * 100) / 100;
+    const depositAmount = Math.round(fullPrice * (percentage / 100) * 100) / 100;
 
     // Fetch patient
     const { data: patient } = await supabaseAdmin
@@ -67,7 +72,9 @@ export async function POST(req: NextRequest) {
       .insert({
         patient_id: patientId,
         invoice_number: invoiceNumber,
-        title: `Acompte 50% – ${service.name}`,
+        title: percentage === 100
+          ? `Acompte – ${service.name}`
+          : `Acompte ${percentage}% – ${service.name}`,
         invoice_date: nowIso.split("T")[0],
         doctor_name: doctor?.name ?? null,
         doctor_gln: doctor?.gln ?? null,

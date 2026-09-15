@@ -9297,7 +9297,7 @@ export default function MedicalConsultationsCard({
                           Lier à un rendez-vous
                         </span>
                         <span className="ml-auto text-[10px] text-slate-400">
-                          Optionnel — active l'annulation auto à 48h si acompte 50% impayé
+                          Optionnel — active l'annulation auto à 48h si acompte impayé
                         </span>
                       </label>
 
