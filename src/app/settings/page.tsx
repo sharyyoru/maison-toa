@@ -1103,6 +1103,8 @@ interface BookingCategory {
   secondary_calendar_provider_id: string | null;
   secondary_calendar_duration_minutes: number | null;
   secondary_calendar_position: "start" | "end";
+  consultation_service_id: string | null;
+  consultation_deposit_percentage: number;
 }
 
 interface BookingTreatment {
@@ -1119,6 +1121,7 @@ interface BookingTreatment {
   order_index: number;
   enabled: boolean;
   prepayment_required: boolean;
+  deposit_percentage: number;
   linked_service_id: string | null;
   service_category_id: string | null;
   display_price: number | null;
@@ -1158,10 +1161,12 @@ function ServicePicker({
   services,
   value,
   onChange,
+  label = "Linked service:",
 }: {
   services: ServiceOption[];
   value: string | null;
   onChange: (id: string | null) => void;
+  label?: string;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -1186,7 +1191,7 @@ function ServicePicker({
 
   return (
     <div className="flex items-center gap-3 flex-wrap">
-      <span className="text-xs text-slate-500">Linked service:</span>
+      <span className="text-xs text-slate-500">{label}</span>
       <div ref={ref} className="relative">
         <button
           type="button"
@@ -1255,7 +1260,6 @@ function ServicePicker({
                     {s.base_price != null && (
                       <div className="shrink-0 text-right">
                         <div className="text-xs font-semibold text-slate-700">CHF {s.base_price}</div>
-                        <div className="text-[10px] text-amber-600">50% = {(s.base_price * 0.5).toFixed(2)}</div>
                       </div>
                     )}
                   </button>
@@ -1508,6 +1512,8 @@ function BookingCategoriesTab() {
       secondary_calendar_provider_id: null,
       secondary_calendar_duration_minutes: null,
       secondary_calendar_position: "start",
+      consultation_service_id: null,
+      consultation_deposit_percentage: 100,
     };
     setCategories([...categories, newCategory]);
   };
@@ -1538,6 +1544,7 @@ function BookingCategoriesTab() {
       order_index: treatments.filter((t) => t.category_id === categoryId).length,
       enabled: true,
       prepayment_required: false,
+      deposit_percentage: 100,
       linked_service_id: null,
       service_category_id: null,
       display_price: null,
@@ -1878,6 +1885,24 @@ function BookingCategoriesTab() {
                             <span>min</span>
                           </label>
                         )}
+                        {cat.skip_treatment && (
+                          <label className="flex items-center gap-2 text-xs text-slate-600">
+                            <span>Deposit %</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={1}
+                              value={cat.consultation_deposit_percentage}
+                              onChange={(e) => updateCategory(
+                                cat.id,
+                                "consultation_deposit_percentage",
+                                Number(e.target.value),
+                              )}
+                              className="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
+                            />
+                          </label>
+                        )}
                         <span className="text-xs text-slate-400">
                           {t("treatmentsCount", { count: treatments.filter((tr) => tr.category_id === cat.id).length })}
                         </span>
@@ -1905,6 +1930,16 @@ function BookingCategoriesTab() {
                         </button>
                       </div>
                     </div>
+                    {cat.skip_treatment && (
+                      <div className="mt-3 flex items-center gap-4">
+                        <ServicePicker
+                          services={services}
+                          value={cat.consultation_service_id ?? null}
+                          onChange={(id) => updateCategory(cat.id, "consultation_service_id", id)}
+                          label="Consultation service:"
+                        />
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -2215,8 +2250,22 @@ function BookingCategoriesTab() {
                               onChange={(e) => updateTreatment(treat.id, "prepayment_required", e.target.checked)}
                               className="w-3.5 h-3.5 text-amber-500 rounded"
                             />
-                            <span className="font-medium text-amber-700">50% deposit required</span>
+                            <span className="font-medium text-amber-700">Deposit required</span>
                           </label>
+                          {treat.prepayment_required && (
+                            <label className="flex items-center gap-2 text-xs text-slate-600">
+                              <span>Deposit %</span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={treat.deposit_percentage}
+                                onChange={(e) => updateTreatment(treat.id, "deposit_percentage", Number(e.target.value))}
+                                className="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
+                              />
+                            </label>
+                          )}
                           {treat.prepayment_required && (
                             <ServicePicker
                               services={services}

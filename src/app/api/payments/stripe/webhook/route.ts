@@ -255,6 +255,7 @@ export async function POST(req: NextRequest) {
         const m = session.metadata!;
         const depositAmount = (session.amount_total || 0) / 100;
         const fullPrice = parseFloat(m.full_price || "0");
+        const depositPercentage = parseInt(m.deposit_percentage || "100", 10) || 100;
         const paymentIntentId = session.payment_intent as string;
 
         const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
@@ -336,7 +337,9 @@ export async function POST(req: NextRequest) {
           // DB, so m.service_name is unreliable and can show the wrong treatment.
           // m.treatment_name is set directly from the booking form's selected treatment.
           const displayName = m.treatment_name || m.service_label || m.service_name || "Traitement";
-          const title = `Acompte 50% – ${displayName}`;
+          const title = depositPercentage === 100
+            ? `Acompte – ${displayName}`
+            : `Acompte ${depositPercentage}% – ${displayName}`;
 
           const { data: newInvoice } = await supabase
             .from("invoices")
@@ -393,7 +396,7 @@ export async function POST(req: NextRequest) {
             amount: depositAmount,
             currency: session.currency || "chf",
             status: "succeeded",
-            metadata: { type: "booking_deposit", treatment: m.treatment_name, session_id: session.id },
+            metadata: { type: "booking_deposit", treatment: m.treatment_name, deposit_percentage: depositPercentage, session_id: session.id },
           }, { onConflict: "stripe_payment_intent_id" });
 
           try {

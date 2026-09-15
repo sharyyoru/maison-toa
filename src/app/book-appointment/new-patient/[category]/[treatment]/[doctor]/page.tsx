@@ -217,9 +217,19 @@ interface Treatment {
   name_en?: string | null;
   duration_minutes: number;
   prepayment_required?: boolean;
+  deposit_percentage?: number;
   linked_service_id?: string | null;
   display_price?: number | null;
   display_duration_minutes?: number | null;
+}
+
+interface BookingCategory {
+  id: string;
+  slug: string;
+  name: string;
+  skip_treatment?: boolean;
+  consultation_service_id?: string | null;
+  consultation_deposit_percentage?: number;
 }
 
 const DEFAULT_TREATMENT: Treatment = {
@@ -243,6 +253,7 @@ function DoctorBookingContent() {
   const preselectedTime = searchParams.get("time");
   const [doctor, setDoctor] = useState<DoctorInfo | null>(null);
   const [doctorLoading, setDoctorLoading] = useState(true);
+  const [category, setCategory] = useState<BookingCategory | null>(null);
   const [hasAppliedPreselection, setHasAppliedPreselection] = useState(false);
 
   const locationId = "lausanne";
@@ -285,6 +296,15 @@ function DoctorBookingContent() {
   const selectedDateRequestSeq = useRef(0);
 
   const selectedService = treatment ? getLocalizedBookingName(treatment, language) : t("common.generalConsultation");
+
+  const requiresDeposit =
+    treatment?.prepayment_required ||
+    (treatmentId === "none" && !!category?.consultation_service_id);
+
+  const depositPercentage = treatment?.prepayment_required
+    ? (treatment.deposit_percentage ?? 100)
+    : (category?.consultation_deposit_percentage ?? 100);
+
   const dateLocale = language === "fr" ? "fr-FR" : "en-US";
   const bookingFormElement = pageConfig.sections
     .flatMap((section) => section.elements)
@@ -337,6 +357,20 @@ function DoctorBookingContent() {
     };
     fetchDoctor();
   }, [doctorSlug]);
+
+  useEffect(() => {
+    const fetchCategory = async () => {
+      try {
+        const res = await fetch("/api/settings/booking-categories");
+        const data = await res.json();
+        const found = (data.categories || []).find((c: BookingCategory) => c.slug === categorySlug);
+        if (found) setCategory(found);
+      } catch (err) {
+        console.error("Failed to fetch booking category:", err);
+      }
+    };
+    fetchCategory();
+  }, [categorySlug]);
 
   useEffect(() => {
     if (!doctor) return;
@@ -676,13 +710,19 @@ function DoctorBookingContent() {
       const [hour, minute] = selectedTime.split(":").map(Number);
       const appointmentDateSwiss = createSwissDateTime(selectedDate, hour, minute);
 
-      // If treatment requires prepayment, redirect to Stripe instead of booking directly
-      if (treatment?.prepayment_required) {
+      // If treatment requires prepayment, or this is a consultation-only category
+      // with a configured consultation service, redirect to Stripe instead of booking directly.
+      const requiresDeposit =
+        treatment?.prepayment_required ||
+        (treatmentId === "none" && category?.consultation_service_id);
+
+      if (requiresDeposit) {
         const res = await fetch("/api/payments/stripe/create-booking-deposit-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             treatmentId,
+            categorySlug,
             firstName,
             lastName,
             email,
@@ -1205,17 +1245,25 @@ function DoctorBookingContent() {
                   )}
                 </div>
 
-                {treatment?.prepayment_required && (
+                {requiresDeposit && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 space-y-2">
                     {language === "fr" ? (
                       <>
-                        <p className="font-medium">Un acompte de 50% est demandé lors de la prise de rendez-vous pour toute première consultation.</p>
+                        <p className="font-medium">
+                          {depositPercentage === 100
+                            ? "Le montant total de la consultation est demandé comme acompte lors de la prise de rendez-vous."
+                            : `Un acompte de ${depositPercentage}% est demandé lors de la prise de rendez-vous pour toute première consultation.`}
+                        </p>
                         <p>Le montant de la consultation est déductible de tout traitement réalisé dans les 3 mois suivants.</p>
                         <p className="font-medium">Votre rendez-vous sera automatiquement annulé si l&apos;acompte n&apos;est pas payé dans les 24 heures.</p>
                       </>
                     ) : (
                       <>
-                        <p className="font-medium">A 50% deposit is required when booking any first consultation appointment.</p>
+                        <p className="font-medium">
+                          {depositPercentage === 100
+                            ? "The full consultation price is required as a deposit when booking."
+                            : `A ${depositPercentage}% deposit is required when booking any first consultation appointment.`}
+                        </p>
                         <p>The consultation fee is deductible from any treatment carried out within the following 3 months.</p>
                         <p className="font-medium">Your appointment will be automatically cancelled if the deposit is not paid within 24 hours.</p>
                       </>
@@ -1245,7 +1293,7 @@ function DoctorBookingContent() {
                         {t("booking.booking")}
                       </>
                     ) : (
-                      treatment?.prepayment_required
+                      requiresDeposit
                         ? t("common.payDepositConfirm")
                         : t("booking.confirmBooking")
                     )}

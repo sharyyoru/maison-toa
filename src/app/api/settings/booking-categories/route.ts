@@ -94,6 +94,15 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Booking duration must be a whole number from 1 to 480." }, { status: 400 });
     }
 
+    const invalidConsultationDeposit = categories.some((category: { skip_treatment?: boolean; consultation_service_id?: string | null; consultation_deposit_percentage?: number | null }) => {
+      if (!category.skip_treatment || !category.consultation_service_id) return false;
+      const percentage = Number(category.consultation_deposit_percentage ?? 100);
+      return !Number.isInteger(percentage) || percentage < 0 || percentage > 100;
+    });
+    if (invalidConsultationDeposit) {
+      return NextResponse.json({ error: "Consultation deposit percentage must be a whole number from 0 to 100." }, { status: 400 });
+    }
+
     const endCategories = categories.filter((category: any) =>
       category.secondary_calendar_provider_id && (category.secondary_calendar_position || "start") === "end"
     );
@@ -166,6 +175,8 @@ export async function PUT(request: NextRequest) {
         secondary_calendar_provider_id?: string | null;
         secondary_calendar_duration_minutes?: number | null;
         secondary_calendar_position?: string | null;
+        consultation_service_id?: string | null;
+        consultation_deposit_percentage?: number | null;
       }) => ({
         id: c.id,
         name: c.name,
@@ -181,6 +192,10 @@ export async function PUT(request: NextRequest) {
           ? Number(c.secondary_calendar_duration_minutes)
           : null,
         secondary_calendar_position: c.secondary_calendar_position || "start",
+        consultation_service_id: c.skip_treatment ? c.consultation_service_id || null : null,
+        consultation_deposit_percentage: c.skip_treatment
+          ? Number(c.consultation_deposit_percentage ?? 100)
+          : 100,
         updated_at: new Date().toISOString(),
       }));
 

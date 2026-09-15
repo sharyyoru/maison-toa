@@ -150,6 +150,15 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Hidden buffer times must be 0-480 whole minutes." }, { status: 400 });
     }
 
+    const invalidDepositPercentage = treatments.some((t: { prepayment_required?: boolean; deposit_percentage?: number | string | null }) => {
+      if (!t.prepayment_required) return false;
+      const percentage = Number(t.deposit_percentage ?? 100);
+      return !Number.isInteger(percentage) || percentage < 0 || percentage > 100;
+    });
+    if (invalidDepositPercentage) {
+      return NextResponse.json({ error: "Deposit percentage must be a whole number from 0 to 100." }, { status: 400 });
+    }
+
     // Get existing treatment IDs
     const { data: existingTreatments } = await supabaseAdmin
       .from("booking_treatments")
@@ -197,6 +206,7 @@ export async function PUT(request: Request) {
           order_index: t.order_index,
           enabled: t.enabled,
           prepayment_required: t.prepayment_required ?? false,
+          deposit_percentage: Number(t.deposit_percentage ?? 100),
           linked_service_id: t.linked_service_id || null,
           service_category_id: t.service_category_id || null,
           display_price: t.display_price ?? null,
