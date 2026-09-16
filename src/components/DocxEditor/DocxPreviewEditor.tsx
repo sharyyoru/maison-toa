@@ -3,9 +3,13 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   DocxEditor,
+  useFonts,
+  useEditorEvent,
   type DocxEditorRef,
-} from "@eigenpal/docx-editor-react";
-import "@eigenpal/docx-editor-react/styles.css";
+} from "@docx-editor.dev/react";
+import { packagedFonts } from "@docx-editor.dev/fonts";
+import "@docx-editor.dev/react/styles.css";
+import "@docx-editor.dev/core/styles/editor.css";
 import { removeNextFieldArtifacts } from "@/lib/docxFieldCleanup";
 import { convertDocxBlobToPdf } from "@/lib/docxToPdf";
 
@@ -14,6 +18,11 @@ interface EditorPaneProps {
   documentTitle: string;
   onChange: () => void;
   onError: (error: Error) => void;
+}
+
+function EditorErrorListener({ onError }: Pick<EditorPaneProps, "onError">) {
+  useEditorEvent("error", onError);
+  return null;
 }
 
 // Isolated + memoized so that unrelated state changes elsewhere in
@@ -26,16 +35,21 @@ const EditorPane = React.memo(
     { documentBuffer, documentTitle, onChange, onError },
     ref
   ) {
+    const fonts = useFonts(packagedFonts());
     return (
       <DocxEditor
         ref={ref}
-        documentBuffer={documentBuffer}
-        documentName={documentTitle}
-        documentNameEditable={false}
-        mode="editing"
+        document={documentBuffer}
+        title={documentTitle}
+        mode="edit"
+        fonts={fonts}
+        rulers={true}
+        colorMode="light"
         onChange={onChange}
-        onError={onError}
-      />
+        onFontError={onError}
+      >
+        <EditorErrorListener onError={onError} />
+      </DocxEditor>
     );
   })
 );
