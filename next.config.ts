@@ -10,6 +10,18 @@ const nextConfig: NextConfig = {
     // Warnings don't fail build - can be fixed incrementally
     ignoreDuringBuilds: true,
   },
+  webpack(config, { isServer }) {
+    // Core's export entry also contains an optional Node file-font loader.
+    // Browser export only fetches packaged font URLs; it never calls that loader.
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        "fs/promises": false,
+      };
+    }
+    return config;
+  },
   serverExternalPackages: ["heic-convert", "libheif-js"],
   images: {
     remotePatterns: [

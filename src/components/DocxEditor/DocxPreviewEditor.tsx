@@ -11,6 +11,7 @@ import { packagedFonts } from "@docx-editor.dev/fonts";
 import "@docx-editor.dev/react/styles.css";
 import "@docx-editor.dev/core/styles/editor.css";
 import { removeNextFieldArtifacts } from "@/lib/docxFieldCleanup";
+import { normalizeDocxFonts } from "@/lib/docxFontNormalization";
 import { convertDocxBlobToPdf } from "@/lib/docxToPdf";
 
 interface EditorPaneProps {
@@ -179,6 +180,7 @@ export default function DocxPreviewEditor({
   onClose,
 }: DocxPreviewEditorProps) {
   const editorRef = useRef<DocxEditorRef>(null);
+  const editorChanged = useRef(false);
   const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer>();
   const [placeholders, setPlaceholders] = useState<Map<string, string>>(
     new Map()
@@ -201,11 +203,13 @@ export default function DocxPreviewEditor({
       setIsLoading(true);
       setError(null);
       setHasChanges(false);
+      editorChanged.current = false;
 
       try {
+        const preparedBlob = await normalizeDocxFonts(documentBlob);
         const [buffer, foundPlaceholders] = await Promise.all([
-          documentBlob.arrayBuffer(),
-          extractPlaceholders(documentBlob, patientData),
+          preparedBlob.arrayBuffer(),
+          extractPlaceholders(preparedBlob, patientData),
         ]);
 
         if (!cancelled) {
@@ -239,6 +243,7 @@ export default function DocxPreviewEditor({
   // reference on every keystroke in the filename field (some editors
   // re-bind/reinitialize internal state when callback props change).
   const handleEditorChange = useCallback(() => {
+    editorChanged.current = true;
     setHasChanges(true);
   }, []);
 
@@ -248,8 +253,14 @@ export default function DocxPreviewEditor({
   }, []);
 
   const buildEditedDocument = async () => {
-    // Selective saving preserves untouched Word XML, including table borders.
-    const buffer = await editorRef.current?.save();
+    // Avoid a round trip for downloads that only change the filename or fields.
+    if (!editorChanged.current && !Array.from(placeholders.values()).some(Boolean)) {
+      if (!documentBuffer) throw new Error("Document is not loaded");
+      return new Blob([documentBuffer], { type: DOCX_MIME_TYPE });
+    }
+    const buffer = editorChanged.current
+      ? await editorRef.current?.save()
+      : documentBuffer;
     if (!buffer) throw new Error("The editor did not return a document");
     return applyPlaceholders(buffer, placeholders);
   };
