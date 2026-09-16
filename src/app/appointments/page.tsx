@@ -1608,6 +1608,44 @@ export default function CalendarPage() {
             if (row.appointment_id) paidIds.add(row.appointment_id);
           }
         }
+
+        // Fallback for historical online bookings whose deposit invoice was
+        // created before the webhook linked appointment_id. Match by patient +
+        // appointment date (treatment_date) for online-paid invoices that have
+        // no appointment_id.
+        const appointmentsByPatient = new Map<string, { id: string; dateStr: string }[]>();
+        let minDateStr: string | null = null;
+        let maxDateStr: string | null = null;
+        for (const appt of appointments) {
+          if (!appt.patient_id) continue;
+          const dateStr = formatYmd(new Date(appt.start_time));
+          if (!minDateStr || dateStr < minDateStr) minDateStr = dateStr;
+          if (!maxDateStr || dateStr > maxDateStr) maxDateStr = dateStr;
+          if (!appointmentsByPatient.has(appt.patient_id)) appointmentsByPatient.set(appt.patient_id, []);
+          appointmentsByPatient.get(appt.patient_id)!.push({ id: appt.id, dateStr });
+        }
+        if (appointmentsByPatient.size > 0 && minDateStr && maxDateStr) {
+          const patientIds = Array.from(appointmentsByPatient.keys());
+          const { data: fallbackData, error: fallbackError } = await supabaseClient
+            .from("invoices")
+            .select("patient_id, treatment_date, deposit_status")
+            .is("appointment_id", null)
+            .eq("payment_method", "online")
+            .in("deposit_status", ["paid", "applied"])
+            .in("patient_id", patientIds)
+            .gte("treatment_date", minDateStr)
+            .lte("treatment_date", maxDateStr);
+          if (!cancelled && !fallbackError && fallbackData) {
+            for (const row of fallbackData as { patient_id: string | null; treatment_date: string | null; deposit_status: string | null }[]) {
+              if (!row.patient_id || !row.treatment_date) continue;
+              const candidates = appointmentsByPatient.get(row.patient_id);
+              if (!candidates) continue;
+              const match = candidates.find((c) => c.dateStr === row.treatment_date);
+              if (match) paidIds.add(match.id);
+            }
+          }
+        }
+
         if (!cancelled) setDepositPaidAppointmentIds(paidIds);
       } catch {
         if (cancelled) return;

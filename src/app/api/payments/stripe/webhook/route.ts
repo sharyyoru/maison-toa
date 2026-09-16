@@ -288,6 +288,9 @@ export async function POST(req: NextRequest) {
           throw new Error(`book-appointment failed: ${bookErr}`);
         }
 
+        const bookResult = await bookRes.json().catch(() => ({} as { appointmentId?: string }));
+        const bookedAppointmentId = bookResult.appointmentId || null;
+
         // 2. Look up the patient by email
         const { data: patients } = await supabase
           .from("patients")
@@ -366,6 +369,7 @@ export async function POST(req: NextRequest) {
               // Store the exact service name the patient selected on the booking
               // platform so it's visible in the CRM and on the invoice.
               notes: `Service réservé en ligne: ${displayName}`,
+              appointment_id: bookedAppointmentId,
               is_archived: false,
               is_demo: false,
             })
