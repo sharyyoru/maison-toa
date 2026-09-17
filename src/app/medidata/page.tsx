@@ -578,7 +578,7 @@ export default function MediDataDashboard() {
         .from("medidata_submissions")
         .select(`
           *,
-          patient:patients(id,first_name,last_name),
+          patient:patients(id,first_name,last_name,is_demo),
           invoice:invoices(id,pdf_path,pdf_generated_at,status,paid_amount,total_amount,medidata_processed_at,medidata_processed_by),
           history:medidata_submission_history(*)
         `, { count: "exact" })
@@ -635,6 +635,8 @@ export default function MediDataDashboard() {
       const { data, count } = await query;
 
       let subs = (data as Submission[]) || [];
+      // Hide demo/test patients (e.g. "Ralf Mutant") from the operational list.
+      subs = subs.filter((s: any) => !s.patient?.is_demo);
 
       // Fetch rejection responses and error notifications separately (no FK constraints)
       if (subs.length > 0) {
@@ -721,13 +723,14 @@ export default function MediDataDashboard() {
         .select(`
           id, invoice_id, invoice_number, patient_id, created_at,
           insurance_response_message,
-          patient:patients(id,first_name,last_name),
+          patient:patients(id,first_name,last_name,is_demo),
           invoice:invoices(id,status,paid_amount,total_amount,medidata_processed_at,medidata_processed_by)
         `)
         .eq("status", "rejected")
         .order("created_at", { ascending: false });
 
-      const subs = (rejectedSubs as any[]) || [];
+      // Demo/test patients (e.g. "Ralf Mutant") never need accountant action.
+      const subs = ((rejectedSubs as any[]) || []).filter((s) => !s.patient?.is_demo);
       if (subs.length === 0) {
         setActionItems([]);
         setActionItemsLoading(false);
