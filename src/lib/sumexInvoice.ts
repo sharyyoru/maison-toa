@@ -412,6 +412,15 @@ export type SumexInvoiceInput = {
   providerZsr?: string;
   qualDignity?: string; // Swiss FMH specialty code — deprecated, use qualDignities
   qualDignities?: string[]; // Array of Swiss FMH specialty codes for multiple qualifications
+  /**
+   * OAAT/OTMA "Fachbereich" (medical section) code per the official
+   * "Reglement Fachbereiche" list, e.g. M800.01 = Dermatologie.
+   * REQUIRED for TARDOC billing: per Annex H of the tariff convention the
+   * "service spécialisé" must be transmitted with every TARDOC position —
+   * insurers reject otherwise (CSS 5.113.002, Helsana eK6.2.1 "Merci de nous
+   * livrer le service spécialisé correct").
+   */
+  medicalSectionCode?: string;
 
   // Insurance (required for TP)
   insuranceGln?: string;
@@ -808,7 +817,7 @@ async function initServiceExInput(
       eBillingRole: BillingRoleType.Both,
       bstrProviderGLN: input.providerGln,
       bstrResponsibleGLN: input.providerGln,
-      bstrMedicalSectionCode: "",
+      bstrMedicalSectionCode: input.medicalSectionCode || "",
     }),
     // 2b. AddDignity — different TARDOC services require different dignities
     ...dignities.map((dignity) => bcall("IServiceExInput", "AddDignity", {

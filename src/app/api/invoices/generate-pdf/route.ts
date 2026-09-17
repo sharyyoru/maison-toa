@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
     if (invoiceData.provider_id) {
       const { data: providerRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid, qual_dignities")
+        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid, qual_dignities, medical_section_code")
         .eq("id", invoiceData.provider_id)
         .single();
       if (providerRow) billingEntityData = providerRow as ProviderData;
@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
     if (!billingEntityData && invoiceData.provider_gln) {
       const { data: providerRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid, qual_dignities")
+        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid, qual_dignities, medical_section_code")
         .eq("gln", invoiceData.provider_gln)
         .limit(1)
         .maybeSingle();
@@ -230,7 +230,7 @@ export async function POST(request: NextRequest) {
     if (invoiceData.doctor_user_id) {
       const { data: staffRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, qual_dignities")
+        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, qual_dignities, medical_section_code")
         .eq("id", invoiceData.doctor_user_id)
         .single();
       if (staffRow) staffData = staffRow as ProviderData;
@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
     if (!staffData && invoiceData.doctor_gln && invoiceData.doctor_gln !== invoiceData.provider_gln) {
       const { data: staffRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, qual_dignities")
+        .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, qual_dignities, medical_section_code")
         .eq("gln", invoiceData.doctor_gln)
         .limit(1)
         .maybeSingle();
@@ -391,7 +391,7 @@ export async function POST(request: NextRequest) {
         if (mandantGln) {
           const { data: mandantRow } = await supabaseAdmin
             .from("providers")
-            .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid, qual_dignities")
+            .select("id, name, specialty, email, phone, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, role, vatuid, qual_dignities, medical_section_code")
             .eq("gln", mandantGln)
             .limit(1)
             .maybeSingle();
@@ -598,6 +598,12 @@ export async function POST(request: NextRequest) {
             : (billingEntityData?.qual_dignities && billingEntityData.qual_dignities.length > 0)
               ? billingEntityData.qual_dignities
               : undefined,
+        // OAAT/OTMA "Fachbereich" (service spécialisé) — required with every
+        // TARDOC position; the printed PDF must match the insurance XML.
+        medicalSectionCode: (staffData as any)?.medical_section_code
+          || (mandantEntity as any)?.medical_section_code
+          || (billingEntityData as any)?.medical_section_code
+          || "",
         ...(invoiceType === "reminder" ? {
           reminderLevel: Number(reminderLevel) || 1,
           reminderText: `Rappel de paiement (${reminderLevel}${reminderLevel === 1 ? "er" : "ème"} rappel)`,

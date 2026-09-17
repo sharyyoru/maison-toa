@@ -277,7 +277,7 @@ export async function POST(request: NextRequest) {
     if (invoiceRecord?.provider_id) {
       const { data: provRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, phone, vatuid, qual_dignities")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, phone, vatuid, qual_dignities, medical_section_code")
         .eq("id", invoiceRecord.provider_id)
         .single();
       if (provRow) billingEntity = provRow;
@@ -286,7 +286,7 @@ export async function POST(request: NextRequest) {
     if (!billingEntity && invoiceRecord?.provider_gln) {
       const { data: provRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, phone, vatuid, qual_dignities")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, phone, vatuid, qual_dignities, medical_section_code")
         .eq("gln", invoiceRecord.provider_gln)
         .limit(1)
         .maybeSingle();
@@ -298,7 +298,7 @@ export async function POST(request: NextRequest) {
     if (invoiceRecord?.doctor_user_id && invoiceRecord.doctor_user_id !== invoiceRecord.provider_id) {
       const { data: staffRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, salutation, title, qual_dignities")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, salutation, title, qual_dignities, medical_section_code")
         .eq("id", invoiceRecord.doctor_user_id)
         .single();
       if (staffRow) staffEntity = staffRow;
@@ -307,7 +307,7 @@ export async function POST(request: NextRequest) {
     if (!staffEntity && invoiceRecord?.doctor_gln && invoiceRecord.doctor_gln !== invoiceRecord.provider_gln) {
       const { data: staffRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, salutation, title, qual_dignities")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, salutation, title, qual_dignities, medical_section_code")
         .eq("gln", invoiceRecord.doctor_gln)
         .limit(1)
         .maybeSingle();
@@ -325,7 +325,7 @@ export async function POST(request: NextRequest) {
     if (billingType === "TP" && senderGln) {
       const { data: mandantRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, vatuid, salutation, title, qual_dignities")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, vatuid, salutation, title, qual_dignities, medical_section_code")
         .eq("gln", senderGln)
         .limit(1)
         .maybeSingle();
@@ -717,6 +717,13 @@ export async function POST(request: NextRequest) {
         }
         return baseDignities.length > 0 ? baseDignities : undefined;
       })(),
+      // OAAT/OTMA "Fachbereich" (service spécialisé) — Annex H of the tariff
+      // convention requires it with every TARDOC position. Missing it causes
+      // CSS 5.113.002 / Helsana eK6.2.1 rejections.
+      medicalSectionCode: staffEntity?.medical_section_code
+        || mandantEntity?.medical_section_code
+        || billingEntity?.medical_section_code
+        || "",
     };
 
     // Guard: qual_dignities are required for TARDOC/TARMED insurance billing
@@ -726,6 +733,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         error: "Missing specialty codes",
         details: `No specialty codes (qual_dignities) found for ${doctorName}. Please add the doctor's specialty codes in the provider settings before sending to insurance.`,
+      }, { status: 422 });
+    }
+
+    // Guard: the Fachbereich (medical section) code is required for TARDOC
+    const hasTardocLines = sumexServices.some(s => s.tariffType === "007");
+    if (hasTardocLines && !sumexInput.medicalSectionCode) {
+      const doctorName = staffEntity?.name || billingEntity?.name || "the doctor";
+      console.error(`[SendInvoice] Missing medical_section_code for ${doctorName} (GLN: ${sumexInput.providerGln})`);
+      return NextResponse.json({
+        error: "Missing medical section code (service spécialisé)",
+        details: `TARDOC billing requires the OAAT Fachbereich code (e.g. M800.01 = Dermatologie) for ${doctorName}. Set medical_section_code in the provider settings before sending to insurance.`,
       }, { status: 422 });
     }
 

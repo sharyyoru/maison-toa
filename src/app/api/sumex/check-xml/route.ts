@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     if (invoice.provider_id) {
       const { data: provRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, phone, vatuid, qual_dignities")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, phone, vatuid, qual_dignities, medical_section_code")
         .eq("id", invoice.provider_id)
         .single();
       if (provRow) billingEntity = provRow;
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
     if (invoice.doctor_user_id && invoice.doctor_user_id !== invoice.provider_id) {
       const { data: staffRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, qual_dignities")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, salutation, title, qual_dignities, medical_section_code")
         .eq("id", invoice.doctor_user_id)
         .single();
       if (staffRow) staffEntity = staffRow;
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
     if (billingType === "TP" && senderGln) {
       const { data: mandantRow } = await supabaseAdmin
         .from("providers")
-        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, vatuid, salutation, title, qual_dignities")
+        .select("id, name, gln, zsr, street, street_no, zip_code, city, canton, iban, vatuid, salutation, title, qual_dignities, medical_section_code")
         .eq("gln", senderGln)
         .limit(1)
         .maybeSingle();
@@ -411,6 +411,12 @@ export async function POST(request: NextRequest) {
             // When skipValidation is true, use a placeholder so buildInvoiceRequest doesn't throw.
             // For normal validation runs, leave undefined so the guard in buildInvoiceRequest catches it.
             : (skipValidation ? ["0000"] : undefined),
+      // OAAT/OTMA "Fachbereich" (service spécialisé) — required with every
+      // TARDOC position (CSS 5.113.002 / Helsana eK6.2.1 otherwise).
+      medicalSectionCode: staffEntity?.medical_section_code
+        || mandantEntity?.medical_section_code
+        || billingEntity?.medical_section_code
+        || "",
     };
 
     // When skipValidation is true and qualDignities still ended up undefined, force placeholder.
