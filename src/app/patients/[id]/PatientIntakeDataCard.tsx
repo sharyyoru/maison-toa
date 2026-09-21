@@ -166,6 +166,42 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
   const [editTreatmentPrefs, setEditTreatmentPrefs] = useState<TreatmentPreferences | null>(null);
   const [editInsurance, setEditInsurance] = useState<PatientInsurance | null>(null);
   const [swissInsurers, setSwissInsurers] = useState<{ id: string; name: string; gln: string }[]>([]);
+  // BILL-016: automatic insurer lookup from the CADA card number
+  const [cadaLookupStatus, setCadaLookupStatus] = useState<"idle" | "loading" | "found" | "not_found" | "error">("idle");
+  const [cadaLookupMessage, setCadaLookupMessage] = useState<string | null>(null);
+
+  const lookupInsuranceFromCada = useCallback(async (cardNumber: string) => {
+    const cleaned = (cardNumber || "").replace(/[\s.-]/g, "");
+    if (!/^80756\d{15}$/.test(cleaned)) {
+      setCadaLookupStatus("idle");
+      setCadaLookupMessage(null);
+      return;
+    }
+    setCadaLookupStatus("loading");
+    setCadaLookupMessage(null);
+    try {
+      const res = await fetch(`/api/insurance/lookup-cada?cardNumber=${encodeURIComponent(cleaned)}`);
+      const data = await res.json();
+      if (!res.ok || !data.insurer) {
+        setCadaLookupStatus(res.status === 404 ? "not_found" : "error");
+        setCadaLookupMessage(data.error || "Lookup failed");
+        return;
+      }
+      const ins = data.insurer as { id: string | null; name: string; gln: string | null; law_types?: number[] | null };
+      setEditInsurance((prev) => prev ? {
+        ...prev,
+        insurer_id: ins.id ?? prev.insurer_id,
+        insurer_gln: ins.gln ?? prev.insurer_gln,
+        provider_name: ins.name || prev.provider_name,
+        law_type: prev.law_type || (Array.isArray(ins.law_types) && ins.law_types.includes(1) ? "KVG" : prev.law_type),
+      } : prev);
+      setCadaLookupStatus("found");
+      setCadaLookupMessage(ins.name);
+    } catch {
+      setCadaLookupStatus("error");
+      setCadaLookupMessage("Lookup failed");
+    }
+  }, []);
 
   const loadIntakeData = useCallback(async () => {
     setLoading(true);
@@ -799,7 +835,23 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-slate-500">No de carte (No CADA)</label>
-                  <input type="text" value={editInsurance.policy_number || ""} onChange={(e) => setEditInsurance({ ...editInsurance, policy_number: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" placeholder="80756..." />
+                  <input
+                    type="text"
+                    value={editInsurance.policy_number || ""}
+                    onChange={(e) => {
+                      setEditInsurance({ ...editInsurance, policy_number: e.target.value });
+                      const cleaned = e.target.value.replace(/[\s.-]/g, "");
+                      if (/^80756\d{15}$/.test(cleaned)) void lookupInsuranceFromCada(cleaned);
+                      else { setCadaLookupStatus("idle"); setCadaLookupMessage(null); }
+                    }}
+                    onBlur={(e) => void lookupInsuranceFromCada(e.target.value)}
+                    className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black"
+                    placeholder="80756..."
+                  />
+                  {cadaLookupStatus === "loading" && <p className="mt-1 text-[11px] text-slate-400">Recherche de l&apos;assureur...</p>}
+                  {cadaLookupStatus === "found" && <p className="mt-1 text-[11px] text-emerald-600">✓ Assureur trouvé: {cadaLookupMessage}</p>}
+                  {cadaLookupStatus === "not_found" && <p className="mt-1 text-[11px] text-amber-600">Aucun assureur trouvé pour ce numéro</p>}
+                  {cadaLookupStatus === "error" && <p className="mt-1 text-[11px] text-red-500">Échec de la recherche</p>}
                 </div>
                 <div>
                   <label className="text-xs text-slate-500">No d&apos;assuré</label>
