@@ -54,6 +54,19 @@ export async function convertRenderedDocxToPdf(
           backgroundColor: "#ffffff",
           logging: false,
           useCORS: true,
+          // Ask the browser to rasterize the already-laid-out DOM. The default
+          // canvas text painter recalculates baselines and can move text down
+          // far enough for table borders to cross headings.
+          foreignObjectRendering: true,
+          onclone: async (clonedDocument) => {
+            // The editor registers its metric-compatible fonts dynamically.
+            // html2canvas uses a cloned document, so copy those loaded faces or
+            // it silently falls back to platform fonts with different metrics.
+            for (const font of document.fonts) {
+              clonedDocument.fonts.add(font);
+            }
+            await clonedDocument.fonts.ready;
+          },
         });
         if (!pdf) {
           pdf = new jsPDF({ orientation, unit: "pt", format: [width, height] });
