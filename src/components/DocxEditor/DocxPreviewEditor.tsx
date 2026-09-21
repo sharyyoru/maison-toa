@@ -12,7 +12,7 @@ import "@docx-editor.dev/react/styles.css";
 import "@docx-editor.dev/core/styles/editor.css";
 import { removeNextFieldArtifacts } from "@/lib/docxFieldCleanup";
 import { normalizeDocxFonts } from "@/lib/docxFontNormalization";
-import { convertDocxBlobToPdf } from "@/lib/docxToPdf";
+import { convertRenderedDocxToPdf } from "@/lib/docxToPdf";
 
 interface EditorPaneProps {
   documentBuffer: ArrayBuffer;
@@ -180,6 +180,7 @@ export default function DocxPreviewEditor({
   onClose,
 }: DocxPreviewEditorProps) {
   const editorRef = useRef<DocxEditorRef>(null);
+  const editorViewportRef = useRef<HTMLDivElement>(null);
   const editorChanged = useRef(false);
   const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer>();
   const [placeholders, setPlaceholders] = useState<Map<string, string>>(
@@ -288,15 +289,34 @@ export default function DocxPreviewEditor({
     setExportingAs(format);
     setError(null);
     try {
-      const blob = await buildEditedDocument();
       const rawName = editedFileName.trim() || documentTitle || "document.docx";
       const downloadName = rawName.split(/[\\/]/).pop() || "document.docx";
 
       if (format === "pdf") {
-        await convertDocxBlobToPdf(blob, downloadName);
+        const viewport = editorViewportRef.current;
+        if (!viewport) throw new Error("The document editor is not ready");
+
+        const paragraphMarksVisible = Boolean(
+          editorRef.current?.snapshot().showParagraphMarks
+        );
+        if (paragraphMarksVisible) {
+          editorRef.current?.exec({ type: "toggleParagraphMarks" });
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          );
+        }
+
+        try {
+          await convertRenderedDocxToPdf(viewport, downloadName);
+        } finally {
+          if (paragraphMarksVisible) {
+            editorRef.current?.exec({ type: "toggleParagraphMarks" });
+          }
+        }
         return;
       }
 
+      const blob = await buildEditedDocument();
       const docxName = /\.docx$/i.test(downloadName)
         ? downloadName
         : `${downloadName}.docx`;
@@ -415,7 +435,7 @@ export default function DocxPreviewEditor({
           )}
 
           {documentBuffer && (
-            <div className="h-full overflow-auto">
+            <div ref={editorViewportRef} className="h-full overflow-auto">
               <EditorPane
                 ref={editorRef}
                 documentBuffer={documentBuffer}
