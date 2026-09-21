@@ -54,18 +54,27 @@ export async function convertRenderedDocxToPdf(
           backgroundColor: "#ffffff",
           logging: false,
           useCORS: true,
-          // Ask the browser to rasterize the already-laid-out DOM. The default
-          // canvas text painter recalculates baselines and can move text down
-          // far enough for table borders to cross headings.
-          foreignObjectRendering: true,
-          onclone: async (clonedDocument) => {
-            // The editor registers its metric-compatible fonts dynamically.
-            // html2canvas uses a cloned document, so copy those loaded faces or
-            // it silently falls back to platform fonts with different metrics.
-            for (const font of document.fonts) {
-              clonedDocument.fonts.add(font);
+          onclone: (clonedDocument) => {
+            // html2canvas paints text a few pixels below the browser's DOM
+            // baseline. In a paragraph immediately above a table this can put
+            // the glyphs on top of the table border. Correct only that boundary
+            // paragraph; all other editor geometry remains untouched.
+            const clonedPage = clonedDocument.querySelector<HTMLElement>(
+              `.docx-page[data-page-index="${page.dataset.pageIndex}"]`
+            );
+            for (const table of Array.from(
+              clonedPage?.querySelectorAll<HTMLElement>(
+                ":scope > .docx-page-content > .docx-table-fragment"
+              ) ?? []
+            )) {
+              const heading = table.previousElementSibling;
+              if (!heading?.classList.contains("docx-paragraph-fragment")) continue;
+              for (const run of heading.querySelectorAll<HTMLElement>(
+                ".layout-run-text"
+              )) {
+                run.style.transform = "translateY(-8px)";
+              }
             }
-            await clonedDocument.fonts.ready;
           },
         });
         if (!pdf) {
