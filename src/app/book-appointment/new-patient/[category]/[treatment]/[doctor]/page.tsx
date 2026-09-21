@@ -280,6 +280,7 @@ function DoctorBookingContent() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [dob, setDob] = useState("");
   const [emailExistsError, setEmailExistsError] = useState(false);
   const [emailChecking, setEmailChecking] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
@@ -688,7 +689,7 @@ function DoctorBookingContent() {
 
   async function handleSubmit() {
     if (!doctor) return;
-    if (!firstName || !lastName || !email || !selectedDate || !selectedTime || !locationId) {
+    if (!firstName || !lastName || !email || !dob || !selectedDate || !selectedTime || !locationId) {
       setError(t("error.required"));
       return;
     }
@@ -727,6 +728,7 @@ function DoctorBookingContent() {
             lastName,
             email,
             phone,
+            dob,
             appointmentDate: appointmentDateSwiss.toISOString(),
             service: selectedService,
             treatmentName: selectedService,
@@ -752,6 +754,7 @@ function DoctorBookingContent() {
           lastName,
           email,
           phone,
+          dob,
           appointmentDate: appointmentDateSwiss.toISOString(),
           service: selectedService,
           doctorSlug: doctorSlug,
@@ -964,7 +967,7 @@ function DoctorBookingContent() {
                 <button
                   key={s}
                   onClick={() => {
-                    if (s === "info" || (s === "datetime" && firstName && lastName && email) || 
+                    if (s === "info" || (s === "datetime" && firstName && lastName && email && dob) || 
                         (s === "confirm" && selectedDate && selectedTime)) {
                       setStep(s);
                     }
@@ -1060,15 +1063,31 @@ function DoctorBookingContent() {
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 outline-none transition-all"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">{t("booking.dateOfBirth")} *</label>
+                  <input
+                    type="date"
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                    max={formatSwissYmd(getSwissToday())}
+                    min="1900-01-01"
+                    required
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 outline-none transition-all"
+                  />
+                </div>
                 <div className="pt-4">
                   <button
                     onClick={() => {
-                      if (!firstName || !lastName || !email) {
+                      if (!firstName || !lastName || !email || !dob) {
                         setError(t("error.required"));
                         return;
                       }
                       if (!isValidEmail(email)) {
                         setError(t("error.invalidEmail"));
+                        return;
+                      }
+                      if (dob > formatSwissYmd(getSwissToday()) || dob < "1900-01-01") {
+                        setError(t("error.invalidDob"));
                         return;
                       }
                       if (phone.trim() && !isValidPhone(phone)) {

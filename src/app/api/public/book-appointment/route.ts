@@ -23,6 +23,7 @@ type BookingPayload = {
   lastName: string;
   email: string;
   phone?: string;
+  dob?: string;
   appointmentDate: string;
   service: string;
   doctorSlug: string;
@@ -182,6 +183,7 @@ export async function POST(request: Request) {
       lastName,
       email,
       phone,
+      dob,
       appointmentDate,
       service,
       doctorSlug,
@@ -605,6 +607,7 @@ export async function POST(request: Request) {
           last_name: stripHtml(lastName) ?? lastName,
           email: email.toLowerCase(),
           phone: phone || null,
+          dob: /^\d{4}-\d{2}-\d{2}$/.test(dob || "") ? dob : null,
           language_preference: language,
           source: "online_booking",
         })

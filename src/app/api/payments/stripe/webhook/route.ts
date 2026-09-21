@@ -269,6 +269,7 @@ export async function POST(req: NextRequest) {
             lastName: m.last_name,
             email: m.email,
             phone: m.phone || undefined,
+            dob: m.dob || undefined,
             appointmentDate: m.appointment_date,
             service: m.service_label,
             doctorSlug: m.doctor_slug,
