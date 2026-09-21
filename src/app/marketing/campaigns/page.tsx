@@ -50,7 +50,20 @@ export default function MarketingCampaignsPage() {
     createdBefore: null,
     dobMonth: null,
     search: "",
+    gender: null,
+    ageMin: null,
+    ageMax: null,
+    practitionerIds: [],
+    serviceSearch: "",
+    appointmentAfter: null,
+    appointmentBefore: null,
+    noAppointmentSinceMonths: null,
+    patientType: "any",
   });
+  // EMAIL-013: practitioners for segmentation
+  const [practitioners, setPractitioners] = useState<{ id: string; name: string }[]>([]);
+  // EMAIL-012: scheduling
+  const [scheduledAt, setScheduledAt] = useState<string>("");
 
   // Campaign state
   const [campaignName, setCampaignName] = useState("");
@@ -87,7 +100,7 @@ export default function MarketingCampaignsPage() {
           setTestEmail(user.email ?? "");
         }
 
-        const [templatesRes, stagesRes, patientsRes, listsRes] = await Promise.all([
+        const [templatesRes, stagesRes, patientsRes, listsRes, providersRes] = await Promise.all([
           supabaseClient
             .from("email_templates")
             .select("id, name, subject_template, html_content, body_template")
@@ -102,6 +115,11 @@ export default function MarketingCampaignsPage() {
             .select("contact_owner_name, source")
             .limit(2000),
           fetch("/api/marketing/lists").then((r) => r.json()).catch(() => ({ lists: [] })),
+          supabaseClient
+            .from("providers")
+            .select("id, name")
+            .in("role", ["doctor", "nurse", "technician"])
+            .order("name"),
         ]);
 
         if (!isMounted) return;
@@ -109,6 +127,7 @@ export default function MarketingCampaignsPage() {
         setTemplates((templatesRes.data as EmailTemplate[]) ?? []);
         setStages((stagesRes.data as DealStage[]) ?? []);
         setSavedLists((listsRes?.lists as SavedList[]) ?? []);
+        setPractitioners((providersRes.data as { id: string; name: string }[]) ?? []);
 
         const ownerSet = new Set<string>();
         const sourceSet = new Set<string>();
@@ -202,8 +221,11 @@ export default function MarketingCampaignsPage() {
       return;
     }
     const name = campaignName.trim() || `Campaign ${new Date().toISOString().slice(0, 10)}`;
+    const scheduledIso = scheduledAt ? new Date(scheduledAt).toISOString() : null;
     const confirmed = window.confirm(
-      `Send this email to ${previewCount} recipient${previewCount === 1 ? "" : "s"}?\n\nCampaign: ${name}\n\nThis cannot be undone.`,
+      scheduledIso
+        ? `Schedule this email to ${previewCount} recipient${previewCount === 1 ? "" : "s"} for ${new Date(scheduledIso).toLocaleString("fr-CH")}?\n\nCampaign: ${name}`
+        : `Send this email to ${previewCount} recipient${previewCount === 1 ? "" : "s"}?\n\nCampaign: ${name}\n\nThis cannot be undone.`,
     );
     if (!confirmed) return;
 
@@ -220,13 +242,16 @@ export default function MarketingCampaignsPage() {
           subject: subjectOverride || undefined,
           filter,
           userId,
+          scheduledAt: scheduledIso,
         }),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || "Send failed");
       const failMsg = data.firstError ? ` — first error: ${data.firstError}` : "";
       setSendResult(
-        `Campaign ${data.status} — ${data.sent} delivered${data.failed ? `, ${data.failed} failed` : ""}.${failMsg}`,
+        scheduledIso
+          ? `Campaign scheduled — ${data.sent} email${data.sent === 1 ? "" : "s"} queued for ${new Date(scheduledIso).toLocaleString("fr-CH")}${data.failed ? `, ${data.failed} failed` : ""}.${failMsg}`
+          : `Campaign ${data.status} — ${data.sent} delivered${data.failed ? `, ${data.failed} failed` : ""}.${failMsg}`,
       );
     } catch (err) {
       setSendError(err instanceof Error ? err.message : "Send failed");
@@ -286,17 +311,31 @@ export default function MarketingCampaignsPage() {
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Marketing Campaigns</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Newsletter &amp; Campaigns</h1>
           <p className="text-sm text-slate-500">
-            Build an audience by filter, preview recipients, pick a template, and send.
+            Build an audience by filter, preview recipients, pick a template, send a test, then send now or schedule.
           </p>
         </div>
-        <Link
-          href="/marketing"
-          className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-        >
-          View history
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/image-library"
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Image library
+          </Link>
+          <Link
+            href="/workflows/templates"
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Templates
+          </Link>
+          <Link
+            href="/marketing"
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            View history
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -486,6 +525,126 @@ export default function MarketingCampaignsPage() {
               </div>
             )}
 
+            {/* EMAIL-013: recipient segmentation */}
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <h3 className="text-xs font-semibold text-slate-700 mb-2">Segmentation</h3>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-600">Gender</span>
+                  <select
+                    value={filter.gender ?? ""}
+                    onChange={(e) => setFilter((f) => ({ ...f, gender: e.target.value || null }))}
+                    className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  >
+                    <option value="">Any</option>
+                    <option value="female">Female</option>
+                    <option value="male">Male</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-600">Age range</span>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={0}
+                      max={120}
+                      placeholder="Min"
+                      value={filter.ageMin ?? ""}
+                      onChange={(e) => setFilter((f) => ({ ...f, ageMin: e.target.value ? parseInt(e.target.value, 10) : null }))}
+                      className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                    />
+                    <span className="text-xs text-slate-400">–</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={120}
+                      placeholder="Max"
+                      value={filter.ageMax ?? ""}
+                      onChange={(e) => setFilter((f) => ({ ...f, ageMax: e.target.value ? parseInt(e.target.value, 10) : null }))}
+                      className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-600">Patient type</span>
+                  <select
+                    value={filter.patientType ?? "any"}
+                    onChange={(e) => setFilter((f) => ({ ...f, patientType: e.target.value as MarketingFilter["patientType"] }))}
+                    className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                  >
+                    <option value="any">Any</option>
+                    <option value="new">New (created in last 90 days)</option>
+                    <option value="existing">Existing (older than 90 days)</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-600">Service / treatment received</span>
+                  <input
+                    type="text"
+                    value={filter.serviceSearch ?? ""}
+                    onChange={(e) => setFilter((f) => ({ ...f, serviceSearch: e.target.value }))}
+                    placeholder="e.g. Botox, HIFU"
+                    className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-600">Appointment between</span>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={filter.appointmentAfter ?? ""}
+                      onChange={(e) => setFilter((f) => ({ ...f, appointmentAfter: e.target.value || null }))}
+                      className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                    />
+                    <input
+                      type="date"
+                      value={filter.appointmentBefore ?? ""}
+                      onChange={(e) => setFilter((f) => ({ ...f, appointmentBefore: e.target.value || null }))}
+                      className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-600">No appointment since (months)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    placeholder="e.g. 6"
+                    value={filter.noAppointmentSinceMonths ?? ""}
+                    onChange={(e) => setFilter((f) => ({ ...f, noAppointmentSinceMonths: e.target.value ? parseInt(e.target.value, 10) : null }))}
+                    className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                  />
+                </label>
+              </div>
+              {practitioners.length > 0 && (
+                <div className="mt-3">
+                  <span className="text-xs font-medium text-slate-600">Practitioner (patients seen by)</span>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {practitioners.map((p) => {
+                      const selected = (filter.practitionerIds ?? []).includes(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() =>
+                            setFilter((f) => ({ ...f, practitionerIds: toggleInArray(f.practitionerIds, p.id) }))
+                          }
+                          className={`rounded-full border px-3 py-1 text-xs ${
+                            selected
+                              ? "border-amber-500 bg-amber-50 text-amber-700"
+                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          {p.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Save list */}
             <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3">
               <input
@@ -599,6 +758,35 @@ export default function MarketingCampaignsPage() {
               </button>
             </div>
 
+            {/* EMAIL-012: schedule */}
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600">
+                  Schedule delivery{" "}
+                  <span className="text-slate-400">(optional — leave empty to send now; max 72h in advance)</span>
+                </span>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    value={scheduledAt}
+                    onChange={(e) => setScheduledAt(e.target.value)}
+                    min={new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16)}
+                    max={new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString().slice(0, 16)}
+                    className="rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                  />
+                  {scheduledAt && (
+                    <button
+                      type="button"
+                      onClick={() => setScheduledAt("")}
+                      className="text-[11px] text-slate-400 hover:text-slate-600"
+                    >
+                      ✕ Clear
+                    </button>
+                  )}
+                </div>
+              </label>
+            </div>
+
             {/* Send */}
             <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
               <span className="text-xs text-slate-500">
@@ -610,7 +798,11 @@ export default function MarketingCampaignsPage() {
                 disabled={sending || !templateId || previewCount === 0}
                 className="rounded-full border border-sky-600 bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {sending ? "Sending campaign…" : `Send to ${previewCount}`}
+                {sending
+                  ? scheduledAt ? "Scheduling campaign…" : "Sending campaign…"
+                  : scheduledAt
+                    ? `Schedule for ${previewCount}`
+                    : `Send to ${previewCount}`}
               </button>
             </div>
 

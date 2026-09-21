@@ -20,6 +20,8 @@ type SendRequestBody = {
   listId?: string | null;
   testEmail?: string | null;     // when set, only send a single test to this address
   userId?: string | null;
+  /** EMAIL-012: ISO datetime — schedule delivery (Resend, max 72h ahead). */
+  scheduledAt?: string | null;
 };
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maisontoa.vercel.app";
@@ -34,6 +36,7 @@ type ResendSendArgs = {
   subject: string;
   html: string;
   emailIdForTracking?: string | null;
+  scheduledAt?: Date | null;
 };
 
 async function sendViaResend(args: ResendSendArgs): Promise<{ ok: boolean; error?: string; messageId?: string }> {
@@ -57,6 +60,7 @@ async function sendViaResend(args: ResendSendArgs): Promise<{ ok: boolean; error
         ...(args.emailIdForTracking ? [{ name: "email_id", value: args.emailIdForTracking }] : []),
         { name: "source", value: "marketing_campaign" },
       ],
+      ...(args.scheduledAt ? { scheduledAt: args.scheduledAt } : {}),
     });
 
     if (!result.success) {
@@ -118,6 +122,26 @@ export async function POST(request: Request) {
     }
 
     const subjectToUse = (body.subject && body.subject.trim()) || template.subject;
+
+    // EMAIL-012: optional scheduled delivery (Resend supports up to 72h ahead)
+    let scheduledAtDate: Date | null = null;
+    if (body.scheduledAt) {
+      const parsed = new Date(body.scheduledAt);
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: "Invalid scheduledAt datetime" }, { status: 400 });
+      }
+      const now = Date.now();
+      if (parsed.getTime() <= now) {
+        return NextResponse.json({ error: "scheduledAt must be in the future" }, { status: 400 });
+      }
+      if (parsed.getTime() > now + 72 * 60 * 60 * 1000) {
+        return NextResponse.json(
+          { error: "Scheduling is limited to 72 hours in advance" },
+          { status: 400 },
+        );
+      }
+      scheduledAtDate = parsed;
+    }
 
     // ----- TEST MODE: send a single rendered preview to testEmail -----
     if (body.testEmail && body.testEmail.trim()) {
@@ -195,6 +219,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // EMAIL-012: record the scheduled time (best-effort until migration applied)
+    if (scheduledAtDate) {
+      await supabaseAdmin
+        .from("marketing_campaigns")
+        .update({ scheduled_at: scheduledAtDate.toISOString() })
+        .eq("id", campaign.id);
+    }
+
     // Insert all recipient rows up front (pending)
     const recipientRows = recipients.map((r) => ({
       campaign_id: campaign.id,
@@ -256,6 +288,7 @@ export async function POST(request: Request) {
             subject: substitutePatientVariables(subjectToUse, patient),
             html: substitutePatientVariables(template.html, patient),
             emailIdForTracking: emailId,
+            scheduledAt: scheduledAtDate,
           });
 
           const now = new Date().toISOString();
