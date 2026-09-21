@@ -1327,6 +1327,34 @@ export default function CalendarPage() {
     return totalMinutes || 15; // Default to 15 min if no services have duration
   }
   const [editModalOpen, setEditModalOpen] = useState(false);
+  // CAL-020: allow the edit window to be dragged around the screen.
+  const [editModalOffset, setEditModalOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const editModalDragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
+
+  const handleEditModalDragStart = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    editModalDragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      baseX: editModalOffset.x,
+      baseY: editModalOffset.y,
+    };
+    const handleMove = (moveEvent: MouseEvent) => {
+      const drag = editModalDragRef.current;
+      if (!drag) return;
+      setEditModalOffset({
+        x: drag.baseX + (moveEvent.clientX - drag.startX),
+        y: drag.baseY + (moveEvent.clientY - drag.startY),
+      });
+    };
+    const handleUp = () => {
+      editModalDragRef.current = null;
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+  }, [editModalOffset]);
   const [editingAppointment, setEditingAppointment] =
     useState<CalendarAppointment | null>(null);
   const [editWorkflowStatus, setEditWorkflowStatus] =
@@ -3808,6 +3836,7 @@ export default function CalendarPage() {
   }
 
   function openEditModalForAppointment(appt: CalendarAppointment) {
+    setEditModalOffset({ x: 0, y: 0 });
     setEditingAppointment(appt);
     editOriginalPatientIdRef.current = appt.patient_id ?? appt.patient?.id ?? null;
     setEditError(null);
@@ -6630,8 +6659,15 @@ export default function CalendarPage() {
               }
             }}
           >
-            <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.75)]" style={{ touchAction: 'auto' } as React.CSSProperties}>
-              <div className="flex items-start justify-between gap-2">
+            <div
+              className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-4 text-xs shadow-[0_24px_60px_rgba(15,23,42,0.75)]"
+              style={{ touchAction: 'auto', transform: `translate(${editModalOffset.x}px, ${editModalOffset.y}px)` } as React.CSSProperties}
+            >
+              <div
+                className="flex cursor-move select-none items-start justify-between gap-2"
+                onMouseDown={handleEditModalDragStart}
+                title="Drag to move this window"
+              >
                 <h2 className="text-sm font-semibold text-slate-900">{t("modal.editTitle")}</h2>
                 <button
                   type="button"
