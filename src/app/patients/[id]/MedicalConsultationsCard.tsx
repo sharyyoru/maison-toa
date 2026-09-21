@@ -2261,6 +2261,120 @@ export default function MedicalConsultationsCard({
     newConsultationOpenRef.current = newConsultationOpen;
   }, [newConsultationOpen]);
 
+  // BUG-025: track the current record type so Yjs sync can leave non-notes
+  // forms (invoice/medication) alone while they are being edited locally.
+  const consultationRecordTypeRef = useRef<ConsultationRecordType>(consultationRecordType);
+  useEffect(() => {
+    consultationRecordTypeRef.current = consultationRecordType;
+  }, [consultationRecordType]);
+
+  // BUG-025: real-time local autosave for in-progress invoices. The draft is
+  // written (debounced) to localStorage while the invoice form is open, so a
+  // crash/refresh/interruption never loses the entered lines. It is restored
+  // the next time the invoice form opens and cleared on normal close
+  // (save or cancel).
+  const invoiceDraftKey = `invoice-draft:${patientId}`;
+  const invoiceFormOpen = newConsultationOpen && consultationRecordType === "invoice";
+  const invoiceDraftRestoredRef = useRef(false);
+  const prevInvoiceFormOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (!invoiceFormOpen) {
+      invoiceDraftRestoredRef.current = false;
+      return;
+    }
+    if (invoiceDraftRestoredRef.current) return;
+    invoiceDraftRestoredRef.current = true;
+    try {
+      const raw = window.localStorage.getItem(invoiceDraftKey);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if ((draft.editingInvoiceId ?? null) !== (editingInvoiceId ?? null)) return;
+      if (invoiceServiceLines.length > 0) return;
+      if (!Array.isArray(draft.invoiceServiceLines) || draft.invoiceServiceLines.length === 0) return;
+      setInvoiceServiceLines(draft.invoiceServiceLines);
+      if (draft.invoiceMode) setInvoiceMode(draft.invoiceMode);
+      if (draft.invoiceCanton) setInvoiceCanton(draft.invoiceCanton);
+      if (draft.invoiceProviderId) setInvoiceProviderId(draft.invoiceProviderId);
+      if (draft.invoicePaymentMethod) setInvoicePaymentMethod(draft.invoicePaymentMethod);
+      if (draft.invoicePaymentTerm) setInvoicePaymentTerm(draft.invoicePaymentTerm);
+      if (draft.invoiceExtraOption !== undefined) setInvoiceExtraOption(draft.invoiceExtraOption);
+      if (Array.isArray(draft.invoiceInstallments)) setInvoiceInstallments(draft.invoiceInstallments);
+      if (draft.invoiceLawType) setInvoiceLawType(draft.invoiceLawType);
+      if (draft.invoiceAccidentDate) setInvoiceAccidentDate(draft.invoiceAccidentDate);
+      if (draft.invoiceNotes) setInvoiceNotes(draft.invoiceNotes);
+      if (Array.isArray(draft.invoiceDiagnosisCodes)) setInvoiceDiagnosisCodes(draft.invoiceDiagnosisCodes);
+      if (draft.consultationDoctorId) setConsultationDoctorId(draft.consultationDoctorId);
+      if (draft.invoiceFromConsultationId) setInvoiceFromConsultationId(draft.invoiceFromConsultationId);
+      console.info("[Consultations] Restored in-progress invoice draft from local autosave");
+    } catch (err) {
+      console.error("[Consultations] Failed to restore invoice draft:", err);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceFormOpen]);
+
+  useEffect(() => {
+    if (!invoiceFormOpen) return;
+    const timer = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(
+          invoiceDraftKey,
+          JSON.stringify({
+            editingInvoiceId: editingInvoiceId ?? null,
+            invoiceServiceLines,
+            invoiceMode,
+            invoiceCanton,
+            invoiceProviderId,
+            invoicePaymentMethod,
+            invoicePaymentTerm,
+            invoiceExtraOption,
+            invoiceInstallments,
+            invoiceLawType,
+            invoiceAccidentDate,
+            invoiceNotes,
+            invoiceDiagnosisCodes,
+            consultationDoctorId,
+            invoiceFromConsultationId,
+            savedAt: Date.now(),
+          }),
+        );
+      } catch {
+        // localStorage full/unavailable — autosave is best-effort
+      }
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [
+    invoiceFormOpen,
+    invoiceDraftKey,
+    editingInvoiceId,
+    invoiceServiceLines,
+    invoiceMode,
+    invoiceCanton,
+    invoiceProviderId,
+    invoicePaymentMethod,
+    invoicePaymentTerm,
+    invoiceExtraOption,
+    invoiceInstallments,
+    invoiceLawType,
+    invoiceAccidentDate,
+    invoiceNotes,
+    invoiceDiagnosisCodes,
+    consultationDoctorId,
+    invoiceFromConsultationId,
+  ]);
+
+  useEffect(() => {
+    if (prevInvoiceFormOpenRef.current && !invoiceFormOpen) {
+      // Normal close (save or cancel) — discard the local draft.
+      try {
+        window.localStorage.removeItem(invoiceDraftKey);
+      } catch {
+        // ignore
+      }
+    }
+    prevInvoiceFormOpenRef.current = invoiceFormOpen;
+  }, [invoiceFormOpen, invoiceDraftKey]);
+
   useEffect(() => {
     newConsultationDraftIdRef.current = newConsultationDraftId;
   }, [newConsultationDraftId]);
@@ -3027,6 +3141,12 @@ export default function MedicalConsultationsCard({
       forcedConsultationsRevision !== lastForcedConsultationsRevisionRef.current
     ) {
       lastForcedConsultationsRevisionRef.current = forcedConsultationsRevision;
+      // BUG-025: never force a reload underneath an open creation form (e.g.
+      // while an invoice is being built) — defer it like ordinary reloads.
+      if (realtimeReloadBlocked) {
+        pendingRealtimeReloadRef.current = true;
+        return;
+      }
       pendingRealtimeReloadRef.current = false;
       silentConsultationsReloadRef.current = true;
       setRealtimeReloadToken((value) => value + 1);
@@ -3182,6 +3302,18 @@ export default function MedicalConsultationsCard({
 
       if (!shouldOpen && justOpenedLocally) {
         console.warn("[Consultations] Ignoring stale Yjs close immediately after local + button click");
+        return;
+      }
+
+      // BUG-025: while a non-notes creation form (invoice, medication, ...) is
+      // open locally, remote Yjs field syncs must not close it or switch its
+      // record type — another user opening the same patient record was wiping
+      // in-progress invoices. Only collaborative "notes" stay Yjs-driven.
+      if (
+        newConsultationOpenRef.current &&
+        consultationRecordTypeRef.current !== "notes" &&
+        (!shouldOpen || recordType !== consultationRecordTypeRef.current)
+      ) {
         return;
       }
 
