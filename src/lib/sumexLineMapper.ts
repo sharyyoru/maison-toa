@@ -114,7 +114,24 @@ export function mapLineItemToSumexService(
   item: SumexLineItemRow,
   ctx: SumexLineMapperContext,
 ): InvoiceServiceInput {
-  const rawTariffType = deriveTariffType(item);
+  let rawTariffType = deriveTariffType(item);
+  let normalizedArticleCode: string | null = null;
+  // Consumables ("Articles personnels"): product lines have no tariff info and
+  // were historically emitted as tariff 590 with raw internal codes ("15.0",
+  // "003"), which insurers reject (SWICA/Sanitas: "chiffre tarifaire
+  // invalide"). Axenita billed the SAME articles under tariff 406 with
+  // 4-digit article codes (e.g. 0065 "Ampoules Triamcort") — accepted and
+  // paid. Mirror that: numeric-coded 590 lines become 406 with a 0-padded
+  // article code.
+  if (rawTariffType === "590") {
+    // matches "65", "003", "15.0" (integer with optional .0 suffix)
+    const m = /^(\d+)(?:\.0+)?$/.exec((item.code || "").trim());
+    const numeric = m ? parseInt(m[1], 10) : NaN;
+    if (Number.isFinite(numeric) && numeric > 0) {
+      rawTariffType = "406";
+      normalizedArticleCode = String(numeric).padStart(4, "0");
+    }
+  }
   // PDF-only leniency: Sumex silently returns 204 for unrecognised tariff
   // types/codes, so patient PDFs remap them to the free-text tariff "590".
   const KNOWN_TARIFFS = new Set(["001", "005", "007", "406", "590"]);
@@ -204,9 +221,10 @@ export function mapLineItemToSumexService(
 
   // For tariff "590" the code must be "0" — any other code causes Sumex to
   // return 204 silently (patient-PDF leniency path only).
-  const resolvedCode = ctx.lenientTariffRemap && tariffType === "590"
-    ? "0"
-    : (item.code || item.tardoc_code || "");
+  const resolvedCode = normalizedArticleCode
+    ?? (ctx.lenientTariffRemap && tariffType === "590"
+      ? "0"
+      : (item.code || item.tardoc_code || ""));
   // Tax-point tariffs and free-text lines are VAT 0; other tariffs may carry
   // the stored per-line VAT on patient PDFs.
   const usesTaxPoints = isTardoc || isTarmed || isAcf || isTma;
@@ -238,8 +256,9 @@ export function mapLineItemToSumexService(
     // ACF 005 lines are already grouped/validated by the standalone
     // acfValidator; the invoice manager's internal grouper would require a
     // TMA session setup we don't use. TMA gesture lines are charge-free
-    // reference lines and are likewise not re-validated.
-    ignoreValidate: (isAcf || isTma || ctx.skipValidation) ? YesNo.Yes : YesNo.No,
+    // reference lines and are likewise not re-validated. Tariff 406
+    // (personal articles) has no Sumex validator catalog either.
+    ignoreValidate: (isAcf || isTma || tariffType === "406" || ctx.skipValidation) ? YesNo.Yes : YesNo.No,
   };
 }
 

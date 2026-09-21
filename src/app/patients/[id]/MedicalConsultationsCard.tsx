@@ -9870,7 +9870,13 @@ export default function MedicalConsultationsCard({
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            setInvoiceServiceLines((prev) => [
+                                            setInvoiceServiceLines((prev) => {
+                                              // BILL-017: same TARDOC code added again -> bump quantity instead of a new line
+                                              const existingIdx = prev.findIndex((l) => l.serviceId === `tardoc-${svc.code}`);
+                                              if (existingIdx >= 0) {
+                                                return prev.map((l, i) => (i === existingIdx ? { ...l, quantity: (l.quantity || 1) + 1 } : l));
+                                              }
+                                              return [
                                               ...prev,
                                               {
                                                 serviceId: `tardoc-${svc.code}`,
@@ -9884,7 +9890,8 @@ export default function MedicalConsultationsCard({
                                                 tardocRecordId: svc.recordId ?? null,
                                                 tardocSection: svc.section ?? null,
                                               },
-                                            ]);
+                                            ];
+                                            });
                                           }}
                                           className="flex h-4 w-4 items-center justify-center rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
                                           title="Add to invoice"
@@ -9917,21 +9924,28 @@ export default function MedicalConsultationsCard({
                                   onAddService={(svc: any) => {
                                     const tpv = CANTON_TAX_POINT_VALUES[invoiceCanton] ?? 0.96;
                                     const price = svc.priceCHF ?? Math.round(((svc.tpMT || 0) + (svc.tpTT || 0)) * tpv * 100) / 100;
-                                    setInvoiceServiceLines((prev) => [
-                                      ...prev,
-                                      {
-                                        serviceId: `tardoc-${svc.code}`,
-                                        quantity: 1,
-                                        unitPrice: price,
-                                        groupId: null,
-                                        discountPercent: null,
-                                        customName: `${svc.code} - ${(svc.name || "").substring(0, 80)}`,
-                                        tardocTpMT: svc.tpMT ?? 0,
-                                        tardocTpTT: svc.tpTT ?? 0,
-                                        tardocRecordId: svc.recordId ?? null,
-                                        tardocSection: svc.section ?? null,
-                                      },
-                                    ]);
+                                    setInvoiceServiceLines((prev) => {
+                                      // BILL-017: same TARDOC code added again -> bump quantity instead of a new line
+                                      const existingIdx = prev.findIndex((l) => l.serviceId === `tardoc-${svc.code}`);
+                                      if (existingIdx >= 0) {
+                                        return prev.map((l, i) => (i === existingIdx ? { ...l, quantity: (l.quantity || 1) + 1 } : l));
+                                      }
+                                      return [
+                                        ...prev,
+                                        {
+                                          serviceId: `tardoc-${svc.code}`,
+                                          quantity: 1,
+                                          unitPrice: price,
+                                          groupId: null,
+                                          discountPercent: null,
+                                          customName: `${svc.code} - ${(svc.name || "").substring(0, 80)}`,
+                                          tardocTpMT: svc.tpMT ?? 0,
+                                          tardocTpTT: svc.tpTT ?? 0,
+                                          tardocRecordId: svc.recordId ?? null,
+                                          tardocSection: svc.section ?? null,
+                                        },
+                                      ];
+                                    });
                                   }}
                                 />
                               </div>
