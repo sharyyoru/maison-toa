@@ -75,6 +75,77 @@ function parseLangFromReason(reason: string | null): string {
   return match ? match[1].toLowerCase() : "fr";
 }
 
+// EMAIL-011: find a paid online deposit linked to the cancelled appointment.
+// Prefers the direct appointment_id link; falls back to matching by patient +
+// appointment date for historical deposit invoices created without the link.
+async function findPaidDepositForAppointment(
+  appointmentId: string,
+  patientId: string | null,
+  startTime: string,
+): Promise<{ amount: number; methodLabel: string | null } | null> {
+  try {
+    let invoice: { paid_amount: number | null; total_amount: number | null; payment_method: string | null; stripe_payment_intent_id: string | null } | null = null;
+
+    const { data: linked } = await supabase
+      .from("invoices")
+      .select("paid_amount, total_amount, payment_method, stripe_payment_intent_id")
+      .eq("appointment_id", appointmentId)
+      .in("deposit_status", ["paid", "applied"])
+      .limit(1)
+      .maybeSingle();
+    invoice = linked ?? null;
+
+    if (!invoice && patientId) {
+      const apptDateStr = new Date(startTime).toLocaleDateString("en-CA", { timeZone: "Europe/Zurich" });
+      const { data: fallback } = await supabase
+        .from("invoices")
+        .select("paid_amount, total_amount, payment_method, stripe_payment_intent_id")
+        .eq("patient_id", patientId)
+        .is("appointment_id", null)
+        .eq("payment_method", "online")
+        .eq("treatment_date", apptDateStr)
+        .in("deposit_status", ["paid", "applied"])
+        .limit(1)
+        .maybeSingle();
+      invoice = fallback ?? null;
+    }
+
+    if (!invoice) return null;
+    const amount = Number(invoice.paid_amount ?? invoice.total_amount ?? 0);
+    if (!(amount > 0)) return null;
+
+    // Best effort: resolve the actual payment method (e.g. "Stripe – Visa", "TWINT")
+    let methodLabel: string | null = null;
+    if (invoice.stripe_payment_intent_id) {
+      methodLabel = "Stripe";
+      try {
+        const { stripe } = await import("@/lib/stripe");
+        const intent = await stripe.paymentIntents.retrieve(invoice.stripe_payment_intent_id, {
+          expand: ["payment_method"],
+        });
+        const pm = intent.payment_method as { type?: string; card?: { brand?: string } } | null;
+        if (pm?.type === "twint") {
+          methodLabel = "TWINT";
+        } else if (pm?.type === "card" && pm.card?.brand) {
+          const brand = pm.card.brand.charAt(0).toUpperCase() + pm.card.brand.slice(1);
+          methodLabel = `Stripe – ${brand}`;
+        } else if (pm?.type) {
+          methodLabel = `Stripe – ${pm.type}`;
+        }
+      } catch (stripeErr) {
+        console.error("[cancel] Failed to resolve Stripe payment method:", stripeErr);
+      }
+    } else if (invoice.payment_method && invoice.payment_method !== "online") {
+      methodLabel = invoice.payment_method;
+    }
+
+    return { amount, methodLabel };
+  } catch (err) {
+    console.error("[cancel] Failed to look up deposit:", err);
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const { id } = await request.json();
@@ -103,7 +174,7 @@ export async function POST(request: Request) {
     // Fetch patient info
     const { data: patient } = await supabase
       .from("patients")
-      .select("first_name, last_name, email, gender")
+      .select("first_name, last_name, email, phone, gender")
       .eq("id", appt.patient_id)
       .single();
 
@@ -148,16 +219,37 @@ export async function POST(request: Request) {
         .replace(/\s*\[Lang:[^\]]*\]/gi, "")
         .replace(/\s*-\s*$/, "")
         .trim() || "-";
+
+      // EMAIL-011: detect a paid online deposit for this appointment so the
+      // team immediately knows a manual refund may be required.
+      const depositInfo = await findPaidDepositForAppointment(
+        appt.id,
+        appt.patient_id,
+        appt.start_time,
+      );
+
+      const subjectPrefix = depositInfo ? "❌💵 " : "";
+      const depositRows = depositInfo
+        ? `<tr><td><b>Email:</b></td><td>${patient?.email ?? "-"}</td></tr>
+           <tr><td><b>Phone:</b></td><td>${patient?.phone ?? "-"}</td></tr>
+           <tr><td><b>Patient Online Payment:</b></td><td><b>${depositInfo.amount.toFixed(2)} CHF${depositInfo.methodLabel ? ` via ${depositInfo.methodLabel}` : ""}</b></td></tr>`
+        : "";
+      const depositWarning = depositInfo
+        ? `<p style="color:#b45309;"><b>⚠️ This patient paid a deposit before cancelling — a manual refund may be required.</b></p>`
+        : "";
+
       await sendEmail(
         ADMIN_NOTIFICATION_EMAIL,
-        `[Cancellation] ${patientName} – ${service}`,
+        `${subjectPrefix}[Cancellation] ${patientName} – ${service}`,
         `<p>A patient has <strong>cancelled</strong> their appointment.</p>
          <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
            <tr><td><b>Patient:</b></td><td>${patientName}</td></tr>
            <tr><td><b>Service:</b></td><td>${service}</td></tr>
            <tr><td><b>Date:</b></td><td>${apptDateStr}</td></tr>
            <tr><td><b>Location:</b></td><td>${appt.location ?? "-"}</td></tr>
-         </table>`
+           ${depositRows}
+         </table>
+         ${depositWarning}`
       );
     } catch (err) {
       console.error("Failed to send admin cancellation notification:", err);
