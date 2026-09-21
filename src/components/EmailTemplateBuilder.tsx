@@ -19,7 +19,22 @@ type EmailTemplate = {
   design_json: any;
   html_content: string | null;
   created_at: string;
+  // EMAIL-008: template management metadata
+  category?: string | null;
+  status?: string | null;
+  description?: string | null;
+  language?: string | null;
 };
+
+// EMAIL-008: fixed template categories
+export const TEMPLATE_CATEGORIES = [
+  "Appointment",
+  "Treatment",
+  "Marketing",
+  "Billing",
+  "Aftercare",
+  "Other",
+] as const;
 
 type GalleryImage = {
   name: string;
@@ -161,6 +176,11 @@ export default function EmailTemplateBuilder({
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [templateName, setTemplateName] = useState("");
   const [subjectTemplate, setSubjectTemplate] = useState("");
+  // EMAIL-008: template management metadata
+  const [templateCategory, setTemplateCategory] = useState("");
+  const [templateStatus, setTemplateStatus] = useState<"draft" | "published">("published");
+  const [templateDescription, setTemplateDescription] = useState("");
+  const [templateLanguage, setTemplateLanguage] = useState("fr");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -371,6 +391,10 @@ export default function EmailTemplateBuilder({
     setSelectedTemplate(template);
     setTemplateName(template.name);
     setSubjectTemplate(template.subject_template);
+    setTemplateCategory(template.category ?? "");
+    setTemplateStatus(template.status === "draft" ? "draft" : "published");
+    setTemplateDescription(template.description ?? "");
+    setTemplateLanguage(template.language ?? "fr");
     setView("editor");
     setEditorReady(false);
     designLoadedRef.current = false;
@@ -381,6 +405,10 @@ export default function EmailTemplateBuilder({
     setSelectedTemplate(null);
     setTemplateName("New Email Template");
     setSubjectTemplate("");
+    setTemplateCategory("");
+    setTemplateStatus("draft");
+    setTemplateDescription("");
+    setTemplateLanguage("fr");
     setView("editor");
     setEditorReady(false);
     designLoadedRef.current = false;
@@ -471,11 +499,34 @@ export default function EmailTemplateBuilder({
         body_template: html,
         design_json: design,
         html_content: html,
+        category: templateCategory || null,
+        status: templateStatus,
+        description: templateDescription || null,
+        language: templateLanguage || "fr",
         updated_at: new Date().toISOString(),
       };
 
       let result;
       if (selectedTemplate) {
+        // EMAIL-008: snapshot the previous version before overwriting so
+        // changes can be reviewed and restored later. Best-effort — saving
+        // must still work if the versions table isn't available yet.
+        try {
+          await supabaseClient.from("email_template_versions").insert({
+            template_id: selectedTemplate.id,
+            name: selectedTemplate.name,
+            subject_template: selectedTemplate.subject_template,
+            body_template: selectedTemplate.body_template,
+            design_json: selectedTemplate.design_json,
+            html_content: selectedTemplate.html_content,
+            category: selectedTemplate.category ?? null,
+            status: selectedTemplate.status ?? null,
+            description: selectedTemplate.description ?? null,
+            language: selectedTemplate.language ?? null,
+          });
+        } catch (versionErr) {
+          console.warn("Failed to snapshot template version:", versionErr);
+        }
         result = await supabaseClient
           .from("email_templates")
           .update(templateData)
@@ -942,6 +993,66 @@ export default function EmailTemplateBuilder({
                   <p className="mt-1 text-[10px] text-slate-500">
                     Use {"{{patient.first_name}}"} etc. for variables
                   </p>
+                </div>
+
+                {/* EMAIL-008: template metadata */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Category</label>
+                    <select
+                      value={templateCategory}
+                      onChange={(e) => setTemplateCategory(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900"
+                    >
+                      <option value="">—</option>
+                      {TEMPLATE_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Language</label>
+                    <select
+                      value={templateLanguage}
+                      onChange={(e) => setTemplateLanguage(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900"
+                    >
+                      <option value="fr">Français</option>
+                      <option value="en">English</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Status</label>
+                  <div className="flex gap-2">
+                    {(["draft", "published"] as const).map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setTemplateStatus(s)}
+                        className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium ${
+                          templateStatus === s
+                            ? s === "draft"
+                              ? "border-amber-300 bg-amber-50 text-amber-700"
+                              : "border-emerald-300 bg-emerald-50 text-emerald-700"
+                            : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                        }`}
+                      >
+                        {s === "draft" ? "Draft" : "Published"}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-500">Only published templates are offered in workflows and campaigns.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Internal Description</label>
+                  <textarea
+                    value={templateDescription}
+                    onChange={(e) => setTemplateDescription(e.target.value)}
+                    placeholder="What is this template for?"
+                    rows={2}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 resize-y"
+                  />
                 </div>
 
                 {/* AI Generation */}
