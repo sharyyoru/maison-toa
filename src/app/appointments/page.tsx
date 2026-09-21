@@ -522,6 +522,34 @@ function getCalendarColorForIndex(index: number): string {
   return "bg-slate-400";
 }
 
+// CAL-014: fixed practitioner/agenda header colors, keyed by initials.
+const AGENDA_HEADER_COLORS: Record<string, string> = {
+  AM: "#CD8FCA",
+  SN: "#2D7D9F",
+  RB: "#865015",
+  LAG: "#8E396F",
+  NK: "#7DCAFA",
+  AP: "#FF781C",
+  CB: "#71BB11",
+  GB: "#CAD979",
+  JLM: "#980000",
+  OP: "#FFE400",
+};
+
+function getAgendaHeaderColor(initials: string): string | null {
+  return AGENDA_HEADER_COLORS[initials.trim().toUpperCase()] ?? null;
+}
+
+// Pick black or white text so the initials stay readable on the fixed color.
+function getReadableTextColor(hex: string): string {
+  const value = hex.replace("#", "");
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? "#1e293b" : "#ffffff";
+}
+
 function formatMonthYear(date: Date) {
   // Use local timezone for calendar display consistency
   return date.toLocaleDateString("fr-CH", { month: "long", year: "numeric" });
@@ -5454,11 +5482,17 @@ export default function CalendarPage() {
                           className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                         />
                         <span className="inline-flex min-w-0 items-center gap-1.5">
-                          <span
-                            className="inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded bg-slate-200 px-1 text-[9px] font-bold text-slate-600"
-                          >
-                            {calendar.initials}
-                          </span>
+                          {(() => {
+                            const headerColor = getAgendaHeaderColor(calendar.initials);
+                            return (
+                              <span
+                                className={`inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded px-1 text-[9px] font-bold ${headerColor ? "" : "bg-slate-200 text-slate-600"}`}
+                                style={headerColor ? { backgroundColor: headerColor, color: getReadableTextColor(headerColor) } : undefined}
+                              >
+                                {calendar.initials}
+                              </span>
+                            );
+                          })()}
                           <span className="block truncate">{calendar.name}</span>
                         </span>
                       </label>
@@ -5997,15 +6031,19 @@ export default function CalendarPage() {
                     {/* Doctor column headers - only show when multiple doctors selected */}
                     {selectedDoctorCalendars.length > 1 && (
                       <div className="flex">
-                        {selectedDoctorCalendars.map((calendar, idx) => (
-                          <div
-                            key={calendar.id}
-                            className={`flex-1 px-1 py-1.5 text-center text-[10px] font-semibold text-white truncate ${calendar.color || "bg-slate-500"} ${idx < selectedDoctorCalendars.length - 1 ? "border-r border-white/30" : ""}`}
-                            title={calendar.name}
-                          >
-                            {calendar.initials}
-                          </div>
-                        ))}
+                        {selectedDoctorCalendars.map((calendar, idx) => {
+                          const headerColor = getAgendaHeaderColor(calendar.initials);
+                          return (
+                            <div
+                              key={calendar.id}
+                              className={`flex-1 px-1 py-1.5 text-center text-[10px] font-semibold truncate ${headerColor ? "" : `text-white ${calendar.color || "bg-slate-500"}`} ${idx < selectedDoctorCalendars.length - 1 ? "border-r border-white/30" : ""}`}
+                              style={headerColor ? { backgroundColor: headerColor, color: getReadableTextColor(headerColor) } : undefined}
+                              title={calendar.name}
+                            >
+                              {calendar.initials}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
