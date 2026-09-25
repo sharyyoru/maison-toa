@@ -53,6 +53,54 @@ export default function EmailTemplatesPage() {
   // EMAIL-008: builder integration + version history
   const [builderOpen, setBuilderOpen] = useState(false);
   const [builderTemplateId, setBuilderTemplateId] = useState<string | null>(null);
+  // EMAIL-008 follow-up: user-managed categories
+  const [categories, setCategories] = useState<string[]>([...TEMPLATE_CATEGORIES]);
+
+  async function loadCategories() {
+    try {
+      const { data } = await supabaseClient
+        .from("email_template_categories")
+        .select("name")
+        .order("name");
+      if (data && data.length > 0) setCategories(data.map((c) => c.name as string));
+    } catch {
+      // keep defaults
+    }
+  }
+
+  async function handleAddCategory() {
+    const name = window.prompt("New category name:")?.trim();
+    if (!name) return;
+    try {
+      const { error: catError } = await supabaseClient
+        .from("email_template_categories")
+        .insert({ name });
+      if (catError && !catError.message.includes("duplicate")) throw catError;
+      await loadCategories();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to add category");
+    }
+  }
+
+  async function handleDeleteCategory(name: string) {
+    const inUse = templates.filter((t) => t.category === name).length;
+    if (inUse > 0) {
+      alert(`"${name}" is used by ${inUse} template${inUse === 1 ? "" : "s"}. Reassign them before deleting the category.`);
+      return;
+    }
+    if (!confirm(`Delete the category "${name}"?`)) return;
+    try {
+      const { error: delError } = await supabaseClient
+        .from("email_template_categories")
+        .delete()
+        .eq("name", name);
+      if (delError) throw delError;
+      if (categoryFilter === name) setCategoryFilter("all");
+      await loadCategories();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete category");
+    }
+  }
   const [historyTemplate, setHistoryTemplate] = useState<EmailTemplate | null>(null);
   const [historyVersions, setHistoryVersions] = useState<TemplateVersion[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -61,6 +109,8 @@ export default function EmailTemplatesPage() {
 
   useEffect(() => {
     loadTemplates();
+    loadCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadTemplates() {
@@ -304,20 +354,39 @@ export default function EmailTemplatesPage() {
             />
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            {["all", ...TEMPLATE_CATEGORIES].map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setCategoryFilter(cat)}
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  categoryFilter === cat
-                    ? "bg-sky-600 text-white"
-                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                {cat === "all" ? "All" : cat}
-              </button>
+            {["all", ...categories].map((cat) => (
+              <span key={cat} className="group relative inline-flex">
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    categoryFilter === cat
+                      ? "bg-sky-600 text-white"
+                      : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {cat === "all" ? "All" : cat}
+                </button>
+                {cat !== "all" && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteCategory(cat)}
+                    title={`Delete category "${cat}"`}
+                    className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white shadow group-hover:flex"
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
             ))}
+            <button
+              type="button"
+              onClick={() => void handleAddCategory()}
+              title="Add a new category"
+              className="rounded-full border border-dashed border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-500 hover:border-sky-400 hover:text-sky-600"
+            >
+              ＋ Category
+            </button>
           </div>
         </div>
 

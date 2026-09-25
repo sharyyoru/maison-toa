@@ -6089,7 +6089,27 @@ export default function MedicalConsultationsCard({
           };
         });
 
-        setInvoiceServiceLines(reconstructedLines);
+        // BILL-017: merge duplicate TARDOC lines from older invoices so editing
+        // shows one line per code with a summed quantity.
+        const mergedLines: InvoiceServiceLine[] = [];
+        for (const line of reconstructedLines) {
+          const existing = line.serviceId.startsWith("tardoc-")
+            ? mergedLines.find(
+                (l) =>
+                  l.serviceId === line.serviceId &&
+                  l.unitPrice === line.unitPrice &&
+                  (l.tardocSideType ?? 0) === (line.tardocSideType ?? 0) &&
+                  (l.tardocExternalFactor ?? 1) === (line.tardocExternalFactor ?? 1),
+              )
+            : undefined;
+          if (existing) {
+            existing.quantity = (existing.quantity || 1) + (line.quantity || 1);
+          } else {
+            mergedLines.push(line);
+          }
+        }
+
+        setInvoiceServiceLines(mergedLines);
 
         // Determine invoice mode from line items
         const hasTardoc = reconstructedLines.some((l) => l.serviceId.startsWith("tardoc-"));
@@ -7828,6 +7848,28 @@ export default function MedicalConsultationsCard({
                               catalog_nature: (isTardocLine || isAcfRelated) ? "TARIFF_CATALOG" : null,
                             };
                           });
+
+                        // BILL-017: merge duplicate TARDOC lines at save time — the same
+                        // code (with identical price/side/factor) must appear as ONE line
+                        // with a summed quantity, regardless of how the lines were added
+                        // (search, catalog tree, groups, or editing an older invoice).
+                        for (let mi = 0; mi < invoiceLines.length; mi++) {
+                          const base = invoiceLines[mi];
+                          if (!base.tardoc_code) continue;
+                          for (let mj = invoiceLines.length - 1; mj > mi; mj--) {
+                            const dup = invoiceLines[mj];
+                            if (
+                              dup.tardoc_code === base.tardoc_code &&
+                              dup.unit_price === base.unit_price &&
+                              (dup.side_type ?? 0) === (base.side_type ?? 0) &&
+                              (dup.external_factor_mt ?? 1) === (base.external_factor_mt ?? 1)
+                            ) {
+                              base.quantity = (base.quantity || 1) + (dup.quantity || 1);
+                              base.total_price = Math.round((Number(base.total_price || 0) + Number(dup.total_price || 0)) * 100) / 100;
+                              invoiceLines.splice(mj, 1);
+                            }
+                          }
+                        }
 
                         // For TARDOC: derive correct ref_codes using the Sumex TARDOC
                         // validator catalog (ISearch::MasterCode + SearchAdditionalService).
@@ -9853,7 +9895,24 @@ export default function MedicalConsultationsCard({
                                                     tardocRefCode: item.ref_code || null,
                                                   };
                                                 });
-                                                setInvoiceServiceLines((prev) => [...prev, ...newLines]);
+                                                // BILL-017: merge group TARDOC codes into existing lines (bump qty)
+                                                setInvoiceServiceLines((prev) => {
+                                                  const next = [...prev];
+                                                  for (const line of newLines) {
+                                                    const existingIdx = line.serviceId.startsWith("tardoc-")
+                                                      ? next.findIndex((l) => l.serviceId === line.serviceId && l.unitPrice === line.unitPrice)
+                                                      : -1;
+                                                    if (existingIdx >= 0) {
+                                                      next[existingIdx] = {
+                                                        ...next[existingIdx],
+                                                        quantity: (next[existingIdx].quantity || 1) + (line.quantity || 1),
+                                                      };
+                                                    } else {
+                                                      next.push(line);
+                                                    }
+                                                  }
+                                                  return next;
+                                                });
                                                 // Inject only TARDOC items into search results cache (ACF/TMA/material don't need it)
                                                 setTardocSearchResults((prev: any[]) => {
                                                   const existing = new Set(prev.map((r: any) => r.code));

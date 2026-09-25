@@ -29,14 +29,18 @@ export async function GET(req: NextRequest) {
   const bagUnpadded = String(parseInt(bagPadded, 10)); // e.g. "1562"
 
   try {
-    // 1. Local lookup
-    const { data: local } = await supabaseAdmin
+    // 1. Local lookup — prefer rows with a real GLN over placeholder rows
+    const { data: localRows } = await supabaseAdmin
       .from("swiss_insurers")
       .select("id, name, name_fr, gln, receiver_gln, bag_number, address_street, address_postal_code, address_city, tp_allowed")
       .in("bag_number", [bagPadded, bagUnpadded])
       .eq("is_active", true)
-      .limit(1)
-      .maybeSingle();
+      .limit(20);
+
+    const local =
+      (localRows ?? []).find((r) => r.gln && /^\d{13}$/.test(r.gln)) ??
+      (localRows ?? [])[0] ??
+      null;
 
     if (local) {
       return NextResponse.json({ source: "database", bagNumber: bagUnpadded, insurer: local });

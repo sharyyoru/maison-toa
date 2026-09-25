@@ -9,7 +9,10 @@ const supabase = createClient(
 );
 
 const PATIENT_SELF_SERVICE_CC_EMAIL = "info@maisontoa.com";
-const ADMIN_NOTIFICATION_EMAIL = "louise.goerig@maisontoa.com.";
+// EMAIL-011: the address previously had a trailing dot ("...com.") which made
+// it invalid — the internal cancellation notifications were never delivered.
+const ADMIN_NOTIFICATION_EMAIL = "louise.goerig@maisontoa.com";
+const ADMIN_NOTIFICATION_CC = "info@maisontoa.com";
 
 async function sendEmail(to: string, subject: string, html: string, cc?: string) {
   if (!isEmailConfigured()) return;
@@ -249,7 +252,8 @@ export async function POST(request: Request) {
            <tr><td><b>Location:</b></td><td>${appt.location ?? "-"}</td></tr>
            ${depositRows}
          </table>
-         ${depositWarning}`
+         ${depositWarning}`,
+        ADMIN_NOTIFICATION_CC
       );
     } catch (err) {
       console.error("Failed to send admin cancellation notification:", err);

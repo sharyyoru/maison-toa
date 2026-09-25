@@ -59,6 +59,16 @@ const NAV_SECTIONS: { items: NavItem[] }[] = [
         children: [
           { label: "Workflows", href: "/workflows" },
           { label: "Templates", href: "/workflows/templates" },
+          { label: "Image Library", href: "/image-library" },
+        ],
+      },
+      {
+        label: "Newsletter & Campaigns",
+        href: "/marketing",
+        icon: <MultiPathNavIcon paths={["M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z", "M22 6 12 13 2 6"]} />,
+        children: [
+          { label: "New Campaign", href: "/marketing/campaigns" },
+          { label: "History & Lists", href: "/marketing" },
         ],
       },
       { label: "Controllers", href: "/controllers", icon: <NavIcon paths="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /> },

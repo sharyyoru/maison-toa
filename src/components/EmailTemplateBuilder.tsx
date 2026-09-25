@@ -181,6 +181,41 @@ export default function EmailTemplateBuilder({
   const [templateStatus, setTemplateStatus] = useState<"draft" | "published">("published");
   const [templateDescription, setTemplateDescription] = useState("");
   const [templateLanguage, setTemplateLanguage] = useState("fr");
+  // EMAIL-008 follow-up: user-managed categories (falls back to the defaults)
+  const [availableCategories, setAvailableCategories] = useState<string[]>([...TEMPLATE_CATEGORIES]);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const { data } = await supabaseClient
+        .from("email_template_categories")
+        .select("name")
+        .order("name");
+      if (data && data.length > 0) {
+        setAvailableCategories(data.map((c) => c.name as string));
+      }
+    } catch {
+      // keep defaults
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) void loadCategories();
+  }, [open, loadCategories]);
+
+  async function handleAddCategory() {
+    const name = window.prompt("New category name:")?.trim();
+    if (!name) return;
+    try {
+      const { error: catError } = await supabaseClient
+        .from("email_template_categories")
+        .insert({ name });
+      if (catError && !catError.message.includes("duplicate")) throw catError;
+      await loadCategories();
+      setTemplateCategory(name);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add category");
+    }
+  }
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1001,13 +1036,23 @@ export default function EmailTemplateBuilder({
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">Category</label>
                     <select
                       value={templateCategory}
-                      onChange={(e) => setTemplateCategory(e.target.value)}
+                      onChange={(e) => {
+                        if (e.target.value === "__add_new__") {
+                          void handleAddCategory();
+                          return;
+                        }
+                        setTemplateCategory(e.target.value);
+                      }}
                       className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900"
                     >
                       <option value="">—</option>
-                      {TEMPLATE_CATEGORIES.map((cat) => (
+                      {availableCategories.map((cat) => (
                         <option key={cat} value={cat}>{cat}</option>
                       ))}
+                      {templateCategory && !availableCategories.includes(templateCategory) && (
+                        <option value={templateCategory}>{templateCategory}</option>
+                      )}
+                      <option value="__add_new__">＋ Add new category…</option>
                     </select>
                   </div>
                   <div>
