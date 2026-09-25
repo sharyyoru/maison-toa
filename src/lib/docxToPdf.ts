@@ -54,6 +54,28 @@ export async function convertRenderedDocxToPdf(
           backgroundColor: "#ffffff",
           logging: false,
           useCORS: true,
+          onclone: (clonedDocument) => {
+            // html2canvas paints text a few pixels below the browser's DOM
+            // baseline. In a paragraph immediately above a table this can put
+            // the glyphs on top of the table border. Correct only that boundary
+            // paragraph; all other editor geometry remains untouched.
+            const clonedPage = clonedDocument.querySelector<HTMLElement>(
+              `.docx-page[data-page-index="${page.dataset.pageIndex}"]`
+            );
+            for (const table of Array.from(
+              clonedPage?.querySelectorAll<HTMLElement>(
+                ":scope > .docx-page-content > .docx-table-fragment"
+              ) ?? []
+            )) {
+              const heading = table.previousElementSibling;
+              if (!heading?.classList.contains("docx-paragraph-fragment")) continue;
+              for (const run of heading.querySelectorAll<HTMLElement>(
+                ".layout-run-text"
+              )) {
+                run.style.transform = "translateY(-8px)";
+              }
+            }
+          },
         });
         if (!pdf) {
           pdf = new jsPDF({ orientation, unit: "pt", format: [width, height] });
