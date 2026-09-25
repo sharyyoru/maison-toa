@@ -91,6 +91,7 @@ type PatientInsurance = {
   law_type: string | null;
   insurer_id: string | null;
   insurer_gln: string | null;
+  avs_number?: string | null;
 };
 
 type ConsultationData = {
@@ -165,7 +166,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
   const [editMeasurements, setEditMeasurements] = useState<Measurements | null>(null);
   const [editTreatmentPrefs, setEditTreatmentPrefs] = useState<TreatmentPreferences | null>(null);
   const [editInsurance, setEditInsurance] = useState<PatientInsurance | null>(null);
-  const [swissInsurers, setSwissInsurers] = useState<{ id: string; name: string; gln: string }[]>([]);
+  const [swissInsurers, setSwissInsurers] = useState<{ id: string; name: string; gln: string; address_street?: string | null; address_postal_code?: string | null; address_city?: string | null }[]>([]);
   // BILL-016: automatic insurer lookup from the CADA card number
   const [cadaLookupStatus, setCadaLookupStatus] = useState<"idle" | "loading" | "found" | "not_found" | "error">("idle");
   const [cadaLookupMessage, setCadaLookupMessage] = useState<string | null>(null);
@@ -348,7 +349,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
 
   useEffect(() => {
     loadIntakeData();
-    supabaseClient.from("swiss_insurers").select("id, name, gln").eq("is_active", true).order("name").then(({ data }) => {
+    supabaseClient.from("swiss_insurers").select("id, name, gln, address_street, address_postal_code, address_city").eq("is_active", true).order("name").then(({ data }) => {
       if (data) setSwissInsurers(data);
     });
   }, [loadIntakeData]);
@@ -472,6 +473,7 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
         law_type: data.law_type || null,
         insurer_id: data.insurer_id || null,
         insurer_gln: data.insurer_gln || null,
+        avs_number: data.avs_number || null,
       };
 
       if (insurance?.id) {
@@ -858,6 +860,19 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
                   <input type="text" value={editInsurance.card_number || ""} onChange={(e) => setEditInsurance({ ...editInsurance, card_number: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black" placeholder="Member number" />
                 </div>
               </div>
+              <div>
+                <label className="text-xs text-slate-500">No AVS (756.XXXX.XXXX.XX)</label>
+                <input
+                  type="text"
+                  value={editInsurance.avs_number || ""}
+                  onChange={(e) => setEditInsurance({ ...editInsurance, avs_number: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-black"
+                  placeholder="756.1234.5678.97"
+                />
+                {editInsurance.avs_number && !/^756[.\s]?\d{4}[.\s]?\d{4}[.\s]?\d{2}$/.test(editInsurance.avs_number.trim()) && (
+                  <p className="mt-1 text-[11px] text-amber-600">Format attendu: 756.XXXX.XXXX.XX</p>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-slate-500">{t("insuranceType")}</label>
@@ -886,10 +901,62 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
           ) : insurance ? (
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-slate-500">{t("provider")}</span><span className="text-slate-900 font-medium">{insurance.provider_name || "N/A"}</span></div>
+              {(() => {
+                const ins = swissInsurers.find((s) => s.id === insurance.insurer_id);
+                const address = ins ? [ins.address_street, [ins.address_postal_code, ins.address_city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
+                return address ? (
+                  <div className="flex justify-between gap-3"><span className="text-slate-500 shrink-0">Adresse assureur</span><span className="text-right text-slate-700">{address}</span></div>
+                ) : null;
+              })()}
               <div className="flex justify-between"><span className="text-slate-500">No CADA</span><span className="text-slate-900 font-medium">{insurance.policy_number || "N/A"}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">No d&apos;assuré</span><span className="text-slate-900 font-medium">{insurance.card_number || "N/A"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">No AVS</span><span className="text-slate-900 font-medium">{insurance.avs_number || "N/A"}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">{t("type")}</span><span className="text-slate-900 font-medium">{insurance.insurance_type || "N/A"}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Law</span><span className="text-slate-900 font-medium">{insurance.law_type || "N/A"}</span></div>
+              {/* BILL-016: refresh insurer info from the stored CADA number */}
+              {insurance.policy_number && /^80756\d{15}$/.test((insurance.policy_number || "").replace(/[\s.-]/g, "")) && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    disabled={cadaLookupStatus === "loading" || saving}
+                    onClick={async () => {
+                      setCadaLookupStatus("loading");
+                      setCadaLookupMessage(null);
+                      try {
+                        const cleaned = (insurance.policy_number || "").replace(/[\s.-]/g, "");
+                        const res = await fetch(`/api/insurance/lookup-cada?cardNumber=${encodeURIComponent(cleaned)}`);
+                        const data = await res.json();
+                        if (!res.ok || !data.insurer) {
+                          setCadaLookupStatus(res.status === 404 ? "not_found" : "error");
+                          setCadaLookupMessage(data.error || "Lookup failed");
+                          return;
+                        }
+                        const ins = data.insurer as { id: string | null; name: string; gln: string | null };
+                        await saveInsurance({
+                          ...insurance,
+                          insurer_id: ins.id ?? insurance.insurer_id,
+                          insurer_gln: ins.gln ?? insurance.insurer_gln,
+                          provider_name: ins.name || insurance.provider_name,
+                        });
+                        setCadaLookupStatus("found");
+                        setCadaLookupMessage(ins.name);
+                      } catch {
+                        setCadaLookupStatus("error");
+                        setCadaLookupMessage("Lookup failed");
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+                  >
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M5.07 9A8 8 0 0119.4 7.6M18.93 15A8 8 0 014.6 16.4" />
+                    </svg>
+                    {cadaLookupStatus === "loading" ? "Mise à jour..." : "Actualiser depuis le No CADA"}
+                  </button>
+                  {cadaLookupStatus === "found" && <span className="ml-2 text-[11px] text-emerald-600">✓ {cadaLookupMessage}</span>}
+                  {cadaLookupStatus === "not_found" && <span className="ml-2 text-[11px] text-amber-600">Aucun assureur trouvé</span>}
+                  {cadaLookupStatus === "error" && <span className="ml-2 text-[11px] text-red-500">Échec de la mise à jour</span>}
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-sm text-slate-400 italic">{t("noInsurance")}</p>

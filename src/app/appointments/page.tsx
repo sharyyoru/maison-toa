@@ -4622,7 +4622,7 @@ export default function CalendarPage() {
 
       // Save to database
       try {
-        const response = await fetch(`/api/appointments/${appt.id}`, {
+        let response = await fetch(`/api/appointments/${appt.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -4631,8 +4631,39 @@ export default function CalendarPage() {
           }),
         });
 
+        // BUG-012: extending an appointment often overlaps an adjacent booking,
+        // which used to silently revert the resize. Ask the user to confirm the
+        // overlap and retry with the internal override instead.
+        if (response.status === 409) {
+          const conflictData = await response.json().catch(() => ({} as { error?: string; code?: string }));
+          const confirmed = window.confirm(
+            `${conflictData.error || "Another appointment overlaps this time."}\n\nDo you still want to apply this new duration?`,
+          );
+          if (confirmed) {
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            const token = sessionData?.session?.access_token;
+            response = await fetch(`/api/appointments/${appt.id}`, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({
+                start_time: appt.start_time,
+                end_time: newEnd,
+                allow_practitioner_overlap: true,
+                allow_resource_overlap: true,
+              }),
+            });
+          }
+        }
+
         if (!response.ok) {
-          console.error("Failed to save resize");
+          const errData = await response.json().catch(() => ({} as { error?: string }));
+          console.error("Failed to save resize:", errData.error);
+          if (response.status !== 409) {
+            alert(errData.error || "Failed to save the new duration. Please try again.");
+          }
           // Revert on failure
           setAppointments(prev => prev.map(a => 
             a.id === appt.id ? { ...a, end_time: originalEnd } : a
@@ -6502,10 +6533,10 @@ export default function CalendarPage() {
                                           data-appointment-resize-handle
                                           draggable={false}
                                           onDragStart={(e) => e.preventDefault()}
-                                          className={`absolute bottom-0 left-0 right-0 cursor-ns-resize flex items-center justify-center rounded-b-md transition-all ${
+                                          className={`absolute bottom-0 left-0 right-0 z-20 cursor-ns-resize flex items-center justify-center rounded-b-md transition-all ${
                                             resizingAppointment?.id === appt.id 
-                                              ? 'h-3 bg-sky-500/30' 
-                                              : 'h-2 hover:h-3 hover:bg-slate-900/10'
+                                              ? 'h-4 bg-sky-500/30' 
+                                              : 'h-3 hover:h-4 hover:bg-slate-900/10'
                                           }`}
                                           title="Drag to resize duration"
                                         >
