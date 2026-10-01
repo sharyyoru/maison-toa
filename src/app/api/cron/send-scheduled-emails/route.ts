@@ -84,7 +84,12 @@ export async function GET(request: Request) {
           // Appointment reminder content is intentionally rebuilt at send time.
           // This is the final guard against stale queued content after a calendar
           // edit, and it also prevents reminders for cancelled/deleted visits.
-          if (email.appointment_id && /rappel de votre rendez-vous|appointment reminder/i.test(email.subject || "")) {
+          const standardReminder = /rappel de votre rendez-vous|appointment reminder|^reminder: appointment/i.test(email.subject || "");
+          const appointmentReminder = email.appointment_id && (
+            ["patient", "provider", "appointment_reminder"].includes(email.recipient_type || "") ||
+            standardReminder
+          );
+          if (appointmentReminder) {
             const { data: appointment, error: appointmentError } = await supabase
               .from("appointments")
               .select("id, patient_id, start_time, status, reason, tracking_params")
@@ -100,8 +105,8 @@ export async function GET(request: Request) {
               : "";
             const isCancelled =
               !appointment ||
-              ["cancelled", "no_show"].includes(String(appointment.status || "").toLowerCase()) ||
-              !!displayStatus?.match(/cancel|annul|no[ _-]?show/);
+              ["cancelled", "no_show", "completed", "done"].includes(String(appointment.status || "").toLowerCase()) ||
+              !!displayStatus?.match(/cancel|annul|no[ _-]?show|complet|termin|effectu|réalis|done/);
 
             if (isCancelled) {
               await supabase.from("scheduled_emails").delete().eq("id", email.id);
@@ -124,16 +129,27 @@ export async function GET(request: Request) {
               return false;
             }
 
-            const language = normalizePatientLanguage(patient?.language_preference, "en");
-            subject = language === "fr" ? "Rappel de votre rendez-vous" : "Appointment reminder";
-            body = generatePatientReminderEmail(
-              patient?.last_name || "",
-              patient?.gender || undefined,
-              currentStart,
-              appointment.reason || "",
-              language,
-              appointment.id,
-            );
+            // A late cron run must never remind patients about a past visit.
+            // Built-in reminders are due one day before the patient's actual time.
+            const builtInReminder = ["patient", "provider"].includes(email.recipient_type || "");
+            if (currentStart.getTime() <= Date.now() ||
+                (builtInReminder && currentStart.getTime() - Date.now() > 25 * 60 * 60 * 1000)) {
+              await supabase.from("scheduled_emails").delete().eq("id", email.id);
+              return "skipped" as const;
+            }
+
+            if (standardReminder && email.recipient_type !== "provider") {
+              const language = normalizePatientLanguage(patient?.language_preference, "en");
+              subject = language === "fr" ? "Rappel de votre rendez-vous" : "Appointment reminder";
+              body = generatePatientReminderEmail(
+                patient?.last_name || "",
+                patient?.gender || undefined,
+                currentStart,
+                appointment.reason || "",
+                language,
+                appointment.id,
+              );
+            }
           }
 
           const success = await sendEmail(
