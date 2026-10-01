@@ -138,8 +138,29 @@ export default function PatientDocumentsTab({
   );
   const documentPreviewTabs = useDocumentPreviewTabs();
 
-  const [items, setItems] = useState<ListedItem[]>([]);
+  const [primaryItems, setPrimaryItems] = useState<ListedItem[]>([]);
+  const [legacyDocsItems, setLegacyDocsItems] = useState<ListedItem[]>([]);
+  const [legacyDocsLoading, setLegacyDocsLoading] = useState(false);
+  const [sortBy, setSortBy] = useState<"name" | "date">("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [currentPrefix, setCurrentPrefix] = useState<string>("");
+  const items = useMemo(() => {
+    const combined = [
+      ...primaryItems,
+      ...(currentPrefix === "" ? legacyDocsItems : []),
+    ];
+    return combined.sort((a, b) => {
+      if (a.kind === "folder" && b.kind !== "folder") return -1;
+      if (a.kind !== "folder" && b.kind === "folder") return 1;
+      if (a.kind === "folder" && b.kind === "folder") return a.name.localeCompare(b.name);
+      if (sortBy === "date") {
+        const comparison = (a.updated_at || a.created_at || "").localeCompare(b.updated_at || b.created_at || "");
+        return sortOrder === "desc" ? -comparison : comparison;
+      }
+      const comparison = a.name.localeCompare(b.name);
+      return sortOrder === "desc" ? -comparison : comparison;
+    });
+  }, [primaryItems, legacyDocsItems, currentPrefix, sortBy, sortOrder]);
   const [selectedFile, setSelectedFile] = useState<ListedItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -222,8 +243,6 @@ export default function PatientDocumentsTab({
   const [currentUploadIndex, setCurrentUploadIndex] = useState(0);
 
   // New state for Documents features
-  const [sortBy, setSortBy] = useState<"name" | "date">("date");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
   const [filterType, setFilterType] = useState<string>("all");
@@ -244,10 +263,6 @@ export default function PatientDocumentsTab({
   
   // Download state
   const [downloadingFiles, setDownloadingFiles] = useState(false);
-
-  // State for files from patient-docs/5_Documents folder
-  const [legacyDocsItems, setLegacyDocsItems] = useState<ListedItem[]>([]);
-  const [legacyDocsLoading, setLegacyDocsLoading] = useState(false);
 
   // Close the More options menu when clicking anywhere outside it
   useEffect(() => {
@@ -344,16 +359,11 @@ export default function PatientDocumentsTab({
           sortBy: { column: "name", order: "asc" },
         });
 
-      console.log(`[PatientDocs] bucket=${BUCKET_NAME}, listPath=${listPath}, returned=${data?.length ?? 0} items, error=${listError?.message ?? 'none'}`);
-      if (data) {
-        console.log(`[PatientDocs] raw items:`, data.map(d => ({ name: d.name, id: (d as any).id, metadata: (d as any).metadata })));
-      }
-
       if (cancelled) return;
 
       if (listError) {
         setError(listError.message ?? "Failed to load documents.");
-        setItems([]);
+        setPrimaryItems([]);
         setSelectedFile(null);
         setLoading(false);
         return;
@@ -417,38 +427,12 @@ export default function PatientDocumentsTab({
         });
       }
 
-      // Only show legacy docs at root level (they're already deduplicated in the fetch)
-      const combined: ListedItem[] = [
+      const listed: ListedItem[] = [
         ...Object.values(folders).sort((a, b) => a.name.localeCompare(b.name)),
         ...files,
-        ...(currentPrefix === "" ? legacyDocsItems : []),
       ];
 
-      // Sort files based on sortBy and sortOrder
-      combined.sort((a, b) => {
-        // Folders always come first
-        if (a.kind === "folder" && b.kind !== "folder") return -1;
-        if (a.kind !== "folder" && b.kind === "folder") return 1;
-        if (a.kind === "folder" && b.kind === "folder") {
-          return a.name.localeCompare(b.name);
-        }
-        // Sort files
-        if (sortBy === "date") {
-          const aDate = a.updated_at || a.created_at || "";
-          const bDate = b.updated_at || b.created_at || "";
-          const comparison = aDate.localeCompare(bDate);
-          return sortOrder === "desc" ? -comparison : comparison;
-        }
-        const comparison = a.name.localeCompare(b.name);
-        return sortOrder === "desc" ? -comparison : comparison;
-      });
-
-      setItems(combined);
-
-      if (!selectedFile) {
-        const firstFile = combined.find((item) => item.kind === "file") ?? null;
-        setSelectedFile(firstFile ?? null);
-      }
+      setPrimaryItems(listed);
 
       setLoading(false);
     }
@@ -458,7 +442,13 @@ export default function PatientDocumentsTab({
     return () => {
       cancelled = true;
     };
-  }, [patientId, currentPrefix, refreshKey, legacyDocsItems, sortBy, sortOrder]);
+  }, [patientId, currentPrefix, refreshKey]);
+
+  useEffect(() => {
+    if (!selectedFile && items.length > 0) {
+      setSelectedFile(items.find((item) => item.kind === "file") ?? null);
+    }
+  }, [items, selectedFile]);
 
   const breadcrumbSegments = useMemo(() => {
     const segments = currentPrefix.split("/").filter(Boolean);
@@ -1382,12 +1372,12 @@ export default function PatientDocumentsTab({
                   </div>
                 )}
               </div>
-              {loading ? <span className="text-slate-400">{t("loading")}</span> : null}
+              {loading || legacyDocsLoading ? <span className="text-slate-400">{t("loading")}</span> : null}
             </div>
             <div className="max-h-[420px] overflow-auto rounded-lg border border-slate-100 bg-slate-50/60 p-2">
               {filteredItems.length === 0 ? (
                 <div className="flex h-24 items-center justify-center text-[11px] text-slate-500">
-                  {t("noDocuments")}
+                  {loading || legacyDocsLoading ? t("loading") : t("noDocuments")}
                 </div>
               ) : (
                 <div className="space-y-2">
