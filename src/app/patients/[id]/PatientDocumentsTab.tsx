@@ -2,19 +2,27 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
-import BeforeAfterEditorModal from "./BeforeAfterEditorModal";
-import PdfAnnotationEditor from "@/components/PdfAnnotationEditor";
-import DocxPreviewEditor from "@/components/DocxEditor/DocxPreviewEditor";
-import DocumentTemplatesPanel from "@/components/DocumentTemplatesPanel";
 import Tooltip from "@/components/Tooltip";
 import EmailShareModal from "./EmailShareModal";
-import { convertDocxBlobToPdf } from "@/lib/docxToPdf";
 import { formatSwissTime, formatSwissDateTime, SWISS_TIMEZONE } from "@/lib/swissTimezone";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from 'next/dynamic';
 import { useDocumentPreviewTabs } from "./DocumentPreviewTabsWrapper";
 import { decodeStorageFileName, encodeStorageFileName } from "@/utils/storageFileName";
+import {
+  cachedLegacyDocuments,
+  cachedPatientDocuments,
+  listLegacyDocuments,
+  listPatientDocuments,
+  seedPatientDocuments,
+} from "@/lib/patientDocumentPrefetch";
+import type { PatientStorageEntry } from "@/lib/patientDocumentPrefetch";
+
+const BeforeAfterEditorModal = dynamic(() => import("./BeforeAfterEditorModal"), { ssr: false });
+const PdfAnnotationEditor = dynamic(() => import("@/components/PdfAnnotationEditor"), { ssr: false });
+const DocxPreviewEditor = dynamic(() => import("@/components/DocxEditor/DocxPreviewEditor"), { ssr: false });
+const DocumentTemplatesPanel = dynamic(() => import("@/components/DocumentTemplatesPanel"), { ssr: false });
 
 // Dynamic import for docx-preview (client-side only)
 const DocxPreview = dynamic(() => import('@/components/DocxPreview'), {
@@ -37,6 +45,7 @@ const HeicPreview = dynamic(() => import('@/components/HeicPreview'), {
 interface PatientDocumentsTabProps {
   patientId: string;
   patientName?: string;
+  initialPrimaryData?: PatientStorageEntry[] | null;
 }
 
 const BUCKET_NAME = "patient-documents";
@@ -63,6 +72,48 @@ interface ListedItem extends StorageItem {
   path: string;
   source?: "patient_document" | "patient-docs"; // Track which bucket the file came from
   publicUrl?: string; // For patient-docs files
+}
+
+function toPrimaryItems(data: PatientStorageEntry[], currentPrefix: string): ListedItem[] {
+  const folders: Record<string, ListedItem> = {};
+  const files: ListedItem[] = [];
+
+  for (const raw of data) {
+    if (raw.name === ".keep") continue;
+    const base: StorageItem = {
+      name: raw.name,
+      id: raw.id ?? undefined,
+      updated_at: raw.updated_at ?? undefined,
+      created_at: raw.created_at ?? undefined,
+      metadata: raw.metadata ?? null,
+    };
+    const isFolder = raw.id == null && raw.metadata == null;
+    if (isFolder) {
+      folders[raw.name] = { ...base, kind: "folder", path: `${currentPrefix}${raw.name}/` };
+    } else if (raw.name.includes("/")) {
+      const [folderName] = raw.name.split("/");
+      if (folderName && !folders[folderName]) {
+        folders[folderName] = {
+          ...base,
+          name: folderName,
+          kind: "folder",
+          path: `${currentPrefix}${folderName}/`,
+        };
+      }
+    } else {
+      files.push({
+        ...base,
+        kind: "file",
+        path: `${currentPrefix}${raw.name}`,
+        source: "patient_document",
+      });
+    }
+  }
+
+  return [
+    ...Object.values(folders).sort((a, b) => a.name.localeCompare(b.name)),
+    ...files,
+  ];
 }
 
 function formatFileSize(bytes: number | undefined): string {
@@ -134,6 +185,7 @@ function sanitizeFilename(filename: string): string {
 export default function PatientDocumentsTab({
   patientId,
   patientName = "Patient",
+  initialPrimaryData = null,
 }: PatientDocumentsTabProps) {
   const t = useTranslations("patient.documentsTab");
   const router = useRouter();
@@ -143,7 +195,9 @@ export default function PatientDocumentsTab({
   );
   const documentPreviewTabs = useDocumentPreviewTabs();
 
-  const [primaryItems, setPrimaryItems] = useState<ListedItem[]>([]);
+  const [primaryItems, setPrimaryItems] = useState<ListedItem[]>(
+    () => initialPrimaryData ? toPrimaryItems(initialPrimaryData, "") : [],
+  );
   const [legacyDocsItems, setLegacyDocsItems] = useState<ListedItem[]>([]);
   const [legacyDocsLoading, setLegacyDocsLoading] = useState(false);
   const [sortBy, setSortBy] = useState<"name" | "date">("date");
@@ -278,6 +332,10 @@ export default function PatientDocumentsTab({
     return () => document.removeEventListener("click", handleClickOutside);
   }, [moreMenuOpenPath]);
 
+  useEffect(() => {
+    if (initialPrimaryData) seedPatientDocuments(patientId, "", initialPrimaryData);
+  }, [patientId, initialPrimaryData]);
+
   // Fetch files from patient-docs/5_Documents folder (legacy storage)
   // Deduplication is done server-side by passing patientId
   useEffect(() => {
@@ -285,34 +343,12 @@ export default function PatientDocumentsTab({
 
     async function loadLegacyDocs() {
       if (!patientName || patientName === "Patient") return;
-      
-      // Parse first and last name from patientName
-      const nameParts = patientName.trim().split(/\s+/);
-      if (nameParts.length < 2) return;
-      
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(" ");
-
-      setLegacyDocsLoading(true);
+      setLegacyDocsLoading(!cachedLegacyDocuments(patientId, patientName));
 
       try {
-        const response = await fetch("/api/patient-docs/list-documents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ firstName, lastName, patientId }),
-        });
-
+        const documents = await listLegacyDocuments(patientId, patientName, refreshKey > 0);
         if (cancelled) return;
-
-        if (!response.ok) {
-          setLegacyDocsLoading(false);
-          return;
-        }
-
-        const data = await response.json();
-        
-        // Files are already deduplicated server-side
-        const files: ListedItem[] = (data.files || [])
+        const files: ListedItem[] = documents
           .map((file: any) => ({
             name: file.name,
             id: file.path,
@@ -344,22 +380,15 @@ export default function PatientDocumentsTab({
     let cancelled = false;
 
     async function loadItems() {
-      setLoading(true);
+      const cached = cachedPatientDocuments(patientId, currentPrefix);
+      setPrimaryItems(cached?.data ? toPrimaryItems(cached.data, currentPrefix) : []);
+      setLoading(!cached);
       setError(null);
-
-      const folderPath = [patientId, currentPrefix]
-        .filter(Boolean)
-        .join("/");
-
-      const listPath = folderPath === "" ? undefined : folderPath;
-
-      const { data, error: listError } = await supabaseClient.storage
-        .from(BUCKET_NAME)
-        .list(listPath, {
-          limit: 200,
-          offset: 0,
-          sortBy: { column: "name", order: "asc" },
-        });
+      const { data, error: listError } = await listPatientDocuments(
+        patientId,
+        currentPrefix,
+        refreshKey > 0,
+      );
 
       if (cancelled) return;
 
@@ -371,70 +400,7 @@ export default function PatientDocumentsTab({
         return;
       }
 
-      const folders: Record<string, ListedItem> = {};
-      const files: ListedItem[] = [];
-
-      for (const raw of data ?? []) {
-        const base: StorageItem = {
-          name: raw.name,
-          id: (raw as any).id,
-          updated_at: (raw as any).updated_at,
-          created_at: (raw as any).created_at,
-          metadata: (raw as any).metadata ?? null,
-        };
-
-        if (raw.name === ".keep") {
-          continue;
-        }
-
-        const isFolder = (raw as any).id == null && (raw as any).metadata == null;
-
-        if (isFolder) {
-          const folderName = raw.name;
-          if (!folderName) continue;
-
-          folders[folderName] = {
-            ...base,
-            name: folderName,
-            kind: "folder",
-            path: `${currentPrefix}${folderName}/`,
-          };
-          continue;
-        }
-
-        if (raw.name.includes("/")) {
-          const [folderName] = raw.name.split("/");
-
-          if (!folderName) continue;
-
-          const folderPathRelative = `${currentPrefix}${folderName}/`;
-
-          if (!folders[folderName]) {
-            folders[folderName] = {
-              ...base,
-              name: folderName,
-              kind: "folder",
-              path: folderPathRelative,
-            };
-          }
-
-          continue;
-        }
-
-        files.push({
-          ...base,
-          kind: "file",
-          path: `${currentPrefix}${raw.name}`,
-          source: "patient_document",
-        });
-      }
-
-      const listed: ListedItem[] = [
-        ...Object.values(folders).sort((a, b) => a.name.localeCompare(b.name)),
-        ...files,
-      ];
-
-      setPrimaryItems(listed);
+      setPrimaryItems(toPrimaryItems(data ?? [], currentPrefix));
 
       setLoading(false);
     }
@@ -1122,6 +1088,7 @@ export default function PatientDocumentsTab({
       if (!response.ok) throw new Error(`Failed to load ${item.name}`);
 
       const blob = await response.blob();
+      const { convertDocxBlobToPdf } = await import("@/lib/docxToPdf");
       await convertDocxBlobToPdf(blob, item.name);
     } catch (err: any) {
       setError(err?.message ?? "Failed to convert document to PDF.");

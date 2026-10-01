@@ -225,6 +225,13 @@ export default async function PatientPage({
 }: PatientDetailsProps) {
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const initialDocumentsPromise = resolvedSearchParams?.m_tab === "documents"
+    ? supabaseAdmin.storage.from("patient-documents").list(id, {
+        limit: 200,
+        offset: 0,
+        sortBy: { column: "name", order: "asc" },
+      })
+    : null;
   const tPatient = await getTranslations("patient");
 
   const { patient, insurance } = await getPatientWithDetails(id);
@@ -334,6 +341,9 @@ export default async function PatientPage({
   }
 
   const patientFileName = formatPatientFileName(patient.first_name, patient.last_name);
+  const initialPrimaryDocuments = initialDocumentsPromise
+    ? (await initialDocumentsPromise).data
+    : null;
   const rawInvoiceStatusFilter = (() => {
     const value = resolvedSearchParams?.invoice_status;
     if (typeof value === "string") return value;
@@ -365,6 +375,7 @@ export default async function PatientPage({
         patientId={patient.id}
         firstName={patient.first_name ?? ""}
         lastName={patient.last_name ?? ""}
+        prefetchDocuments={medicalTab !== "documents"}
         avatarUrl={(patient as any).avatar_url ?? null}
       />
       <CrisalixPlayerModal
@@ -714,7 +725,12 @@ export default async function PatientPage({
         ) : null}
 
         {medicalTab === "documents" ? (
-          <PatientDocumentsTab patientId={patient.id} patientName={`${patient.first_name} ${patient.last_name}`} />
+          <PatientDocumentsTab
+            key={patient.id}
+            patientId={patient.id}
+            patientName={`${patient.first_name} ${patient.last_name}`}
+            initialPrimaryData={initialPrimaryDocuments}
+          />
         ) : null}
 
         {medicalTab === "rendezvous" ? (

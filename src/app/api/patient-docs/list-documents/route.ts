@@ -54,52 +54,26 @@ function parseFolderName(folderName: string): {
   return { firstName: null, lastName: null };
 }
 
-// Helper to fetch all folders with pagination
-async function fetchAllFolders(): Promise<{ name: string; id: string | null }[]> {
-  const allFolders: { name: string; id: string | null }[] = [];
+// Search the root by patient name instead of paging through every patient folder.
+async function fetchMatchingFolders(firstName: string, lastName: string): Promise<string[]> {
   const PAGE_SIZE = 1000;
-  let offset = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const { data: folders, error } = await supabaseAdmin.storage
-      .from(BUCKET_NAME)
-      .list("", { limit: PAGE_SIZE, offset });
-
-    if (error) {
-      console.error("Error listing folders at offset", offset, error);
-      throw error;
+  const terms = [...new Set([firstName, lastName].map((name) => name.trim()).filter(Boolean))];
+  const results = await Promise.all(terms.map(async (search) => {
+    const names: string[] = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabaseAdmin.storage
+        .from(BUCKET_NAME)
+        .list("", { search, limit: PAGE_SIZE, offset });
+      if (error) throw error;
+      const page = data ?? [];
+      names.push(...page.filter((entry) => entry.id == null).map((entry) => entry.name));
+      if (page.length < PAGE_SIZE) break;
+      offset += page.length;
     }
-
-    if (!folders || folders.length === 0) {
-      hasMore = false;
-    } else {
-      allFolders.push(...folders.map(f => ({ name: f.name, id: f.id })));
-      offset += folders.length;
-      hasMore = folders.length === PAGE_SIZE;
-    }
-  }
-
-  return allFolders;
-}
-
-// Reuse the bucket index across requests handled by the same warm server instance.
-let folderCache: { expiresAt: number; folders: { name: string; id: string | null }[] } | null = null;
-let pendingFolders: Promise<{ name: string; id: string | null }[]> | null = null;
-
-function getFolders() {
-  if (folderCache && folderCache.expiresAt > Date.now()) {
-    return Promise.resolve(folderCache.folders);
-  }
-  if (!pendingFolders) {
-    pendingFolders = fetchAllFolders()
-      .then((folders) => {
-        folderCache = { folders, expiresAt: Date.now() + 5 * 60 * 1000 };
-        return folders;
-      })
-      .finally(() => { pendingFolders = null; });
-  }
-  return pendingFolders;
+    return names;
+  }));
+  return [...new Set(results.flat())];
 }
 
 // Helper to fetch all file names from patient_document bucket recursively
@@ -144,27 +118,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "firstName and lastName are required" }, { status: 400 });
     }
     
-    // Fetch all file names from patient_document bucket for deduplication
-    const [existingKeys, folders] = await Promise.all([
-      patientId ? fetchAllPatientDocumentKeys(patientId) : Promise.resolve(new Set<string>()),
-      getFolders(),
-    ]);
-    
     const searchFirstNameLower = firstName.toLowerCase().trim();
     const searchLastNameLower = lastName.toLowerCase().trim();
 
-    // Fetch all folders from patient-docs bucket
+    const folders = await fetchMatchingFolders(firstName, lastName);
     if (folders.length === 0) {
       return NextResponse.json({ files: [] });
     }
 
-    const documentFiles: DocumentFile[] = [];
-
     const matchingFolders = folders.filter((folder) => {
       // Skip files at root level
-      if (/\.(pdf|jpg|jpeg|png|gif|txt|doc|docx)$/i.test(folder.name)) return false;
+      if (/\.(pdf|jpg|jpeg|png|gif|txt|doc|docx)$/i.test(folder)) return false;
 
-      const folderInfo = parseFolderName(folder.name);
+      const folderInfo = parseFolderName(folder);
       const folderFirstName = folderInfo.firstName?.toLowerCase().trim() || "";
       const folderLastName = folderInfo.lastName?.toLowerCase().trim() || "";
 
@@ -177,16 +143,16 @@ export async function POST(request: NextRequest) {
         (folderFirstName.includes(searchLastNameLower) || searchLastNameLower.includes(folderFirstName)) &&
         (folderLastName.includes(searchFirstNameLower) || searchFirstNameLower.includes(folderLastName));
       
-      const folderNameLower = folder.name.toLowerCase();
+      const folderNameLower = folder.toLowerCase();
       const containsBothNames = folderNameLower.includes(searchFirstNameLower) && folderNameLower.includes(searchLastNameLower);
 
       return directMatch || reverseMatch || containsBothNames;
     });
 
-    await Promise.all(matchingFolders.map(async (folder) => {
+    const listedFiles = await Promise.all(matchingFolders.map(async (folder) => {
 
       // Found matching patient folder - now look for 5_Documents subfolder
-      const documentsPath = `${folder.name}/5_Documents`;
+      const documentsPath = `${folder}/5_Documents`;
       
       const { data: files, error: listError } = await supabaseAdmin.storage
         .from(BUCKET_NAME)
@@ -194,50 +160,45 @@ export async function POST(request: NextRequest) {
 
       if (listError || !files) {
         // 5_Documents folder doesn't exist for this patient - that's OK
-        return;
+        return [];
       }
 
-      const candidates = files.filter((file) =>
-        file.name !== ".keep" &&
-        file.name !== ".emptyFolderPlaceholder" &&
-        !existingKeys.has(normalizeForMatch(file.name.replace(/_/g, "-")))
-      );
-      if (candidates.length === 0) return;
-
-      const { data: signedUrls, error: signedUrlError } = await supabaseAdmin.storage
-        .from(BUCKET_NAME)
-        .createSignedUrls(candidates.map((file) => `${documentsPath}/${file.name}`), 3600);
-      if (signedUrlError || !signedUrls) return;
-      const urlByPath = new Map(signedUrls.map((item) => [item.path, item.signedUrl]));
-
-      // Process each file in 5_Documents
-      for (const file of candidates) {
-
-        const filePath = `${documentsPath}/${file.name}`;
-
-        const signedUrl = urlByPath.get(filePath);
-        if (!signedUrl) continue;
-
-        const legacyDisplayName = file.name.replace(/_/g, "-");
-        const normalizedLegacyName = normalizeForMatch(legacyDisplayName);
-
-        const legacySize = (file as any).metadata?.size ?? null;
-
-        // ✅ Dedup by normalized filename only
-        if (existingKeys.has(normalizedLegacyName)) continue;
-
-        documentFiles.push({
-          name: legacyDisplayName,          // ✅ UI shows '-' instead of '_'
-          path: filePath,                   // ✅ still points to the real storage object
-          size: legacySize,
-          mimeType: (file as any).metadata?.mimetype || null,
-          createdAt: (file as any).created_at || null,
-          updatedAt: (file as any).updated_at || null,
-          publicUrl: signedUrl,
-          source: "patient-docs",
-        });
-      }
+      return files
+        .filter((file) => file.name !== ".keep" && file.name !== ".emptyFolderPlaceholder")
+        .map((file) => ({ file, path: `${documentsPath}/${file.name}` }));
     }));
+
+    const candidates = listedFiles.flat();
+    if (candidates.length === 0) return NextResponse.json({ files: [] });
+
+    const existingKeys = patientId
+      ? await fetchAllPatientDocumentKeys(patientId)
+      : new Set<string>();
+    const uniqueFiles = candidates.filter(({ file }) =>
+      !existingKeys.has(normalizeForMatch(file.name))
+    );
+    if (uniqueFiles.length === 0) return NextResponse.json({ files: [] });
+
+    const { data: signedUrls, error: signedUrlError } = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .createSignedUrls(uniqueFiles.map(({ path }) => path), 3600);
+    if (signedUrlError || !signedUrls) throw signedUrlError || new Error("Failed to sign legacy documents");
+    const urlByPath = new Map(signedUrls.map((item) => [item.path, item.signedUrl]));
+
+    const documentFiles: DocumentFile[] = uniqueFiles.flatMap(({ file, path }) => {
+      const publicUrl = urlByPath.get(path);
+      if (!publicUrl) return [];
+      return [{
+        name: file.name.replace(/_/g, "-"),
+        path,
+        size: (file as any).metadata?.size ?? null,
+        mimeType: (file as any).metadata?.mimetype || null,
+        createdAt: (file as any).created_at || null,
+        updatedAt: (file as any).updated_at || null,
+        publicUrl,
+        source: "patient-docs" as const,
+      }];
+    });
 
     return NextResponse.json({ files: documentFiles });
   } catch (error: any) {
