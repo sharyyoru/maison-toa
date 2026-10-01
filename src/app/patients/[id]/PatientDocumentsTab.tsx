@@ -41,6 +41,11 @@ interface PatientDocumentsTabProps {
 
 const BUCKET_NAME = "patient-documents";
 
+function patientRelativePath(path: string, patientId: string): string {
+  const prefix = `${patientId}/`;
+  return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+}
+
 interface StorageItem {
   name: string;
   id?: string;
@@ -192,10 +197,7 @@ export default function PatientDocumentsTab({
     if (!linkedPath || !linkedBucket) return;
 
     if (linkedBucket === BUCKET_NAME) {
-      const patientPrefix = `${patientId}/`;
-      if (linkedPath.startsWith(patientPrefix)) {
-        linkedPath = linkedPath.slice(patientPrefix.length);
-      }
+      linkedPath = patientRelativePath(linkedPath, patientId);
 
       const slashIndex = linkedPath.lastIndexOf("/");
       const linkedPrefix = slashIndex >= 0 ? linkedPath.slice(0, slashIndex + 1) : "";
@@ -215,7 +217,7 @@ export default function PatientDocumentsTab({
     setFilterType("all");
     setCurrentPage(1);
     setLinkedDocumentHandled(true);
-  }, [currentPrefix, items, linkedDocumentHandled, searchParams]);
+  }, [currentPrefix, items, linkedDocumentHandled, patientId, searchParams]);
 
   function handleCreateTask(item: ListedItem) {
     const documentBucket = item.source === "patient-docs" ? "patient-docs" : BUCKET_NAME;
@@ -565,7 +567,10 @@ export default function PatientDocumentsTab({
     if (searchParams.get("openDocumentMode") !== "edit" || !linkedPath) return;
 
     linkedDocumentEditLaunchingRef.current = true;
-    const linkedName = linkedPath.split("/").filter(Boolean).pop() || linkedPath;
+    const relativePath = linkedBucket === BUCKET_NAME
+      ? patientRelativePath(linkedPath, patientId)
+      : linkedPath;
+    const linkedName = relativePath.split("/").filter(Boolean).pop() || relativePath;
     if (linkedBucket !== BUCKET_NAME || getExtension(linkedName) !== "docx") {
       setOpeningLinkedDocument(false);
       return;
@@ -574,7 +579,7 @@ export default function PatientDocumentsTab({
     const linkedFile: ListedItem = {
       kind: "file",
       name: linkedName,
-      path: linkedPath,
+      path: relativePath,
       source: "patient_document",
     };
     let cancelled = false;
@@ -605,6 +610,7 @@ export default function PatientDocumentsTab({
     };
   }, [
     getFileAccessUrl,
+    patientId,
     searchParams,
   ]);
 
