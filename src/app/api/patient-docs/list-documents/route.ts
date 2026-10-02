@@ -54,33 +54,26 @@ function parseFolderName(folderName: string): {
   return { firstName: null, lastName: null };
 }
 
-// Helper to fetch all folders with pagination
-async function fetchAllFolders(): Promise<{ name: string; id: string | null }[]> {
-  const allFolders: { name: string; id: string | null }[] = [];
+// Search the root by patient name instead of paging through every patient folder.
+async function fetchMatchingFolders(firstName: string, lastName: string): Promise<string[]> {
   const PAGE_SIZE = 1000;
-  let offset = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const { data: folders, error } = await supabaseAdmin.storage
-      .from(BUCKET_NAME)
-      .list("", { limit: PAGE_SIZE, offset });
-
-    if (error) {
-      console.error("Error listing folders at offset", offset, error);
-      break;
+  const terms = [...new Set([firstName, lastName].map((name) => name.trim()).filter(Boolean))];
+  const results = await Promise.all(terms.map(async (search) => {
+    const names: string[] = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabaseAdmin.storage
+        .from(BUCKET_NAME)
+        .list("", { search, limit: PAGE_SIZE, offset });
+      if (error) throw error;
+      const page = data ?? [];
+      names.push(...page.filter((entry) => entry.id == null).map((entry) => entry.name));
+      if (page.length < PAGE_SIZE) break;
+      offset += page.length;
     }
-
-    if (!folders || folders.length === 0) {
-      hasMore = false;
-    } else {
-      allFolders.push(...folders.map(f => ({ name: f.name, id: f.id })));
-      offset += folders.length;
-      hasMore = folders.length === PAGE_SIZE;
-    }
-  }
-
-  return allFolders;
+    return names;
+  }));
+  return [...new Set(results.flat())];
 }
 
 // Helper to fetch all file names from patient_document bucket recursively
@@ -125,30 +118,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "firstName and lastName are required" }, { status: 400 });
     }
     
-    // Fetch all file names from patient_document bucket for deduplication
-    const existingKeys = patientId
-      ? await fetchAllPatientDocumentKeys(patientId)
-      : new Set<string>();
-
-    console.log("Existing keys in patient_document:", Array.from(existingKeys));
-    
     const searchFirstNameLower = firstName.toLowerCase().trim();
     const searchLastNameLower = lastName.toLowerCase().trim();
 
-    // Fetch all folders from patient-docs bucket
-    const folders = await fetchAllFolders();
-
+    const folders = await fetchMatchingFolders(firstName, lastName);
     if (folders.length === 0) {
       return NextResponse.json({ files: [] });
     }
 
-    const documentFiles: DocumentFile[] = [];
-
-    for (const folder of folders) {
+    const matchingFolders = folders.filter((folder) => {
       // Skip files at root level
-      if (/\.(pdf|jpg|jpeg|png|gif|txt|doc|docx)$/i.test(folder.name)) continue;
+      if (/\.(pdf|jpg|jpeg|png|gif|txt|doc|docx)$/i.test(folder)) return false;
 
-      const folderInfo = parseFolderName(folder.name);
+      const folderInfo = parseFolderName(folder);
       const folderFirstName = folderInfo.firstName?.toLowerCase().trim() || "";
       const folderLastName = folderInfo.lastName?.toLowerCase().trim() || "";
 
@@ -161,13 +143,16 @@ export async function POST(request: NextRequest) {
         (folderFirstName.includes(searchLastNameLower) || searchLastNameLower.includes(folderFirstName)) &&
         (folderLastName.includes(searchFirstNameLower) || searchFirstNameLower.includes(folderLastName));
       
-      const folderNameLower = folder.name.toLowerCase();
+      const folderNameLower = folder.toLowerCase();
       const containsBothNames = folderNameLower.includes(searchFirstNameLower) && folderNameLower.includes(searchLastNameLower);
 
-      if (!directMatch && !reverseMatch && !containsBothNames) continue;
+      return directMatch || reverseMatch || containsBothNames;
+    });
+
+    const listedFiles = await Promise.all(matchingFolders.map(async (folder) => {
 
       // Found matching patient folder - now look for 5_Documents subfolder
-      const documentsPath = `${folder.name}/5_Documents`;
+      const documentsPath = `${folder}/5_Documents`;
       
       const { data: files, error: listError } = await supabaseAdmin.storage
         .from(BUCKET_NAME)
@@ -175,44 +160,45 @@ export async function POST(request: NextRequest) {
 
       if (listError || !files) {
         // 5_Documents folder doesn't exist for this patient - that's OK
-        continue;
+        return [];
       }
 
-      // Process each file in 5_Documents
-      for (const file of files) {
-        if (file.name === ".keep" || file.name === ".emptyFolderPlaceholder") continue;
+      return files
+        .filter((file) => file.name !== ".keep" && file.name !== ".emptyFolderPlaceholder")
+        .map((file) => ({ file, path: `${documentsPath}/${file.name}` }));
+    }));
 
-        const filePath = `${documentsPath}/${file.name}`;
+    const candidates = listedFiles.flat();
+    if (candidates.length === 0) return NextResponse.json({ files: [] });
 
-        const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
-          .from(BUCKET_NAME)
-          .createSignedUrl(filePath, 3600);
+    const existingKeys = patientId
+      ? await fetchAllPatientDocumentKeys(patientId)
+      : new Set<string>();
+    const uniqueFiles = candidates.filter(({ file }) =>
+      !existingKeys.has(normalizeForMatch(file.name))
+    );
+    if (uniqueFiles.length === 0) return NextResponse.json({ files: [] });
 
-        if (signedUrlError || !signedUrlData?.signedUrl) continue;
+    const { data: signedUrls, error: signedUrlError } = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .createSignedUrls(uniqueFiles.map(({ path }) => path), 3600);
+    if (signedUrlError || !signedUrls) throw signedUrlError || new Error("Failed to sign legacy documents");
+    const urlByPath = new Map(signedUrls.map((item) => [item.path, item.signedUrl]));
 
-        const legacyDisplayName = file.name.replace(/_/g, "-");
-        const normalizedLegacyName = normalizeForMatch(legacyDisplayName);
-
-        const legacySize = (file as any).metadata?.size ?? null;
-
-        // ✅ Dedup by normalized filename only
-        if (existingKeys.has(normalizedLegacyName)) {
-          console.log("Skipping duplicate legacy file (name):", legacyDisplayName);
-          continue;
-        }
-
-        documentFiles.push({
-          name: legacyDisplayName,          // ✅ UI shows '-' instead of '_'
-          path: filePath,                   // ✅ still points to the real storage object
-          size: legacySize,
-          mimeType: (file as any).metadata?.mimetype || null,
-          createdAt: (file as any).created_at || null,
-          updatedAt: (file as any).updated_at || null,
-          publicUrl: signedUrlData.signedUrl,
-          source: "patient-docs",
-        });
-      }
-    }
+    const documentFiles: DocumentFile[] = uniqueFiles.flatMap(({ file, path }) => {
+      const publicUrl = urlByPath.get(path);
+      if (!publicUrl) return [];
+      return [{
+        name: file.name.replace(/_/g, "-"),
+        path,
+        size: (file as any).metadata?.size ?? null,
+        mimeType: (file as any).metadata?.mimetype || null,
+        createdAt: (file as any).created_at || null,
+        updatedAt: (file as any).updated_at || null,
+        publicUrl,
+        source: "patient-docs" as const,
+      }];
+    });
 
     return NextResponse.json({ files: documentFiles });
   } catch (error: any) {

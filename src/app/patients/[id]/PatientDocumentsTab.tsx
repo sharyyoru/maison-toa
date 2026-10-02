@@ -2,19 +2,27 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
-import BeforeAfterEditorModal from "./BeforeAfterEditorModal";
-import PdfAnnotationEditor from "@/components/PdfAnnotationEditor";
-import DocxPreviewEditor from "@/components/DocxEditor/DocxPreviewEditor";
-import DocumentTemplatesPanel from "@/components/DocumentTemplatesPanel";
 import Tooltip from "@/components/Tooltip";
 import EmailShareModal from "./EmailShareModal";
-import { convertDocxBlobToPdf } from "@/lib/docxToPdf";
 import { formatSwissTime, formatSwissDateTime, SWISS_TIMEZONE } from "@/lib/swissTimezone";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from 'next/dynamic';
 import { useDocumentPreviewTabs } from "./DocumentPreviewTabsWrapper";
 import { decodeStorageFileName, encodeStorageFileName } from "@/utils/storageFileName";
+import {
+  cachedLegacyDocuments,
+  cachedPatientDocuments,
+  listLegacyDocuments,
+  listPatientDocuments,
+  seedPatientDocuments,
+} from "@/lib/patientDocumentPrefetch";
+import type { PatientStorageEntry } from "@/lib/patientDocumentPrefetch";
+
+const BeforeAfterEditorModal = dynamic(() => import("./BeforeAfterEditorModal"), { ssr: false });
+const PdfAnnotationEditor = dynamic(() => import("@/components/PdfAnnotationEditor"), { ssr: false });
+const DocxPreviewEditor = dynamic(() => import("@/components/DocxEditor/DocxPreviewEditor"), { ssr: false });
+const DocumentTemplatesPanel = dynamic(() => import("@/components/DocumentTemplatesPanel"), { ssr: false });
 
 // Dynamic import for docx-preview (client-side only)
 const DocxPreview = dynamic(() => import('@/components/DocxPreview'), {
@@ -37,9 +45,15 @@ const HeicPreview = dynamic(() => import('@/components/HeicPreview'), {
 interface PatientDocumentsTabProps {
   patientId: string;
   patientName?: string;
+  initialPrimaryData?: PatientStorageEntry[] | null;
 }
 
 const BUCKET_NAME = "patient-documents";
+
+function patientRelativePath(path: string, patientId: string): string {
+  const prefix = `${patientId}/`;
+  return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+}
 
 interface StorageItem {
   name: string;
@@ -58,6 +72,48 @@ interface ListedItem extends StorageItem {
   path: string;
   source?: "patient_document" | "patient-docs"; // Track which bucket the file came from
   publicUrl?: string; // For patient-docs files
+}
+
+function toPrimaryItems(data: PatientStorageEntry[], currentPrefix: string): ListedItem[] {
+  const folders: Record<string, ListedItem> = {};
+  const files: ListedItem[] = [];
+
+  for (const raw of data) {
+    if (raw.name === ".keep") continue;
+    const base: StorageItem = {
+      name: raw.name,
+      id: raw.id ?? undefined,
+      updated_at: raw.updated_at ?? undefined,
+      created_at: raw.created_at ?? undefined,
+      metadata: raw.metadata ?? null,
+    };
+    const isFolder = raw.id == null && raw.metadata == null;
+    if (isFolder) {
+      folders[raw.name] = { ...base, kind: "folder", path: `${currentPrefix}${raw.name}/` };
+    } else if (raw.name.includes("/")) {
+      const [folderName] = raw.name.split("/");
+      if (folderName && !folders[folderName]) {
+        folders[folderName] = {
+          ...base,
+          name: folderName,
+          kind: "folder",
+          path: `${currentPrefix}${folderName}/`,
+        };
+      }
+    } else {
+      files.push({
+        ...base,
+        kind: "file",
+        path: `${currentPrefix}${raw.name}`,
+        source: "patient_document",
+      });
+    }
+  }
+
+  return [
+    ...Object.values(folders).sort((a, b) => a.name.localeCompare(b.name)),
+    ...files,
+  ];
 }
 
 function formatFileSize(bytes: number | undefined): string {
@@ -129,6 +185,7 @@ function sanitizeFilename(filename: string): string {
 export default function PatientDocumentsTab({
   patientId,
   patientName = "Patient",
+  initialPrimaryData = null,
 }: PatientDocumentsTabProps) {
   const t = useTranslations("patient.documentsTab");
   const router = useRouter();
@@ -138,8 +195,31 @@ export default function PatientDocumentsTab({
   );
   const documentPreviewTabs = useDocumentPreviewTabs();
 
-  const [items, setItems] = useState<ListedItem[]>([]);
+  const [primaryItems, setPrimaryItems] = useState<ListedItem[]>(
+    () => initialPrimaryData ? toPrimaryItems(initialPrimaryData, "") : [],
+  );
+  const [legacyDocsItems, setLegacyDocsItems] = useState<ListedItem[]>([]);
+  const [legacyDocsLoading, setLegacyDocsLoading] = useState(false);
+  const [sortBy, setSortBy] = useState<"name" | "date">("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [currentPrefix, setCurrentPrefix] = useState<string>("");
+  const items = useMemo(() => {
+    const combined = [
+      ...primaryItems,
+      ...(currentPrefix === "" ? legacyDocsItems : []),
+    ];
+    return combined.sort((a, b) => {
+      if (a.kind === "folder" && b.kind !== "folder") return -1;
+      if (a.kind !== "folder" && b.kind === "folder") return 1;
+      if (a.kind === "folder" && b.kind === "folder") return a.name.localeCompare(b.name);
+      if (sortBy === "date") {
+        const comparison = (a.updated_at || a.created_at || "").localeCompare(b.updated_at || b.created_at || "");
+        return sortOrder === "desc" ? -comparison : comparison;
+      }
+      const comparison = a.name.localeCompare(b.name);
+      return sortOrder === "desc" ? -comparison : comparison;
+    });
+  }, [primaryItems, legacyDocsItems, currentPrefix, sortBy, sortOrder]);
   const [selectedFile, setSelectedFile] = useState<ListedItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,10 +251,7 @@ export default function PatientDocumentsTab({
     if (!linkedPath || !linkedBucket) return;
 
     if (linkedBucket === BUCKET_NAME) {
-      const patientPrefix = `${patientId}/`;
-      if (linkedPath.startsWith(patientPrefix)) {
-        linkedPath = linkedPath.slice(patientPrefix.length);
-      }
+      linkedPath = patientRelativePath(linkedPath, patientId);
 
       const slashIndex = linkedPath.lastIndexOf("/");
       const linkedPrefix = slashIndex >= 0 ? linkedPath.slice(0, slashIndex + 1) : "";
@@ -194,7 +271,7 @@ export default function PatientDocumentsTab({
     setFilterType("all");
     setCurrentPage(1);
     setLinkedDocumentHandled(true);
-  }, [currentPrefix, items, linkedDocumentHandled, searchParams]);
+  }, [currentPrefix, items, linkedDocumentHandled, patientId, searchParams]);
 
   function handleCreateTask(item: ListedItem) {
     const documentBucket = item.source === "patient-docs" ? "patient-docs" : BUCKET_NAME;
@@ -222,8 +299,6 @@ export default function PatientDocumentsTab({
   const [currentUploadIndex, setCurrentUploadIndex] = useState(0);
 
   // New state for Documents features
-  const [sortBy, setSortBy] = useState<"name" | "date">("date");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
   const [filterType, setFilterType] = useState<string>("all");
@@ -245,10 +320,6 @@ export default function PatientDocumentsTab({
   // Download state
   const [downloadingFiles, setDownloadingFiles] = useState(false);
 
-  // State for files from patient-docs/5_Documents folder
-  const [legacyDocsItems, setLegacyDocsItems] = useState<ListedItem[]>([]);
-  const [legacyDocsLoading, setLegacyDocsLoading] = useState(false);
-
   // Close the More options menu when clicking anywhere outside it
   useEffect(() => {
     if (!moreMenuOpenPath) return;
@@ -261,6 +332,10 @@ export default function PatientDocumentsTab({
     return () => document.removeEventListener("click", handleClickOutside);
   }, [moreMenuOpenPath]);
 
+  useEffect(() => {
+    if (initialPrimaryData) seedPatientDocuments(patientId, "", initialPrimaryData);
+  }, [patientId, initialPrimaryData]);
+
   // Fetch files from patient-docs/5_Documents folder (legacy storage)
   // Deduplication is done server-side by passing patientId
   useEffect(() => {
@@ -268,34 +343,12 @@ export default function PatientDocumentsTab({
 
     async function loadLegacyDocs() {
       if (!patientName || patientName === "Patient") return;
-      
-      // Parse first and last name from patientName
-      const nameParts = patientName.trim().split(/\s+/);
-      if (nameParts.length < 2) return;
-      
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(" ");
-
-      setLegacyDocsLoading(true);
+      setLegacyDocsLoading(!cachedLegacyDocuments(patientId, patientName));
 
       try {
-        const response = await fetch("/api/patient-docs/list-documents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ firstName, lastName, patientId }),
-        });
-
+        const documents = await listLegacyDocuments(patientId, patientName, refreshKey > 0);
         if (cancelled) return;
-
-        if (!response.ok) {
-          setLegacyDocsLoading(false);
-          return;
-        }
-
-        const data = await response.json();
-        
-        // Files are already deduplicated server-side
-        const files: ListedItem[] = (data.files || [])
+        const files: ListedItem[] = documents
           .map((file: any) => ({
             name: file.name,
             id: file.path,
@@ -327,128 +380,27 @@ export default function PatientDocumentsTab({
     let cancelled = false;
 
     async function loadItems() {
-      setLoading(true);
+      const cached = cachedPatientDocuments(patientId, currentPrefix);
+      setPrimaryItems(cached?.data ? toPrimaryItems(cached.data, currentPrefix) : []);
+      setLoading(!cached);
       setError(null);
-
-      const folderPath = [patientId, currentPrefix]
-        .filter(Boolean)
-        .join("/");
-
-      const listPath = folderPath === "" ? undefined : folderPath;
-
-      const { data, error: listError } = await supabaseClient.storage
-        .from(BUCKET_NAME)
-        .list(listPath, {
-          limit: 200,
-          offset: 0,
-          sortBy: { column: "name", order: "asc" },
-        });
-
-      console.log(`[PatientDocs] bucket=${BUCKET_NAME}, listPath=${listPath}, returned=${data?.length ?? 0} items, error=${listError?.message ?? 'none'}`);
-      if (data) {
-        console.log(`[PatientDocs] raw items:`, data.map(d => ({ name: d.name, id: (d as any).id, metadata: (d as any).metadata })));
-      }
+      const { data, error: listError } = await listPatientDocuments(
+        patientId,
+        currentPrefix,
+        refreshKey > 0,
+      );
 
       if (cancelled) return;
 
       if (listError) {
         setError(listError.message ?? "Failed to load documents.");
-        setItems([]);
+        setPrimaryItems([]);
         setSelectedFile(null);
         setLoading(false);
         return;
       }
 
-      const folders: Record<string, ListedItem> = {};
-      const files: ListedItem[] = [];
-
-      for (const raw of data ?? []) {
-        const base: StorageItem = {
-          name: raw.name,
-          id: (raw as any).id,
-          updated_at: (raw as any).updated_at,
-          created_at: (raw as any).created_at,
-          metadata: (raw as any).metadata ?? null,
-        };
-
-        if (raw.name === ".keep") {
-          continue;
-        }
-
-        const isFolder = (raw as any).id == null && (raw as any).metadata == null;
-
-        if (isFolder) {
-          const folderName = raw.name;
-          if (!folderName) continue;
-
-          folders[folderName] = {
-            ...base,
-            name: folderName,
-            kind: "folder",
-            path: `${currentPrefix}${folderName}/`,
-          };
-          continue;
-        }
-
-        if (raw.name.includes("/")) {
-          const [folderName] = raw.name.split("/");
-
-          if (!folderName) continue;
-
-          const folderPathRelative = `${currentPrefix}${folderName}/`;
-
-          if (!folders[folderName]) {
-            folders[folderName] = {
-              ...base,
-              name: folderName,
-              kind: "folder",
-              path: folderPathRelative,
-            };
-          }
-
-          continue;
-        }
-
-        files.push({
-          ...base,
-          kind: "file",
-          path: `${currentPrefix}${raw.name}`,
-          source: "patient_document",
-        });
-      }
-
-      // Only show legacy docs at root level (they're already deduplicated in the fetch)
-      const combined: ListedItem[] = [
-        ...Object.values(folders).sort((a, b) => a.name.localeCompare(b.name)),
-        ...files,
-        ...(currentPrefix === "" ? legacyDocsItems : []),
-      ];
-
-      // Sort files based on sortBy and sortOrder
-      combined.sort((a, b) => {
-        // Folders always come first
-        if (a.kind === "folder" && b.kind !== "folder") return -1;
-        if (a.kind !== "folder" && b.kind === "folder") return 1;
-        if (a.kind === "folder" && b.kind === "folder") {
-          return a.name.localeCompare(b.name);
-        }
-        // Sort files
-        if (sortBy === "date") {
-          const aDate = a.updated_at || a.created_at || "";
-          const bDate = b.updated_at || b.created_at || "";
-          const comparison = aDate.localeCompare(bDate);
-          return sortOrder === "desc" ? -comparison : comparison;
-        }
-        const comparison = a.name.localeCompare(b.name);
-        return sortOrder === "desc" ? -comparison : comparison;
-      });
-
-      setItems(combined);
-
-      if (!selectedFile) {
-        const firstFile = combined.find((item) => item.kind === "file") ?? null;
-        setSelectedFile(firstFile ?? null);
-      }
+      setPrimaryItems(toPrimaryItems(data ?? [], currentPrefix));
 
       setLoading(false);
     }
@@ -458,7 +410,13 @@ export default function PatientDocumentsTab({
     return () => {
       cancelled = true;
     };
-  }, [patientId, currentPrefix, refreshKey, legacyDocsItems, sortBy, sortOrder]);
+  }, [patientId, currentPrefix, refreshKey]);
+
+  useEffect(() => {
+    if (!selectedFile && items.length > 0) {
+      setSelectedFile(items.find((item) => item.kind === "file") ?? null);
+    }
+  }, [items, selectedFile]);
 
   const breadcrumbSegments = useMemo(() => {
     const segments = currentPrefix.split("/").filter(Boolean);
@@ -575,7 +533,10 @@ export default function PatientDocumentsTab({
     if (searchParams.get("openDocumentMode") !== "edit" || !linkedPath) return;
 
     linkedDocumentEditLaunchingRef.current = true;
-    const linkedName = linkedPath.split("/").filter(Boolean).pop() || linkedPath;
+    const relativePath = linkedBucket === BUCKET_NAME
+      ? patientRelativePath(linkedPath, patientId)
+      : linkedPath;
+    const linkedName = relativePath.split("/").filter(Boolean).pop() || relativePath;
     if (linkedBucket !== BUCKET_NAME || getExtension(linkedName) !== "docx") {
       setOpeningLinkedDocument(false);
       return;
@@ -584,7 +545,7 @@ export default function PatientDocumentsTab({
     const linkedFile: ListedItem = {
       kind: "file",
       name: linkedName,
-      path: linkedPath,
+      path: relativePath,
       source: "patient_document",
     };
     let cancelled = false;
@@ -615,6 +576,7 @@ export default function PatientDocumentsTab({
     };
   }, [
     getFileAccessUrl,
+    patientId,
     searchParams,
   ]);
 
@@ -1126,6 +1088,7 @@ export default function PatientDocumentsTab({
       if (!response.ok) throw new Error(`Failed to load ${item.name}`);
 
       const blob = await response.blob();
+      const { convertDocxBlobToPdf } = await import("@/lib/docxToPdf");
       await convertDocxBlobToPdf(blob, item.name);
     } catch (err: any) {
       setError(err?.message ?? "Failed to convert document to PDF.");
@@ -1382,12 +1345,12 @@ export default function PatientDocumentsTab({
                   </div>
                 )}
               </div>
-              {loading ? <span className="text-slate-400">{t("loading")}</span> : null}
+              {loading || legacyDocsLoading ? <span className="text-slate-400">{t("loading")}</span> : null}
             </div>
             <div className="max-h-[420px] overflow-auto rounded-lg border border-slate-100 bg-slate-50/60 p-2">
               {filteredItems.length === 0 ? (
                 <div className="flex h-24 items-center justify-center text-[11px] text-slate-500">
-                  {t("noDocuments")}
+                  {loading || legacyDocsLoading ? t("loading") : t("noDocuments")}
                 </div>
               ) : (
                 <div className="space-y-2">

@@ -379,23 +379,8 @@ export async function POST(request: Request) {
                   status: "pending",
                 });
 
-                // Try to send via Resend (will skip if beyond 24-hour limit)
-                const result = await sendEmail(
-                  patientEmail,
-                  `Reminder: Appointment Tomorrow - ${formatAppointmentDate(appointmentDateObj)}`,
-                  patientReminderHtml,
-                  reminderDate
-                );
-                
-                // If Resend sent/scheduled it, mark as sent in DB
-                if (result.sent) {
-                  await supabase.from("scheduled_emails")
-                    .update({ status: "sent" })
-                    .eq("appointment_id", appointmentId)
-                    .eq("recipient_type", "patient");
-                }
-                
-                console.log("Patient reminder scheduled for:", reminderDate.toISOString(), result);
+                // Keep reminders in our queue so calendar changes can still cancel them.
+                console.log("Patient reminder queued for:", reminderDate.toISOString());
               } catch (err) {
                 console.error("Error scheduling patient reminder:", err);
                 // Don't throw - this is a non-critical operation
@@ -427,23 +412,7 @@ export async function POST(request: Request) {
                   status: "pending",
                 });
 
-                // Try to send via Resend (will skip if beyond 24-hour limit)
-                const result = await sendEmail(
-                  assignedUserEmail,
-                  `Reminder: Appointment with ${patientName} Tomorrow`,
-                  providerReminderHtml,
-                  reminderDate
-                );
-                
-                // If Resend sent/scheduled it, mark as sent in DB
-                if (result.sent) {
-                  await supabase.from("scheduled_emails")
-                    .update({ status: "sent" })
-                    .eq("appointment_id", appointmentId)
-                    .eq("recipient_type", "provider");
-                }
-                
-                console.log("Provider reminder scheduled for:", reminderDate.toISOString(), result);
+                console.log("Provider reminder queued for:", reminderDate.toISOString());
               } catch (err) {
                 console.error("Error scheduling provider reminder:", err);
                 // Don't throw - this is a non-critical operation

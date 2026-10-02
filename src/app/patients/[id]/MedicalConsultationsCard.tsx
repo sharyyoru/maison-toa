@@ -1226,6 +1226,7 @@ function PendingCreateConsultationNoteEditor({
 
 function CollaborativeUnlockedNoteEditor({
   row,
+  focusTitle,
   patientId,
   currentUserEmail,
   currentUserName,
@@ -1236,6 +1237,7 @@ function CollaborativeUnlockedNoteEditor({
   onError,
 }: {
   row: ConsultationRow;
+  focusTitle: boolean;
   patientId: string;
   currentUserEmail: string | null;
   currentUserName: string | null;
@@ -1260,6 +1262,7 @@ function CollaborativeUnlockedNoteEditor({
   const [refIcd10, setRefIcd10] = useState(row.ref_icd10 || "");
   const [contentHtml, setContentHtml] = useState(row.content || "");
   const contentHtmlRef = useRef(row.content || "");
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const [savingState, setSavingState] = useState<"idle" | "pending" | "saving" | "saved">("idle");
   const [locking, setLocking] = useState(false);
   const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
@@ -1321,6 +1324,10 @@ function CollaborativeUnlockedNoteEditor({
     },
     [currentUserEmail, currentUserName, provider, ydoc],
   );
+
+  useEffect(() => {
+    if (focusTitle) titleInputRef.current?.focus({ preventScroll: true });
+  }, [focusTitle]);
 
   useEffect(() => {
     const { room, leave } = liveblocksClient.enterRoom(roomId, {
@@ -1409,7 +1416,6 @@ function CollaborativeUnlockedNoteEditor({
       setContentHtml(row.content);
     } else if (isConsultationYjsFragmentEmpty(ydoc) && isBlankNotesHtml(row.content)) {
       editor.commands.setContent(buildBlankConsultationNotesDoc(), { emitUpdate: false });
-      editor.commands.focus("start");
       const blankHtml = buildBlankConsultationNotesHtml();
       contentHtmlRef.current = blankHtml;
       setContentHtml(blankHtml);
@@ -1590,6 +1596,7 @@ function CollaborativeUnlockedNoteEditor({
         <label className="space-y-1">
           <span className="block text-[11px] font-medium text-slate-700">Title</span>
           <input
+            ref={titleInputRef}
             type="text"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
@@ -1748,6 +1755,7 @@ export default function MedicalConsultationsCard({
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [editingInvoiceNumber, setEditingInvoiceNumber] = useState<string | null>(null);
   const [newConsultationOpen, setNewConsultationOpen] = useState(false);
+  const [focusConsultationTitleId, setFocusConsultationTitleId] = useState<string | null>(null);
   const [pendingCreateConsultationNotes, setPendingCreateConsultationNotes] = useState<
     PendingCreateConsultationNote[]
   >([]);
@@ -4227,6 +4235,7 @@ export default function MedicalConsultationsCard({
         invoice_stop_reminders: false,
       };
 
+      setFocusConsultationTitleId(row.id);
       setConsultations((prev) =>
         prev.map((item) => (item.id === row.id ? draftRow : item)),
       );
@@ -5234,6 +5243,7 @@ export default function MedicalConsultationsCard({
         invoice_stop_reminders: false,
       };
 
+      setFocusConsultationTitleId(newRow.id);
       setConsultations((prev) =>
         prev.some((row) => row.id === newRow.id) ? prev : [newRow, ...prev],
       );
@@ -7040,6 +7050,7 @@ export default function MedicalConsultationsCard({
               <div key={row.id} id={`consultation-note-${row.id}`}>
                 <CollaborativeUnlockedNoteEditor
                   row={row}
+                  focusTitle={focusConsultationTitleId === row.id}
                   patientId={patientId}
                   currentUserEmail={currentUserEmail}
                   currentUserName={currentUserName}

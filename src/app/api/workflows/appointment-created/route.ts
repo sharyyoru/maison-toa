@@ -575,6 +575,7 @@ export async function POST(request: Request) {
           // not available to the calendar update paths and it becomes stale.
           const canUseProviderScheduling =
             sendMode !== "reminder_before" &&
+            emailType !== "appointment_reminder" &&
             isEmailConfigured() &&
             delayMs <= 72 * 60 * 60 * 1000;
 
@@ -623,7 +624,9 @@ export async function POST(request: Request) {
               appointment_id: appointmentId,
               // Keep workflow jobs distinct from the built-in 24-hour patient
               // reminder. Calendar time synchronization only manages the latter.
-              recipient_type: "workflow",
+              recipient_type: sendMode === "reminder_before" || emailType === "appointment_reminder"
+                ? "appointment_reminder"
+                : "workflow",
               recipient_email: recipientEmail,
               subject,
               body: bodyHtml,

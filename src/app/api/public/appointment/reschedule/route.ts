@@ -232,6 +232,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to reschedule appointment" }, { status: 500 });
     }
 
+    const { data: pendingReminders, error: reminderError } = await supabase
+      .from("scheduled_emails")
+      .select("id, scheduled_for")
+      .eq("appointment_id", id)
+      .eq("status", "pending");
+    if (reminderError) throw reminderError;
+    const reminderDeltaMs = newPatientStartDate.getTime() - currentPatientStart.getTime();
+    for (const reminder of pendingReminders ?? []) {
+      const scheduledAt = new Date(reminder.scheduled_for).getTime();
+      if (!Number.isFinite(scheduledAt)) continue;
+      const { error: shiftError } = await supabase
+        .from("scheduled_emails")
+        .update({ scheduled_for: new Date(scheduledAt + reminderDeltaMs).toISOString() })
+        .eq("id", reminder.id);
+      if (shiftError) throw shiftError;
+    }
+
     // Fetch patient and doctor info for email
     const { data: patient } = await supabase
       .from("patients")
