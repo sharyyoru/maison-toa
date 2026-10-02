@@ -1653,9 +1653,28 @@ function BankPaymentReceipts() {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: listError } = await supabaseClient.storage
-        .from(BUCKET)
-        .list("", { sortBy: { column: "created_at", order: "desc" } });
+      // Fetch ALL receipt files — the storage list API returns at most 100
+      // rows per call (which silently limited the visible history to about
+      // one month), so page through until everything is loaded.
+      const pageSize = 100;
+      const data: { name: string; created_at: string | null; metadata: { size?: number } | null }[] = [];
+      let listError: { message: string } | null = null;
+      for (let offset = 0; offset < 10000; offset += pageSize) {
+        const { data: page, error: pageError } = await supabaseClient.storage
+          .from(BUCKET)
+          .list("", {
+            limit: pageSize,
+            offset,
+            sortBy: { column: "created_at", order: "desc" },
+          });
+        if (pageError) {
+          listError = pageError;
+          break;
+        }
+        if (!page || page.length === 0) break;
+        data.push(...page);
+        if (page.length < pageSize) break;
+      }
 
       if (listError) {
         setError(listError.message);
@@ -2116,20 +2135,35 @@ function PaymentImportHistory() {
   const [selectedImport, setSelectedImport] = useState<ImportRecord | null>(null);
   const [items, setItems] = useState<ImportItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
+  // Full history access: filter any period instead of a fixed recent window
+  const [historyFrom, setHistoryFrom] = useState<string>("");
+  const [historyTo, setHistoryTo] = useState<string>("");
+  const [hasMore, setHasMore] = useState(false);
+  const [pageCount, setPageCount] = useState(1);
+  const HISTORY_PAGE_SIZE = 50;
 
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const { data } = await supabaseClient
+      let query = supabaseClient
         .from("bank_payment_imports")
         .select("*")
-        .order("imported_at", { ascending: false })
-        .limit(50);
-      setImports((data as ImportRecord[]) || []);
+        .order("imported_at", { ascending: false });
+      if (historyFrom) query = query.gte("imported_at", historyFrom);
+      if (historyTo) query = query.lte("imported_at", `${historyTo}T23:59:59.999Z`);
+      const { data } = await query.limit(HISTORY_PAGE_SIZE * pageCount + 1);
+      const rows = (data as ImportRecord[]) || [];
+      setHasMore(rows.length > HISTORY_PAGE_SIZE * pageCount);
+      setImports(rows.slice(0, HISTORY_PAGE_SIZE * pageCount));
       setLoading(false);
     }
     void load();
-  }, []);
+  }, [historyFrom, historyTo, pageCount]);
+
+  // Reset pagination when the period changes
+  useEffect(() => {
+    setPageCount(1);
+  }, [historyFrom, historyTo]);
 
   async function loadItems(importId: string) {
     setItemsLoading(true);
@@ -2199,8 +2233,42 @@ function PaymentImportHistory() {
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white/90 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur overflow-hidden">
       <div className="border-b border-slate-100 px-6 py-4">
-        <h2 className="text-base font-semibold text-slate-900">{t("title")}</h2>
-        <p className="mt-0.5 text-sm text-slate-500">{t("subtitle")}</p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">{t("title")}</h2>
+            <p className="mt-0.5 text-sm text-slate-500">{t("subtitle")}</p>
+          </div>
+          {/* Full-history period filter — no more one-month window */}
+          <div className="flex items-end gap-2">
+            <label className="space-y-1 text-[11px] font-medium text-slate-500">
+              <span>From</span>
+              <input
+                type="date"
+                value={historyFrom}
+                onChange={(e) => setHistoryFrom(e.target.value)}
+                className="block rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-normal text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              />
+            </label>
+            <label className="space-y-1 text-[11px] font-medium text-slate-500">
+              <span>To</span>
+              <input
+                type="date"
+                value={historyTo}
+                onChange={(e) => setHistoryTo(e.target.value)}
+                className="block rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-normal text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              />
+            </label>
+            {(historyFrom || historyTo) && (
+              <button
+                type="button"
+                onClick={() => { setHistoryFrom(""); setHistoryTo(""); }}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-500 shadow-sm hover:bg-slate-50"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {loading ? (
@@ -2351,6 +2419,17 @@ function PaymentImportHistory() {
               </div>
             );
           })}
+          {hasMore && (
+            <div className="px-6 py-3 text-center">
+              <button
+                type="button"
+                onClick={() => setPageCount((c) => c + 1)}
+                className="rounded-full border border-sky-200 bg-sky-50 px-4 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100"
+              >
+                Load older imports
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
