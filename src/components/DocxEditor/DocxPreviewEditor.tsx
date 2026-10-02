@@ -12,7 +12,7 @@ import "@docx-editor.dev/react/styles.css";
 import "@docx-editor.dev/core/styles/editor.css";
 import { removeNextFieldArtifacts } from "@/lib/docxFieldCleanup";
 import { normalizeDocxFonts } from "@/lib/docxFontNormalization";
-import { convertRenderedDocxToPdf } from "@/lib/docxToPdf";
+import { convertRenderedDocxToPdf, convertRenderedDocxToPdfBlob } from "@/lib/docxToPdf";
 
 interface EditorPaneProps {
   documentBuffer: ArrayBuffer;
@@ -72,7 +72,7 @@ interface DocxPreviewEditorProps {
   documentId: string;
   patientData?: PatientData;
   fileName?: string;
-  onSave: (blob: Blob, fileName?: string) => Promise<void>;
+  onSave: (blob: Blob, fileName?: string, pdfBlob?: Blob | null) => Promise<void>;
   onClose: () => void;
 }
 
@@ -275,7 +275,37 @@ export default function DocxPreviewEditor({
       const targetFileName = fileName !== undefined && editedFileName.trim()
         ? editedFileName.trim()
         : undefined;
-      await onSave(blob, targetFileName);
+
+      // BUG-013-DOC: also render the PDF with the live editor (the exact
+      // layout the user sees) so later downloads from the Documents section
+      // match this saved version. Best-effort — saving must never fail
+      // because of PDF generation.
+      let pdfBlob: Blob | null = null;
+      try {
+        const viewport = editorViewportRef.current;
+        if (viewport) {
+          const paragraphMarksVisible = Boolean(
+            editorRef.current?.snapshot().showParagraphMarks
+          );
+          if (paragraphMarksVisible) {
+            editorRef.current?.exec({ type: "toggleParagraphMarks" });
+            await new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+            );
+          }
+          try {
+            pdfBlob = await convertRenderedDocxToPdfBlob(viewport);
+          } finally {
+            if (paragraphMarksVisible) {
+              editorRef.current?.exec({ type: "toggleParagraphMarks" });
+            }
+          }
+        }
+      } catch (pdfErr) {
+        console.warn("Could not render the saved-version PDF:", pdfErr);
+      }
+
+      await onSave(blob, targetFileName, pdfBlob);
       setHasChanges(false);
     } catch (saveError) {
       console.error("Error saving document:", saveError);

@@ -29,7 +29,10 @@ export async function GET(req: NextRequest) {
   const bagUnpadded = String(parseInt(bagPadded, 10)); // e.g. "1562"
 
   try {
-    // 1. Local lookup — prefer rows with a real GLN over placeholder rows
+    // 1. Local lookup. A VEKA/CADA card is a KVG (LAMal) health-insurance
+    // card, so when the insurer has several entities (e.g. "Helsana KVG" vs
+    // "Helsana UVG/LAA"), pick the KVG one — accident (UVG/LAA) entities are
+    // a different coverage and must not be auto-selected from the card.
     const { data: localRows } = await supabaseAdmin
       .from("swiss_insurers")
       .select("id, name, name_fr, gln, receiver_gln, bag_number, address_street, address_postal_code, address_city, tp_allowed")
@@ -37,13 +40,25 @@ export async function GET(req: NextRequest) {
       .eq("is_active", true)
       .limit(20);
 
+    const rows = localRows ?? [];
+    const isAccidentEntity = (name: string | null) => /\b(uvg|laa|unfall|accident)\b/i.test(name || "");
+    const hasRealGln = (gln: string | null) => !!gln && /^\d{13}$/.test(gln);
+    const isKvgEntity = (name: string | null) => /\b(kvg|lamal)\b/i.test(name || "");
+
     const local =
-      (localRows ?? []).find((r) => r.gln && /^\d{13}$/.test(r.gln)) ??
-      (localRows ?? [])[0] ??
+      rows.find((r) => isKvgEntity(r.name) && hasRealGln(r.gln)) ??
+      rows.find((r) => !isAccidentEntity(r.name) && hasRealGln(r.gln)) ??
+      rows.find((r) => !isAccidentEntity(r.name)) ??
+      rows[0] ??
       null;
 
     if (local) {
-      return NextResponse.json({ source: "database", bagNumber: bagUnpadded, insurer: local });
+      return NextResponse.json({
+        source: "database",
+        bagNumber: bagUnpadded,
+        lawType: "KVG",
+        insurer: local,
+      });
     }
 
     // 2. Medidata participants fallback

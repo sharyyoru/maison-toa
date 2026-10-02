@@ -80,6 +80,9 @@ function toPrimaryItems(data: PatientStorageEntry[], currentPrefix: string): Lis
 
   for (const raw of data) {
     if (raw.name === ".keep") continue;
+    // Hidden system folders/files (e.g. .pdf-exports holding the saved PDF
+    // version of edited documents) are never shown in the documents list.
+    if (raw.name.startsWith(".")) continue;
     const base: StorageItem = {
       name: raw.name,
       id: raw.id ?? undefined,
@@ -1083,6 +1086,30 @@ export default function PatientDocumentsTab({
       setError(null);
       setDownloadingPdfPaths((prev) => new Set(prev).add(item.path));
 
+      // BUG-013-DOC: if the editor stored the saved-version PDF (rendered by
+      // the editor itself at save time), serve that exact file so it matches
+      // what was saved. Otherwise fall back to on-the-fly conversion.
+      try {
+        const storedPdfPath = [patientId, ".pdf-exports", `${item.path}.pdf`]
+          .filter(Boolean)
+          .join("/");
+        const { data: storedPdf } = await supabaseClient.storage
+          .from(BUCKET_NAME)
+          .download(storedPdfPath);
+        if (storedPdf && storedPdf.size > 0) {
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(storedPdf);
+          link.download = decodeStorageFileName(item.name).replace(/\.docx$/i, "") + ".pdf";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(link.href);
+          return;
+        }
+      } catch {
+        // No stored PDF — fall through to conversion
+      }
+
       const url = await getFileAccessUrl(item);
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Failed to load ${item.name}`);
@@ -1900,7 +1927,7 @@ export default function PatientDocumentsTab({
           patientId={patientId}
           documentId={editingDocx.item.id || editingDocx.item.name}
           fileName={decodeStorageFileName(editingDocx.item.path)}
-          onSave={async (blob, newFileName) => {
+          onSave={async (blob, newFileName, pdfBlob) => {
             const originalFileName = editingDocx.item.path;
             const targetFileName = newFileName?.trim() || originalFileName;
             const fullPath = [patientId, targetFileName].filter(Boolean).join("/");
@@ -1925,6 +1952,28 @@ export default function PatientDocumentsTab({
             const result = await response.json().catch(() => ({}));
             if (!response.ok || result.error) {
               throw new Error(result.error || "Failed to save edited document");
+            }
+
+            // BUG-013-DOC: store the PDF rendered by the editor alongside the
+            // docx (hidden .pdf-exports folder) so "Download PDF" from the
+            // Documents list serves exactly what was saved. Best-effort.
+            if (pdfBlob) {
+              try {
+                const savedName = (result.fileName || targetFileName) as string;
+                const pdfPath = [patientId, ".pdf-exports", `${savedName}.pdf`]
+                  .filter(Boolean)
+                  .join("/");
+                await supabaseClient.storage
+                  .from(BUCKET_NAME)
+                  .upload(pdfPath, pdfBlob, { contentType: "application/pdf", upsert: true });
+                if (oldPath) {
+                  await supabaseClient.storage
+                    .from(BUCKET_NAME)
+                    .remove([[patientId, ".pdf-exports", `${originalFileName}.pdf`].filter(Boolean).join("/")]);
+                }
+              } catch (pdfUploadErr) {
+                console.warn("Failed to store the saved-version PDF:", pdfUploadErr);
+              }
             }
 
             const storedFileName = result.fileName || originalFileName;

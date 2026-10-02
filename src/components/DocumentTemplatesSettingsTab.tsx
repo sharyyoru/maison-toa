@@ -123,17 +123,57 @@ export default function DocumentTemplatesSettingsTab() {
   }
 
   async function handleDelete(template: DocumentTemplate) {
-    if (!template.storage_only) return;
-    if (!confirm(`Delete the template "${template.name}"? This cannot be undone.`)) return;
+    if (!confirm(`Delete the template "${template.name}"?${template.storage_only ? " This cannot be undone." : ""}`)) return;
     setBusyId(template.id);
     setError(null);
     try {
-      const storageName = template.file_path.replace(/^storage:/, "");
-      const { error: deleteError } = await supabaseClient.storage.from(BUCKET).remove([storageName]);
-      if (deleteError) throw deleteError;
+      if (template.storage_only) {
+        const storageName = template.file_path.replace(/^storage:/, "");
+        const { error: deleteError } = await supabaseClient.storage.from(BUCKET).remove([storageName]);
+        if (deleteError) throw deleteError;
+      } else {
+        // Built-in template: mark as hidden so it disappears everywhere
+        const { error: hideError } = await supabaseClient
+          .from("document_template_overrides")
+          .upsert({ file_name: template.file_path, hidden: true, updated_at: new Date().toISOString() });
+        if (hideError) throw hideError;
+      }
       await loadTemplates();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleRename(template: DocumentTemplate) {
+    const input = window.prompt("New template name:", template.name);
+    if (!input) return;
+    const newName = input.trim();
+    if (!newName || newName === template.name) return;
+    if (templates.some((t) => t.name.toLowerCase() === newName.toLowerCase())) {
+      setError(`A template named "${newName}" already exists.`);
+      return;
+    }
+    setBusyId(template.id);
+    setError(null);
+    try {
+      if (template.storage_only) {
+        const storageName = template.file_path.replace(/^storage:/, "");
+        const { error: moveError } = await supabaseClient.storage
+          .from(BUCKET)
+          .move(storageName, `${newName}.docx`);
+        if (moveError) throw moveError;
+      } else {
+        // Built-in template: store a display-name override
+        const { error: renameError } = await supabaseClient
+          .from("document_template_overrides")
+          .upsert({ file_name: template.file_path, display_name: newName, hidden: false, updated_at: new Date().toISOString() });
+        if (renameError) throw renameError;
+      }
+      await loadTemplates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Rename failed");
     } finally {
       setBusyId(null);
     }
@@ -256,22 +296,28 @@ export default function DocumentTemplatesSettingsTab() {
                       </button>
                       <button
                         type="button"
+                        onClick={() => void handleRename(template)}
+                        disabled={busyId === template.id}
+                        className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        Rename
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => void handleDuplicate(template)}
                         disabled={busyId === template.id}
                         className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
                       >
                         {busyId === template.id ? "..." : "Duplicate"}
                       </button>
-                      {template.storage_only && (
-                        <button
-                          type="button"
-                          onClick={() => void handleDelete(template)}
-                          disabled={busyId === template.id}
-                          className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
-                        >
-                          Delete
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(template)}
+                        disabled={busyId === template.id}
+                        className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </td>
                 </tr>

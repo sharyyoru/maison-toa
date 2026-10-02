@@ -11,11 +11,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Same fixes as the cancel route: the admin address had a trailing dot making
-// it undeliverable, and the patient-facing email is no longer CC'd to the
-// clinic — staff get the dedicated internal notification instead.
-const ADMIN_NOTIFICATION_EMAIL = "louise.goerig@maisontoa.com";
-const ADMIN_NOTIFICATION_CC = "info@maisontoa.com";
+// EMAIL-011: internal notifications go ONLY to the team inbox; the
+// patient-facing email carries no internal CC.
+const ADMIN_NOTIFICATION_EMAIL = "info@maisontoa.com";
 
 async function sendEmail(to: string, subject: string, html: string, cc?: string) {
   if (!isEmailConfigured()) return;
@@ -296,8 +294,7 @@ export async function POST(request: Request) {
            <tr><td><b>Practitioner:</b></td><td>${doctorName || "-"}</td></tr>
            <tr><td><b>New Date:</b></td><td>${newDateStr}</td></tr>
            <tr><td><b>Location:</b></td><td>${appt.location ?? "-"}</td></tr>
-         </table>`,
-        ADMIN_NOTIFICATION_CC
+         </table>`
       );
     } catch (err) {
       console.error("Failed to send admin reschedule notification:", err);

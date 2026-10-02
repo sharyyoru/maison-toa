@@ -94,6 +94,27 @@ export default function ImageLibraryPage() {
     }
   }
 
+  async function handleRename(img: GalleryImage) {
+    const ext = img.name.split(".").pop() || "png";
+    const currentBase = img.name.replace(/\.[^.]+$/, "");
+    const input = window.prompt("New image name:", currentBase);
+    if (!input) return;
+    const newBase = input.trim().replace(/[^a-zA-Z0-9 _().-]+/g, "-").slice(0, 80);
+    if (!newBase || newBase === currentBase) return;
+    const newName = `${newBase}.${ext}`;
+    if (images.some((i) => i.name.toLowerCase() === newName.toLowerCase())) {
+      setError(`An image named "${newName}" already exists.`);
+      return;
+    }
+    try {
+      const { error: moveError } = await supabaseClient.storage.from(BUCKET).move(img.name, newName);
+      if (moveError) throw moveError;
+      await loadImages();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Rename failed");
+    }
+  }
+
   async function handleCopyUrl(url: string) {
     try {
       await navigator.clipboard.writeText(url);
@@ -191,6 +212,14 @@ export default function ImageLibraryPage() {
                       className="rounded-md bg-white/90 px-1.5 py-1 text-[10px] font-medium text-slate-700 shadow hover:bg-white"
                     >
                       {copiedUrl === img.url ? "✓ Copied" : "Copy URL"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleRename(img)}
+                      title="Rename image (note: emails already using this image keep working; templates referencing the old URL must re-insert it)"
+                      className="rounded-md bg-white/90 px-1.5 py-1 text-[10px] font-medium text-slate-700 shadow hover:bg-white"
+                    >
+                      Rename
                     </button>
                     <button
                       type="button"

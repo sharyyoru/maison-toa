@@ -8,12 +8,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// EMAIL-011: the address previously had a trailing dot ("...com.") which made
-// it invalid — the internal cancellation notifications were never delivered.
-// Per Maison Tóā feedback, the patient-facing cancellation email is no longer
-// CC'd to the clinic — only the internal notification below is sent to staff.
-const ADMIN_NOTIFICATION_EMAIL = "louise.goerig@maisontoa.com";
-const ADMIN_NOTIFICATION_CC = "info@maisontoa.com";
+// EMAIL-011: per Maison Tóā feedback, internal notifications go ONLY to the
+// team inbox, and the patient-facing email carries no internal CC.
+const ADMIN_NOTIFICATION_EMAIL = "info@maisontoa.com";
 
 async function sendEmail(to: string, subject: string, html: string, cc?: string) {
   if (!isEmailConfigured()) return;
@@ -265,8 +262,7 @@ export async function POST(request: Request) {
            <tr><td><b>Location:</b></td><td>${appt.location ?? "-"}</td></tr>
            ${depositRows}
          </table>
-         ${depositWarning}`,
-        ADMIN_NOTIFICATION_CC
+         ${depositWarning}`
       );
     } catch (err) {
       console.error("Failed to send admin cancellation notification:", err);

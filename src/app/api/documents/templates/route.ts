@@ -23,16 +23,34 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // DOC-003: apply user overrides (rename / hide) to built-in templates
+    const overrides = new Map<string, { display_name: string | null; hidden: boolean }>();
+    try {
+      const { data: overrideRows } = await supabaseAdmin
+        .from("document_template_overrides")
+        .select("file_name, display_name, hidden");
+      for (const row of overrideRows ?? []) {
+        overrides.set(row.file_name as string, {
+          display_name: (row.display_name as string | null) ?? null,
+          hidden: Boolean(row.hidden),
+        });
+      }
+    } catch (overrideErr) {
+      console.error("Error reading template overrides:", overrideErr);
+    }
+
     // Format built-in templates for frontend
-    const formattedTemplates = files.map(file => ({
-      id: file,
-      name: file.replace('.docx', ''),
-      description: 'Template from General',
-      file_path: file, // Just the filename, API will look in aesthetic-templates
-      file_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      category: 'General',
-      storage_only: false,
-    }));
+    const formattedTemplates = files
+      .filter(file => !overrides.get(file)?.hidden)
+      .map(file => ({
+        id: file,
+        name: overrides.get(file)?.display_name || file.replace('.docx', ''),
+        description: 'Template from General',
+        file_path: file, // Just the filename, API will look in aesthetic-templates
+        file_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        category: 'General',
+        storage_only: false,
+      }));
 
     // DOC-003: merge in user-managed templates from the document-templates
     // storage bucket (added/duplicated by staff in Settings).

@@ -24,6 +24,25 @@ export async function convertRenderedDocxToPdf(
   editorViewport: HTMLElement,
   fileName: string
 ): Promise<void> {
+  const pdf = await renderEditorPagesToPdf(editorViewport);
+  pdf.save(fileName.replace(/\.docx$/i, "") + ".pdf");
+}
+
+/**
+ * BUG-013-DOC: same rendering as convertRenderedDocxToPdf but returns the PDF
+ * as a Blob — used at save time so the Documents section can later serve the
+ * exact PDF the user saw in the editor.
+ */
+export async function convertRenderedDocxToPdfBlob(
+  editorViewport: HTMLElement
+): Promise<Blob> {
+  const pdf = await renderEditorPagesToPdf(editorViewport);
+  return pdf.output("blob");
+}
+
+async function renderEditorPagesToPdf(
+  editorViewport: HTMLElement
+): Promise<jsPDF> {
   await document.fonts.ready;
   const pages = Array.from(
     editorViewport.querySelectorAll<HTMLElement>(".docx-page")
@@ -88,7 +107,7 @@ export async function convertRenderedDocxToPdf(
       }
     }
 
-    pdf!.save(fileName.replace(/\.docx$/i, "") + ".pdf");
+    return pdf!;
   } finally {
     editorViewport.scrollTo(previousScrollLeft, previousScrollTop);
   }

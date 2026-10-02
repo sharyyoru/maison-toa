@@ -189,12 +189,17 @@ export default function PatientIntakeDataCard({ patientId }: { patientId: string
         return;
       }
       const ins = data.insurer as { id: string | null; name: string; gln: string | null; law_types?: number[] | null };
+      // A CADA/VEKA card is always the KVG (LAMal) coverage — set the law
+      // type accordingly so e.g. "Helsana KVG" is never mixed up with the
+      // separate "Helsana UVG/LAA" accident entity.
+      const resolvedLaw = (data.lawType as string | undefined) ||
+        (Array.isArray(ins.law_types) && ins.law_types.includes(1) ? "KVG" : null);
       setEditInsurance((prev) => prev ? {
         ...prev,
         insurer_id: ins.id ?? prev.insurer_id,
         insurer_gln: ins.gln ?? prev.insurer_gln,
         provider_name: ins.name || prev.provider_name,
-        law_type: prev.law_type || (Array.isArray(ins.law_types) && ins.law_types.includes(1) ? "KVG" : prev.law_type),
+        law_type: resolvedLaw || prev.law_type,
       } : prev);
       setCadaLookupStatus("found");
       setCadaLookupMessage(ins.name);
