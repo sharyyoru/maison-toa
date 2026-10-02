@@ -8,9 +8,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const PATIENT_SELF_SERVICE_CC_EMAIL = "info@maisontoa.com";
 // EMAIL-011: the address previously had a trailing dot ("...com.") which made
 // it invalid — the internal cancellation notifications were never delivered.
+// Per Maison Tóā feedback, the patient-facing cancellation email is no longer
+// CC'd to the clinic — only the internal notification below is sent to staff.
 const ADMIN_NOTIFICATION_EMAIL = "louise.goerig@maisontoa.com";
 const ADMIN_NOTIFICATION_CC = "info@maisontoa.com";
 
@@ -191,6 +192,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to cancel appointment" }, { status: 500 });
     }
 
+    // Remove any pending reminder emails for this appointment so patients
+    // never receive reminders for cancelled visits.
+    try {
+      await supabase
+        .from("scheduled_emails")
+        .delete()
+        .eq("appointment_id", id)
+        .eq("status", "pending");
+    } catch (reminderErr) {
+      console.error("Failed to clean up pending reminders:", reminderErr);
+    }
+
     // Send cancellation email
     if (patient?.email) {
       try {
@@ -202,7 +215,7 @@ export async function POST(request: Request) {
         const subject = language === "fr"
           ? "Annulation de votre rendez-vous"
           : "Appointment cancellation";
-        await sendEmail(patient.email, subject, html, PATIENT_SELF_SERVICE_CC_EMAIL);
+        await sendEmail(patient.email, subject, html);
       } catch (err) {
         console.error("Failed to send cancellation email:", err);
       }

@@ -124,6 +124,24 @@ export async function GET(request: Request) {
               return false;
             }
 
+            // Never remind for an appointment that has already taken place
+            // (e.g. a stale queued reminder for a past visit).
+            if (currentStart.getTime() <= Date.now()) {
+              await supabase.from("scheduled_emails").delete().eq("id", email.id);
+              return "skipped" as const;
+            }
+
+            // If the appointment was rescheduled far into the future, do not
+            // send the reminder months early — move it back to 24h before the
+            // new start time and keep it pending.
+            if (currentStart.getTime() - Date.now() > 3 * 24 * 60 * 60 * 1000) {
+              await supabase
+                .from("scheduled_emails")
+                .update({ scheduled_for: new Date(currentStart.getTime() - 24 * 60 * 60 * 1000).toISOString() })
+                .eq("id", email.id);
+              return "skipped" as const;
+            }
+
             const language = normalizePatientLanguage(patient?.language_preference, "en");
             subject = language === "fr" ? "Rappel de votre rendez-vous" : "Appointment reminder";
             body = generatePatientReminderEmail(

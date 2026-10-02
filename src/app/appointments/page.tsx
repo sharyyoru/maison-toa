@@ -4631,39 +4631,31 @@ export default function CalendarPage() {
           }),
         });
 
-        // BUG-012: extending an appointment often overlaps an adjacent booking,
-        // which used to silently revert the resize. Ask the user to confirm the
-        // overlap and retry with the internal override instead.
+        // BUG-012: resizing over an adjacent booking is an intentional manual
+        // action by clinic staff — apply the internal overlap override
+        // automatically, without interrupting the user with a prompt.
         if (response.status === 409) {
-          const conflictData = await response.json().catch(() => ({} as { error?: string; code?: string }));
-          const confirmed = window.confirm(
-            `${conflictData.error || "Another appointment overlaps this time."}\n\nDo you still want to apply this new duration?`,
-          );
-          if (confirmed) {
-            const { data: sessionData } = await supabaseClient.auth.getSession();
-            const token = sessionData?.session?.access_token;
-            response = await fetch(`/api/appointments/${appt.id}`, {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-              },
-              body: JSON.stringify({
-                start_time: appt.start_time,
-                end_time: newEnd,
-                allow_practitioner_overlap: true,
-                allow_resource_overlap: true,
-              }),
-            });
-          }
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const token = sessionData?.session?.access_token;
+          response = await fetch(`/api/appointments/${appt.id}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+              start_time: appt.start_time,
+              end_time: newEnd,
+              allow_practitioner_overlap: true,
+              allow_resource_overlap: true,
+            }),
+          });
         }
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({} as { error?: string }));
           console.error("Failed to save resize:", errData.error);
-          if (response.status !== 409) {
-            alert(errData.error || "Failed to save the new duration. Please try again.");
-          }
+          alert(errData.error || "Failed to save the new duration. Please try again.");
           // Revert on failure
           setAppointments(prev => prev.map(a => 
             a.id === appt.id ? { ...a, end_time: originalEnd } : a

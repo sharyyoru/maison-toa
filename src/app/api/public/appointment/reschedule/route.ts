@@ -11,8 +11,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const PATIENT_SELF_SERVICE_CC_EMAIL = "info@maisontoa.com";
-const ADMIN_NOTIFICATION_EMAIL = "louise.goerig@maisontoa.com.";
+// Same fixes as the cancel route: the admin address had a trailing dot making
+// it undeliverable, and the patient-facing email is no longer CC'd to the
+// clinic — staff get the dedicated internal notification instead.
+const ADMIN_NOTIFICATION_EMAIL = "louise.goerig@maisontoa.com";
+const ADMIN_NOTIFICATION_CC = "info@maisontoa.com";
 
 async function sendEmail(to: string, subject: string, html: string, cc?: string) {
   if (!isEmailConfigured()) return;
@@ -251,7 +254,7 @@ export async function POST(request: Request) {
         const subject = language === "fr"
           ? "Ajustement de votre rendez-vous chez Maison Tóā"
           : "Your appointment at Maison Tóā has been adjusted";
-        await sendEmail(patient.email, subject, html, PATIENT_SELF_SERVICE_CC_EMAIL);
+        await sendEmail(patient.email, subject, html);
       } catch (err) {
         console.error("Failed to send reschedule email:", err);
       }
@@ -276,7 +279,8 @@ export async function POST(request: Request) {
            <tr><td><b>Practitioner:</b></td><td>${doctorName || "-"}</td></tr>
            <tr><td><b>New Date:</b></td><td>${newDateStr}</td></tr>
            <tr><td><b>Location:</b></td><td>${appt.location ?? "-"}</td></tr>
-         </table>`
+         </table>`,
+        ADMIN_NOTIFICATION_CC
       );
     } catch (err) {
       console.error("Failed to send admin reschedule notification:", err);

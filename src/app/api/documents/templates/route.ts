@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readdir } from "fs/promises";
 import path from "path";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
 
     // Read templates from local filesystem (public/documents)
     const templatesDir = path.join(process.cwd(), "public", "documents");
-    
+
     let files: string[] = [];
     try {
       const dirContents = await readdir(templatesDir);
@@ -22,18 +23,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('Local templates found:', files.length);
-
-    // Filter by search term if provided
-    let filteredFiles = files;
-    if (search) {
-      filteredFiles = files.filter(file => 
-        file.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    // Format templates for frontend
-    const formattedTemplates = filteredFiles.map(file => ({
+    // Format built-in templates for frontend
+    const formattedTemplates = files.map(file => ({
       id: file,
       name: file.replace('.docx', ''),
       description: 'Template from General',
@@ -43,10 +34,40 @@ export async function GET(request: NextRequest) {
       storage_only: false,
     }));
 
-    // Sort alphabetically
-    formattedTemplates.sort((a, b) => a.name.localeCompare(b.name));
+    // DOC-003: merge in user-managed templates from the document-templates
+    // storage bucket (added/duplicated by staff in Settings).
+    try {
+      const { data: storageFiles } = await supabaseAdmin.storage
+        .from("document-templates")
+        .list("", { limit: 500, sortBy: { column: "name", order: "asc" } });
+      for (const file of storageFiles ?? []) {
+        if (!file.name || !file.name.toLowerCase().endsWith(".docx")) continue;
+        formattedTemplates.push({
+          id: `storage:${file.name}`,
+          name: file.name.replace(/\.docx$/i, ""),
+          description: "Custom template",
+          file_path: `storage:${file.name}`,
+          file_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          category: 'Custom',
+          storage_only: true,
+        });
+      }
+    } catch (storageErr) {
+      console.error("Error reading storage templates:", storageErr);
+    }
 
-    return NextResponse.json({ templates: formattedTemplates });
+    // Filter by search term if provided
+    let filtered = formattedTemplates;
+    if (search) {
+      filtered = formattedTemplates.filter(t =>
+        t.name.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+
+    // Sort alphabetically
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+
+    return NextResponse.json({ templates: filtered });
   } catch (error) {
     console.error("Error fetching templates:", error);
     return NextResponse.json(

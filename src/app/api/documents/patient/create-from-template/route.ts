@@ -198,22 +198,36 @@ export async function POST(request: NextRequest) {
       ? requestedFileName.trim()
       : buildBaseFileName(patientName || "", title);
 
-    // Read template from local filesystem (public/documents)
+    // Read template: from the document-templates storage bucket (DOC-003
+    // user-managed templates, prefixed "storage:") or from public/documents.
     const templateFileName = templatePath || `${title}.docx`;
-    const localTemplatePath = path.join(process.cwd(), "public", "documents", templateFileName);
-    
-    console.log("Reading template from:", localTemplatePath);
-    
     let templateBuffer: Buffer;
-    try {
-      templateBuffer = await readFile(localTemplatePath);
-      console.log("Template loaded, size:", templateBuffer.length, "bytes");
-    } catch (fileError: any) {
-      console.error("Failed to read local template:", fileError.message);
-      return NextResponse.json(
-        { error: `Template not found: ${templateFileName}` },
-        { status: 404 }
-      );
+    if (templateFileName.startsWith("storage:")) {
+      const storageName = templateFileName.slice("storage:".length);
+      const { data: blob, error: downloadError } = await supabaseAdmin.storage
+        .from("document-templates")
+        .download(storageName);
+      if (downloadError || !blob) {
+        console.error("Failed to read storage template:", downloadError?.message);
+        return NextResponse.json(
+          { error: `Template not found: ${storageName}` },
+          { status: 404 }
+        );
+      }
+      templateBuffer = Buffer.from(await blob.arrayBuffer());
+    } else {
+      const localTemplatePath = path.join(process.cwd(), "public", "documents", templateFileName);
+      console.log("Reading template from:", localTemplatePath);
+      try {
+        templateBuffer = await readFile(localTemplatePath);
+        console.log("Template loaded, size:", templateBuffer.length, "bytes");
+      } catch (fileError: any) {
+        console.error("Failed to read local template:", fileError.message);
+        return NextResponse.json(
+          { error: `Template not found: ${templateFileName}` },
+          { status: 404 }
+        );
+      }
     }
 
     // Fetch patient data for placeholder substitution

@@ -37,6 +37,11 @@ const Icd10CodesSettingsTab = dynamic(
   { loading: () => <div className="text-xs text-slate-400 py-8 text-center">Loading…</div> },
 );
 
+const DocumentTemplatesSettingsTab = dynamic(
+  () => import("@/components/DocumentTemplatesSettingsTab"),
+  { loading: () => <div className="text-xs text-slate-400 py-8 text-center">Loading…</div> },
+);
+
 const TABS = [
   { id: "external-labs", label: "External Labs" },
   { id: "doctor-scheduling", label: "Doctor Scheduling" },
@@ -48,6 +53,7 @@ const TABS = [
   { id: "icd10-codes", label: "ICD-10 Codes" },
   { id: "providers-billing", label: "Providers & Billing" },
   { id: "tardoc-groups", label: "TARDOC Groups" },
+  { id: "document-templates", label: "Document Templates" },
   { id: "system-configuration", label: "System Configuration" },
 ] as const;
 
@@ -89,6 +95,7 @@ export default function SettingsPage() {
     "icd10-codes": t("tabs.icd10Codes"),
     "providers-billing": t("tabs.providersBilling"),
     "tardoc-groups": t("tabs.tardocGroups"),
+    "document-templates": "Document Templates",
     "system-configuration": t("tabs.systemConfiguration"),
   };
 
@@ -131,6 +138,7 @@ export default function SettingsPage() {
         {activeTab === "icd10-codes" && <Icd10CodesSettingsTab />}
         {activeTab === "providers-billing" && <ProvidersBillingSettingsTab />}
         {activeTab === "tardoc-groups" && <TardocGroupsTab />}
+        {activeTab === "document-templates" && <DocumentTemplatesSettingsTab />}
         {activeTab === "system-configuration" && <SystemConfigurationTab />}
       </div>
     </div>
