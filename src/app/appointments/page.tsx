@@ -392,6 +392,7 @@ type CalendarAppointment = {
   temporary_text: string | null;
   machine_ids: string[];
   linked_parent_appointment_id?: string | null;
+  manual_linked_appointment_id?: string | null;
   recurrence_series_id?: string | null;
   recurrence_sequence?: number | null;
   tracking_params?: Record<string, string> | null;
@@ -968,6 +969,18 @@ export default function CalendarPage() {
   // BILL-005.1: appointment ids whose deposit invoice is paid — drives the
   // "🟢 Deposit Paid / Acompte réglé" note and 💵 badge on calendar cards.
   const [depositPaidAppointmentIds, setDepositPaidAppointmentIds] = useState<Set<string>>(new Set());
+  // CAL-018: ids of appointments connected by a manual link (either end),
+  // used to show the link badge on calendar cards.
+  const manuallyLinkedAppointmentIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const appt of appointments) {
+      if (appt.manual_linked_appointment_id) {
+        ids.add(appt.id);
+        ids.add(appt.manual_linked_appointment_id);
+      }
+    }
+    return ids;
+  }, [appointments]);
   const dayViewScrollRef = useRef<HTMLDivElement | null>(null);
   const focusedAppointmentScrolledRef = useRef<string | null>(null);
   const [appointmentsReloadVersion, setAppointmentsReloadVersion] = useState(0);
@@ -1421,6 +1434,10 @@ export default function CalendarPage() {
   const [editServiceDropdownOpen, setEditServiceDropdownOpen] = useState(false);
   const [editMachineIds, setEditMachineIds] = useState<string[]>([]);
   const [editMachineManualOpen, setEditMachineManualOpen] = useState(false);
+  // CAL-018: optional manual link to another appointment of the same patient
+  const [editLinkedAppointmentId, setEditLinkedAppointmentId] = useState<string>("");
+  const [editLinkOptions, setEditLinkOptions] = useState<Array<{ id: string; label: string }>>([]);
+  const [editLinkOptionsLoading, setEditLinkOptionsLoading] = useState(false);
 
   // Categories loaded from service_categories (with optional color) — used to populate
   // the category dropdowns and override CATEGORY_COLORS when a color is set in DB.
@@ -1504,7 +1521,7 @@ export default function CalendarPage() {
         const { data, error } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, manual_linked_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -3690,7 +3707,7 @@ export default function CalendarPage() {
           const { data: fullApptData } = await supabaseClient
             .from("appointments")
             .select(
-              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)",
+              "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, manual_linked_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)",
             )
             .eq('id', firstAppt.id)
             .single();
@@ -3709,7 +3726,7 @@ export default function CalendarPage() {
         const { data: refreshedData } = await supabaseClient
           .from("appointments")
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, manual_linked_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)",
           )
           .neq("status", "cancelled")
           .gte("start_time", fromIso)
@@ -3760,7 +3777,7 @@ export default function CalendarPage() {
             source: "manual",
           })
           .select(
-            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)",
+            "id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, manual_linked_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)",
           )
           .single();
 
@@ -3940,6 +3957,79 @@ export default function CalendarPage() {
 
     setEditMachineIds(appt.machine_ids || []);
     setEditMachineManualOpen(false);
+
+    // CAL-018: load this patient's other appointments for the optional
+    // "Linked Appointment" dropdown (same-day options first).
+    setEditLinkedAppointmentId(appt.manual_linked_appointment_id ?? "");
+    setEditLinkOptions([]);
+    if (appt.patient_id) {
+      setEditLinkOptionsLoading(true);
+      void (async () => {
+        try {
+          const windowStart = new Date();
+          windowStart.setDate(windowStart.getDate() - 60);
+          const { data: patientAppts } = await supabaseClient
+            .from("appointments")
+            .select("id, start_time, reason, title, status")
+            .eq("patient_id", appt.patient_id)
+            .neq("status", "cancelled")
+            .neq("id", appt.id)
+            .gte("start_time", windowStart.toISOString())
+            .order("start_time", { ascending: true })
+            .limit(200);
+          const apptDay = new Date(appt.start_time).toDateString();
+          const options = (patientAppts ?? [])
+            .filter((row: any) => !appt.manual_linked_appointment_id || row.id !== appt.id)
+            .map((row: any) => {
+              const start = new Date(row.start_time);
+              const { serviceLabel } = getServiceAndStatusFromReason(row.reason ?? "");
+              const service = serviceLabel || row.title || "Appointment";
+              const dd = String(start.getDate()).padStart(2, "0");
+              const mm = String(start.getMonth() + 1).padStart(2, "0");
+              const hh = String(start.getHours()).padStart(2, "0");
+              const min = String(start.getMinutes()).padStart(2, "0");
+              return {
+                id: row.id as string,
+                label: `${dd}.${mm}.${start.getFullYear()} – ${hh}:${min} – ${service}`,
+                sameDay: start.toDateString() === apptDay,
+                startMs: start.getTime(),
+              };
+            })
+            .sort((a: any, b: any) =>
+              a.sameDay !== b.sameDay ? (a.sameDay ? -1 : 1) : a.startMs - b.startMs
+            )
+            .map(({ id, label }: any) => ({ id, label }));
+          // Ensure the currently linked appointment is always selectable even
+          // if it falls outside the 60-day window.
+          const linkedId = appt.manual_linked_appointment_id;
+          if (linkedId && !options.some((o: any) => o.id === linkedId)) {
+            const { data: linkedRow } = await supabaseClient
+              .from("appointments")
+              .select("id, start_time, reason, title")
+              .eq("id", linkedId)
+              .maybeSingle();
+            if (linkedRow) {
+              const start = new Date(linkedRow.start_time);
+              const { serviceLabel } = getServiceAndStatusFromReason(linkedRow.reason ?? "");
+              const dd = String(start.getDate()).padStart(2, "0");
+              const mm = String(start.getMonth() + 1).padStart(2, "0");
+              const hh = String(start.getHours()).padStart(2, "0");
+              const min = String(start.getMinutes()).padStart(2, "0");
+              options.unshift({
+                id: linkedRow.id,
+                label: `${dd}.${mm}.${start.getFullYear()} – ${hh}:${min} – ${serviceLabel || linkedRow.title || "Appointment"}`,
+              });
+            }
+          }
+          setEditLinkOptions(options);
+        } catch (err) {
+          console.error("Failed to load linkable appointments:", err);
+        } finally {
+          setEditLinkOptionsLoading(false);
+        }
+      })();
+    }
+
     setEditModalOpen(true);
   }
 
@@ -4911,6 +5001,30 @@ export default function CalendarPage() {
       normalizeString(editBookingStatus) === "annule" &&
       normalizeString(getServiceAndStatusFromReason(editingAppointment.reason ?? "").statusLabel ?? "") !== "annule";
 
+    // CAL-018: when cancelling an appointment that is manually linked to
+    // another one, ask whether the linked appointment should be cancelled too.
+    let cancelLinkedCounterpart: CalendarAppointment | null = null;
+    if (bookingStatusChangedToCancelled && manuallyLinkedAppointmentIds.has(editingAppointment.id)) {
+      const counterpart =
+        appointments.find(
+          (a) =>
+            a.id !== editingAppointment.id &&
+            (a.id === editingAppointment.manual_linked_appointment_id ||
+              a.manual_linked_appointment_id === editingAppointment.id),
+        ) ?? null;
+      if (counterpart) {
+        const start = new Date(counterpart.start_time);
+        const label = `${String(start.getDate()).padStart(2, "0")}.${String(start.getMonth() + 1).padStart(2, "0")}.${start.getFullYear()} ${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`;
+        if (
+          window.confirm(
+            `🔗 This appointment is linked to another appointment (${label}).\n\nDo you also want to cancel the linked appointment?\n\nOK = cancel both\nCancel = cancel only this one`,
+          )
+        ) {
+          cancelLinkedCounterpart = counterpart;
+        }
+      }
+    }
+
     try {
       setSavingEdit(true);
 
@@ -4973,6 +5087,7 @@ export default function CalendarPage() {
             ? editingAppointment.provider_id
             : editProviderId || null,
           machine_ids: editMachineIds,
+          manual_linked_appointment_id: editLinkedAppointmentId || null,
           recurrence_scope: recurrenceScope,
           allow_practitioner_overlap: allowPractitionerOverlap,
           allow_resource_overlap: allowResourceOverlap,
@@ -5022,15 +5137,58 @@ export default function CalendarPage() {
         await syncPendingAppointmentReminder(updated);
       }
 
+      // CAL-018: cancel the manually linked appointment too, if confirmed.
+      let cancelledLinkedId: string | null = null;
+      if (cancelLinkedCounterpart) {
+        try {
+          await supabaseClient
+            .from("scheduled_emails")
+            .delete()
+            .eq("appointment_id", cancelLinkedCounterpart.id);
+          const linkedReason = (cancelLinkedCounterpart.reason ?? "").match(/\[Status:\s*[^\]]+\]/i)
+            ? (cancelLinkedCounterpart.reason ?? "").replace(/\[Status:\s*[^\]]+\]/i, "[Status: Annulé]")
+            : `${cancelLinkedCounterpart.reason ?? ""} [Status: Annulé]`.trim();
+          const linkedCancelResponse = await fetch(`/api/appointments/${cancelLinkedCounterpart.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "cancelled", reason: linkedReason }),
+          });
+          if (linkedCancelResponse.ok) cancelledLinkedId = cancelLinkedCounterpart.id;
+        } catch (linkedCancelErr) {
+          console.error("Failed to cancel linked appointment:", linkedCancelErr);
+        }
+      }
+
       setAppointments((prev) => {
+        if (cancelledLinkedId) {
+          prev = prev.filter((appt) => appt.id !== cancelledLinkedId);
+        }
         if (updated.status === "cancelled") {
           return prev.filter(
             (appt) => appt.id !== updated.id && appt.linked_parent_appointment_id !== updated.id,
           );
         }
 
+        const manualDelta =
+          new Date(updated.start_time).getTime() - new Date(editingAppointment.start_time).getTime();
         const next = prev.map((appt) => {
           if (appt.id === updated.id) return updated;
+          // CAL-018: mirror the server-side shift of manually linked
+          // appointments in local state (either direction of the link).
+          if (
+            manualDelta !== 0 &&
+            (appt.manual_linked_appointment_id === updated.id ||
+              (updated.manual_linked_appointment_id && appt.id === updated.manual_linked_appointment_id)) &&
+            appt.status !== "cancelled"
+          ) {
+            const startMs = new Date(appt.start_time).getTime() + manualDelta;
+            const endMs = appt.end_time ? new Date(appt.end_time).getTime() + manualDelta : null;
+            return {
+              ...appt,
+              start_time: new Date(startMs).toISOString(),
+              end_time: endMs ? new Date(endMs).toISOString() : appt.end_time,
+            };
+          }
           if (appt.linked_parent_appointment_id === updated.id) {
             const linkedStartMs = new Date(appt.start_time).getTime();
             const linkedEndMs = appt.end_time ? new Date(appt.end_time).getTime() : linkedStartMs;
@@ -5089,6 +5247,28 @@ export default function CalendarPage() {
     const appointmentToDelete = options?.appointment ?? editingAppointment;
     if (!appointmentToDelete || deletingAppointment) return;
 
+    // CAL-018: if this appointment is manually linked to another one, ask
+    // whether the linked appointment should be deleted as well so e.g.
+    // preparation appointments don't remain alone in the calendar.
+    let linkedCounterpart: CalendarAppointment | null = null;
+    if (manuallyLinkedAppointmentIds.has(appointmentToDelete.id)) {
+      linkedCounterpart =
+        appointments.find(
+          (a) =>
+            a.id !== appointmentToDelete.id &&
+            (a.id === appointmentToDelete.manual_linked_appointment_id ||
+              a.manual_linked_appointment_id === appointmentToDelete.id),
+        ) ?? null;
+      if (linkedCounterpart) {
+        const start = new Date(linkedCounterpart.start_time);
+        const label = `${String(start.getDate()).padStart(2, "0")}.${String(start.getMonth() + 1).padStart(2, "0")}.${start.getFullYear()} ${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`;
+        const alsoDelete = window.confirm(
+          `🔗 This appointment is linked to another appointment (${label}).\n\nDo you also want to delete the linked appointment?\n\nOK = delete both\nCancel = delete only this one`,
+        );
+        if (!alsoDelete) linkedCounterpart = null;
+      }
+    }
+
     try {
       setDeletingAppointment(true);
       setEditError(null);
@@ -5131,6 +5311,24 @@ export default function CalendarPage() {
           ? deleteData.deletedAppointmentIds
           : [appointmentToDelete.id],
       );
+
+      // CAL-018: also delete the manually linked appointment if confirmed.
+      if (linkedCounterpart && !deletedAppointmentIds.has(linkedCounterpart.id)) {
+        try {
+          await supabaseClient
+            .from("scheduled_emails")
+            .delete()
+            .eq("appointment_id", linkedCounterpart.id);
+          const linkedDeleteResponse = await fetch(`/api/appointments/${linkedCounterpart.id}`, {
+            method: "DELETE",
+          });
+          if (linkedDeleteResponse.ok) {
+            deletedAppointmentIds.add(linkedCounterpart.id);
+          }
+        } catch (linkedDeleteErr) {
+          console.error("Failed to delete linked appointment:", linkedDeleteErr);
+        }
+      }
 
       // A primary appointment deletion cascades to its mirrored reservations.
       setAppointments((prev) => prev.filter((a) => !deletedAppointmentIds.has(a.id)));
@@ -6029,6 +6227,14 @@ export default function CalendarPage() {
                                     💵
                                   </span>
                                 ) : null}
+                                {manuallyLinkedAppointmentIds.has(appt.id) ? (
+                                  <span
+                                    title="Linked appointment — moves together with its linked appointment"
+                                    className="flex-shrink-0 text-[11px] leading-none"
+                                  >
+                                    🔗
+                                  </span>
+                                ) : null}
                                 {appt.patient_id &&
                                 firstAppointmentByPatient[appt.patient_id] === getLogicalPatientAppointmentStart(appt) ? (
                                   <span
@@ -6492,6 +6698,14 @@ export default function CalendarPage() {
                                                 className="flex-shrink-0 text-[13px] leading-none"
                                               >
                                                 💵
+                                              </span>
+                                            ) : null}
+                                            {manuallyLinkedAppointmentIds.has(appt.id) ? (
+                                              <span
+                                                title="Linked appointment — moves together with its linked appointment"
+                                                className="flex-shrink-0 text-[11px] leading-none"
+                                              >
+                                                🔗
                                               </span>
                                             ) : null}
                                             {appt.patient_id &&
@@ -7109,6 +7323,31 @@ export default function CalendarPage() {
                       )}
                     </div>
                   </div>
+                  {/* CAL-018: optional link to another appointment of the same patient */}
+                  {!editNoPatient && editPatientId ? (
+                    <div className="mt-2 pt-2 border-t border-slate-200">
+                      <p className="text-[10px] text-slate-500 mb-1">🔗 Linked appointment (optional)</p>
+                      <select
+                        value={editLinkedAppointmentId}
+                        onChange={(e) => setEditLinkedAppointmentId(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      >
+                        <option value="">
+                          {editLinkOptionsLoading ? "Loading appointments..." : "— Not linked —"}
+                        </option>
+                        {editLinkOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      {editLinkedAppointmentId ? (
+                        <p className="mt-1 text-[10px] text-sky-600">
+                          🔗 {editLinkOptions.find((o) => o.id === editLinkedAppointmentId)?.label ?? "Linked appointment"} — when either appointment is moved, the other follows, keeping the same time difference.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="mt-2 pt-2 border-t border-slate-200">
                     <p className="text-[10px] text-slate-500 mb-1">{t("modal.fields.notes")}</p>
                     <textarea

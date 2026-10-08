@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { POST as runAppointmentWorkflow } from "@/app/api/workflows/appointment-created/route";
 import { emitWorkflowEvent } from "@/lib/workflows/events";
 import type { WorkflowTriggerType } from "@/lib/workflows/types";
+import { shiftManualLinkedAppointments } from "@/lib/manualLinkedAppointments";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -80,6 +81,7 @@ export async function PATCH(
     const allowedFields = [
       "end_time", "start_time", "status", "reason", "title", "notes", "location",
       "provider_id", "patient_id", "no_patient", "machine_ids",
+      "manual_linked_appointment_id",
     ];
     const updateData: Record<string, unknown> = {};
     
@@ -280,7 +282,7 @@ export async function PATCH(
 
       const { data: selectedUpdated, error: selectedError } = await supabase
         .from("appointments")
-        .select("id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)")
+        .select("id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, manual_linked_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)")
         .eq("id", id)
         .single();
       if (selectedError) return NextResponse.json({ error: selectedError.message }, { status: 500 });
@@ -399,7 +401,7 @@ export async function PATCH(
       .from("appointments")
       .update(updateData)
       .eq("id", id)
-      .select("id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)")
+      .select("id, patient_id, no_patient, provider_id, start_time, end_time, status, reason, title, notes, location, machine_ids, linked_parent_appointment_id, manual_linked_appointment_id, recurrence_series_id, recurrence_sequence, tracking_params, patient:patients(id, first_name, last_name, email, phone, date_of_birth:dob, is_vip, is_member, language_preference), provider:providers(id, name)")
       .single();
     
     if (error) {
@@ -414,6 +416,14 @@ export async function PATCH(
       startDeltaMs: proposedStart.getTime() - new Date(currentAppointment.start_time).getTime(),
       cancelled: proposedStatus === "cancelled" || proposedStatus === "no_show",
     });
+
+    // CAL-018: keep manually linked appointments in sync — if this
+    // appointment's start moved, shift its linked counterpart(s) by the same
+    // time difference.
+    const manualLinkDeltaMs = proposedStart.getTime() - new Date(currentAppointment.start_time).getTime();
+    if (manualLinkDeltaMs !== 0 && proposedStatus !== "cancelled" && proposedStatus !== "no_show") {
+      await shiftManualLinkedAppointments(id, manualLinkDeltaMs);
+    }
 
     const previousDisplayStatus = appointmentDisplayStatus(currentAppointment.reason);
     const nextDisplayStatus = appointmentDisplayStatus(data.reason);

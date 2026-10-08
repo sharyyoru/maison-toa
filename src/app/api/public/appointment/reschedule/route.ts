@@ -5,6 +5,7 @@ import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplat
 import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
 import { cleanAppointmentReason } from "@/lib/appointmentUtils";
 import { nameToSlug } from "@/lib/doctorAvailability";
+import { shiftManualLinkedAppointments } from "@/lib/manualLinkedAppointments";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -245,6 +246,13 @@ export async function POST(request: Request) {
         .update({ scheduled_for: new Date(scheduledAt + reminderDeltaMs).toISOString() })
         .eq("id", reminder.id);
       if (shiftError) throw shiftError;
+    }
+
+    // CAL-018: when the patient reschedules online, move any manually linked
+    // appointment (e.g. a preparation appointment) by the same time difference
+    // so the pair stays synchronized.
+    if (reminderDeltaMs !== 0) {
+      await shiftManualLinkedAppointments(id, reminderDeltaMs);
     }
 
     // Fetch patient and doctor info for email
