@@ -10,6 +10,7 @@ import {
   intervalOverlaps,
   type BookingInterval,
 } from "@/lib/exactBookingAvailability";
+import { isWithinOnlineBookingRange, resolveOnlineBookingRange } from "@/lib/onlineBookingTimeRange";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -200,11 +201,15 @@ export async function GET(request: NextRequest) {
     let appointmentsResult: Awaited<ReturnType<typeof fetchAppointments>>;
     let machineData: Awaited<ReturnType<typeof fetchMachineData>>;
     let secondaryAppointments: Array<{ start_time: string; end_time: string }>;
+    let onlineBookingRange: Awaited<ReturnType<typeof resolveOnlineBookingRange>>;
     try {
-      [appointmentsResult, machineData, secondaryAppointments] = await Promise.all([
+      [appointmentsResult, machineData, secondaryAppointments, onlineBookingRange] = await Promise.all([
         fetchAppointments(),
         fetchMachineData(),
         fetchSecondaryAppointments(),
+        // BP-018: optional online bookable-from/until window configured on the
+        // treatment and/or its machine — restricts ONLINE slots only.
+        resolveOnlineBookingRange(supabase, treatmentId),
       ]);
     } catch {
       return NextResponse.json({ error: "Failed to check secondary calendar availability" }, { status: 500 });
@@ -375,7 +380,10 @@ export async function GET(request: NextRequest) {
         (interval) => !!intervals.secondaryCalendarStart && !!intervals.secondaryCalendarEnd
           && intervalOverlaps(intervals.secondaryCalendarStart, intervals.secondaryCalendarEnd, interval),
       );
-      if (primaryBlocked || machineBlocked || secondaryBlocked) {
+      // BP-018: slots outside the configured online bookable-from/until window
+      // are never offered online, even if the practitioner is available.
+      const outsideOnlineRange = !isWithinOnlineBookingRange(slotStart, onlineBookingRange);
+      if (primaryBlocked || machineBlocked || secondaryBlocked || outsideOnlineRange) {
         unavailableStarts.add(slotStart.toISOString());
       } else {
         availableStarts.push(slotStart.toISOString());

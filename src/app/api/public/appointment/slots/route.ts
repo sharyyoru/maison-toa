@@ -5,6 +5,7 @@ import { MULTI_CAPACITY_DOCTORS, nameToSlug } from "@/lib/doctorAvailability";
 import { createSwissDateTime, parseSwissDate } from "@/lib/swissTimezone";
 import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
 import { hasCapacityConflict, intervalOverlaps, type BookingInterval } from "@/lib/exactBookingAvailability";
+import { isWithinOnlineBookingRange, resolveMachinesOnlineBookingRange } from "@/lib/onlineBookingTimeRange";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -205,13 +206,24 @@ export async function GET(request: Request) {
   if (excludeId) {
     const { data: currentAppointment, error: currentAppointmentError } = await supabase
       .from("appointments")
-      .select("id, start_time, end_time, tracking_params")
+      .select("id, start_time, end_time, tracking_params, machine_ids")
       .eq("id", excludeId)
       .maybeSingle();
 
     if (currentAppointmentError || !currentAppointment) {
       console.error("[Slots API] Failed to load rescheduled appointment:", currentAppointmentError);
       return NextResponse.json({ error: "Failed to verify appointment availability" }, { status: 500 });
+    }
+
+    // BP-018: when the appointment uses a machine with an online
+    // bookable-from/until window, only offer reschedule slots inside it.
+    const rescheduleRange = await resolveMachinesOnlineBookingRange(
+      supabase,
+      (currentAppointment.machine_ids as string[] | null) ?? null,
+    );
+    if (rescheduleRange) {
+      availableSlots = availableSlots.filter((time) => isWithinOnlineBookingRange(time, rescheduleRange));
+      allSlots = allSlots.filter((time) => isWithinOnlineBookingRange(time, rescheduleRange));
     }
 
     const primaryDurationMs = Math.max(

@@ -1140,6 +1140,8 @@ interface BookingTreatment {
   secondary_calendar_duration_minutes: number | null;
   secondary_calendar_position: "start" | "end" | null;
   image_url: string | null;
+  online_booking_start_time: string | null;
+  online_booking_end_time: string | null;
 }
 
 // BP-008: shared image upload widget for booking categories/treatments.
@@ -1667,6 +1669,8 @@ function BookingCategoriesTab() {
       secondary_calendar_duration_minutes: null,
       secondary_calendar_position: null,
       image_url: null,
+      online_booking_start_time: null,
+      online_booking_end_time: null,
     };
     setTreatments([...treatments, newTreatment]);
     setIsDirty(true);
@@ -2443,6 +2447,43 @@ function BookingCategoriesTab() {
                             ))}
                           </div>
                         </div>
+                        {/* BP-018: optional online bookable-from/until window for this treatment */}
+                        <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50/40 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-semibold text-rose-800">Online booking time range (optional) <span className="ml-1 rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] text-violet-700">NEW</span></p>
+                              <p className="text-[10px] text-slate-500">Define the time range during which this treatment can be booked online. If no time is set, the treatment follows the normal online availability rules.</p>
+                            </div>
+                            {(treat.online_booking_start_time || treat.online_booking_end_time) && (
+                              <div className="rounded-lg border border-rose-100 bg-white/70 px-3 py-2 text-[10px] text-slate-600">
+                                ℹ️ Patients will only see appointment slots within this time range on the online booking platform.
+                              </div>
+                            )}
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-6">
+                            {([
+                              ["online_booking_start_time", "Limit online booking start time (from)", "08:00"],
+                              ["online_booking_end_time", "Limit online booking end time (until)", "14:00"],
+                            ] as const).map(([field, label, defaultTime]) => (
+                              <label key={field} className="flex items-center gap-2 text-xs text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(treat[field])}
+                                  onChange={(e) => updateTreatment(treat.id, field, e.target.checked ? defaultTime : null)}
+                                  className="rounded text-rose-500"
+                                />
+                                {label}
+                                <input
+                                  type="time"
+                                  disabled={!treat[field]}
+                                  value={treat[field] || defaultTime}
+                                  onChange={(e) => updateTreatment(treat.id, field, e.target.value || null)}
+                                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 disabled:bg-slate-100"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        </div>
                         <div className="mt-3 rounded-lg border border-violet-100 bg-violet-50/50 p-3">
                           <p className="mb-2 text-xs font-medium text-violet-800">Additional calendar reservation</p>
                           <div className="flex flex-wrap items-end gap-3">
@@ -2575,6 +2616,8 @@ interface Machine {
   name: string;
   max_concurrent: number;
   is_active: boolean;
+  online_booking_start_time: string | null;
+  online_booking_end_time: string | null;
 }
 
 interface ServiceMachineMapping {
@@ -2591,6 +2634,9 @@ function MachinesView({ services }: { services: { id: string; name: string; cate
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editMax, setEditMax] = useState(1);
+  // BP-018: optional online bookable-from/until window per machine
+  const [editBookableFrom, setEditBookableFrom] = useState<string>("");
+  const [editBookableUntil, setEditBookableUntil] = useState<string>("");
   const [newName, setNewName] = useState("");
   const [newMax, setNewMax] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -2625,7 +2671,12 @@ function MachinesView({ services }: { services: { id: string; name: string; cate
 
   async function handleSaveEdit(id: string) {
     setSaving(true);
-    await supabase.from("machines").update({ name: editName, max_concurrent: editMax }).eq("id", id);
+    await supabase.from("machines").update({
+      name: editName,
+      max_concurrent: editMax,
+      online_booking_start_time: editBookableFrom || null,
+      online_booking_end_time: editBookableUntil || null,
+    }).eq("id", id);
     setEditingId(null);
     await loadData();
     setSaving(false);
@@ -2689,9 +2740,17 @@ function MachinesView({ services }: { services: { id: string; name: string; cate
             <div key={machine.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 {isEditing ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <input value={editName} onChange={(e) => setEditName(e.target.value)} className="rounded border border-slate-200 px-2 py-1 text-sm font-semibold" />
                     <input type="number" min={1} value={editMax} onChange={(e) => setEditMax(Number(e.target.value))} className="w-14 rounded border border-slate-200 px-2 py-1 text-sm" />
+                    <span className="flex items-center gap-1 text-[10px] text-slate-500" title="Online Booking Time Range (Optional) — only appointment slots within this range will be visible on the online booking platform. If no time is configured, the machine follows the normal online availability rules.">
+                      Bookable from
+                      <input type="time" value={editBookableFrom} onChange={(e) => setEditBookableFrom(e.target.value)} className="rounded border border-slate-200 px-1.5 py-1 text-xs" />
+                      {editBookableFrom && <button type="button" onClick={() => setEditBookableFrom("")} className="text-slate-400 hover:text-red-500">×</button>}
+                      until
+                      <input type="time" value={editBookableUntil} onChange={(e) => setEditBookableUntil(e.target.value)} className="rounded border border-slate-200 px-1.5 py-1 text-xs" />
+                      {editBookableUntil && <button type="button" onClick={() => setEditBookableUntil("")} className="text-slate-400 hover:text-red-500">×</button>}
+                    </span>
                     <button onClick={() => handleSaveEdit(machine.id)} className="text-xs text-sky-600 font-medium">Save</button>
                     <button onClick={() => setEditingId(null)} className="text-xs text-slate-400">Cancel</button>
                   </div>
@@ -2699,11 +2758,16 @@ function MachinesView({ services }: { services: { id: string; name: string; cate
                   <div className="flex items-center gap-3">
                     <h3 className="font-semibold text-sm text-slate-900">{machine.name}</h3>
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">max {machine.max_concurrent}</span>
+                    {(machine.online_booking_start_time || machine.online_booking_end_time) && (
+                      <span className="rounded-full bg-rose-50 border border-rose-200 px-2 py-0.5 text-[10px] text-rose-700" title="Online booking time range — only slots within this range are offered on the online booking platform">
+                        🕐 Online {machine.online_booking_start_time ? `from ${machine.online_booking_start_time.slice(0, 5)}` : ""}{machine.online_booking_start_time && machine.online_booking_end_time ? " " : ""}{machine.online_booking_end_time ? `until ${machine.online_booking_end_time.slice(0, 5)}` : ""}
+                      </span>
+                    )}
                   </div>
                 )}
                 <div className="flex items-center gap-2">
                   {!isEditing && (
-                    <button onClick={() => { setEditingId(machine.id); setEditName(machine.name); setEditMax(machine.max_concurrent); }} className="text-xs text-slate-500 hover:text-sky-600">Edit</button>
+                    <button onClick={() => { setEditingId(machine.id); setEditName(machine.name); setEditMax(machine.max_concurrent); setEditBookableFrom(machine.online_booking_start_time?.slice(0, 5) || ""); setEditBookableUntil(machine.online_booking_end_time?.slice(0, 5) || ""); }} className="text-xs text-slate-500 hover:text-sky-600">Edit</button>
                   )}
                   <button onClick={() => handleDelete(machine.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
                 </div>

@@ -222,6 +222,8 @@ export async function PUT(request: Request) {
           secondary_calendar_position:
             t.secondary_calendar_mode === "custom" ? t.secondary_calendar_position || "start" : null,
           image_url: t.image_url || null,
+          online_booking_start_time: t.online_booking_start_time || null,
+          online_booking_end_time: t.online_booking_end_time || null,
         }))
       );
 

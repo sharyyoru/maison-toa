@@ -13,6 +13,7 @@ import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
 import { resolveBookingSecondaryCalendar } from "@/lib/bookingSecondaryCalendar";
 import { getBookingCalendarIntervals } from "@/lib/bookingCalendarIntervals";
 import { hasCapacityConflict, intervalOverlaps, type BookingInterval } from "@/lib/exactBookingAvailability";
+import { isWithinOnlineBookingRange, resolveOnlineBookingRange } from "@/lib/onlineBookingTimeRange";
 import { formatSwissYmd, getSwissSlotString } from "@/lib/swissTimezone";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -351,6 +352,17 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       }
+    }
+
+    // BP-018: enforce the optional online bookable-from/until window
+    // (configured on the treatment and/or its machine) server-side so a
+    // crafted request cannot book outside the allowed online time range.
+    const onlineBookingRange = await resolveOnlineBookingRange(supabase, treatmentId);
+    if (!isWithinOnlineBookingRange(appointmentSwissTime, onlineBookingRange)) {
+      return NextResponse.json(
+        { error: "This treatment cannot be booked online at the selected time." },
+        { status: 409 },
+      );
     }
 
     if (!treatmentServiceId) {
