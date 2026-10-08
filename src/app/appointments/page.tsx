@@ -24,6 +24,7 @@ import {
   createSwissDateTime,
   getSwissDayOfWeek,
 } from "@/lib/swissTimezone";
+import { resolvePatientAppointmentStart } from "@/lib/patientAppointmentStart";
 
 type AppointmentStatus =
   | "scheduled"
@@ -787,8 +788,12 @@ async function sendAppointmentConfirmationEmail(
   if (!patientEmail) return false;
 
   try {
-    const trackedPatientStart = appointment.tracking_params?.patient_appointment_start;
-    const start = new Date(trackedPatientStart || appointment.start_time);
+    // BUG-020: never trust a stale tracked patient time — fall back to the
+    // real start_time when they diverge so emails always show the latest date.
+    const start = resolvePatientAppointmentStart(
+      appointment.start_time,
+      appointment.tracking_params?.patient_appointment_start,
+    );
     const trackedDurationMinutes = Number(appointment.tracking_params?.appointment_duration_minutes);
     const end = Number.isFinite(trackedDurationMinutes) && trackedDurationMinutes > 0
       ? new Date(start.getTime() + trackedDurationMinutes * 60_000)
@@ -868,8 +873,11 @@ async function sendAppointmentConfirmationEmail(
 }
 
 async function syncPendingAppointmentReminder(appointment: CalendarAppointment): Promise<void> {
-  const patientStart = appointment.tracking_params?.patient_appointment_start || appointment.start_time;
-  const reminderDate = new Date(new Date(patientStart).getTime() - 24 * 60 * 60 * 1000);
+  const patientStart = resolvePatientAppointmentStart(
+    appointment.start_time,
+    appointment.tracking_params?.patient_appointment_start,
+  );
+  const reminderDate = new Date(patientStart.getTime() - 24 * 60 * 60 * 1000);
 
   const { data: existingReminders } = await supabaseClient
     .from("scheduled_emails")
@@ -1093,15 +1101,17 @@ export default function CalendarPage() {
     useState<CalendarAppointment | null>(null);
   const [modificationEmailPromptType, setModificationEmailPromptType] =
     useState<"modification" | "confirmation">("modification");
+  // BUG-020 / CAL-004: "Send email notification" is selected by default —
+  // staff uncheck it only when they intentionally do not want to notify.
   const [sendModificationEmailNotification, setSendModificationEmailNotification] =
-    useState(false);
+    useState(true);
   const [modificationEmailMessage, setModificationEmailMessage] = useState("");
   const [cancellationEmailPromptAppointment, setCancellationEmailPromptAppointment] =
     useState<CalendarAppointment | null>(null);
   const [cancellationEmailPromptMode, setCancellationEmailPromptMode] =
     useState<"delete" | "emailOnly">("delete");
   const [sendCancellationEmailNotification, setSendCancellationEmailNotification] =
-    useState(false);
+    useState(true);
   const [cancellationEmailMessage, setCancellationEmailMessage] = useState("");
   const [recurrenceFrequency, setRecurrenceFrequency] =
     useState<RecurrenceFrequency>("weekly");
@@ -3716,7 +3726,11 @@ export default function CalendarPage() {
             void sendAppointmentConfirmationEmail(
               fullApptData as unknown as CalendarAppointment,
               emailNotificationMessage,
-            );
+            ).then((sent) => {
+              // BUG-020: never fail silently — staff must know when the
+              // patient did not receive the confirmation email.
+              if (!sent) window.alert("⚠️ The appointment was created, but the confirmation email could NOT be sent to the patient. Please resend it from the appointment window.");
+            });
           }
         }
         
@@ -3804,7 +3818,11 @@ export default function CalendarPage() {
         }
 
         if (shouldSendEmailNotification) {
-          void sendAppointmentConfirmationEmail(inserted, emailNotificationMessage);
+          void sendAppointmentConfirmationEmail(inserted, emailNotificationMessage).then((sent) => {
+            // BUG-020: never fail silently — staff must know when the
+            // patient did not receive the confirmation email.
+            if (!sent) window.alert("⚠️ The appointment was created, but the confirmation email could NOT be sent to the patient. Please resend it from the appointment window.");
+          });
         }
 
         setAppointments((prev) => {
@@ -4862,7 +4880,7 @@ export default function CalendarPage() {
     if (!appointment.patient?.email) return;
     setModificationEmailPromptAppointment(appointment);
     setModificationEmailPromptType(emailType);
-    setSendModificationEmailNotification(false);
+    setSendModificationEmailNotification(true);
     setModificationEmailMessage("");
   }
 

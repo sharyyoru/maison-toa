@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
 import { generatePatientReminderEmail } from "@/lib/appointmentEmails";
 import { normalizePatientLanguage } from "@/lib/languagePreference";
+import { resolvePatientAppointmentStart } from "@/lib/patientAppointmentStart";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -119,10 +120,13 @@ export async function GET(request: Request) {
               .eq("id", appointment.patient_id)
               .maybeSingle();
             const trackingParams = (appointment.tracking_params || {}) as Record<string, unknown>;
-            const currentStart = new Date(
+            // BUG-020: ignore a stale tracked patient time so reminders are
+            // always built from the latest saved appointment date.
+            const currentStart = resolvePatientAppointmentStart(
+              appointment.start_time,
               typeof trackingParams.patient_appointment_start === "string"
                 ? trackingParams.patient_appointment_start
-                : appointment.start_time,
+                : null,
             );
             if (Number.isNaN(currentStart.getTime())) {
               await supabase.from("scheduled_emails").update({ status: "failed", error: "Invalid appointment start time" }).eq("id", email.id);

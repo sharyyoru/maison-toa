@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { formatSwissDateWithWeekday, formatSwissTimeAmPm, formatSwissYmd, getSwissHourMinute } from "@/lib/swissTimezone";
 import { nameToSlug } from "@/lib/doctorAvailability";
 import { cleanAppointmentReason } from "@/lib/appointmentUtils";
+import { resolvePatientAppointmentStart } from "@/lib/patientAppointmentStart";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -56,10 +57,12 @@ export async function GET(request: Request) {
   }
 
   const trackingParams = (appt.tracking_params || {}) as Record<string, string>;
-  const trackedPatientStart = trackingParams.patient_appointment_start;
-  const startDate = trackedPatientStart && !Number.isNaN(new Date(trackedPatientStart).getTime())
-    ? new Date(trackedPatientStart)
-    : new Date(appt.start_time);
+  // BUG-020: ignore a stale tracked patient time so the manage page never
+  // shows an old appointment date after a reschedule.
+  const startDate = resolvePatientAppointmentStart(
+    appt.start_time,
+    trackingParams.patient_appointment_start,
+  );
   const { hour, minute } = getSwissHourMinute(startDate);
   const rawDate = formatSwissYmd(startDate);
   const rawTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;

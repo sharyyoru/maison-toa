@@ -454,28 +454,54 @@ export default function PatientRendezvousTab({
       if (editNotes) updatedReason += ` [Notes: ${editNotes}]`;
       if (editBookingStatus && editBookingStatus !== "Aucune sélection") updatedReason += ` [Status: ${editBookingStatus}]`;
 
-      const { data, error } = await supabaseClient
-        .from("appointments")
-        .update({
-          status: nextStatus,
-          start_time: startIso,
-          end_time: endIso,
-          location: editLocation || null,
-          reason: updatedReason,
-        })
-        .eq("id", editingAppointment.id)
-        .select(
-          "id, patient_id, provider_id, start_time, end_time, status, cancellation_source, reason, title, notes, location, provider:providers(id, name)"
-        )
-        .single();
+      // BUG-020: go through the appointments API instead of a direct DB
+      // update so rescheduling here behaves exactly like the calendar —
+      // the patient-facing time (tracking_params.patient_appointment_start)
+      // is shifted with the new date, pending reminder emails are moved,
+      // and linked appointments stay synchronized. The direct update used
+      // before left stale data behind, so re-sent confirmation emails
+      // still showed the OLD appointment date.
+      const patchBody: Record<string, unknown> = {
+        status: nextStatus,
+        start_time: startIso,
+        end_time: endIso,
+        location: editLocation || null,
+        reason: updatedReason,
+      };
+      let response = await fetch(`/api/appointments/${editingAppointment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patchBody),
+      });
 
-      if (error || !data) {
-        setEditError(error?.message ?? "Failed to update appointment.");
+      if (response.status === 409) {
+        // Staff edits from the patient file were never blocked by overlaps
+        // before — keep that behavior by retrying with an authorized
+        // internal override.
+        const { data: sessionData } = await supabaseClient.auth.getSession();
+        const token = sessionData.session?.access_token;
+        response = await fetch(`/api/appointments/${editingAppointment.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            ...patchBody,
+            allow_practitioner_overlap: true,
+            allow_resource_overlap: true,
+          }),
+        });
+      }
+
+      const responseData = await response.json().catch(() => null);
+      if (!response.ok || !responseData) {
+        setEditError(responseData?.error ?? "Failed to update appointment.");
         setSavingEdit(false);
         return;
       }
 
-      const updated = data as unknown as Appointment;
+      const updated = (responseData.appointment ?? responseData) as unknown as Appointment;
 
       setAppointments((prev) => {
         return prev.map((appt) => (appt.id === updated.id ? updated : appt));
