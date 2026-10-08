@@ -1117,6 +1117,8 @@ export default function CalendarPage() {
   const [newPatientEmail, setNewPatientEmail] = useState("");
   const [newPatientPhone, setNewPatientPhone] = useState("");
   const [newPatientGender, setNewPatientGender] = useState("");
+  // CAL-021: date of birth is required when creating a patient from the calendar
+  const [newPatientDob, setNewPatientDob] = useState("");
   const [newPatientSource, setNewPatientSource] = useState("manual");
   const [savingNewPatient, setSavingNewPatient] = useState(false);
   const [newPatientError, setNewPatientError] = useState<string | null>(null);
@@ -3300,10 +3302,15 @@ export default function CalendarPage() {
     const emailRaw = newPatientEmail.trim();
     const phoneRaw = newPatientPhone.trim();
 
-    if (!firstName || !lastName || !emailRaw || !phoneRaw) {
+    if (!firstName || !lastName || !emailRaw || !phoneRaw || !newPatientDob) {
       setNewPatientError(
-        "First name, last name, email, and phone are required.",
+        "First name, last name, email, phone, and date of birth are required.",
       );
+      return;
+    }
+
+    if (newPatientDob > formatSwissYmd(new Date()) || newPatientDob < "1900-01-01") {
+      setNewPatientError("Please enter a valid date of birth.");
       return;
     }
 
@@ -3336,6 +3343,7 @@ export default function CalendarPage() {
           email: normalizedEmail,
           phone,
           gender: newPatientGender || null,
+          dob: newPatientDob,
           source: (newPatientSource || "manual").toLowerCase(),
         })
         .select("id, first_name, last_name, email, phone")
@@ -3379,6 +3387,7 @@ export default function CalendarPage() {
       setNewPatientEmail("");
       setNewPatientPhone("");
       setNewPatientGender("");
+      setNewPatientDob("");
       setNewPatientSource("manual");
       setNewPatientError(null);
       setSavingNewPatient(false);
@@ -7762,6 +7771,7 @@ export default function CalendarPage() {
                           setNewPatientEmail("");
                           setNewPatientPhone("");
                           setNewPatientGender("");
+                          setNewPatientDob("");
                           setNewPatientSource("manual");
                           setNewPatientError(null);
                           setSavingNewPatient(false);
@@ -8703,6 +8713,19 @@ export default function CalendarPage() {
                       placeholder="79 123 45 67"
                     />
                   </div>
+                </div>
+                {/* CAL-021: mandatory date of birth */}
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-slate-600">Date of birth *</p>
+                  <input
+                    type="date"
+                    value={newPatientDob}
+                    onChange={(event) => setNewPatientDob(event.target.value)}
+                    max={formatSwissYmd(new Date())}
+                    min="1900-01-01"
+                    required
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
