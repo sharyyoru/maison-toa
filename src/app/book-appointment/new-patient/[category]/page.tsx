@@ -24,6 +24,7 @@ interface Treatment {
   enabled: boolean;
   display_price?: number | null;
   price_prefix?: number | null;
+  image_url?: string | null;
 }
 
 interface Category {
@@ -171,9 +172,19 @@ export default function NewPatientTreatmentsPage() {
                             <Link
                               key={treatment.id}
                               href={`/book-appointment/new-patient/${categorySlug}/${treatment.id}`}
-                              className="group bg-white/80 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02] hover:border-slate-300"
+                              className="group bg-white/80 backdrop-blur-sm rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02] hover:border-slate-300"
                             >
                               <div className="flex flex-col h-full">
+                                {treatment.image_url && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={treatment.image_url}
+                                    alt={getLocalizedBookingName(treatment, language)}
+                                    className="h-32 w-full object-cover"
+                                    loading="lazy"
+                                  />
+                                )}
+                                <div className="flex flex-col flex-1 p-5">
                                 <h3 className="text-base font-semibold text-slate-900 group-hover:text-slate-700 transition-colors mb-2 line-clamp-2">
                                   {getLocalizedBookingName(treatment, language)}
                                 </h3>
@@ -214,6 +225,7 @@ export default function NewPatientTreatmentsPage() {
                                       d="M9 5l7 7-7 7"
                                     />
                                   </svg>
+                                </div>
                                 </div>
                               </div>
                             </Link>

@@ -1113,6 +1113,7 @@ interface BookingCategory {
   secondary_calendar_position: "start" | "end";
   consultation_service_id: string | null;
   consultation_deposit_percentage: number;
+  image_url: string | null;
 }
 
 interface BookingTreatment {
@@ -1138,6 +1139,91 @@ interface BookingTreatment {
   secondary_calendar_provider_id: string | null;
   secondary_calendar_duration_minutes: number | null;
   secondary_calendar_position: "start" | "end" | null;
+  image_url: string | null;
+}
+
+// BP-008: shared image upload widget for booking categories/treatments.
+// Uploads to the public booking-images bucket and stores the public URL.
+function BookingImageField({
+  label,
+  value,
+  uploadPrefix,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  uploadPrefix: string;
+  onChange: (url: string | null) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFile(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Only image files are supported.");
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${uploadPrefix}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: uploadError } = await supabaseClient.storage
+        .from("booking-images")
+        .upload(path, file, { contentType: file.type });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabaseClient.storage.from("booking-images").getPublicUrl(path);
+      onChange(urlData.publicUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="space-y-1">
+      <label className="block text-[11px] font-medium text-slate-600">{label}</label>
+      <div className="flex items-center gap-2">
+        {value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value} alt="" className="h-12 w-16 rounded-md border border-slate-200 object-cover" />
+        ) : (
+          <div className="flex h-12 w-16 items-center justify-center rounded-md border border-dashed border-slate-300 text-[10px] text-slate-400">
+            No image
+          </div>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => void handleFile(e.target.files?.[0] ?? null)}
+        />
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {uploading ? "Uploading..." : value ? "Replace" : "Upload image"}
+        </button>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-medium text-red-600 hover:bg-red-100"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      {error && <p className="text-[11px] text-red-600">{error}</p>}
+    </div>
+  );
 }
 
 interface ServiceCategoryOption {
@@ -1537,6 +1623,7 @@ function BookingCategoriesTab() {
       secondary_calendar_position: "start",
       consultation_service_id: null,
       consultation_deposit_percentage: 100,
+      image_url: null,
     };
     setCategories([...categories, newCategory]);
     setIsDirty(true);
@@ -1579,6 +1666,7 @@ function BookingCategoriesTab() {
       secondary_calendar_provider_id: null,
       secondary_calendar_duration_minutes: null,
       secondary_calendar_position: null,
+      image_url: null,
     };
     setTreatments([...treatments, newTreatment]);
     setIsDirty(true);
@@ -1831,6 +1919,13 @@ function BookingCategoriesTab() {
                             className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
                           />
                         </div>
+                        {/* BP-008: category image shown on the online booking platform */}
+                        <BookingImageField
+                          label="Booking image (shown on the online booking page)"
+                          value={cat.image_url}
+                          uploadPrefix={`categories/${cat.id}`}
+                          onChange={(url) => updateCategory(cat.id, "image_url", url)}
+                        />
                       </div>
                     </div>
                     <div className="mt-3 rounded-lg border border-violet-100 bg-violet-50/50 p-3">
@@ -2198,6 +2293,15 @@ function BookingCategoriesTab() {
                               onChange={(e) => updateTreatment(treat.id, "description_en", e.target.value)}
                               placeholder={t("optionalDescription")}
                               className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-400 outline-none"
+                            />
+                          </div>
+                          {/* BP-008: treatment image shown on the online booking platform */}
+                          <div className="md:col-span-4">
+                            <BookingImageField
+                              label="Booking image (shown on the online booking page)"
+                              value={treat.image_url}
+                              uploadPrefix={`treatments/${treat.id}`}
+                              onChange={(url) => updateTreatment(treat.id, "image_url", url)}
                             />
                           </div>
                           <div className="md:col-span-1">

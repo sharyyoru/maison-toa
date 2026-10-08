@@ -16,6 +16,7 @@ interface Category {
   description_en?: string | null;
   slug: string;
   enabled: boolean;
+  image_url?: string | null;
 }
 
 export default function NewPatientCategoryPage() {
@@ -111,9 +112,19 @@ export default function NewPatientCategoryPage() {
                             <Link
                               key={category.id}
                               href={`/book-appointment/new-patient/${category.slug}`}
-                              className="group bg-white/80 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-105"
+                              className="group bg-white/80 backdrop-blur-sm rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-105"
                             >
                               <div className="flex flex-col h-full">
+                                {category.image_url && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={category.image_url}
+                                    alt={getLocalizedBookingName(category, language)}
+                                    className="h-32 w-full object-cover"
+                                    loading="lazy"
+                                  />
+                                )}
+                                <div className="flex flex-col flex-1 p-5">
                                 <h3 className="text-lg font-semibold text-slate-900 mb-2 group-hover:text-slate-700 transition-colors">
                                   {getLocalizedBookingName(category, language)}
                                 </h3>
@@ -127,6 +138,7 @@ export default function NewPatientCategoryPage() {
                                   <svg className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                   </svg>
+                                </div>
                                 </div>
                               </div>
                             </Link>

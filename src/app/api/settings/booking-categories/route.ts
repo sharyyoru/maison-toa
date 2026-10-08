@@ -177,6 +177,7 @@ export async function PUT(request: NextRequest) {
         secondary_calendar_position?: string | null;
         consultation_service_id?: string | null;
         consultation_deposit_percentage?: number | null;
+        image_url?: string | null;
       }) => ({
         id: c.id,
         name: c.name,
@@ -196,6 +197,7 @@ export async function PUT(request: NextRequest) {
         consultation_deposit_percentage: c.skip_treatment
           ? Number(c.consultation_deposit_percentage ?? 100)
           : 100,
+        image_url: c.image_url || null,
         updated_at: new Date().toISOString(),
       }));
 

@@ -221,6 +221,7 @@ export async function PUT(request: Request) {
             t.secondary_calendar_mode === "custom" ? Number(t.secondary_calendar_duration_minutes) : null,
           secondary_calendar_position:
             t.secondary_calendar_mode === "custom" ? t.secondary_calendar_position || "start" : null,
+          image_url: t.image_url || null,
         }))
       );
 
