@@ -4256,10 +4256,13 @@ export default function MedicalConsultationsCard({
     setConsultationDiagnosisCode(row.diagnosis_code || "");
     setConsultationRefIcd10(row.ref_icd10 || "");
 
-    const now = new Date();
-    setConsultationDate(formatLocalDateInputValue(now));
-    setConsultationHour(now.getHours().toString().padStart(2, "0"));
-    setConsultationMinute(now.getMinutes().toString().padStart(2, "0"));
+    // BILL-019: an invoice created from a consultation uses the consultation's
+    // date as the invoice date (not the day the invoice happens to be created).
+    const sourceDate = row.scheduled_at ? new Date(row.scheduled_at) : new Date();
+    const invoiceBaseDate = Number.isNaN(sourceDate.getTime()) ? new Date() : sourceDate;
+    setConsultationDate(formatLocalDateInputValue(invoiceBaseDate));
+    setConsultationHour(invoiceBaseDate.getHours().toString().padStart(2, "0"));
+    setConsultationMinute(invoiceBaseDate.getMinutes().toString().padStart(2, "0"));
     setInvoicePaymentMethod("");
     setInvoiceMode("individual");
     setInvoiceGroupId("");
@@ -11587,12 +11590,14 @@ export default function MedicalConsultationsCard({
                                   setInvoiceProviderId("");
                                   setConsultationDiagnosisCode(row.diagnosis_code || "");
                                   setConsultationRefIcd10(row.ref_icd10 || "");
-                                  // Use TODAY's date for the invoice (not the consultation's old date)
+                                  // BILL-019: the invoice takes the CONSULTATION's date as its
+                                  // invoice date, not the day the invoice is created.
                                   {
-                                    const now = new Date();
-                                    setConsultationDate(now.toISOString().split("T")[0]);
-                                    setConsultationHour(now.getHours().toString().padStart(2, "0"));
-                                    setConsultationMinute(now.getMinutes().toString().padStart(2, "0"));
+                                    const consultationSourceDate = row.scheduled_at ? new Date(row.scheduled_at) : new Date();
+                                    const baseDate = Number.isNaN(consultationSourceDate.getTime()) ? new Date() : consultationSourceDate;
+                                    setConsultationDate(formatLocalDateInputValue(baseDate));
+                                    setConsultationHour(baseDate.getHours().toString().padStart(2, "0"));
+                                    setConsultationMinute(baseDate.getMinutes().toString().padStart(2, "0"));
                                   }
                                   // Prefill provider from doctor's provider_id mapping
                                   if (row.doctor_user_id) {
