@@ -52,7 +52,10 @@ export default function RightPanel({ collapsed, onToggle }: Props) {
           ? patientQuery.eq("dob", isoDob)
           : patientQuery.or(`first_name.ilike.%${trimmedQuery}%,last_name.ilike.%${trimmedQuery}%,email.ilike.%${trimmedQuery}%,phone.ilike.%${trimmedQuery}%`);
 
-        const { data } = await patientQuery.limit(8);
+        // CAL-023: return all matching patients (scrollable list), not just 8
+        const { data } = await patientQuery
+          .order("first_name", { ascending: true })
+          .limit(200);
         setSearchResults((data || []) as PatientResult[]);
       } catch {
         setSearchResults([]);

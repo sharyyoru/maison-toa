@@ -121,7 +121,8 @@ export default function GlobalPatientSearch() {
           ].join(","));
         }
 
-        textQuery = textQuery.limit(50);
+        // CAL-023: fetch enough rows that common names return every match
+        textQuery = textQuery.limit(500);
 
         // Run DOB query in parallel if search looks like a date pattern
         const hasDigits = /\d/.test(trimmed);
@@ -138,7 +139,7 @@ export default function GlobalPatientSearch() {
               .from("patients")
               .select("id, first_name, last_name, email, phone, dob")
               .eq("dob", isoDate)
-              .limit(10);
+              .limit(50);
           } else {
             // Try exact date match (e.g. "1998-08-21")
             const dateMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
@@ -147,7 +148,7 @@ export default function GlobalPatientSearch() {
                 .from("patients")
                 .select("id, first_name, last_name, email, phone, dob")
                 .eq("dob", trimmed)
-                .limit(10);
+                .limit(50);
             } else {
               // Year-only search (e.g. "1998")
               const yearMatch = trimmed.match(/^(\d{4})$/);
@@ -157,7 +158,7 @@ export default function GlobalPatientSearch() {
                   .select("id, first_name, last_name, email, phone, dob")
                   .gte("dob", `${yearMatch[1]}-01-01`)
                   .lte("dob", `${yearMatch[1]}-12-31`)
-                  .limit(10);
+                  .limit(50);
               }
             }
           }
@@ -258,7 +259,9 @@ export default function GlobalPatientSearch() {
             return nameA.localeCompare(nameB);
           });
 
-          setResults(scored.slice(0, 8));
+          // CAL-023: show ALL matching patients (the dropdown scrolls);
+          // cap at 200 to keep rendering fast on very broad queries.
+          setResults(scored.slice(0, 200));
           setSearchError(false);
         }
       } catch (err) {
@@ -324,7 +327,7 @@ export default function GlobalPatientSearch() {
       </div>
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-2 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
+        <div className="absolute top-full left-0 right-0 z-50 mt-2 max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
           {!loading && searchError && (
             <p className="px-4 py-3 text-sm text-rose-600">{t("patientSearchFailed")}</p>
           )}
