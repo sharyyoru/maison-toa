@@ -4103,6 +4103,37 @@ export default function MedicalConsultationsCard({
     }
   }
 
+  // Restore an archived consultation or invoice back to the active list.
+  async function handleRestoreConsultation(rowId: string) {
+    if (!rowId) return;
+
+    try {
+      setConsultationsError(null);
+
+      // Determine if this is an invoice row or a consultation row
+      const target = consultations.find(c => c.id === rowId);
+      const table = target?.invoice_id ? "invoices" : "consultations";
+
+      const { error } = await supabaseClient
+        .from(table)
+        .update({
+          is_archived: false,
+          archived_at: null,
+        })
+        .eq("id", rowId);
+
+      if (error) {
+        setConsultationsError(error.message ?? "Failed to restore record.");
+        return;
+      }
+
+      setConsultations((prev) => prev.filter((row) => row.id !== rowId));
+      broadcastPatientRealtimeRefresh({ force: true });
+    } catch {
+      setConsultationsError("Failed to restore record.");
+    }
+  }
+
   async function handleDeleteConsultation(rowId: string) {
     if (!rowId) return;
 
@@ -11674,15 +11705,30 @@ export default function MedicalConsultationsCard({
                             </button>
                           </>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void handleDeleteConsultation(row.id);
-                            }}
-                            className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700 shadow-sm hover:bg-red-100"
-                          >
-                            Delete
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void handleRestoreConsultation(row.id);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 shadow-sm hover:bg-emerald-100"
+                              title="Restore this record to the active list"
+                            >
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a5 5 0 015 5v1M3 10l5-5M3 10l5 5" />
+                              </svg>
+                              Restore
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void handleDeleteConsultation(row.id);
+                              }}
+                              className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700 shadow-sm hover:bg-red-100"
+                            >
+                              Delete
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
