@@ -104,8 +104,23 @@ export default function TopBar() {
         </nav>
       </div>
 
-      <div className="hidden min-w-0 flex-1 justify-center lg:flex">
+      <div className="hidden min-w-0 flex-1 items-center justify-center gap-1.5 lg:flex">
         <GlobalPatientSearch />
+        {/* PF-005: quick "add patient" next to the global search bar */}
+        <div className="group relative flex items-center justify-center">
+          <Link
+            href="/add-patients"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--blz-border)] text-[var(--blz-text-muted)] transition-colors hover:bg-[var(--blz-hover)] hover:text-[var(--blz-text-primary)]"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </Link>
+          <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-[var(--blz-surface-elevated)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--blz-text-primary)] opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+            Add patient
+            <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-[var(--blz-surface-elevated)]" />
+          </div>
+        </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
