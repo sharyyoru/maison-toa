@@ -558,7 +558,8 @@ export default function PatientDocumentsTab({
       try {
         setSelectedFilePreviewLoading(true);
         const url = await getFileAccessUrl(linkedFile);
-        const response = await fetch(url);
+        // BUG-013-DOC: open the latest saved version, never a cached one
+        const response = await fetch(url, { cache: "no-store" });
         if (!response.ok) throw new Error("Failed to load document for editing");
         const blob = await response.blob();
         if (!cancelled) {
@@ -1067,7 +1068,8 @@ export default function PatientDocumentsTab({
     try {
       setError(null);
       const url = await getFileAccessUrl(item);
-      const response = await fetch(url);
+      // BUG-013-DOC: always fetch the latest stored version, never a cached one
+      const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) throw new Error(`Failed to download ${item.name}`);
 
       const blob = await response.blob();
@@ -1117,7 +1119,8 @@ export default function PatientDocumentsTab({
       }
 
       const url = await getFileAccessUrl(item);
-      const response = await fetch(url);
+      // BUG-013-DOC: always convert the latest stored version, never a cached one
+      const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) throw new Error(`Failed to load ${item.name}`);
 
       const blob = await response.blob();
@@ -1570,7 +1573,8 @@ export default function PatientDocumentsTab({
                                     const url = await getFileAccessUrl(item);
                                     if (getExtension(item.name) === "docx") {
                                       setSelectedFilePreviewLoading(true);
-                                      const response = await fetch(url);
+                                      // BUG-013-DOC: open the latest saved version, never a cached one
+                                      const response = await fetch(url, { cache: "no-store" });
                                       if (!response.ok) throw new Error("Failed to download document for editing");
                                       const blob = await response.blob();
                                       setEditingDocx({ item, blob, url });
@@ -1996,24 +2000,28 @@ export default function PatientDocumentsTab({
 
             // BUG-013-DOC: store the PDF rendered by the editor alongside the
             // docx (hidden .pdf-exports folder) so "Download PDF" from the
-            // Documents list serves exactly what was saved. Best-effort.
-            if (pdfBlob) {
-              try {
-                const savedName = (result.fileName || targetFileName) as string;
-                const pdfPath = [patientId, ".pdf-exports", `${savedName}.pdf`]
-                  .filter(Boolean)
-                  .join("/");
+            // Documents list serves exactly what was saved. Best-effort —
+            // but if the PDF could not be rendered this save, DELETE any
+            // previously stored PDF so an outdated version is never served.
+            try {
+              const savedName = (result.fileName || targetFileName) as string;
+              const pdfPath = [patientId, ".pdf-exports", `${savedName}.pdf`]
+                .filter(Boolean)
+                .join("/");
+              if (pdfBlob) {
                 await supabaseClient.storage
                   .from(BUCKET_NAME)
-                  .upload(pdfPath, pdfBlob, { contentType: "application/pdf", upsert: true });
-                if (oldPath) {
-                  await supabaseClient.storage
-                    .from(BUCKET_NAME)
-                    .remove([[patientId, ".pdf-exports", `${originalFileName}.pdf`].filter(Boolean).join("/")]);
-                }
-              } catch (pdfUploadErr) {
-                console.warn("Failed to store the saved-version PDF:", pdfUploadErr);
+                  .upload(pdfPath, pdfBlob, { contentType: "application/pdf", upsert: true, cacheControl: "0" });
+              } else {
+                await supabaseClient.storage.from(BUCKET_NAME).remove([pdfPath]);
               }
+              if (oldPath) {
+                await supabaseClient.storage
+                  .from(BUCKET_NAME)
+                  .remove([[patientId, ".pdf-exports", `${originalFileName}.pdf`].filter(Boolean).join("/")]);
+              }
+            } catch (pdfUploadErr) {
+              console.warn("Failed to store the saved-version PDF:", pdfUploadErr);
             }
 
             const storedFileName = result.fileName || originalFileName;

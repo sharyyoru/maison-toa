@@ -56,6 +56,11 @@ export async function POST(request: NextRequest) {
       .upload(path, buffer, {
         contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         upsert: !isRename,
+        // BUG-013-DOC: saved documents are overwritten in place. The default
+        // cacheControl (1h) made the storage CDN keep serving the OLD version
+        // after a save, so downloads from the Documents list didn't match the
+        // version saved in the editor. Never cache editable documents.
+        cacheControl: "0",
       });
 
     if (error) {
