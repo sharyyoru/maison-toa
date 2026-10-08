@@ -227,6 +227,8 @@ export default function PatientDocumentsTab({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  // DOC-002: drag & drop upload state
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [showBeforeAfterEditor, setShowBeforeAfterEditor] = useState(false);
@@ -652,9 +654,14 @@ export default function PatientDocumentsTab({
   async function handleFilesSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
+    await uploadFiles(Array.from(files));
+    event.target.value = "";
+  }
 
-    const fileArray = Array.from(files);
-    
+  // DOC-002: shared upload used by both the Upload button and drag & drop
+  async function uploadFiles(fileArray: File[]) {
+    if (fileArray.length === 0) return;
+
     // Initialize upload modal
     setUploadingFiles(fileArray.map(f => ({ name: f.name, size: f.size })));
     setUploadProgress(0);
@@ -714,7 +721,6 @@ export default function PatientDocumentsTab({
       setError(err?.message ?? "Failed to upload file(s).");
     } finally {
       setUploading(false);
-      event.target.value = "";
       setSelectedFile(null);
       setRefreshKey((prev) => prev + 1);
     }
@@ -1153,7 +1159,41 @@ export default function PatientDocumentsTab({
 
   return (
     <>
-      <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
+      <div
+        className={`relative rounded-xl border bg-white/90 p-4 text-sm shadow-[0_16px_40px_rgba(15,23,42,0.08)] transition-colors ${
+          isDraggingOver ? "border-sky-400 ring-2 ring-sky-300/60" : "border-slate-200/80"
+        }`}
+        onDragOver={(e) => {
+          // DOC-002: drag & drop upload — only react to files from the computer
+          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+          setIsDraggingOver(true);
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+          setIsDraggingOver(false);
+        }}
+        onDrop={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+          e.preventDefault();
+          setIsDraggingOver(false);
+          if (uploading) return;
+          const files = Array.from(e.dataTransfer.files);
+          if (files.length > 0) void uploadFiles(files);
+        }}
+      >
+        {isDraggingOver && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-sky-50/90">
+            <div className="flex flex-col items-center gap-2 text-sky-700">
+              <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" />
+              </svg>
+              <p className="text-sm font-semibold">Drop files to upload</p>
+              <p className="text-xs text-sky-600">They will be added to this patient&apos;s documents{currentPrefix ? ` (${currentPrefix.replace(/\/$/, "")})` : ""}</p>
+            </div>
+          </div>
+        )}
         {/* File Storage Only - No Tabs */}
         {/* Files View Header */}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
