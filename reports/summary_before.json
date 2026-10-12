@@ -1,0 +1,1678 @@
+[
+  {
+    "project": "maisontoa-clinic",
+    "ref": "mwtdhbllkzuryswrumrd",
+    "advisorCounts": {
+      "security": {
+        "ERROR": 79,
+        "WARN": 79,
+        "INFO": 7
+      },
+      "performance": {
+        "ERROR": 0,
+        "WARN": 42,
+        "INFO": 263
+      }
+    },
+    "analysis": {
+      "tableCount": 155,
+      "rlsDisabled": [
+        {
+          "table": "admin_gmail_accounts",
+          "approx_rows": 0
+        },
+        {
+          "table": "admin_task_comments",
+          "approx_rows": 0
+        },
+        {
+          "table": "admin_task_mentions",
+          "approx_rows": 0
+        },
+        {
+          "table": "admin_task_notifications",
+          "approx_rows": 0
+        },
+        {
+          "table": "admin_tasks",
+          "approx_rows": 0
+        },
+        {
+          "table": "admin_users",
+          "approx_rows": 2
+        },
+        {
+          "table": "bank_accounts",
+          "approx_rows": 3
+        },
+        {
+          "table": "bank_payment_import_items",
+          "approx_rows": 596
+        },
+        {
+          "table": "bank_payment_imports",
+          "approx_rows": 247
+        },
+        {
+          "table": "booking_categories",
+          "approx_rows": 12
+        },
+        {
+          "table": "booking_category_doctors",
+          "approx_rows": 2
+        },
+        {
+          "table": "booking_doctors",
+          "approx_rows": 10
+        },
+        {
+          "table": "booking_links",
+          "approx_rows": 7
+        },
+        {
+          "table": "booking_treatment_doctors",
+          "approx_rows": 332
+        },
+        {
+          "table": "booking_treatments",
+          "approx_rows": 106
+        },
+        {
+          "table": "calendar_defaults",
+          "approx_rows": 19
+        },
+        {
+          "table": "chat_folders",
+          "approx_rows": 0
+        },
+        {
+          "table": "client_invoices",
+          "approx_rows": 0
+        },
+        {
+          "table": "clinics",
+          "approx_rows": 1
+        },
+        {
+          "table": "consultation_note_events",
+          "approx_rows": 92835
+        },
+        {
+          "table": "crisalix_reconstructions",
+          "approx_rows": 0
+        },
+        {
+          "table": "demo_bookings",
+          "approx_rows": 0
+        },
+        {
+          "table": "doctor_scheduling_settings",
+          "approx_rows": 11
+        },
+        {
+          "table": "document_templates",
+          "approx_rows": 0
+        },
+        {
+          "table": "email_reply_notifications",
+          "approx_rows": 0
+        },
+        {
+          "table": "external_labs",
+          "approx_rows": 0
+        },
+        {
+          "table": "invoice_installments",
+          "approx_rows": 365
+        },
+        {
+          "table": "machines",
+          "approx_rows": 9
+        },
+        {
+          "table": "medication_template_items",
+          "approx_rows": 2
+        },
+        {
+          "table": "medication_templates",
+          "approx_rows": 2
+        },
+        {
+          "table": "medidata_config",
+          "approx_rows": 1
+        },
+        {
+          "table": "medidata_notifications_log",
+          "approx_rows": 96
+        },
+        {
+          "table": "medidata_responses",
+          "approx_rows": 324
+        },
+        {
+          "table": "medidata_submission_history",
+          "approx_rows": 1054
+        },
+        {
+          "table": "medidata_submission_jobs",
+          "approx_rows": 383
+        },
+        {
+          "table": "medidata_submissions",
+          "approx_rows": 360
+        },
+        {
+          "table": "organization_api_keys",
+          "approx_rows": 1
+        },
+        {
+          "table": "organization_audit_log",
+          "approx_rows": 0
+        },
+        {
+          "table": "organization_invitations",
+          "approx_rows": 0
+        },
+        {
+          "table": "organization_members",
+          "approx_rows": 0
+        },
+        {
+          "table": "organization_settings",
+          "approx_rows": 0
+        },
+        {
+          "table": "organizations",
+          "approx_rows": 0
+        },
+        {
+          "table": "patient_document_versions",
+          "approx_rows": 0
+        },
+        {
+          "table": "patient_documents",
+          "approx_rows": 177
+        },
+        {
+          "table": "patient_edit_locks",
+          "approx_rows": 3514
+        },
+        {
+          "table": "patient_insurances",
+          "approx_rows": 12130
+        },
+        {
+          "table": "patient_note_mentions",
+          "approx_rows": 0
+        },
+        {
+          "table": "patient_prescriptions",
+          "approx_rows": 1661
+        },
+        {
+          "table": "patients_master_stage",
+          "approx_rows": 0
+        },
+        {
+          "table": "pdf_generation_jobs",
+          "approx_rows": 2751
+        },
+        {
+          "table": "scheduled_emails",
+          "approx_rows": 3284
+        },
+        {
+          "table": "service_categories",
+          "approx_rows": 21
+        },
+        {
+          "table": "service_group_services",
+          "approx_rows": 12
+        },
+        {
+          "table": "service_groups",
+          "approx_rows": 3
+        },
+        {
+          "table": "service_machines",
+          "approx_rows": 49
+        },
+        {
+          "table": "services",
+          "approx_rows": 621
+        },
+        {
+          "table": "stripe_transactions",
+          "approx_rows": 599
+        },
+        {
+          "table": "stripe_webhook_events",
+          "approx_rows": 667
+        },
+        {
+          "table": "swiss_insurer_laws",
+          "approx_rows": 319
+        },
+        {
+          "table": "swiss_insurers",
+          "approx_rows": 234
+        },
+        {
+          "table": "task_comment_mentions",
+          "approx_rows": 19
+        },
+        {
+          "table": "task_comments",
+          "approx_rows": 20
+        },
+        {
+          "table": "temp_patient_treatment_2",
+          "approx_rows": 154133
+        },
+        {
+          "table": "tmp_accounted_medical_invoices",
+          "approx_rows": 45196
+        },
+        {
+          "table": "tmp_appointments",
+          "approx_rows": 111821
+        },
+        {
+          "table": "tmp_axenita_invoice_lines",
+          "approx_rows": 41661
+        },
+        {
+          "table": "tmp_catalog_codes",
+          "approx_rows": 0
+        },
+        {
+          "table": "tmp_contacts",
+          "approx_rows": 0
+        },
+        {
+          "table": "tmp_contacts_phone",
+          "approx_rows": 16030
+        },
+        {
+          "table": "tmp_deals",
+          "approx_rows": 0
+        },
+        {
+          "table": "tmp_invoice_import",
+          "approx_rows": 0
+        },
+        {
+          "table": "tmp_invoice_raw",
+          "approx_rows": 45067
+        },
+        {
+          "table": "tmp_notes",
+          "approx_rows": 0
+        },
+        {
+          "table": "tmp_patient_axenita",
+          "approx_rows": 0
+        },
+        {
+          "table": "tmp_patient_with_address_and_ssn",
+          "approx_rows": 0
+        },
+        {
+          "table": "tmp_patients",
+          "approx_rows": 16192
+        },
+        {
+          "table": "tmp_treatment_flat",
+          "approx_rows": 0
+        },
+        {
+          "table": "users",
+          "approx_rows": 16
+        },
+        {
+          "table": "workflow_actions",
+          "approx_rows": 0
+        }
+      ],
+      "rlsEnabledNoPolicy": [
+        "colored_line_configurations",
+        "exceptional_booking_availability",
+        "sales_pipeline_automation_runs",
+        "sales_pipeline_automations",
+        "sales_pipeline_email_templates",
+        "workflow_events",
+        "workflow_jobs"
+      ],
+      "securityDefinerViews": [],
+      "publicBuckets": [
+        "avatars",
+        "booking-images",
+        "cash-receipts",
+        "doctor-images",
+        "email-assets",
+        "emailgallery",
+        "invoice-pdfs",
+        "page-builder-images"
+      ],
+      "anonGrants": [
+        {
+          "table": "admin_gmail_accounts",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "admin_task_comments",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "admin_task_mentions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "admin_task_notifications",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "admin_tasks",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "admin_users",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "appointment_status_options",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "appointments",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "bank_accounts",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "bank_payment_import_items",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "bank_payment_imports",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "booking_blocked_dates",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "booking_categories",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "booking_category_doctors",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "booking_doctors",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "booking_links",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "booking_treatment_doctors",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "booking_treatments",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "calendar_defaults",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "chat_conversations",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "chat_folders",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "chat_messages",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "client_invoices",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "clinic_onboarding_submissions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "clinic_onboarding_tokens",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "clinics",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "colored_line_configurations",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "consultation_collab_docs",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "consultation_note_events",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "consultations",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "crisalix_reconstructions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "deal_stages",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "deals",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "demo_bookings",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "doctor_scheduling_settings",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "document_template_overrides",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "document_templates",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "documents",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "email_attachments",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "email_reply_notifications",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "email_template_categories",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "email_template_versions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "email_templates",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "emails",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "embed_form_leads",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "exceptional_booking_availability",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "external_labs",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "favorites",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "icd10_code_options",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "invoice_installments",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "invoice_line_items",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "invoice_payments",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "invoices",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "lead_imports",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "machines",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "marketing_campaign_recipients",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "marketing_campaigns",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "marketing_lists",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "medical_records",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "medication_template_items",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "medication_templates",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "medidata_config",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "medidata_notifications_log",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "medidata_responses",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "medidata_submission_history",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "medidata_submission_jobs",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "medidata_submissions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "organization_api_keys",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "organization_audit_log",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "organization_invitations",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "organization_members",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "organization_settings",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "organizations",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_consents",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_consultation_data",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_deposits",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_document_versions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_documents",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_edit_locks",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_form_submissions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_health_background",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_insurances",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_intake_photos",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_intake_preferences",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_intake_submissions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_measurements",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_memberships",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_note_mentions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_notes",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_packages",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_prescriptions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_property_definitions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_property_values",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_quotes",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_simulations",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_surgeries",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_tag_assignments",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_tags",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_treatment_areas",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_treatment_preferences",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patient_treatments",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patients",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "patients_master_stage",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "pdf_generation_jobs",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "providers",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "sales_pipeline_automation_runs",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "sales_pipeline_automations",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "sales_pipeline_email_templates",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "scheduled_emails",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "service_categories",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "service_group_services",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "service_groups",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "service_machines",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "services",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "site_settings",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "stripe_transactions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "stripe_webhook_events",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "swiss_insurer_laws",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "swiss_insurers",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tardoc_group_items",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tardoc_groups",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "task_comment_mentions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "task_comments",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tasks",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "temp_patient_treatment_2",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_accounted_medical_invoices",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_appointments",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_axenita_invoice_lines",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_catalog_codes",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_contacts",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_contacts_phone",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_deals",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_invoice_import",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_invoice_raw",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_notes",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_patient_axenita",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_patient_with_address_and_ssn",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_patients",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "tmp_treatment_flat",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "user_availability",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "users",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "whatsapp_conversations",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "whatsapp_messages",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "whatsapp_queue",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "whatsapp_templates",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "workflow_actions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "workflow_enrollment_steps",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "workflow_enrollments",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "workflow_events",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "workflow_jobs",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "workflow_runs_v2",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "workflow_staff_notifications",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "workflow_step_runs_v2",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "workflow_versions",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        },
+        {
+          "table": "workflows",
+          "grantee": "anon",
+          "privileges": "DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+          "writable": true
+        }
+      ],
+      "mutableSearchPathFunctions": [
+        "public.accept_organization_invitation(p_token uuid, p_user_id uuid)",
+        "public.create_organization_with_owner(p_name text, p_slug text, p_owner_user_id uuid)",
+        "public.delete_storage_files(file_ids uuid[])",
+        "public.fix_migrated_owners(source_bucket text, dest_bucket text)",
+        "public.generate_payment_link_token()",
+        "public.get_laura_bookings_filters()",
+        "public.get_laura_bookings_json(p_from date, p_to date, p_statuses text[], p_sources text[], p_services text[], p_page integer, p_limit integer)",
+        "public.get_storage_inventory(bucket_name_input text)",
+        "public.get_user_organizations(p_user_id uuid)",
+        "public.is_current_user_demo()",
+        "public.should_see_demo_data()",
+        "public.user_has_role(p_user_id uuid, p_organization_id uuid, p_roles organization_role[])",
+        "public.user_is_org_admin(p_user_id uuid, p_organization_id uuid)",
+        "extensions.armor(bytea, text[], text[])",
+        "extensions.armor(bytea)",
+        "extensions.crypt(text, text)",
+        "extensions.dearmor(text)",
+        "extensions.decrypt(bytea, bytea, text)",
+        "extensions.decrypt_iv(bytea, bytea, bytea, text)",
+        "extensions.digest(bytea, text)",
+        "extensions.digest(text, text)",
+        "extensions.encrypt(bytea, bytea, text)",
+        "extensions.encrypt_iv(bytea, bytea, bytea, text)",
+        "extensions.gen_random_bytes(integer)",
+        "extensions.gen_random_uuid()",
+        "extensions.gen_salt(text)",
+        "extensions.gen_salt(text, integer)",
+        "extensions.hmac(bytea, bytea, text)",
+        "extensions.hmac(text, text, text)",
+        "extensions.pg_stat_statements(showtext boolean, OUT userid oid, OUT dbid oid, OUT toplevel boolean, OUT queryid bigint, OUT query text, OUT plans bigint, OUT total_plan_time double precision, OUT min_plan_time double precision, OUT max_plan_time double precision, OUT mean_plan_time double precision, OUT stddev_plan_time double precision, OUT calls bigint, OUT total_exec_time double precision, OUT min_exec_time double precision, OUT max_exec_time double precision, OUT mean_exec_time double precision, OUT stddev_exec_time double precision, OUT rows bigint, OUT shared_blks_hit bigint, OUT shared_blks_read bigint, OUT shared_blks_dirtied bigint, OUT shared_blks_written bigint, OUT local_blks_hit bigint, OUT local_blks_read bigint, OUT local_blks_dirtied bigint, OUT local_blks_written bigint, OUT temp_blks_read bigint, OUT temp_blks_written bigint, OUT shared_blk_read_time double precision, OUT shared_blk_write_time double precision, OUT local_blk_read_time double precision, OUT local_blk_write_time double precision, OUT temp_blk_read_time double precision, OUT temp_blk_write_time double precision, OUT wal_records bigint, OUT wal_fpi bigint, OUT wal_bytes numeric, OUT jit_functions bigint, OUT jit_generation_time double precision, OUT jit_inlining_count bigint, OUT jit_inlining_time double precision, OUT jit_optimization_count bigint, OUT jit_optimization_time double precision, OUT jit_emission_count bigint, OUT jit_emission_time double precision, OUT jit_deform_count bigint, OUT jit_deform_time double precision, OUT stats_since timestamp with time zone, OUT minmax_stats_since timestamp with time zone)",
+        "extensions.pg_stat_statements_info(OUT dealloc bigint, OUT stats_reset timestamp with time zone)",
+        "extensions.pg_stat_statements_reset(userid oid, dbid oid, queryid bigint, minmax_only boolean)",
+        "extensions.pgp_armor_headers(text, OUT key text, OUT value text)",
+        "extensions.pgp_key_id(bytea)",
+        "extensions.pgp_pub_decrypt(bytea, bytea)",
+        "extensions.pgp_pub_decrypt(bytea, bytea, text)",
+        "extensions.pgp_pub_decrypt(bytea, bytea, text, text)",
+        "extensions.pgp_pub_decrypt_bytea(bytea, bytea, text, text)",
+        "extensions.pgp_pub_decrypt_bytea(bytea, bytea)",
+        "extensions.pgp_pub_decrypt_bytea(bytea, bytea, text)",
+        "extensions.pgp_pub_encrypt(text, bytea, text)",
+        "extensions.pgp_pub_encrypt(text, bytea)",
+        "extensions.pgp_pub_encrypt_bytea(bytea, bytea)",
+        "extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)",
+        "extensions.pgp_sym_decrypt(bytea, text, text)",
+        "extensions.pgp_sym_decrypt(bytea, text)",
+        "extensions.pgp_sym_decrypt_bytea(bytea, text, text)",
+        "extensions.pgp_sym_decrypt_bytea(bytea, text)",
+        "extensions.pgp_sym_encrypt(text, text, text)",
+        "extensions.pgp_sym_encrypt(text, text)",
+        "extensions.pgp_sym_encrypt_bytea(bytea, text, text)",
+        "extensions.pgp_sym_encrypt_bytea(bytea, text)",
+        "extensions.uuid_generate_v1()",
+        "extensions.uuid_generate_v1mc()",
+        "extensions.uuid_generate_v3(namespace uuid, name text)",
+        "extensions.uuid_generate_v4()",
+        "extensions.uuid_generate_v5(namespace uuid, name text)",
+        "extensions.uuid_nil()",
+        "extensions.uuid_ns_dns()",
+        "extensions.uuid_ns_oid()",
+        "extensions.uuid_ns_url()",
+        "extensions.uuid_ns_x500()",
+        "public.financials_summary(p_date_from timestamp with time zone, p_date_to timestamp with time zone, p_date_field text, p_patient_id text, p_owner_ids text[], p_invoice_type text, p_status text, p_only_unpaid boolean)",
+        "public.generate_invoice_number()",
+        "public.get_invoices_page(p_search text, p_status text, p_payment_method text, p_billing_type text, p_date_from date, p_date_to date, p_insurance_filter text, p_job_issue_filter text, p_reminder_filter text, p_page integer, p_limit integer)",
+        "public.prevent_assistant_billing_entity()",
+        "public.reset_invoice_medidata_processed_on_rejection()",
+        "public.round_to_hour(ts timestamp with time zone)",
+        "public.set_appointment_cancellation_source()",
+        "public.sync_linked_booking_calendar_appointments()",
+        "public.touch_consultation_collab_docs_updated_at()",
+        "public.update_intake_updated_at()",
+        "public.update_medical_records_updated_at()",
+        "public.update_patient_form_submissions_updated_at()",
+        "public.update_updated_at_column()"
+      ],
+      "securityDefinerFunctions": [
+        "public.accept_organization_invitation(p_token uuid, p_user_id uuid)",
+        "public.appointment_workflow_events()",
+        "public.claim_workflow_jobs(p_worker_id text, p_limit integer)",
+        "public.consent_workflow_events()",
+        "public.create_organization_with_owner(p_name text, p_slug text, p_owner_user_id uuid)",
+        "public.delete_storage_files(file_ids uuid[])",
+        "public.deposit_workflow_events()",
+        "public.emit_workflow_event(p_type text, p_subject_type text, p_subject_id text, p_patient_id uuid, p_payload jsonb, p_dedupe_key text, p_occurred_at timestamp with time zone)",
+        "public.enqueue_workflow_event_job()",
+        "public.fix_migrated_owners(source_bucket text, dest_bucket text)",
+        "public.generate_payment_link_token()",
+        "public.generate_scheduled_workflow_events(p_now timestamp with time zone)",
+        "public.get_laura_bookings_filters()",
+        "public.get_laura_bookings_json(p_from date, p_to date, p_statuses text[], p_sources text[], p_services text[], p_page integer, p_limit integer)",
+        "public.get_storage_inventory(bucket_name_input text)",
+        "public.get_user_organizations(p_user_id uuid)",
+        "public.invoice_workflow_events()",
+        "public.is_current_user_demo()",
+        "public.membership_workflow_events()",
+        "public.package_workflow_events()",
+        "public.patient_workflow_events()",
+        "public.quote_workflow_events()",
+        "public.refresh_patient_vip(target_patient_id uuid)",
+        "public.refresh_patient_vip_from_activity()",
+        "public.should_see_demo_data()",
+        "public.surgery_workflow_events()",
+        "public.treatment_workflow_events()",
+        "public.user_has_role(p_user_id uuid, p_organization_id uuid, p_roles organization_role[])",
+        "public.user_is_org_admin(p_user_id uuid, p_organization_id uuid)"
+      ],
+      "extensionsInPublic": [],
+      "tmpTables": [
+        {
+          "table": "patients_master_stage",
+          "exact_rows": 0,
+          "approx_rows": 0,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "birth_date_text"
+          ]
+        },
+        {
+          "table": "temp_patient_treatment_2",
+          "exact_rows": 154133,
+          "approx_rows": 154133,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "patient_id"
+          ]
+        },
+        {
+          "table": "tmp_accounted_medical_invoices",
+          "exact_rows": 45196,
+          "approx_rows": 45196,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "accounted_medical_benefit_id",
+            "health_insurance_law",
+            "medical_case_id",
+            "medical_case_no",
+            "medical_case_subject",
+            "patient_birthdate",
+            "patient_first_name",
+            "patient_gender",
+            "patient_id",
+            "patient_last_name",
+            "patient_number",
+            "source_unaccounted_medical_benefit_id"
+          ]
+        },
+        {
+          "table": "tmp_appointments",
+          "exact_rows": 111821,
+          "approx_rows": 111821,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "patient_id",
+            "patient_email",
+            "patient_phone",
+            "patient_first_name",
+            "patient_last_name",
+            "dob",
+            "street_address",
+            "manual_patient_info"
+          ]
+        },
+        {
+          "table": "tmp_axenita_invoice_lines",
+          "exact_rows": 41661,
+          "approx_rows": 41661,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "medical_case_subject",
+            "source_unaccounted_medical_benefit_id",
+            "health_insurance_law",
+            "patient_id",
+            "patient_last_name",
+            "medical_case_no",
+            "accounted_medical_benefit_id",
+            "patient_birthdate",
+            "medical_case_id",
+            "patient_gender",
+            "patient_first_name",
+            "patient_number"
+          ]
+        },
+        {
+          "table": "tmp_catalog_codes",
+          "exact_rows": 0,
+          "approx_rows": 0,
+          "rls_enabled": false,
+          "sensitive_columns": []
+        },
+        {
+          "table": "tmp_contacts",
+          "exact_rows": 0,
+          "approx_rows": 0,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "patient_id",
+            "phone",
+            "email",
+            "dob"
+          ]
+        },
+        {
+          "table": "tmp_contacts_phone",
+          "exact_rows": 16030,
+          "approx_rows": 16030,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "phone"
+          ]
+        },
+        {
+          "table": "tmp_deals",
+          "exact_rows": 0,
+          "approx_rows": 0,
+          "rls_enabled": false,
+          "sensitive_columns": []
+        },
+        {
+          "table": "tmp_invoice_import",
+          "exact_rows": 0,
+          "approx_rows": 0,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "medical_case_subject",
+            "source_unaccounted_medical_benefit_id",
+            "health_insurance_law",
+            "patient_id",
+            "patient_last_name",
+            "medical_case_no",
+            "accounted_medical_benefit_id",
+            "patient_birthdate",
+            "medical_case_id",
+            "patient_gender",
+            "patient_first_name",
+            "patient_number"
+          ]
+        },
+        {
+          "table": "tmp_invoice_raw",
+          "exact_rows": 45067,
+          "approx_rows": 45067,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "invoicing_party_phone",
+            "patient_streetno",
+            "care_provider_email",
+            "medical_case_law",
+            "medical_case_subject",
+            "invoice_recipient_patient_guarant_insured_number",
+            "payment_details_account_iban",
+            "assigner_address_address_addition",
+            "invoicing_party_address_type",
+            "assigner_address_canton",
+            "care_provider_address_type",
+            "assigner_address_po_box",
+            "assigner_address_salutation",
+            "medical_case_no",
+            "care_provider_address_addition",
+            "patient_pobox",
+            "payment_details_account_payment_recipient_address_line_1",
+            "payment_details_bank_address_zip_code",
+            "payment_details_account_payment_recipient_address_line_2",
+            "invoice_recipient_address_type",
+            "patient_language",
+            "patient_lastname",
+            "patient_firstname",
+            "assigner_address_street",
+            "second_invoice_recipient_address_type",
+            "patient_gender",
+            "medical_case_external_reference_number",
+            "medical_case_reason",
+            "patient_guarant_insurance_card_number",
+            "assigner_address_street_no",
+            "invoice_notes",
+            "invoicing_party_address_addition",
+            "second_invoice_recipient_hmo_insurance_model_kind",
+            "patient_salutation",
+            "medical_case_site",
+            "patient_ssn",
+            "payment_details_bank_address_city",
+            "assigner_address_title",
+            "assigner_address_lastname",
+            "patient_canton",
+            "patient_id",
+            "patient_title",
+            "patient_city",
+            "patient_zip",
+            "assigner_address_gln",
+            "care_provider_phone",
+            "invoicing_party_email",
+            "assigner_address_firstname",
+            "patient_street",
+            "payment_details_bank_address_country",
+            "assigner_address_zip_code",
+            "second_invoice_recipient_kvg_insurance_model",
+            "patient_birthdate",
+            "assigner_address_city",
+            "patient_guarantor_insured_number",
+            "invoice_recipient_hmo_insurance_model_kind",
+            "assigner_address_type",
+            "patient_country",
+            "assigner_address_country",
+            "invoice_recipient_address_addition",
+            "invoice_recipient_kvg_insurance_model",
+            "second_invoice_recipient_address_addition",
+            "patient_number",
+            "patient_address_addition"
+          ]
+        },
+        {
+          "table": "tmp_notes",
+          "exact_rows": 0,
+          "approx_rows": 0,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "patient_id"
+          ]
+        },
+        {
+          "table": "tmp_patient_axenita",
+          "exact_rows": 0,
+          "approx_rows": 0,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "matched_patient_id"
+          ]
+        },
+        {
+          "table": "tmp_patient_with_address_and_ssn",
+          "exact_rows": 0,
+          "approx_rows": 0,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "patientno",
+            "birthday",
+            "patientfieldvalue1",
+            "patientfieldvalue2",
+            "patientfieldvalue3",
+            "patientfieldvalue4",
+            "patientfieldvalue5",
+            "extended_info.ssn",
+            "extended_info.birthDate",
+            "extended_info.patientNo",
+            "extended_info.patientMandator_name",
+            "extended_info.patientMandator_id",
+            "extended_info.protectedPatient",
+            "address.street",
+            "address.streetNo",
+            "address.addressAddition",
+            "address.poBox",
+            "address.zipCode",
+            "address.city",
+            "address.canton_shortName",
+            "address.canton_name",
+            "address.country_shortName",
+            "address.country_name",
+            "address.error"
+          ]
+        },
+        {
+          "table": "tmp_patients",
+          "exact_rows": 16192,
+          "approx_rows": 16192,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "patientno",
+            "birthday",
+            "patientfieldvalue1",
+            "patientfieldvalue2",
+            "patientfieldvalue3",
+            "patientfieldvalue4",
+            "patientfieldvalue5"
+          ]
+        },
+        {
+          "table": "tmp_treatment_flat",
+          "exact_rows": 0,
+          "approx_rows": 0,
+          "rls_enabled": false,
+          "sensitive_columns": [
+            "patient_id"
+          ]
+        }
+      ],
+      "policyCount": 155
+    }
+  }
+]

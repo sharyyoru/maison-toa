@@ -1,0 +1,7 @@
+{
+  "_README": "Deliberate exceptions to the security invariants enforced by ci-check.mjs. Every key MUST have a justification and an owner. Anything in here is a documented, accepted risk — review at each release.",
+  "publicBuckets": {},
+  "anonTables": {},
+  "advisorLints": {},
+  "scratchTables": {}
+}

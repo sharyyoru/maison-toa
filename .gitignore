@@ -92,3 +92,26 @@ scripts/migrate-insurance.js
 scripts/migrate-medical-notes.js
 scripts/setup-billing-entities-v2.sql
 scripts/setup-billing-entities-v2.sql
+
+# ---------------------------------------------------------------------
+# Security remediation artifacts
+# ---------------------------------------------------------------------
+# Credentials for the remediation tooling (also matched by .env* above).
+.env.security
+
+# Deliverable reports must be committable despite the blanket *.md rule.
+!reports/**/*.md
+!reports/**/*.json
+
+# ...but raw request logs contain client IP addresses (personal data under
+# the nFADP) and must stay local. Only the aggregated summary is committed.
+reports/**/access_logs.json
+reports/**/access_logs.csv
+
+# Supabase CLI scratch state: leaks the pooler URL and project ref.
+# Already tracked, so also needs: git rm -r --cached supabase/.temp
+supabase/.temp/
+
+# Local Postgres client tooling and encrypted dumps, if ever placed in-tree.
+.pgtools/
+*.sql.gz.enc

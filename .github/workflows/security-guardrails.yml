@@ -1,0 +1,104 @@
+name: Security guardrails
+
+# Fails the build if a database security invariant regresses:
+#   - any public table without RLS
+#   - any view without security_invoker
+#   - any public storage bucket
+#   - any Security Advisor ERROR
+#   - any table granted to anon
+#   - any leftover tmp_* scratch table
+#
+# Deliberate exceptions go in scripts/security/allowlist.json with a
+# justification. Requires the SUPABASE_ACCESS_TOKEN repository secret
+# (fine-grained: database:read, analytics:read, projects read).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 6 * * *' # daily drift detection
+  workflow_dispatch:
+
+concurrency:
+  group: security-guardrails-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-secrets-in-repo:
+    name: No credentials committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fail on committed Supabase keys or JWTs
+        run: |
+          echo "Scanning tracked files for credential patterns..."
+          if git grep -nIE \
+              'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|sbp_[a-f0-9]{40}|sb_secret_[A-Za-z0-9_-]{10,}' \
+              -- . ':(exclude)package-lock.json' ':(exclude).github/workflows/security-guardrails.yml'; then
+            echo "::error::A JWT or Supabase secret is committed. Rotate it, then remove it."
+            exit 1
+          fi
+          echo "Clean."
+
+      - name: Fail if a real .env file is tracked
+        run: |
+          if git ls-files --error-unmatch .env .env.local .env.production 2>/dev/null; then
+            echo "::error::A real .env file is tracked. .gitignore does not cover already-tracked files."
+            exit 1
+          fi
+          echo "No tracked .env files."
+
+  database-invariants:
+    name: Database security invariants
+    runs-on: ubuntu-latest
+    # Only runs where the secret is available (not on forked PRs).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check every project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REFS: ${{ vars.SUPABASE_PROJECT_REFS }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN secret is not set; cannot verify database invariants."
+            exit 1
+          fi
+          node scripts/security/ci-check.mjs
+
+  migration-review:
+    name: RLS policy review reminder
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a second reviewer for policy changes
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          changed=$(git diff --name-only "$base" "$head" -- supabase/migrations || true)
+          if [ -z "$changed" ]; then
+            echo "No migrations touched."
+            exit 0
+          fi
+          echo "Migrations in this PR:"; echo "$changed"
+          if echo "$changed" | xargs -r grep -lE 'CREATE POLICY|ALTER POLICY|DROP POLICY|ROW LEVEL SECURITY|USING \(true\)' ; then
+            echo "::warning::This PR changes RLS policies. A second-person review is required (see docs/security/pre-production-checklist.md)."
+          fi
+          if echo "$changed" | xargs -r grep -nE 'USING \(\s*true\s*\)' ; then
+            echo "::error::A policy uses USING (true). Never permit that on patient data."
+            exit 1
+          fi
