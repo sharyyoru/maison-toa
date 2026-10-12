@@ -94,6 +94,23 @@ export default function InsuranceBillingModal({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<any | null>(null);
 
+  /**
+   * Set when the duplicate guard returns 409. Held separately from `error`
+   * because this is not a failure to report but a state to act on — the user
+   * needs the insurer's reason and, usually, a Storno.
+   */
+  const [guardBlock, setGuardBlock] = useState<{
+    message: string;
+    outcome: string | null;
+    requiresStorno: boolean;
+    previousSubmissionId: string | null;
+    previousStatus: string | null;
+    rejectionClass: string | null;
+  } | null>(null);
+  const [isStornoing, setIsStornoing] = useState(false);
+  const [stornoReason, setStornoReason] = useState("");
+  const [stornoSent, setStornoSent] = useState<string | null>(null);
+
   // Real invoice line items loaded from DB
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [lineItemsLoading, setLineItemsLoading] = useState(false);
@@ -374,6 +391,48 @@ export default function InsuranceBillingModal({
     }
   };
 
+  /**
+   * Cancel the previous submission (Storno) and then resend. Deliberately one
+   * explicit, user-initiated action: insurers return allowModification="false"
+   * on virtually every rejection, so a correction requires a real cancellation
+   * message. Automating it silently would send insurer traffic with no human
+   * in the loop.
+   */
+  const handleStornoThenResend = async () => {
+    if (!guardBlock?.previousSubmissionId) return;
+
+    setIsStornoing(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/medidata/cancel-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId: guardBlock.previousSubmissionId,
+          reason: stornoReason.trim() || "Correction resend - previous submission cancelled",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Could not cancel the previous submission.");
+      }
+
+      // The original only leaves its active status once MediData/the insurer
+      // accepts the Storno, so resending immediately would just hit the guard
+      // again. Tell the user where it stands instead of looping.
+      setGuardBlock(null);
+      setError(null);
+      setStornoSent(
+        "Cancellation (Storno) sent. Once the insurer confirms it, this invoice can be sent again. " +
+          "The Insurance tab will show the outcome.",
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not cancel the previous submission.");
+    } finally {
+      setIsStornoing(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (billingType === "TP" && !selectedInsurerGln) {
       setError("Please select an insurance company for Tiers Payant billing");
@@ -382,6 +441,8 @@ export default function InsuranceBillingModal({
 
     setIsSubmitting(true);
     setError(null);
+    setGuardBlock(null);
+    setStornoSent(null);
 
     try {
       const { data: sessionData } = await supabaseClient.auth.getSession();
@@ -419,6 +480,21 @@ export default function InsuranceBillingModal({
       const data = await response.json();
 
       if (!response.ok) {
+        // 409 means the duplicate guard stopped this: the insurer already holds
+        // this invoice, or the previous rejection needs a specific action
+        // first. Show the reason and, where applicable, the Storno path —
+        // rather than a bare error that invites another blind retry.
+        if (response.status === 409) {
+          setGuardBlock({
+            message: data.error || "This invoice cannot be sent again right now.",
+            outcome: data.outcome ?? null,
+            requiresStorno: Boolean(data.requiresStorno),
+            previousSubmissionId: data.previousSubmissionId ?? null,
+            previousStatus: data.previousStatus ?? null,
+            rejectionClass: data.rejectionClass ?? null,
+          });
+          return;
+        }
         const errMsg = data.error || "Unknown error";
         throw new Error(errMsg);
       }
@@ -953,6 +1029,80 @@ export default function InsuranceBillingModal({
                 <option value="prevention">Pr&eacute;vention / Prevention</option>
               </select>
             </div>
+
+            {/* Storno sent confirmation */}
+            {stornoSent && (
+              <div className="rounded-xl bg-sky-50 border border-sky-200 p-4">
+                <p className="text-sm font-medium text-sky-800">Cancellation sent</p>
+                <p className="mt-0.5 text-xs text-sky-700 break-words">{stornoSent}</p>
+              </div>
+            )}
+
+            {/* Duplicate guard: the insurer already holds this invoice, or the
+                previous rejection needs a specific action first. */}
+            {guardBlock && (
+              <div className="rounded-xl bg-amber-50 border border-amber-300 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                    <svg className="h-4 w-4 text-amber-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-amber-900">
+                      Not sent &mdash; this would be a duplicate
+                    </p>
+                    <p className="mt-0.5 text-xs text-amber-800 break-words">{guardBlock.message}</p>
+
+                    {(guardBlock.previousStatus || guardBlock.rejectionClass) && (
+                      <p className="mt-1 text-[11px] text-amber-700">
+                        {guardBlock.previousStatus && <>Previous submission: <strong>{guardBlock.previousStatus}</strong></>}
+                        {guardBlock.previousStatus && guardBlock.rejectionClass && " \u00b7 "}
+                        {guardBlock.rejectionClass && <>Insurer reason: <strong>{guardBlock.rejectionClass}</strong></>}
+                      </p>
+                    )}
+
+                    {guardBlock.requiresStorno && guardBlock.previousSubmissionId && (
+                      <div className="mt-3 space-y-2">
+                        <input
+                          type="text"
+                          value={stornoReason}
+                          onChange={(e) => setStornoReason(e.target.value)}
+                          placeholder="Reason for cancellation (sent to the insurer)"
+                          className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleStornoThenResend}
+                          disabled={isStornoing}
+                          className="w-full rounded-lg bg-amber-600 px-3 py-2 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                        >
+                          {isStornoing ? "Cancelling\u2026" : "Cancel previous submission (Storno)"}
+                        </button>
+                        <p className="text-[11px] text-amber-700">
+                          The insurer must confirm the cancellation before this invoice can be sent again.
+                        </p>
+                      </div>
+                    )}
+
+                    {!guardBlock.requiresStorno && (
+                      <p className="mt-2 text-[11px] text-amber-700">
+                        Resending will not change the outcome &mdash; this needs to be resolved outside the app first.
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setGuardBlock(null)}
+                    className="shrink-0 rounded p-1 text-amber-500 hover:text-amber-700"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Error Message */}
             {error && (
