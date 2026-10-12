@@ -2,6 +2,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveInsuranceDiagnosisCodes } from "@/lib/insuranceDiagnosisCodes";
+import {
+  applySupersede,
+  evaluateSubmissionGuard,
+  isUniqueActiveViolation,
+  uniqueViolationVerdict,
+} from "@/lib/medidataSubmissionGuard";
 
 export const maxDuration = 300;
 
@@ -171,6 +177,45 @@ export async function POST(request: NextRequest) {
       }
     } else {
       return NextResponse.json({ error: "invoiceId is required" }, { status: 400 });
+    }
+
+    // ── Idempotency guard ──
+    // Checked here, before any Sumex XML generation or transmission, so a
+    // duplicate send costs nothing and never reaches the insurer. This route
+    // previously had NO duplicate check of any kind, which is why ~107 insurer
+    // rejections were duplicates ("Double calcul", "facture déjà reçue").
+    //
+    // Storno is NOT handled by this route (see /api/medidata/cancel-invoice),
+    // so cancellations are unaffected by this check.
+    if (resolvedInvoiceId) {
+      const guard = await evaluateSubmissionGuard(supabaseAdmin, resolvedInvoiceId);
+
+      if (!guard.allowed) {
+        console.warn(
+          `[SendInvoice] blocked by guard (${guard.outcome}) for invoice ${resolvedInvoiceId}: ${guard.message}`,
+        );
+        return NextResponse.json(
+          {
+            error: guard.message,
+            outcome: guard.outcome,
+            requiresStorno: guard.requiresStorno,
+            previousSubmissionId: guard.previousSubmissionId,
+            previousStatus: guard.previousStatus,
+            rejectionClass: guard.rejectionClass,
+          },
+          // 409: the request is well-formed but conflicts with current state.
+          { status: 409 },
+        );
+      }
+
+      // Retire a stale pending submission before inserting the replacement —
+      // doing it afterwards would trip the unique index.
+      if (guard.supersede) {
+        await applySupersede(supabaseAdmin, guard.supersede);
+        console.log(
+          `[SendInvoice] superseded stale submission ${guard.supersede.submissionId} for invoice ${resolvedInvoiceId}`,
+        );
+      }
     }
 
     const patientId = bodyPatientId
@@ -882,6 +927,16 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (submissionError) {
+      // Defensive: the insert uses `draft`, which the unique index ignores, so
+      // this should not fire. If the predicate is ever widened, surface the
+      // friendly conflict rather than a bare 500.
+      if (isUniqueActiveViolation(submissionError)) {
+        const v = uniqueViolationVerdict();
+        return NextResponse.json(
+          { error: v.message, outcome: v.outcome, requiresStorno: v.requiresStorno },
+          { status: 409 },
+        );
+      }
       console.error("Error creating submission:", submissionError);
       return NextResponse.json(
         { error: "Failed to create invoice submission" },
@@ -931,16 +986,77 @@ export async function POST(request: NextRequest) {
           medidataTransmissionStatus = 'pending';
           medidataTransmissionRef = uploadResult.transmissionReference;
 
-          // Update submission with transmission details
-          await supabaseAdmin
+          // Update submission with transmission details.
+          //
+          // This is the moment the row enters an active status, so it is where
+          // the one-active-submission-per-invoice index can fire (the insert
+          // above uses `draft`, which the index deliberately ignores).
+          //
+          // Honest limitation: the index protects the DATA, not the
+          // transmission. If a concurrent request slipped past the guard, the
+          // upload above has already happened. When that occurs, this row is
+          // the authoritative one — it holds a real MediData transmission
+          // reference — so we retire the competing row rather than losing the
+          // record of something the insurer has actually received.
+          const transmissionUpdate = {
+            status: 'pending',
+            medidata_message_id: uploadResult.transmissionReference,
+            medidata_transmission_date: new Date().toISOString(),
+            medidata_response_code: String(uploadResult.statusCode),
+          };
+
+          const { error: txUpdateErr } = await supabaseAdmin
             .from("medidata_submissions")
-            .update({
-              status: 'pending',
-              medidata_message_id: uploadResult.transmissionReference,
-              medidata_transmission_date: new Date().toISOString(),
-              medidata_response_code: String(uploadResult.statusCode),
-            })
+            .update(transmissionUpdate)
             .eq("id", submission.id);
+
+          if (txUpdateErr && isUniqueActiveViolation(txUpdateErr)) {
+            console.error(
+              `[SendInvoice] RACE: invoice ${resolvedInvoiceId} already had an active submission when ` +
+                `transmission ${uploadResult.transmissionReference} completed. Retiring the competing row ` +
+                `in favour of this transmitted one.`,
+            );
+
+            const { data: competing } = await supabaseAdmin
+              .from("medidata_submissions")
+              .select("id")
+              .eq("invoice_id", resolvedInvoiceId)
+              .eq("is_storno", false)
+              .eq("is_superseded", false)
+              .in("status", ["pending", "transmitted", "delivered", "accepted"])
+              .neq("id", submission.id);
+
+            for (const row of competing ?? []) {
+              await applySupersede(
+                supabaseAdmin,
+                {
+                  submissionId: row.id,
+                  reason:
+                    `Superseded by submission ${submission.id}, which carries MediData transmission ` +
+                    `reference ${uploadResult.transmissionReference}. Detected as a concurrent-send race.`,
+                },
+                submission.id,
+              );
+            }
+
+            const { error: retryErr } = await supabaseAdmin
+              .from("medidata_submissions")
+              .update(transmissionUpdate)
+              .eq("id", submission.id);
+
+            if (retryErr) {
+              console.error(
+                `[SendInvoice] Could not record transmission ${uploadResult.transmissionReference} ` +
+                  `for submission ${submission.id} after resolving the race:`,
+                retryErr,
+              );
+            }
+          } else if (txUpdateErr) {
+            console.error(
+              `[SendInvoice] Failed to record transmission for submission ${submission.id}:`,
+              txUpdateErr,
+            );
+          }
 
           // Record status change
           await supabaseAdmin.from("medidata_submission_history").insert({

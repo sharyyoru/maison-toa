@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveInsuranceDiagnosisCodes } from "@/lib/insuranceDiagnosisCodes";
+import { applySupersede, evaluateSubmissionGuard } from "@/lib/medidataSubmissionGuard";
 import { createClient } from "@supabase/supabase-js";
 
 async function getUserId(request: NextRequest): Promise<string | null> {
@@ -47,21 +48,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Dedupe: if a pending or processing job exists for this invoice, return it
-    const { data: existingJobs } = await supabaseAdmin
-      .from("medidata_submission_jobs")
-      .select("id, status, created_at")
-      .eq("invoice_id", invoiceId)
-      .in("status", ["pending", "processing"])
-      .order("created_at", { ascending: false })
-      .limit(1);
+    // Idempotency guard. The previous check here only looked for an in-flight
+    // JOB, so once a job completed the same invoice could be queued again and
+    // sent to the insurer a second time — the cause of ~107 duplicate
+    // rejections. The guard also inspects medidata_submissions and, for a
+    // previously rejected invoice, the insurer's own reject codes.
+    const guard = await evaluateSubmissionGuard(supabaseAdmin, invoiceId);
 
-    if (existingJobs && existingJobs.length > 0) {
+    if (guard.outcome === "JOB_IN_FLIGHT") {
+      // Not an error: the caller gets the job it already has.
       return NextResponse.json({
-        jobId: existingJobs[0].id,
-        status: existingJobs[0].status,
-        message: "A submission for this invoice is already queued",
+        jobId: guard.existingJobId,
+        status: "pending",
+        message: guard.message,
       });
+    }
+
+    if (!guard.allowed) {
+      return NextResponse.json(
+        {
+          error: guard.message,
+          outcome: guard.outcome,
+          requiresStorno: guard.requiresStorno,
+          previousSubmissionId: guard.previousSubmissionId,
+          previousStatus: guard.previousStatus,
+          rejectionClass: guard.rejectionClass,
+        },
+        { status: 409 },
+      );
+    }
+
+    // A stale pending submission must be retired BEFORE the new one is created,
+    // otherwise the medidata_submissions_one_active_per_invoice index would
+    // reject exactly what the guard just permitted.
+    if (guard.supersede) {
+      await applySupersede(supabaseAdmin, guard.supersede);
+      console.log(
+        `[QueueSubmission] superseded stale submission ${guard.supersede.submissionId} for invoice ${invoiceId}`,
+      );
     }
 
     const { data: job, error: insertErr } = await supabaseAdmin

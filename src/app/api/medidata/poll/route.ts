@@ -8,6 +8,7 @@ import {
   confirmNotification,
   getUploadStatus,
 } from "@/lib/medidataProxy";
+import { parseResponseXml, primaryErrorCode } from "@/lib/medidataResponseParser";
 
 /**
  * POST /api/medidata/poll
@@ -236,13 +237,18 @@ export async function POST() {
               : parsed.type === "pending" ? "pending"
               : matchedSub.status;
 
+            // Prefer the insurer's structured reject code. statusOut is the
+            // literal string "unknown" in most real responses, which is why
+            // this column was useless and rejection reasons were invisible.
+            const responseCode = primaryErrorCode(parsed.errors) ?? parsed.statusOut;
+
             if (newStatus !== matchedSub.status) {
               await supabaseAdmin
                 .from("medidata_submissions")
                 .update({
                   status: newStatus,
                   insurance_response_date: new Date().toISOString(),
-                  insurance_response_code: parsed.statusOut,
+                  insurance_response_code: responseCode,
                   insurance_response_message: parsed.explanation || parsed.type,
                   updated_at: new Date().toISOString(),
                 })
@@ -252,7 +258,7 @@ export async function POST() {
                 submission_id: matchedSub.id,
                 previous_status: matchedSub.status,
                 new_status: newStatus,
-                response_code: parsed.statusOut,
+                response_code: responseCode,
                 response_message: `Insurer response: ${parsed.type}${parsed.explanation ? ` — ${parsed.explanation}` : ""}`,
               });
 
@@ -296,22 +302,55 @@ export async function POST() {
         }
 
         // Store the response in DB
-        await supabaseAdmin.from("medidata_responses").insert({
-          medidata_message_id: ref,
-          document_reference: (dl as any).documentReference || null,
-          correlation_reference: corrRef || null,
-          submission_id: submissionId,
-          response_type: parsed.type,
-          status_in: parsed.statusIn,
-          status_out: parsed.statusOut,
-          sender_gln: (dl as any).senderGln || null,
-          content,
-          raw_data: dl,
-          explanation: parsed.explanation,
-          received_at: (dl as any).created || new Date().toISOString(),
-          processed_at: new Date().toISOString(),
-          ...(responseDocPath ? { document_path: responseDocPath } : {}),
-        });
+        const receivedAt = (dl as any).created || new Date().toISOString();
+        const senderGln = (dl as any).senderGln || null;
+        const { data: insertedResponse, error: responseInsertErr } = await supabaseAdmin
+          .from("medidata_responses")
+          .insert({
+            medidata_message_id: ref,
+            document_reference: (dl as any).documentReference || null,
+            correlation_reference: corrRef || null,
+            submission_id: submissionId,
+            response_type: parsed.type,
+            status_in: parsed.statusIn,
+            status_out: parsed.statusOut,
+            sender_gln: senderGln,
+            content,
+            raw_data: dl,
+            explanation: parsed.explanation,
+            received_at: receivedAt,
+            processed_at: new Date().toISOString(),
+            ...(responseDocPath ? { document_path: responseDocPath } : {}),
+          })
+          .select("id")
+          .single();
+
+        if (responseInsertErr) {
+          console.warn(`[poll] Response insert failed for ${ref}:`, responseInsertErr.message);
+        }
+
+        // Persist the structured <invoice:error> codes. These are what make a
+        // rejection actionable — without them operators only see "unknown" and
+        // blind-retry, which is what generated the duplicate rejections.
+        if (insertedResponse?.id && parsed.errors.length > 0) {
+          const { error: errErr } = await supabaseAdmin
+            .from("medidata_response_errors")
+            .upsert(
+              parsed.errors.map((e) => ({
+                response_id: insertedResponse.id,
+                submission_id: submissionId,
+                code: e.code,
+                text: e.text,
+                record_id: e.recordId,
+                insurer_gln: senderGln,
+                received_at: receivedAt,
+              })),
+              { onConflict: "response_id,code,record_id", ignoreDuplicates: true },
+            );
+          if (errErr) {
+            console.warn(`[poll] Response error rows failed for ${ref}:`, errErr.message);
+          }
+        }
 
         // Confirm receipt to MediData
         const confirmed = await confirmDownload(ref);
@@ -472,46 +511,5 @@ export async function POST() {
   }
 }
 
-/**
- * Parse insurer response XML to extract type and explanation.
- */
-function parseResponseXml(content: string): {
-  type: string;
-  statusIn: string;
-  statusOut: string;
-  explanation: string;
-} {
-  let type = "unknown";
-  let statusIn = "";
-  let statusOut = "";
-  let explanation = "";
-
-  // Check for accepted/rejected/pending
-  const acceptedMatch = content.match(/status_in="([^"]*)"[^>]*status_out="([^"]*)"/);
-  if (acceptedMatch) {
-    statusIn = acceptedMatch[1];
-    statusOut = acceptedMatch[2];
-  }
-
-  if (content.includes("<invoice:accepted") || content.includes("status_out=\"granted\"")) {
-    type = "accepted";
-  } else if (content.includes("<invoice:rejected") || content.includes("status_out=\"refused\"")) {
-    type = "rejected";
-  } else if (content.includes("<invoice:pending") || content.includes("status_out=\"pending\"")) {
-    type = "pending";
-  }
-
-  // Extract explanation
-  const explMatch = content.match(/<invoice:explanation>([^<]+)<\/invoice:explanation>/);
-  if (explMatch) {
-    explanation = explMatch[1];
-  }
-
-  // Also check for text in status/reason elements
-  if (!explanation) {
-    const textMatch = content.match(/<invoice:text>([^<]+)<\/invoice:text>/);
-    if (textMatch) explanation = textMatch[1];
-  }
-
-  return { type, statusIn, statusOut, explanation };
-}
+// parseResponseXml now lives in @/lib/medidataResponseParser so that the
+// backfill script parses historical responses with exactly the same logic.
