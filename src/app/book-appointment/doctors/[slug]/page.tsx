@@ -246,6 +246,17 @@ function DoctorBookingContent() {
 
   useEffect(() => {
     if (autofill === "true" && patientId) {
+      // KNOWN LIMITATION — intentionally left non-functional.
+      //
+      // This reads patient PII straight from the browser using a patient id
+      // taken from the URL. Unauthenticated visitors no longer have database
+      // access, so it now returns nothing and the form simply stays blank.
+      //
+      // Do NOT "fix" this by granting `anon` read access to `patients`: the id
+      // comes from a query parameter, so that would let anyone read any
+      // patient's name, e-mail and phone by changing `pid` (an IDOR). If the
+      // intake -> booking prefill is wanted again it needs a short-lived,
+      // single-use token issued by the intake step and exchanged server-side.
       const fetchPatientData = async () => {
         try {
           const { data: patient } = await supabaseClient

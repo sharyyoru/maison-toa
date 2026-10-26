@@ -11,6 +11,35 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const treatmentId = searchParams.get("treatment_id");
     const categorySlug = searchParams.get("category_slug");
+    const slug = searchParams.get("slug");
+
+    // Single doctor by slug, for the public booking pages.
+    //
+    // Those pages used to read `booking_doctors` straight from the browser with
+    // the anon key. That broke when anon access to the schema was locked down:
+    // the request still returned HTTP 200 but with zero rows (RLS denies every
+    // row, which PostgREST reports as an empty result rather than an error), so
+    // the doctor silently never loaded and booking could not be completed.
+    // Serving it here keeps every booking page on the same server-side path and
+    // means no public visitor needs direct database access at all.
+    if (slug) {
+      const { data: doctor, error } = await supabaseAdmin
+        .from("booking_doctors")
+        // Only fields the public page renders — no calendar_provider_id etc.
+        .select("id, name, specialty, image_url, description, slug, enabled, order_index")
+        .eq("slug", slug)
+        .eq("enabled", true)
+        .maybeSingle();
+
+      if (error) {
+        console.error("GET booking-doctors by slug error:", error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      if (!doctor) {
+        return NextResponse.json({ error: "Doctor not found" }, { status: 404 });
+      }
+      return NextResponse.json({ doctor });
+    }
 
     if (treatmentId && treatmentId !== "none") {
       // Check if there are any treatment-level assignments

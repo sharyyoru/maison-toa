@@ -276,6 +276,39 @@ export async function POST(request: Request) {
       }
     }
 
+    // Reject bookings for a doctor we cannot place anywhere.
+    //
+    // Until now an unrecognised doctorSlug fell through every lookup leaving
+    // providerId null, and the appointment was still created — so a request
+    // with arbitrary doctor/service strings produced a real appointment
+    // attached to no calendar, invisible to staff but occupying a slot.
+    //
+    // Deliberately conservative: this only rejects when the slug matches no
+    // enabled booking doctor AND no provider could be resolved by name. Any
+    // booking that works today satisfies at least one of those, including the
+    // legacy /book-appointment/doctors/[slug] route, so this cannot refuse a
+    // legitimate request. Checked before the patient record is created so a
+    // bogus request leaves nothing behind.
+    if (!providerId) {
+      const { data: knownDoctor } = await supabase
+        .from("booking_doctors")
+        .select("id")
+        .eq("slug", doctorSlug)
+        .eq("enabled", true)
+        .maybeSingle();
+
+      if (!knownDoctor) {
+        console.warn(
+          `[Booking] Rejected: doctorSlug "${doctorSlug}" (name "${doctorName}") matches no enabled ` +
+            `booking doctor and no provider could be resolved.`,
+        );
+        return NextResponse.json(
+          { error: "The selected doctor is not available for online booking." },
+          { status: 400 },
+        );
+      }
+    }
+
     // Doctor-specific capacity: XT and CR can have 3 concurrent, others have 1
     const MULTI_CAPACITY_DOCTORS = ["xavier-tenorio", "cesar-rodriguez"];
     const maxCapacity = MULTI_CAPACITY_DOCTORS.includes(doctorSlug) ? 3 : 1;

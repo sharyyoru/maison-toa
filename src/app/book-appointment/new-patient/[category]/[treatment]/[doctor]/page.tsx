@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { supabaseClient } from "@/lib/supabaseClient";
 import { getSwissToday, formatSwissYmd, parseSwissDate, getSwissDayOfWeek, formatSwissDateWithWeekday, getSwissDayRange, createSwissDateTime } from "@/lib/swissTimezone";
 import { pushToDataLayer } from "@/components/GoogleTagManager";
 import { getBookingTrackingParams } from "@/lib/bookingTracking";
@@ -338,23 +337,30 @@ function DoctorBookingContent() {
       : t("success.backHome");
 
   useEffect(() => {
+    // Served by the API route rather than queried from the browser: public
+    // visitors have no database access, and a direct anon query here returned
+    // an empty 200 (RLS denying every row) which left the doctor silently
+    // unloaded and made booking impossible.
     const fetchDoctor = async () => {
-      const { data } = await supabaseClient
-        .from("booking_doctors")
-        .select("name, specialty, image_url, description")
-        .eq("slug", doctorSlug)
-        .eq("enabled", true)
-        .single();
-      if (data) {
-        setDoctor({
-          name: data.name,
-          specialty: data.specialty || "",
-          image: data.image_url || "/doctors/clinic.png",
-          email: "info@maisontoa.com",
-          description: data.description || "",
-        });
+      try {
+        const res = await fetch(`/api/settings/booking-doctors?slug=${encodeURIComponent(doctorSlug)}`);
+        if (res.ok) {
+          const { doctor: data } = await res.json();
+          if (data) {
+            setDoctor({
+              name: data.name,
+              specialty: data.specialty || "",
+              image: data.image_url || "/doctors/clinic.png",
+              email: "info@maisontoa.com",
+              description: data.description || "",
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load doctor:", err);
+      } finally {
+        setDoctorLoading(false);
       }
-      setDoctorLoading(false);
     };
     fetchDoctor();
   }, [doctorSlug]);
