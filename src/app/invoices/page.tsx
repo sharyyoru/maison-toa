@@ -7,6 +7,7 @@ import InsuranceBillingModal from "@/components/InsuranceBillingModal";
 import { usePDFJobNotifications } from "@/components/PDFJobNotificationsContext";
 import { useInsuranceSubmissionNotifications } from "@/components/InsuranceSubmissionNotificationsContext";
 import { useAuth } from "@/components/AuthContext";
+import SumexStatusBanner from "@/components/SumexStatusBanner";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1049,6 +1050,9 @@ export default function InvoicesPage() {
 
   return (
     <div className="space-y-4 p-1">
+      {/* Visible when the Sumex billing server is unreachable, so staff know
+          PDFs are local fallbacks and insurance submission is queued. */}
+      <SumexStatusBanner />
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>

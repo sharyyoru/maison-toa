@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import type { Invoice, InvoiceLineItem } from "@/lib/invoiceTypes";
+import { buildFallbackInvoicePdf } from "@/lib/fallbackInvoicePdf";
 import {
   buildInvoiceRequest,
   mapLawType as mapSumexLaw,
@@ -272,6 +273,79 @@ export async function POST(request: NextRequest) {
         `[GeneratePDF] No provider_id on invoice; using doctor (${staffData.name}) as billing entity.`,
       );
     }
+
+    /**
+     * Degraded-mode PDF.
+     *
+     * The official invoice layout is produced by the Sumex1 print template. The
+     * Sumex1 server is unreachable, so native XML generation succeeds but
+     * returns no pdfContent — which previously surfaced as
+     * "Sumex1 PDF generation failed" and no downloadable file at all.
+     *
+     * This builds a local patient PDF instead so billing keeps moving. It is
+     * NOT a substitute for the Sumex layout on insurance claims; the response
+     * is flagged degradedMode so callers can say so.
+     */
+    const generateFallbackPdf = async () => {
+      const biller = billingEntityData || staffData;
+      const doctorName =
+        staffData?.name
+        || invoiceData.doctor_name
+        || (billingEntityData?.name !== biller?.name ? billingEntityData?.name : null)
+        || "";
+      const pdfBuffer = await buildFallbackInvoicePdf({
+        invoice: invoiceData,
+        lineItems,
+        patient: patientData,
+        biller: {
+          name: biller?.name || invoiceData.provider_name || "Maison TOA",
+          street: biller?.street,
+          streetNo: biller?.street_no,
+          postalCode: biller?.zip_code,
+          town: biller?.city,
+          iban: biller?.iban || invoiceData.provider_iban,
+          phone: biller?.phone,
+        },
+        doctor: doctorName ? {
+          name: doctorName,
+          title: staffData?.title || billingEntityData?.title || null,
+          salutation: staffData?.salutation || billingEntityData?.salutation || null,
+          specialty: staffData?.specialty || billingEntityData?.specialty || null,
+          zsr: staffData?.zsr || invoiceData.provider_zsr || null,
+          gln: staffData?.gln || invoiceData.provider_gln || null,
+        } : null,
+        treatmentDate: invoiceData.treatment_date || invoiceData.invoice_date || null,
+        treatmentCanton: billingEntityData?.canton || invoiceData.treatment_canton || null,
+        billingType: invoiceData.billing_type || null,
+      });
+      const patientName = `${patientData.last_name}_${patientData.first_name}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const filePath = `${invoiceData.patient_id}/Facture_${invoiceData.invoice_number}_${patientName}_${timestamp}_fallback.pdf`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from("invoice-pdfs")
+        .upload(filePath, pdfBuffer, { contentType: "application/pdf", cacheControl: "3600" });
+      if (uploadError) throw uploadError;
+      const generatedAt = new Date().toISOString();
+      const { error: updateError } = await supabaseAdmin
+        .from("invoices")
+        .update({ pdf_path: filePath, pdf_generated_at: generatedAt })
+        .eq("id", invoiceId);
+      if (updateError) throw updateError;
+      // Signed, not public: invoice-pdfs is a private bucket here, so
+      // getPublicUrl() would hand back a URL that fails with
+      // "Bucket not found".
+      const { data: signed } = await supabaseAdmin.storage
+        .from("invoice-pdfs")
+        .createSignedUrl(filePath, 60 * 60);
+      return NextResponse.json({
+        success: true,
+        pdfUrl: signed?.signedUrl ?? null,
+        pdfPath: filePath,
+        qrCodeType: "local-fallback",
+        degradedMode: true,
+        warning: "The Sumex service is unavailable. A local patient PDF was generated; insurance transmission still requires Sumex.",
+      });
+    };
 
     // Normalize canton abbreviation — DB may store full name e.g. "Vaud" instead of "VD"
     const CANTON_NAME_TO_CODE: Record<string, string> = {
@@ -646,11 +720,10 @@ export async function POST(request: NextRequest) {
 
       // Use Sumex1-generated PDF
       if (!sumexResult.pdfContent) {
-        console.error(`[GeneratePDF] Sumex1 XML OK but PDF not available`);
-        return NextResponse.json({ 
-          error: "Sumex1 PDF generation failed - no PDF content returned",
-          xmlGenerated: true
-        }, { status: 500 });
+        // Native XML path (no Sumex server): the official print template is
+        // unavailable, so produce the local patient PDF instead of failing.
+        console.warn(`[GeneratePDF] XML generated natively — no server print; using local fallback PDF`);
+        return generateFallbackPdf();
       }
 
       const pdfBuffer = await overlayNoteHonoraireBox(sumexResult.pdfContent);
@@ -926,6 +999,13 @@ export async function POST(request: NextRequest) {
             });
           }
         } else {
+          // Native XML path (no Sumex server): the XML built fine but there is
+          // no official print template, so produce the local patient PDF
+          // instead of erroring out with no downloadable file.
+          if (sumexResult2.success && !sumexResult2.pdfContent) {
+            console.warn(`[GeneratePDF] XML generated natively — using local fallback PDF`);
+            return generateFallbackPdf();
+          }
           console.error(`[GeneratePDF] Sumex1 unified failed: ${sumexResult2.error}`);
           return NextResponse.json({ 
             error: "Sumex1 PDF generation failed", 
