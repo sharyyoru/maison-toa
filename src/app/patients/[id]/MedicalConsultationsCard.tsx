@@ -5694,13 +5694,21 @@ export default function MedicalConsultationsCard({
     }
   }
 
-  function handleViewCashReceipt(path: string | null) {
+  async function handleViewCashReceipt(path: string | null) {
     if (!path) return;
     try {
-      const { data } = supabaseClient.storage
+      // cash-receipts is a private bucket (a receipt identifies the patient and
+      // the amount), so getPublicUrl() yields a URL that fails with
+      // "Bucket not found". A signed URL is required.
+      const { data, error } = await supabaseClient.storage
         .from("cash-receipts")
-        .getPublicUrl(path);
-      const url = data?.publicUrl;
+        .createSignedUrl(path, 60 * 60);
+      if (error || !data?.signedUrl) {
+        console.error("Failed to sign cash receipt URL:", error?.message);
+        alert("Could not open the receipt. You may not have permission, or the file no longer exists.");
+        return;
+      }
+      const url = data.signedUrl;
       if (url && typeof window !== "undefined") {
         window.open(url, "_blank", "noopener,noreferrer");
       }

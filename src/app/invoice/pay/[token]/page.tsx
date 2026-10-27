@@ -19,6 +19,8 @@ type InvoiceData = {
   doctor_name: string | null;
   status: string;
   pdf_path: string | null;
+  /** Pre-signed, time-limited download URL issued by /api/invoices/get-by-token. */
+  pdf_url: string | null;
   payment_link_expires_at: string | null;
   payrexx_payment_link: string | null;
   title: string | null;
@@ -71,9 +73,12 @@ export default function InvoicePaymentPage() {
   }
 
   function downloadPDF() {
-    if (!invoice?.pdf_path) return;
-    const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/invoice-pdfs/${invoice.pdf_path}`;
-    window.open(publicUrl, "_blank");
+    // Use the pre-signed URL from the API. Building
+    // /storage/v1/object/public/invoice-pdfs/<path> here cannot work:
+    // invoice-pdfs is a private bucket (an invoice PDF identifies the patient
+    // and the amount), so that URL returns "Bucket not found".
+    if (!invoice?.pdf_url) return;
+    window.open(invoice.pdf_url, "_blank");
   }
 
   if (loading) return (
@@ -99,7 +104,7 @@ export default function InvoicePaymentPage() {
       <div className="w-full max-w-md rounded-2xl border border-emerald-200 bg-white p-8 text-center shadow-xl">
         <h1 className="mb-2 text-xl font-semibold text-slate-900">Already Paid</h1>
         <p className="mb-6 text-sm text-slate-600">This invoice has already been paid.</p>
-        {invoice.pdf_path && (
+        {invoice.pdf_url && (
           <button onClick={downloadPDF} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200">
             Download Invoice
           </button>
@@ -156,7 +161,7 @@ export default function InvoicePaymentPage() {
             <span className="text-2xl font-bold">{formattedAmount} CHF</span>
           </div>
 
-          {invoice.pdf_path && (
+          {invoice.pdf_url && (
             <button onClick={downloadPDF} className="mb-6 w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
               Download Invoice PDF
             </button>

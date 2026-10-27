@@ -61,13 +61,26 @@ export async function GET(
       );
     }
 
-    // Generate public URL for PDF if available
+    // Signed URL, not a public one.
+    //
+    // `invoice-pdfs` is a private bucket: an invoice PDF carries the patient's
+    // name, the amount and the billed services, so it must not be reachable at
+    // a guessable public path. getPublicUrl() still returns a nicely-formed URL
+    // for a private bucket, but fetching it fails with "Bucket not found",
+    // which is why the download button silently stopped working.
+    //
+    // The payment token has already been validated above, so issuing a
+    // short-lived signed URL here is the authorisation boundary. Done with the
+    // service role, so no storage policy is needed and the bucket stays shut.
     let pdfPublicUrl: string | null = null;
     if (invoice.pdf_path) {
-      const { data: urlData } = supabaseAdmin.storage
+      const { data: urlData, error: signErr } = await supabaseAdmin.storage
         .from("invoice-pdfs")
-        .getPublicUrl(invoice.pdf_path);
-      pdfPublicUrl = urlData?.publicUrl || null;
+        .createSignedUrl(invoice.pdf_path, 60 * 60); // 1 hour
+      if (signErr) {
+        console.error("[invoices/public] failed to sign PDF URL:", signErr.message);
+      }
+      pdfPublicUrl = urlData?.signedUrl || null;
     }
 
     return NextResponse.json({

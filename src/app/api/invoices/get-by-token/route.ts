@@ -76,6 +76,29 @@ export async function GET(request: NextRequest) {
         .trim() || null;
     }
 
+    // Sign the PDF here instead of letting the page build a public URL.
+    //
+    // `invoice-pdfs` is a private bucket — an invoice PDF carries the patient's
+    // name, the amount and the billed services, so it must not sit at a
+    // guessable public path. The payment page used to assemble
+    // `/storage/v1/object/public/invoice-pdfs/<path>` itself, which returns
+    // "Bucket not found" for a private bucket; that is why the Download
+    // Invoice button stopped working.
+    //
+    // The payment token was already validated above, so that is the
+    // authorisation boundary. Signing with the service role means no storage
+    // policy is required and the bucket stays closed.
+    let pdfUrl: string | null = null;
+    if (invoice.pdf_path) {
+      const { data: signed, error: signErr } = await supabaseAdmin.storage
+        .from("invoice-pdfs")
+        .createSignedUrl(invoice.pdf_path, 60 * 60); // 1 hour
+      if (signErr) {
+        console.error("[invoices/get-by-token] failed to sign PDF URL:", signErr.message);
+      }
+      pdfUrl = signed?.signedUrl ?? null;
+    }
+
     // Return only necessary data for payment page
     return NextResponse.json({
       invoice: {
@@ -87,6 +110,8 @@ export async function GET(request: NextRequest) {
         doctor_name: invoice.doctor_name,
         status: invoice.status,
         pdf_path: invoice.pdf_path,
+        // Pre-signed, time-limited download URL. Prefer this over pdf_path.
+        pdf_url: pdfUrl,
         payment_link_expires_at: invoice.payment_link_expires_at,
         payrexx_payment_link: invoice.payrexx_payment_link,
         title: invoice.title,

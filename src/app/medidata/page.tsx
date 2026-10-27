@@ -559,11 +559,19 @@ export default function MediDataDashboard() {
     return full || "Unknown patient";
   }, []);
 
-  const openStorageFile = useCallback((path: string | null | undefined) => {
+  // invoice-pdfs is a private bucket, so getPublicUrl() returns a URL that
+  // fails with "Bucket not found". A signed URL is required.
+  const openStorageFile = useCallback(async (path: string | null | undefined) => {
     if (!path) return;
-    const { data } = supabaseClient.storage.from("invoice-pdfs").getPublicUrl(path);
-    const url = data?.publicUrl;
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
+    const { data, error } = await supabaseClient.storage
+      .from("invoice-pdfs")
+      .createSignedUrl(path, 60 * 60);
+    if (error || !data?.signedUrl) {
+      console.error("Failed to sign invoice PDF URL:", error?.message);
+      alert("Could not open the PDF. You may not have permission, or the file no longer exists.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   }, []);
 
   const submissionTotalPages = Math.max(1, Math.ceil(submissionsCount / SUBMISSIONS_PAGE_SIZE));
