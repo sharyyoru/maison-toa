@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 /**
  * GET /api/invoices/pdf-jobs/[invoiceId]
@@ -11,6 +12,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ invoiceId: string }> }
 ) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { invoiceId } = await params;
 

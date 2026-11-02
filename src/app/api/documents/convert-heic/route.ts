@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import convert from "heic-convert";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export async function GET(req: NextRequest) {
+    try {
+      await requireStaff(req);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const url = req.nextUrl.searchParams.get("url");
 
   if (!url) {

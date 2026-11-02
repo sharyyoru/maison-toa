@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 const SETTINGS_KEY = "booking_content_translations";
 const PAGE_CONFIG_KEY = "booking_page_config";
@@ -12,6 +14,11 @@ const NO_STORE_HEADERS = {
 };
 
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     // Fetch translations, page config, and all booking pages
     const [translationsResult, pageConfigResult, bookingPagesResult] = await Promise.all([
@@ -74,6 +81,11 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { translations, pageConfig, bookingPages } = body;

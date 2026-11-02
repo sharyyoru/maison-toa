@@ -5,6 +5,7 @@ import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplat
 import { sendEmail as sendEmailViaResend, isEmailConfigured } from "@/lib/email";
 import { normalizePatientLanguage } from "@/lib/languagePreference";
 import { cleanAppointmentReason } from "@/lib/appointmentUtils";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -219,6 +220,11 @@ function generatePatientConfirmationEmail(
 }
 
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = (await request.json()) as SendConfirmationPayload;
 

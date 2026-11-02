@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import type { MarketingFilter } from "@/lib/marketingFilters";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 export const runtime = "nodejs";
 
 /** GET /api/marketing/lists — list all saved lists. */
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { data, error } = await supabaseAdmin
       .from("marketing_lists")
@@ -21,6 +28,11 @@ export async function GET() {
 
 /** POST /api/marketing/lists — create a saved list. */
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = (await request.json()) as {
       name?: string;

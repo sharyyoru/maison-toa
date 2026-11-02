@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 /**
  * GET /api/settings/medidata
@@ -8,6 +10,11 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
  * Clinic name/address/ZSR come from the providers table linked to each invoice.
  */
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const { data: configData } = await supabaseAdmin
     .from("medidata_config")
     .select("clinic_gln, medidata_client_id, is_test_mode")
@@ -31,6 +38,11 @@ export async function GET() {
  * Save MediData sender GLN and client ID to medidata_config table.
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { senderGln, clientId } = body as { senderGln?: string; clientId?: string };

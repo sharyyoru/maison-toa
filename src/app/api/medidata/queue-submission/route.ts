@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveInsuranceDiagnosisCodes } from "@/lib/insuranceDiagnosisCodes";
 import { createClient } from "@supabase/supabase-js";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 async function getUserId(request: NextRequest): Promise<string | null> {
   const authHeader = request.headers.get("authorization");
@@ -15,6 +16,11 @@ async function getUserId(request: NextRequest): Promise<string | null> {
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const userId = await getUserId(request);
     if (!userId) {

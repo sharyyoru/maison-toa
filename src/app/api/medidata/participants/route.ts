@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { MediDataClient, type LawType } from "@/lib/medidataClient";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 type MediDataConfigRow = {
   medidata_endpoint_url: string | null;
@@ -15,6 +16,11 @@ type MediDataConfigRow = {
  * Fetch list of insurers from MediData
  */
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { searchParams } = new URL(request.url);
     const lawTypeParam = searchParams.get("lawType") || "KVG";
@@ -85,6 +91,11 @@ export async function GET(request: NextRequest) {
  * Sync insurers from MediData to local database
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     // Get MediData config
     const { data: configData } = await supabaseAdmin

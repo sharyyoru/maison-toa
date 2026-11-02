@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getParticipants } from "@/lib/medidataProxy";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 /**
  * GET /api/medidata/proxy-participants?lawtype=1&limit=50&offset=0&name=CSS
  * Fetch participants (insurers) directly from MediData via the Railway proxy.
  */
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { searchParams } = new URL(request.url);
     const lawtype = searchParams.get("lawtype");

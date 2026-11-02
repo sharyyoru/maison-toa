@@ -4,8 +4,14 @@ import { requireWorkflowAdmin } from "@/lib/workflows/auth";
 import { legacyNodesToGraph } from "@/lib/workflows/legacy";
 import { validateWorkflowGraph } from "@/lib/workflows/validation";
 import { configWithFlattenedTrigger } from "@/lib/workflows/legacyConfig";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const auth = await requireWorkflowAdmin(request);
   if (auth instanceof NextResponse) return auth;
   const body = await request.json();

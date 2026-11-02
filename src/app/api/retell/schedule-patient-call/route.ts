@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { normalizePhone, RETELL_FROM_NUMBER } from "@/lib/retell";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,11 @@ function formatReadableDateTime(iso: string): string {
 }
 
 export async function POST(req: NextRequest) {
+    try {
+      await requireStaff(req);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = (await req.json()) as {
       patient_id?: string;

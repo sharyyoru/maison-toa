@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export const maxDuration = 300;
 
@@ -17,6 +18,11 @@ export const maxDuration = 300;
  * Body: { submissionId: string }
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { submissionId } = (await request.json().catch(() => ({}))) as { submissionId?: string };
 
@@ -87,7 +93,7 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
     const genRes = await fetch(`${baseUrl}/api/invoices/generate-pdf`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-internal-api-secret": process.env.INTERNAL_API_SECRET || "" },
       body: JSON.stringify({
         invoiceId: sub.invoice_id,
         invoiceType: billingType === "TP" ? "tp" : "tg",

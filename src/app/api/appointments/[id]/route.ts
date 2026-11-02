@@ -4,6 +4,7 @@ import { POST as runAppointmentWorkflow } from "@/app/api/workflows/appointment-
 import { emitWorkflowEvent } from "@/lib/workflows/events";
 import type { WorkflowTriggerType } from "@/lib/workflows/types";
 import { shiftManualLinkedAppointments } from "@/lib/manualLinkedAppointments";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -68,6 +69,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { id } = await params;
     const body = await request.json();
@@ -469,6 +475,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { id } = await params;
 
@@ -533,6 +544,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { id } = await params;
     

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 type ProviderRole = "billing_entity" | "doctor" | "nurse" | "technician";
 
@@ -85,6 +87,11 @@ async function syncProviderLink(providerId: string, linkedUserId: string | null)
 }
 
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const [{ data: providers, error: providersError }, { data: users, error: usersError }] =
       await Promise.all([
@@ -135,6 +142,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = (await request.json()) as ProviderPayload;
     const role = body.role;
@@ -217,6 +229,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");

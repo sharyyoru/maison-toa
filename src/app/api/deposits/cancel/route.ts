@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 // Manual cancellation of a deposit invoice + its linked appointment
 export async function POST(req: NextRequest) {
+    try {
+      await requireStaff(req);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { invoiceId, appointmentId } = await req.json();
     if (!invoiceId) return NextResponse.json({ error: "Missing invoiceId" }, { status: 400 });

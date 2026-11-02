@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { buildInvoiceRequest, RoleType, TiersMode, LawType } from "@/lib/sumexInvoice";
 import type { Invoice, InvoiceLineItem } from "@/lib/invoiceTypes";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const requestUrl = process.env.SUMEX_INVOICE_REQUEST_URL;
   const effectiveUrl = requestUrl || "http://34.100.230.253:8080/generalInvoiceRequestManagerServer500";
   let reachable = false;
@@ -37,6 +44,11 @@ export async function GET() {
 
 // POST /api/sumex/debug?invoiceId=xxx — dumps full sumexInput for an invoice
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const { invoiceId } = await request.json();
   if (!invoiceId) return NextResponse.json({ error: "invoiceId required" }, { status: 400 });
 

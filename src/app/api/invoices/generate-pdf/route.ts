@@ -26,6 +26,7 @@ import {
   type SumexLineItemRow,
 } from "@/lib/sumexLineMapper";
 import { PDFDocument, rgb } from "pdf-lib";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 /**
  * DEBUG overlay: draws a gray rectangle over the area where "NOTE HONORAIRE"
@@ -108,6 +109,11 @@ function patientSalutation(gender: string | null): string {
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { invoiceId, invoiceType = "tp", reminderLevel = 1 } = await request.json();
     console.log("PDF generation request received for invoice ID:", invoiceId, "type:", invoiceType);

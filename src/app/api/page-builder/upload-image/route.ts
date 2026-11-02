@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const BUCKET_NAME = "page-builder-images";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -33,6 +34,11 @@ async function ensureBucket() {
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const formData = await request.formData();
     const file = formData.get("file");

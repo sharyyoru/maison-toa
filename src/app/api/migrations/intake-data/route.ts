@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -7,6 +9,11 @@ const supabaseAdmin = createClient(
 );
 
 export async function POST() {
+    try {
+      await requireRole((await headers()), ["owner","admin"]);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const results = {
       patientsUpdated: 0,
@@ -115,6 +122,11 @@ export async function POST() {
 }
 
 export async function GET() {
+    try {
+      await requireRole((await headers()), ["owner","admin"]);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   // Preview what will be migrated without making changes
   try {
     const preview = {

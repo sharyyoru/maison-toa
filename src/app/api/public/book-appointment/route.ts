@@ -861,7 +861,7 @@ export async function POST(request: Request) {
         
         await fetch(`${baseUrl}/api/workflows/patient-created`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-internal-api-secret": process.env.INTERNAL_API_SECRET || "" },
           body: JSON.stringify({ patient_id: patientId, skipDealCreation: true }),
         });
         console.log("✓ Triggered patient-created workflow for new patient:", patientId);
@@ -937,7 +937,7 @@ export async function POST(request: Request) {
 
       const wfRes = await fetch(`${baseUrl}/api/workflows/appointment-created`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-internal-api-secret": process.env.INTERNAL_API_SECRET || "" },
         body: JSON.stringify({
           appointmentId: appointment.id,
           patientId,

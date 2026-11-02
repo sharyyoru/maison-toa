@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { printInvoiceResponse } from "@/lib/sumexInvoice";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 /**
  * POST /api/medidata/response-pdf
@@ -14,6 +15,11 @@ import { printInvoiceResponse } from "@/lib/sumexInvoice";
  * 3. Return PDF binary, or fall back to structured JSON for HTML rendering
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json().catch(() => ({}));
     const { responseId, mode } = body as { responseId?: string; mode?: string };

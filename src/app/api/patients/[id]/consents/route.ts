@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 async function user(request: Request) {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, ""); if (!token) return null;
   const { data } = await supabaseAdmin.auth.getUser(token); return data.user || null;
 }
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   if (!(await user(request))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params; const { data, error } = await supabaseAdmin.from("patient_consents").select("channel, granted, source, changed_at").eq("patient_id", id).order("changed_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -14,6 +20,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   return NextResponse.json([...latest.values()]);
 }
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const actor = await user(request); if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params; const body = await request.json();
   if (!["email_marketing", "social_media"].includes(body.channel) || typeof body.granted !== "boolean") return NextResponse.json({ error: "Invalid consent" }, { status: 400 });

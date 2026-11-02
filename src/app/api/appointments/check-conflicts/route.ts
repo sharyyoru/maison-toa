@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getBookingCalendarIntervals } from '@/lib/bookingCalendarIntervals';
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 function formatPatientFileName(firstName?: string | null, lastName?: string | null) {
   const first = (firstName ?? '').trim();
@@ -10,6 +11,11 @@ function formatPatientFileName(firstName?: string | null, lastName?: string | nu
 }
 
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { providers, providerIds, startTime, endTime, excludeAppointmentId, machineIds, serviceIds } = await request.json();
     

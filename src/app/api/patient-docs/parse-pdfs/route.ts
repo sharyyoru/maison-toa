@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { inflateSync, inflateRawSync } from "zlib";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 // Force Node.js runtime and dynamic rendering
 export const runtime = "nodejs";
@@ -314,6 +315,11 @@ async function fetchAllFolders(): Promise<{ name: string; id: string | null }[]>
 }
 
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { searchParams } = new URL(request.url);
     const firstName = searchParams.get("firstName");
@@ -391,6 +397,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { firstName, lastName } = body;

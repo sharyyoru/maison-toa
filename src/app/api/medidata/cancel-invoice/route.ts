@@ -4,8 +4,14 @@ import {
   generateStornoFromXMLSimple,
 } from "@/lib/sumexInvoice";
 import { uploadInvoiceXml } from "@/lib/medidataProxy";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const {

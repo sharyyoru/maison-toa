@@ -23,6 +23,7 @@ import {
   type InvoiceDiagnosis,
 } from "@/lib/sumexInvoice";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 /**
  * GET /api/sumex/invoice?action=info|requestInfo|responseInfo
@@ -30,6 +31,11 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
  * Returns module version info from the Sumex1 servers.
  */
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action") || "info";
 
@@ -77,6 +83,11 @@ export async function GET(request: NextRequest) {
  * - parseResponse: Parse a generalInvoiceResponse XML
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const action = body.action as string;

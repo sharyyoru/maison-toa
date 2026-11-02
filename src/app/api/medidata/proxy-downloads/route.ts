@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDownloads, getDownload, confirmDownload } from "@/lib/medidataProxy";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 /**
  * GET /api/medidata/proxy-downloads
  * Fetch pending download messages (insurer responses) from MediData via proxy.
  */
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const downloads = await getDownloads();
     return NextResponse.json({
@@ -27,6 +34,11 @@ export async function GET() {
  * Actions: { action: "download", ref: "..." } or { action: "confirm", ref: "..." }
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { action, ref } = body;

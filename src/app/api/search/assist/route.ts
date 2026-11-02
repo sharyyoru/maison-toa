@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateContentWithFallback } from "@/lib/geminiWithFallback";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const ROUTE_MAP = `
 System pages and routes:
@@ -62,6 +63,11 @@ function shouldTriggerAssist(query: string): boolean {
 }
 
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { query } = body as { query: string };

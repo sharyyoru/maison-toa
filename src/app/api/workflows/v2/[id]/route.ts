@@ -5,8 +5,14 @@ import { graphToLegacyNodes, legacyNodesToGraph } from "@/lib/workflows/legacy";
 import { validateWorkflowGraph } from "@/lib/workflows/validation";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { configWithFlattenedTrigger } from "@/lib/workflows/legacyConfig";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const auth = await requireWorkflowAdmin(request);
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
@@ -21,6 +27,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const auth = await requireWorkflowAdmin(request);
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;

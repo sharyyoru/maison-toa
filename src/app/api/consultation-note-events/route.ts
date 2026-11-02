@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -34,6 +35,11 @@ function userName(user: NonNullable<Awaited<ReturnType<typeof getUserFromRequest
 }
 
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const { user, error: authError } = await getUserFromRequest(request);
   if (!user) return NextResponse.json({ error: authError }, { status: 401 });
 
@@ -63,6 +69,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const { user, error: authError } = await getUserFromRequest(request);
   if (!user) return NextResponse.json({ error: authError }, { status: 401 });
 

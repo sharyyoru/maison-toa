@@ -394,7 +394,7 @@ export async function POST(request: NextRequest) {
           const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
           await fetch(`${baseUrl}/api/workflows/deal-stage-changed`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "x-internal-api-secret": process.env.INTERNAL_API_SECRET || "" },
             body: JSON.stringify({
               dealId,
               patientId,

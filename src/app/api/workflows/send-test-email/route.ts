@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withPatientTemplateVariables } from "@/lib/patientTemplateVariables";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
 
@@ -109,6 +110,11 @@ function sanitizeTelLinks(html: string): string {
 }
 
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = (await request.json()) as SendTestEmailRequestBody;
     const to = (body.to || "").trim();

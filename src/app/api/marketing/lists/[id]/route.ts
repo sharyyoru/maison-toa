@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import type { MarketingFilter } from "@/lib/marketingFilters";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
 
@@ -8,6 +9,11 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 /** GET /api/marketing/lists/:id */
 export async function GET(_request: Request, { params }: RouteParams) {
+    try {
+      await requireStaff(_request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { id } = await params;
     const { data, error } = await supabaseAdmin
@@ -25,6 +31,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
 /** PATCH /api/marketing/lists/:id */
 export async function PATCH(request: Request, { params }: RouteParams) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { id } = await params;
     const body = (await request.json()) as {
@@ -52,6 +63,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
 /** DELETE /api/marketing/lists/:id */
 export async function DELETE(_request: Request, { params }: RouteParams) {
+    try {
+      await requireStaff(_request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { id } = await params;
     const { error } = await supabaseAdmin

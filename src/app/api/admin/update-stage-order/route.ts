@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 const STAGE_ORDER = [
   'request for information',
@@ -14,6 +16,11 @@ const STAGE_ORDER = [
 ];
 
 export async function POST() {
+    try {
+      await requireRole((await headers()), ["owner","admin"]);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

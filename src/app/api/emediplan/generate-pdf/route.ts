@@ -6,6 +6,7 @@ import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
 import { randomUUID } from "crypto";
 import { gzipSync } from "zlib";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -233,6 +234,11 @@ async function generateQRCode(data: string): Promise<string> {
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { patientId, tabType, providerId, prescriptionSheetId } = body;

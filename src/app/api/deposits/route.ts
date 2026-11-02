@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 // Returns all deposit invoices (those with deposit_deadline_at set OR PARTIAL_PAID from prepayment flow)
 // i.e. invoices created via "Créer facture acompte 50%" with an appointment linked
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const { data, error } = await supabaseAdmin
     .from("invoices")
     .select(`

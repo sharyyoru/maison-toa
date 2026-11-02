@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 // Increase body size limit to 25MB for image uploads
 export const config = {
@@ -60,6 +61,11 @@ async function refreshAccessToken(
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   console.log("[Crisalix Patients] POST request received");
   
   const cookie = request.cookies.get("crisalix_tokens")?.value;

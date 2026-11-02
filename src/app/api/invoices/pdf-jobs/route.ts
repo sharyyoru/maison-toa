@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { createClient } from "@supabase/supabase-js";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 async function getUserId(request: NextRequest): Promise<string | null> {
   const authHeader = request.headers.get("authorization");
@@ -25,6 +26,11 @@ async function getUserId(request: NextRequest): Promise<string | null> {
  *   status — filter by status (pending/processing/completed/failed)
  */
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const userId = await getUserId(request);
     if (!userId) {

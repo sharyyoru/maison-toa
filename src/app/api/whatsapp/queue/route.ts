@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,11 @@ const supabaseAdmin = createClient(
  * The queue processor on the WhatsApp server will pick it up and send it.
  */
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     // Get the authenticated user from the Authorization header
     const authHeader = request.headers.get("authorization");
@@ -116,6 +122,11 @@ export async function POST(request: Request) {
  * Used by the WhatsApp panel notifications tab.
  */
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     // Try Authorization header first, then fall back to cookie-based auth
     const authHeader = request.headers.get("authorization");
@@ -207,6 +218,11 @@ export async function GET(request: NextRequest) {
  * - retryAll: retry all session_failed + failed items for this user
  */
 export async function PATCH(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const authHeader = request.headers.get("authorization");
     let senderUserId: string | null = null;

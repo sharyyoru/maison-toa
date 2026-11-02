@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { MediDataClient } from "@/lib/medidataClient";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 type MediDataConfigRow = {
   medidata_endpoint_url: string | null;
@@ -15,6 +16,11 @@ type MediDataConfigRow = {
  * Poll the status of a MediData submission
  */
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { searchParams } = new URL(request.url);
     const submissionId = searchParams.get("submissionId");
@@ -148,6 +154,11 @@ export async function GET(request: NextRequest) {
  * Manually trigger status refresh for multiple submissions
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { submissionIds } = body;

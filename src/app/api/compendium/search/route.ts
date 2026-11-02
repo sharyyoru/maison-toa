@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const q = request.nextUrl.searchParams.get("q") ?? "";
 
   if (!q || q.trim().length < 2) {

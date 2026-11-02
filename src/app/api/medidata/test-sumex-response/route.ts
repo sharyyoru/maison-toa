@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { printInvoiceResponse } from "@/lib/sumexInvoice";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 /**
  * GET /api/medidata/test-sumex-response
@@ -121,6 +123,11 @@ const SAMPLE_XML = `<?xml version="1.0" encoding="UTF-8"?>
 </invoice:response>`;
 
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const steps: { step: string; success: boolean; data?: unknown; error?: string }[] = [];
 
   try {
