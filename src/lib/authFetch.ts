@@ -44,3 +44,6 @@ export function installAuthFetch() {
     return originalFetch(input, { ...init, headers });
   };
 }
+
+// Install eagerly on import so fetches issued before AuthProvider mounts are covered.
+installAuthFetch();

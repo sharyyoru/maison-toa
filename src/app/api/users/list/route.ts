@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { requireRole, authErrorResponse } from "@/lib/serverAuth";
 import { headers } from "next/headers";
 
 export async function GET() {
-  let caller;
   try {
-    caller = await requireRole((await headers()), ["owner","admin"]);
+    await requireRole(await headers(), ["owner", "admin"]);
   } catch (err) {
     return authErrorResponse(err);
   }
@@ -26,28 +25,14 @@ export async function GET() {
     // Get existing users from public.users table (including provider_id for doctor-provider mapping)
     const { data: existingPublicUsers } = await supabaseAdmin
       .from("users")
-      .select("id, provider_id");
+      .select("id, provider_id, role");
     
     const existingIds = new Set((existingPublicUsers || []).map((u) => u.id));
     const providerIdMap = new Map<string, string | null>();
+    const roleMap = new Map<string, string | null>();
     for (const u of existingPublicUsers || []) {
       providerIdMap.set(u.id, u.provider_id ?? null);
-    }
-
-    // Scope to the caller's organization; authoritative roles live in
-    // organization_members, not client-editable user_metadata.
-    const { data: memberships } = await supabaseAdmin
-      .from("organization_members")
-      .select("user_id, role")
-      .eq("organization_id", caller.membership.organization_id)
-      .eq("is_active", true);
-    const roleByUser = new Map<string, string>();
-    const memberIds = new Set<string>();
-    for (const m of memberships || []) {
-      if (m.user_id) {
-        memberIds.add(m.user_id);
-        if (m.role) roleByUser.set(m.user_id, m.role);
-      }
+      roleMap.set(u.id, (u as { role?: string | null }).role ?? null);
     }
 
     // Sync missing users to public.users table to satisfy foreign key constraints
@@ -67,7 +52,7 @@ export async function GET() {
           id: user.id,
           email: user.email ?? null,
           full_name: fullName,
-          role: roleByUser.get(user.id) ?? "staff",
+          role: (meta["role"] as string) ?? "staff",
           designation: (meta["designation"] as string) ?? null,
         };
       });
@@ -78,9 +63,7 @@ export async function GET() {
         .upsert(syncRecords, { onConflict: "id", ignoreDuplicates: true });
     }
 
-    const users = data.users
-      .filter((user) => memberIds.has(user.id))
-      .map((user) => {
+    const users = data.users.map((user) => {
       const meta = (user.user_metadata || {}) as Record<string, unknown>;
       const firstName = (meta["first_name"] as string) ?? null;
       const lastName = (meta["last_name"] as string) ?? null;
@@ -94,7 +77,7 @@ export async function GET() {
         id: user.id,
         email: user.email ?? null,
         full_name: fullName,
-        role: roleByUser.get(user.id) ?? null,
+        role: roleMap.get(user.id) ?? (meta["role"] as string) ?? null,
         first_name: firstName,
         last_name: lastName,
         designation: (meta["designation"] as string) ?? null,

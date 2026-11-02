@@ -2,13 +2,12 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireRole, authErrorResponse } from "@/lib/serverAuth";
 
-// POST /api/users/update-role — caller must be owner/admin of an organization
-// that the target user also belongs to. Authoritative role lives in
-// organization_members.role; user_metadata is never trusted.
+// POST /api/users/update-role — admin only. Authoritative role lives in
+// public.users.role (service-role writable only); user_metadata is never
+// trusted for authorization.
 export async function POST(request: Request) {
-  let caller;
   try {
-    caller = await requireRole(request, ["owner", "admin"]);
+    await requireRole(request, ["owner", "admin"]);
   } catch (err) {
     return authErrorResponse(err);
   }
@@ -24,43 +23,34 @@ export async function POST(request: Request) {
       );
     }
 
-    const allowedRoles = [
-      "owner",
-      "admin",
-      "doctor",
-      "staff",
-      "receptionist",
-      "billing",
-    ];
-    if (!allowedRoles.includes(role.toLowerCase())) {
+    const allowedRoles = ["admin", "staff", "user", "expert", "contact_owner", "doctor", "nurse", "technician"];
+    const newRole = role.toLowerCase();
+    if (!allowedRoles.includes(newRole)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
-    const newRole = role.toLowerCase();
 
-    // Target must be a member of the caller's organization.
-    const { data: targetMembership } = await supabaseAdmin
-      .from("organization_members")
-      .select("id, role")
-      .eq("organization_id", caller.membership.organization_id)
-      .eq("user_id", userId)
-      .eq("is_active", true)
+    const { data: target } = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .eq("id", userId)
       .maybeSingle();
-
-    if (!targetMembership) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!target) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     const { error } = await supabaseAdmin
-      .from("organization_members")
+      .from("users")
       .update({ role: newRole })
-      .eq("id", targetMembership.id);
+      .eq("id", userId);
 
     if (error) {
       return NextResponse.json({ error: "Failed to update role" }, { status: 500 });
     }
 
-    // Mirror onto public.users for display only (not authorization).
-    await supabaseAdmin.from("users").update({ role: newRole }).eq("id", userId);
+    // Keep display metadata in sync (NOT used for authorization).
+    await supabaseAdmin.auth.admin.updateUserById(userId, {
+      user_metadata: { role: newRole },
+    });
 
     return NextResponse.json({ ok: true });
   } catch {

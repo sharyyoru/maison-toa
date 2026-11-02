@@ -2,30 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/serverAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-// GET /api/me — returns the authenticated user's server-derived role and
-// organization memberships. Never reads user_metadata for authorization data.
+// GET /api/me — returns the authenticated user's server-derived role
+// (public.users.role). Never reads user_metadata for authorization data.
 export async function GET(request: NextRequest) {
   const user = await getUserFromRequest(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: memberships } = await supabaseAdmin
-    .from("organization_members")
-    .select("organization_id, role")
-    .eq("user_id", user.id)
-    .eq("is_active", true);
-
-  const meta = (user.user_metadata || {}) as Record<string, unknown>;
+  const { data: staff } = await supabaseAdmin
+    .from("users")
+    .select("id, role, full_name")
+    .eq("id", user.id)
+    .maybeSingle();
 
   return NextResponse.json({
     id: user.id,
     email: user.email ?? null,
-    full_name: (meta["full_name"] as string) ?? null,
-    memberships: memberships ?? [],
-    // Primary role = highest-privilege active membership role.
-    role: memberships?.some((m) => (m.role ?? "").toLowerCase() === "admin")
-      ? "admin"
-      : (memberships?.[0]?.role ?? null),
+    full_name: (staff as { full_name?: string | null } | null)?.full_name ?? null,
+    is_staff: !!staff,
+    role: ((staff as { role?: string | null } | null)?.role ?? null)?.toLowerCase() ?? null,
   });
 }
