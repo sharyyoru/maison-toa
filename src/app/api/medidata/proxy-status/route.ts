@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUploadStatus } from "@/lib/medidataProxy";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 /**
  * GET /api/medidata/proxy-status?ref=xxx
  * Check transmission status via the Railway proxy.
  */
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { searchParams } = new URL(request.url);
     const ref = searchParams.get("ref");

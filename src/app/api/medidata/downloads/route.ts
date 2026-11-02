@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { MediDataClient } from "@/lib/medidataClient";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 type MediDataConfigRow = {
   medidata_endpoint_url: string | null;
@@ -15,6 +17,11 @@ type MediDataConfigRow = {
  * Fetch incoming messages (responses from insurers) from MediData
  */
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     // Get MediData config
     const { data: configData } = await supabaseAdmin
@@ -65,6 +72,11 @@ export async function GET() {
  * Process and acknowledge downloaded messages
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { action, messageId } = body;

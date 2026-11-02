@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { encodeStorageFileName } from "@/utils/storageFileName";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const formData = await request.formData();
     const file = formData.get("file") as Blob;

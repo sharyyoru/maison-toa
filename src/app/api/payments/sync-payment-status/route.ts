@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 /**
  * Sync payment status - can be used to manually mark invoices as paid
  * or to sync status based on invoice_number (formerly consultation_id code)
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { consultationCode, markAsPaid } = await request.json();
 

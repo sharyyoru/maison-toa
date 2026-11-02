@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { type MediDataInvoiceStatus } from "@/lib/medidata";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { 
@@ -135,6 +141,11 @@ export async function POST(request: NextRequest) {
 
 // GET endpoint to fetch submission status and history
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { searchParams } = new URL(request.url);
     const submissionId = searchParams.get("submissionId");

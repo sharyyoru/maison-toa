@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const SYSTEM_PAGES = [
   { label: "Dashboard", href: "/", category: "pages" },
@@ -31,6 +32,11 @@ const SYSTEM_PAGES = [
 ];
 
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { query, categories, page = 1, limit = 20 } = body as {

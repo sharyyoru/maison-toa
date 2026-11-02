@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveDepositBillingEntity } from "@/lib/depositBillingEntity";
 import { randomBytes } from "crypto";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
 
 export async function POST(req: NextRequest) {
+    try {
+      await requireStaff(req);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { patientId, serviceId, doctorId, appointmentId, depositPercentage } = await req.json();
     if (!patientId || !serviceId) return NextResponse.json({ error: "Missing patientId or serviceId" }, { status: 400 });

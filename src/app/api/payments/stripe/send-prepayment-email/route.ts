@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { brandedEmail, infoRow, infoTable, LOGO_URL } from "@/utils/emailTemplate";
 import { sendEmail, isEmailConfigured } from "@/lib/email";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export async function POST(req: NextRequest) {
+    try {
+      await requireStaff(req);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const { patientEmail, patientFirstName, patientLastName, stripeUrl, invoiceNumber, serviceName, depositAmount, depositPercentage, invoiceId } = await req.json();
 
   if (!patientEmail || !stripeUrl) return NextResponse.json({ error: "Missing fields" }, { status: 400 });

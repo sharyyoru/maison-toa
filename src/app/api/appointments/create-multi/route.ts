@@ -4,10 +4,16 @@ import { generatePatientReminderEmail } from '@/lib/appointmentEmails';
 import { normalizePatientLanguage } from '@/lib/languagePreference';
 import { getBookingCalendarIntervals, type SecondaryCalendarPosition } from '@/lib/bookingCalendarIntervals';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const INTERNAL_ROLES = new Set(['admin', 'doctor', 'nurse', 'technician', 'staff']);
 
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
     if (!token) {

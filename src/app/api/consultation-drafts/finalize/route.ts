@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { emitWorkflowEvent } from "@/lib/workflows/events";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -44,6 +45,11 @@ async function logConsultationNoteEvent(params: {
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const authHeader = request.headers.get("authorization") ?? "";
   const token = authHeader.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) {

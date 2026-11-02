@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 type TargetType = "user" | "billing_entity";
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
@@ -18,6 +20,11 @@ async function loadOptions() {
 }
 
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const [{ data: configurations, error }, options] = await Promise.all([
       supabaseAdmin.from("colored_line_configurations").select("id, target_type, target_id, hex_color, created_at, updated_at").order("created_at"),
@@ -38,6 +45,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const targetType = body.target_type as TargetType;
@@ -73,6 +85,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const id = new URL(request.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
   const { error } = await supabaseAdmin.from("colored_line_configurations").delete().eq("id", id);

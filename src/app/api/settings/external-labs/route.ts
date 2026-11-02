@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { data, error } = await supabaseAdmin
       .from("external_labs")
@@ -20,6 +27,11 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { labs } = body;

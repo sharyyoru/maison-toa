@@ -5,6 +5,7 @@ import {
   type SumexLanguage,
   type TardocServiceRecord,
 } from "@/lib/sumexTardoc";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
 
@@ -53,6 +54,11 @@ export const runtime = "nodejs";
  *     suggestions and re-validate via IValidate::AddService.
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = (await request.json()) as { codes?: unknown; lang?: number };
     const codes = Array.isArray(body.codes)

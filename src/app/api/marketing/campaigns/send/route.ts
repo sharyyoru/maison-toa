@@ -8,6 +8,7 @@ import {
   MAX_CAMPAIGN_RECIPIENTS,
 } from "@/lib/marketingFilters";
 import { sendEmail as sendEmailViaResend, isEmailConfigured, addTrackingPixel } from "@/lib/email";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -94,6 +95,11 @@ async function loadTemplate(templateId: string): Promise<{ subject: string; html
 }
 
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = (await request.json()) as SendRequestBody;
     if (!body.templateId) {

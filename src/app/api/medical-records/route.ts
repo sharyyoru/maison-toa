@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +29,11 @@ export type MedicalRecord = {
 
 // GET - Fetch medical record for a patient
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { searchParams } = new URL(request.url);
     const patientId = searchParams.get("patientId");
@@ -57,6 +63,11 @@ export async function GET(request: NextRequest) {
 
 // POST - Create or update (upsert) medical record with autosave
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const {
@@ -104,6 +115,11 @@ export async function POST(request: NextRequest) {
 
 // PATCH - Partial update (for autosave of individual fields)
 export async function PATCH(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { patientId, field, content, editedByName } = body;

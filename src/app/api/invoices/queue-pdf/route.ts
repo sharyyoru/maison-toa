@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 /**
  * Kick the job processor immediately (fire-and-forget, runs after the
@@ -36,6 +37,11 @@ function kickProcessor() {
  * }
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const {

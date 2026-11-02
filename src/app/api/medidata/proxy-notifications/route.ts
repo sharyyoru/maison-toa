@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getNotifications, confirmNotification } from "@/lib/medidataProxy";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 /**
  * GET /api/medidata/proxy-notifications
  * Fetch notifications from MediData via proxy.
  */
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const result = await getNotifications();
     const notifications = Array.isArray(result.data) ? result.data : [];
@@ -28,6 +35,11 @@ export async function GET() {
  * Confirm a notification: { action: "confirm", id: 123 }
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { action, id } = body;

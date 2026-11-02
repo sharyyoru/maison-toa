@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { data, error } = await supabaseAdmin
       .from("doctor_scheduling_settings")
@@ -20,6 +27,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { provider_id, time_interval_minutes, default_duration_minutes } = body;
@@ -64,6 +76,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 // GET /api/patients/deposit-status?patientId=xxx
 // Returns the most recent deposit invoice for a patient.
@@ -9,6 +10,11 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 //   - deposit_status is set (status was updated)
 // Non-CANCELLED invoices are preferred. Returns the most recent one overall.
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const patientId = request.nextUrl.searchParams.get("patientId");
   if (!patientId) {
     return NextResponse.json({ error: "Missing patientId" }, { status: 400 });
@@ -42,6 +48,11 @@ export async function GET(request: NextRequest) {
 // Manually updates deposit_status on a specific invoice
 // Allowed transitions after 'paid': applied | refunded
 export async function PATCH(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const { invoiceId, deposit_status } = await request.json() as {
     invoiceId?: string;
     deposit_status?: string;

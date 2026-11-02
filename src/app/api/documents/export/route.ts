@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { slateToDocx } from '@/lib/docx/serializer';
 import { SlateNode } from '@/lib/docx/parser';
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,6 +13,11 @@ const supabaseAdmin = createClient(
  * Export Slate.js nodes to .docx and upload to Supabase storage
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { nodes, bucket, path, filename } = body;

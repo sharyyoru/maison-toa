@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireWorkflowAdmin } from "@/lib/workflows/auth";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const auth = await requireWorkflowAdmin(request);
   if (auth instanceof NextResponse) return auth;
   const { workflowId, newName } = await request.json() as { workflowId?: string; newName?: string };

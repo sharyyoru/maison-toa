@@ -23,6 +23,7 @@ import {
   reconcileInvoiceLines,
   type SumexLineItemRow,
 } from "@/lib/sumexLineMapper";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 // No IBAN fallback — provider must have a valid QR-IBAN configured
 const FALLBACK_QR_IBAN = null;
@@ -50,6 +51,11 @@ function sanitizeIban(raw: string | null | undefined): string | null {
  * Accepts { invoiceId } — queries the `invoices` table.
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const insurerWasProvided = Object.prototype.hasOwnProperty.call(body, "insurerGln");

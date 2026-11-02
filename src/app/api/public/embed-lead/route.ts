@@ -172,14 +172,14 @@ export async function POST(request: NextRequest) {
         if (isNewPatient) {
           await fetch(`${baseUrl}/api/workflows/patient-created`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "x-internal-api-secret": process.env.INTERNAL_API_SECRET || "" },
             body: JSON.stringify({ patient_id: patientId }),
           });
         } else {
           // For existing patients, create deal and task directly
           await fetch(`${baseUrl}/api/workflows/embed-lead-followup`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "x-internal-api-secret": process.env.INTERNAL_API_SECRET || "" },
             body: JSON.stringify({ 
               patient_id: patientId,
               lead_id: lead.id,

@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 export const runtime = "nodejs";
 
 /** GET /api/marketing/campaigns — list campaign history, newest first. */
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { data, error } = await supabaseAdmin
       .from("marketing_campaigns")

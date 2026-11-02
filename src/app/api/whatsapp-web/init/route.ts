@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createWhatsAppAuthHeader } from '@/lib/whatsapp-auth';
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const WA_SERVER = process.env.WA_SERVER_URL || 'http://localhost:3001';
 
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const authHeader = createWhatsAppAuthHeader(request);
   
   if (!authHeader) {

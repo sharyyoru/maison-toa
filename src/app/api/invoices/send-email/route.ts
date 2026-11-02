@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendEmail } from "@/lib/email";
 import { generateInvoiceEmailContent } from "@/lib/invoiceEmailContent";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 // Map documentType to the corresponding pdf_path column
 const DOC_TYPE_COLUMN: Record<string, string> = {
@@ -12,6 +13,11 @@ const DOC_TYPE_COLUMN: Record<string, string> = {
 };
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { invoiceId, recipientEmail, documentType } = (await request.json()) as {
       invoiceId?: string;

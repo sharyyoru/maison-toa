@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -15,6 +17,11 @@ async function loadOptions() {
 }
 
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const [{ data, error }, options] = await Promise.all([
       supabaseAdmin
@@ -32,6 +39,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const doctorId = typeof body.booking_doctor_id === "string" ? body.booking_doctor_id : "";
@@ -78,6 +90,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const id = request.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
   const { error } = await supabaseAdmin.from("exceptional_booking_availability").delete().eq("id", id);

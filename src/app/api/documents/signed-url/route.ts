@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const ALLOWED_BUCKETS = new Set(["patient-documents", "patient-docs"]);
 const supabaseAuth = createClient(
@@ -9,6 +10,11 @@ const supabaseAuth = createClient(
 );
 
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const authHeader = request.headers.get("authorization");
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Liveblocks } from "@liveblocks/node";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const roomPattern = /^patient:([0-9a-fA-F-]{36}):consultation(?:-create|:([0-9a-fA-F-]{36}))$/;
 
@@ -35,6 +36,11 @@ async function logLiveblocksEvent(params: {
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const secret = process.env.LIVEBLOCKS_SECRET_KEY;
   if (!secret) {
     return NextResponse.json({ error: "Liveblocks is not configured" }, { status: 500 });

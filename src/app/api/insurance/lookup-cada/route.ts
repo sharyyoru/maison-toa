@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getParticipants } from "@/lib/medidataProxy";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 /**
  * BILL-016 – Automatic Insurance Information Retrieval from CADA Card Number
@@ -16,6 +17,11 @@ import { getParticipants } from "@/lib/medidataProxy";
  *      matches are cached back into swiss_insurers for future lookups.
  */
 export async function GET(req: NextRequest) {
+    try {
+      await requireStaff(req);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const raw = (req.nextUrl.searchParams.get("cardNumber") || "").replace(/[\s.-]/g, "");
 
   if (!/^80756\d{15}$/.test(raw)) {

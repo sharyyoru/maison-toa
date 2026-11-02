@@ -15,6 +15,7 @@ import {
   type TmaType,
   type TmaGrouperInput,
 } from "@/lib/sumexAcf";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 /**
  * API route for ACF (Ambulatory Case Flatrate) validator.
@@ -29,6 +30,11 @@ import {
  * - refresh: Invalidate cached session
  */
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action");
@@ -140,6 +146,11 @@ export async function GET(request: NextRequest) {
  *   Runs IValidateTMA: gesture codes + ICD → ACF flat rate codes
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const action = body.action || "validate005";

@@ -83,7 +83,7 @@ async function processOneJob(appUrl: string): Promise<
   try {
     const res = await fetch(`${appUrl}/api/invoices/generate-pdf`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-internal-api-secret": process.env.INTERNAL_API_SECRET || "" },
       body: JSON.stringify({
         invoiceId: invoice_id,
         invoiceType: invoice_type,

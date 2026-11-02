@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import JSZip from "jszip";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 // Format date in different styles
 function formatDate(date: Date, style: "long" | "short" | "numeric" = "long", locale: string = "fr-CH"): string {
@@ -95,6 +96,11 @@ function replacePlaceholders(content: string, placeholders: Record<string, strin
 
 // GET endpoint for OnlyOffice to fetch documents
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { searchParams } = new URL(request.url);
     const templateName = searchParams.get("template");

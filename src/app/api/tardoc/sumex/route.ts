@@ -13,6 +13,7 @@ import {
   type TardocServiceRecord,
 } from "@/lib/sumexTardoc";
 import { CANTON_TAX_POINT_VALUES, DEFAULT_CANTON, type SwissCanton } from "@/lib/tardoc";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,11 @@ export const runtime = "nodejs";
  *   parent:     Parent code for chapters (default "" = root)
  */
 export async function GET(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const sp = request.nextUrl.searchParams;
     const action = sp.get("action") || "chapters";

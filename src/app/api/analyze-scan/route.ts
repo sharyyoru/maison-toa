@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateContentWithFallback } from "@/lib/geminiWithFallback";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -24,6 +25,11 @@ function isValidIsoDate(value: unknown): value is string {
 }
 
 export async function POST(req: NextRequest) {
+    try {
+      await requireStaff(req);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     if (!GEMINI_API_KEY) {
       return NextResponse.json(

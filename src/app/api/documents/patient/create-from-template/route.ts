@@ -4,6 +4,7 @@ import path from "path";
 import JSZip from "jszip";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { removeNextFieldArtifacts } from "@/lib/docxFieldCleanup";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 function formatFrenchDate(date: Date): string {
   return date.toLocaleDateString("fr-FR", {
@@ -183,6 +184,11 @@ async function uploadWithUniqueFileName(
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { patientId, templatePath, title, patientName, fileName: requestedFileName } = body;

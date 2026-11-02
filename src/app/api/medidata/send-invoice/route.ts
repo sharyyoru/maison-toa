@@ -40,6 +40,7 @@ import {
   reconcileInvoiceLines,
   type SumexLineItemRow,
 } from "@/lib/sumexLineMapper";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 type ConsultationData = {
   id: string;
@@ -86,6 +87,11 @@ const MEDIDATA_INTERMEDIATE_GLN = "7601001304307";
 const TG_NO_TRANSMISSION_GLN = "2000000000008";
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const insurerWasProvided = Object.prototype.hasOwnProperty.call(body, "insurerGln");

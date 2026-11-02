@@ -3,6 +3,7 @@ import { Part } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
 import { generateContentWithFallback } from "@/lib/geminiWithFallback";
 import { buildKnowledgeBaseSection } from "@/lib/knowledgeBase";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -57,6 +58,11 @@ async function getFileFromStorage(storagePath: string): Promise<{ data: string; 
 }
 
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {

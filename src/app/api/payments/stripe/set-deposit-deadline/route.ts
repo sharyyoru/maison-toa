@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 // Sets deposit_deadline_at = now() + 48h on a prepayment invoice, but only if:
 // 1. deposit_deadline_at is currently NULL (first trigger wins — copy or email)
@@ -7,6 +8,11 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 // 3. The invoice status is still OPEN
 // This ensures regular invoices are never affected.
 export async function POST(req: NextRequest) {
+    try {
+      await requireStaff(req);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { invoiceId } = await req.json();
     if (!invoiceId) return NextResponse.json({ error: "Missing invoiceId" }, { status: 400 });

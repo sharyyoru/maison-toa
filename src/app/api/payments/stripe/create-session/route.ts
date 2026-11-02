@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,6 +12,11 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.verc
 const SESSION_BUFFER_MINUTES = 30; // reuse session if it expires more than 30min from now
 
 export async function POST(req: NextRequest) {
+    try {
+      await requireStaff(req);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { token } = await req.json();
     if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });

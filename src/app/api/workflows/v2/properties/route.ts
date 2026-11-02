@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireWorkflowAdmin } from "@/lib/workflows/auth";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export async function GET(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const auth = await requireWorkflowAdmin(request); if (auth instanceof NextResponse) return auth;
   const { data, error } = await supabaseAdmin.from("patient_property_definitions").select("*").order("label");
   return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json(data);
 }
 export async function POST(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const auth = await requireWorkflowAdmin(request); if (auth instanceof NextResponse) return auth;
   const body = await request.json();
   const key = String(body.key || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
@@ -16,6 +27,11 @@ export async function POST(request: Request) {
   return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json(data, { status: 201 });
 }
 export async function DELETE(request: Request) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const auth = await requireWorkflowAdmin(request); if (auth instanceof NextResponse) return auth;
   const { id } = await request.json();
   const { error } = await supabaseAdmin.from("patient_property_definitions").update({ active: false }).eq("id", id);

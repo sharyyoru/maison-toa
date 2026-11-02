@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireWorkflowAdmin } from "@/lib/workflows/auth";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   const auth = await requireWorkflowAdmin(request); if (auth instanceof NextResponse) return auth;
   const { id } = await params; const { action } = await request.json();
   if (action === "cancel") {

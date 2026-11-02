@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { autofillGroupRefs, type AutofillSummary } from "@/lib/groupRefAutofill";
+import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { headers } from "next/headers";
 
 export const runtime = "nodejs";
 
@@ -42,6 +44,11 @@ function summaryToReport(s: AutofillSummary): AutofillReport {
  * GET /api/tardoc/groups — List all active TarDoc groups with their items
  */
 export async function GET() {
+    try {
+      await requireStaff((await headers()));
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const { data: groups, error } = await supabaseAdmin
       .from("tardoc_groups")
@@ -86,6 +93,11 @@ export async function GET() {
  * Body: { name, description?, canton?, law_type?, items: [...] }
  */
 export async function POST(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const {
@@ -216,6 +228,11 @@ export async function POST(request: NextRequest) {
  * Body: { id, name?, description?, canton?, law_type?, items?: [...] }
  */
 export async function PUT(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { id, name, description, canton, law_type, tax_point_value, items } = body as {
@@ -347,6 +364,11 @@ export async function PUT(request: NextRequest) {
  * Body: { id }
  */
 export async function DELETE(request: NextRequest) {
+    try {
+      await requireStaff(request);
+    } catch (err) {
+      return authErrorResponse(err);
+    }
   try {
     const body = await request.json();
     const { id } = body as { id: string };
