@@ -39,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    installAuthFetch();
     let isMounted = true;
 
     async function loadUser() {
