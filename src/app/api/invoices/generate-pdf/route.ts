@@ -323,18 +323,24 @@ export async function POST(request: NextRequest) {
         treatmentDate: invoiceData.treatment_date || invoiceData.invoice_date || null,
         treatmentCanton: billingEntityData?.canton || invoiceData.treatment_canton || null,
         billingType: invoiceData.billing_type || null,
+        documentType: invoiceType,
+        reminderLevel,
       });
       const patientName = `${patientData.last_name}_${patientData.first_name}`.replace(/[^a-zA-Z0-9_-]/g, "_");
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-      const filePath = `${invoiceData.patient_id}/Facture_${invoiceData.invoice_number}_${patientName}_${timestamp}_fallback.pdf`;
+      const docPrefix = invoiceType === "reminder" ? `Rappel${reminderLevel}` : invoiceType === "receipt" ? "Quittance" : "Facture";
+      const filePath = `${invoiceData.patient_id}/${docPrefix}_${invoiceData.invoice_number}_${patientName}_${timestamp}_fallback.pdf`;
       const { error: uploadError } = await supabaseAdmin.storage
         .from("invoice-pdfs")
         .upload(filePath, pdfBuffer, { contentType: "application/pdf", cacheControl: "3600" });
       if (uploadError) throw uploadError;
       const generatedAt = new Date().toISOString();
+      // Same per-type column as the Sumex path; the UI reads pdf_path_tg /
+      // _tp / _reminder / _receipt, so writing only pdf_path hid the file.
+      const pdfColumn = invoiceType === "tg" ? "pdf_path_tg" : invoiceType === "tp" ? "pdf_path_tp" : invoiceType === "reminder" ? "pdf_path_reminder" : "pdf_path_receipt";
       const { error: updateError } = await supabaseAdmin
         .from("invoices")
-        .update({ pdf_path: filePath, pdf_generated_at: generatedAt })
+        .update({ pdf_path: filePath, [pdfColumn]: filePath, pdf_generated_at: generatedAt })
         .eq("id", invoiceId);
       if (updateError) throw updateError;
       // Signed, not public: invoice-pdfs is a private bucket here, so
@@ -349,7 +355,7 @@ export async function POST(request: NextRequest) {
         pdfPath: filePath,
         qrCodeType: "local-fallback",
         degradedMode: true,
-        warning: "The Sumex service is unavailable. A local patient PDF was generated; insurance transmission still requires Sumex.",
+        warning: "The Sumex print service is unavailable, so the local invoice layout was used. Insurance XML is generated natively and is unaffected.",
       });
     };
 

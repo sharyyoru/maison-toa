@@ -34,3 +34,44 @@ export async function loadTardocCatalog(
   }
   return catalog;
 }
+
+export type LocalTardocCode = {
+  recordId: number;
+  code: string;
+  name: string;
+  tpMT: number;
+  tpTT: number;
+  section: string | null;
+};
+
+/**
+ * Code search used when the Sumex TARDOC validator is unreachable.
+ *
+ * Covers only codes the clinic already has in its saved TARDOC groups — each
+ * of which was taken from the Sumex catalog when it was online. It is a
+ * degraded fallback, not the full catalog; the API flags it as such.
+ */
+export async function searchLocalTardocCodes(query: string, limit = 50): Promise<LocalTardocCode[]> {
+  const q = query.trim().replace(/[%_,()]/g, "");
+  if (!q) return [];
+  const { data } = await supabaseAdmin
+    .from("tardoc_group_items")
+    .select("tardoc_code, description, tp_mt, tp_tt, tariff_type")
+    .or(`tardoc_code.ilike.${q}%,description.ilike.%${q}%`)
+    .limit(500);
+  const byCode = new Map<string, LocalTardocCode>();
+  for (const row of data ?? []) {
+    const code: string = row.tardoc_code || "";
+    if (!code || /^(mat|acf|tma):/.test(code) || (row.tariff_type && row.tariff_type !== "007")) continue;
+    if (byCode.has(code)) continue;
+    byCode.set(code, {
+      recordId: 0,
+      code,
+      name: row.description || code,
+      tpMT: Number(row.tp_mt) || 0,
+      tpTT: Number(row.tp_tt) || 0,
+      section: null,
+    });
+  }
+  return [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code)).slice(0, limit);
+}

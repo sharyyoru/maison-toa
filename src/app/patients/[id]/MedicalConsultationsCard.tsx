@@ -1797,6 +1797,14 @@ export default function MedicalConsultationsCard({
   const [selectedTardocCode, setSelectedTardocCode] = useState("");
   const [invoiceCanton, setInvoiceCanton] = useState<SwissCanton>(DEFAULT_CANTON);
   const [invoiceLawType, setInvoiceLawType] = useState("KVG");
+  const [invoiceInsurerGln, setInvoiceInsurerGln] = useState<string | null>(null);
+  // Tariff point value resolved per insurer/canton/law/date from
+  // tariff_point_values. Starts at the canton default so pricing is never blank.
+  const [invoiceTpvResolution, setInvoiceTpvResolution] = useState<{ value: number; source: string }>({
+    value: CANTON_TAX_POINT_VALUES[DEFAULT_CANTON] ?? 0.96,
+    source: "fallback",
+  });
+  const invoiceTpv = invoiceTpvResolution.value;
   const [invoiceAccidentDate, setInvoiceAccidentDate] = useState("");
   const [invoiceNotes, setInvoiceNotes] = useState("");
   const [invoiceDiagnosisCodes, setInvoiceDiagnosisCodes] = useState<string[]>([]);
@@ -1811,6 +1819,7 @@ export default function MedicalConsultationsCard({
   const [tardocSearchQuery, setTardocSearchQuery] = useState("");
   const [tardocSearchResults, setTardocSearchResults] = useState<any[]>([]);
   const [tardocSearchLoading, setTardocSearchLoading] = useState(false);
+  const [tardocSearchNotice, setTardocSearchNotice] = useState<string | null>(null);
   const [tardocChapters, setTardocChapters] = useState<{code:string;name:string}[]>([]);
   const [tardocSelectedChapter, setTardocSelectedChapter] = useState("");
   const [tardocDbInfo, setTardocDbInfo] = useState<{dbVersion:string;dbVersionDate:string}|null>(null);
@@ -2781,7 +2790,7 @@ export default function MedicalConsultationsCard({
       try {
         const { data } = await supabaseClient
           .from("patient_insurances")
-          .select("law_type")
+          .select("law_type, insurer_id, gln")
           .eq("patient_id", patientId)
           .order("is_primary", { ascending: false })
           .order("created_at", { ascending: true })
@@ -2791,6 +2800,17 @@ export default function MedicalConsultationsCard({
         if (isMounted && ["KVG", "UVG", "IVG", "MVG", "VVG"].includes(law)) {
           setInvoiceLawType(law);
         }
+        // Insurer GLN drives the per-insurer tariff point value.
+        let insurerGln: string | null = data?.gln || null;
+        if (data?.insurer_id) {
+          const { data: insurer } = await supabaseClient
+            .from("swiss_insurers")
+            .select("gln")
+            .eq("id", data.insurer_id)
+            .maybeSingle();
+          insurerGln = insurer?.gln || insurerGln;
+        }
+        if (isMounted) setInvoiceInsurerGln(insurerGln);
       } catch {}
     }
 
@@ -2806,6 +2826,53 @@ export default function MedicalConsultationsCard({
       isMounted = false;
     };
   }, []);
+
+  // Resolve the tariff point value for the patient's insurer + canton + law +
+  // treatment date. Until a contract rate exists the server returns the canton
+  // default, so pricing matches the old behaviour exactly.
+  useEffect(() => {
+    const fallback = { value: CANTON_TAX_POINT_VALUES[invoiceCanton] ?? 0.96, source: "fallback" };
+    setInvoiceTpvResolution(fallback);
+    const controller = new AbortController();
+    const params = new URLSearchParams({ canton: invoiceCanton, lawType: invoiceLawType });
+    if (invoiceInsurerGln) params.set("insurerGln", invoiceInsurerGln);
+    if (consultationDate) params.set("on", consultationDate);
+    fetch(`/api/tardoc/tax-point-value?${params}`, { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const value = Number(json?.value);
+        if (Number.isFinite(value) && value > 0) {
+          setInvoiceTpvResolution({ value, source: json.source || "fallback" });
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [invoiceCanton, invoiceLawType, invoiceInsurerGln, consultationDate]);
+
+  async function runTardocSearch() {
+    if (!tardocSearchQuery.trim()) return;
+    setTardocSearchLoading(true);
+    setTardocSearchNotice(null);
+    try {
+      const res = await fetch(`/api/tardoc/sumex?action=searchCode&code=${encodeURIComponent(tardocSearchQuery.trim())}&canton=${invoiceCanton}`);
+      const json = await res.json();
+      if (json.success) {
+        setTardocSearchResults(json.data || []);
+        if (json.offline) {
+          setTardocSearchNotice(
+            "TARDOC catalogue service (Sumex) is offline — showing only codes already saved in your TARDOC groups.",
+          );
+        }
+      } else {
+        setTardocSearchResults([]);
+        setTardocSearchNotice(`TARDOC search failed: ${json.error || res.statusText}`);
+      }
+    } catch {
+      setTardocSearchResults([]);
+      setTardocSearchNotice("TARDOC search failed — could not reach the server.");
+    }
+    setTardocSearchLoading(false);
+  }
 
 
   // Auto-prefill billing entity based on selected doctor + payment method + invoice mode.
@@ -7656,7 +7723,7 @@ export default function MedicalConsultationsCard({
                         const hasAcfLines = invoiceServiceLines.some((l) => l.serviceId.startsWith("flatrate-") || l.serviceId.startsWith("tma-"));
                         const hasTardocLines = invoiceServiceLines.some((l) => l.serviceId.startsWith("tardoc-"));
                         const isTardocInvoice = hasTardocLines;
-                        const taxPointValue = CANTON_TAX_POINT_VALUES[invoiceCanton] ?? 0.96;
+                        const taxPointValue = invoiceTpv;
 
                         // ── ACF Validation: validate flat rate services before saving ──
                         let workingServiceLines = [...invoiceServiceLines];
@@ -9832,6 +9899,10 @@ export default function MedicalConsultationsCard({
                                       </option>
                                     ))}
                                   </select>
+                                  <span className="block text-[9px] text-slate-500">
+                                    Applied: CHF {invoiceTpv.toFixed(2)}/pt
+                                    {invoiceTpvResolution.source.startsWith("insurer") ? " (insurer contract rate)" : " (canton default)"}
+                                  </span>
                                 </div>
                                 <div className="space-y-1">
                                   <span className="block text-[10px] font-medium text-slate-600">
@@ -9894,7 +9965,7 @@ export default function MedicalConsultationsCard({
                                               type="button"
                                               className="w-full text-left px-3 py-2 text-[11px] text-slate-800 hover:bg-sky-50 border-b border-slate-100 last:border-0"
                                               onClick={() => {
-                                                const tpv = CANTON_TAX_POINT_VALUES[invoiceCanton] ?? 0.96;
+                                                const tpv = invoiceTpv;
                                                 const newLines: InvoiceServiceLine[] = (g.tardoc_group_items || []).map((item: any) => {
                                                   const rawCode: string = item.tardoc_code || "";
                                                   const isMaterial = item.tariff_type === "402" || rawCode.startsWith("mat:");
@@ -10058,30 +10129,14 @@ export default function MedicalConsultationsCard({
                                     placeholder="e.g. AA.00 or consultation"
                                     value={tardocSearchQuery}
                                     onChange={(e) => setTardocSearchQuery(e.target.value)}
-                                    onKeyDown={async (e) => {
-                                      if (e.key !== "Enter" || !tardocSearchQuery.trim()) return;
-                                      setTardocSearchLoading(true);
-                                      try {
-                                        const res = await fetch(`/api/tardoc/sumex?action=searchCode&code=${encodeURIComponent(tardocSearchQuery.trim())}&canton=${invoiceCanton}`);
-                                        const json = await res.json();
-                                        if (json.success) setTardocSearchResults(json.data || []);
-                                      } catch { /* ignore */ }
-                                      setTardocSearchLoading(false);
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") void runTardocSearch();
                                     }}
                                     className="block w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                   />
                                   <button
                                     type="button"
-                                    onClick={async () => {
-                                      if (!tardocSearchQuery.trim()) return;
-                                      setTardocSearchLoading(true);
-                                      try {
-                                        const res = await fetch(`/api/tardoc/sumex?action=searchCode&code=${encodeURIComponent(tardocSearchQuery.trim())}&canton=${invoiceCanton}`);
-                                        const json = await res.json();
-                                        if (json.success) setTardocSearchResults(json.data || []);
-                                      } catch { /* ignore */ }
-                                      setTardocSearchLoading(false);
-                                    }}
+                                    onClick={() => void runTardocSearch()}
                                     className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 shadow-sm hover:bg-slate-50"
                                   >
                                     Search
@@ -10089,6 +10144,11 @@ export default function MedicalConsultationsCard({
                                 </div>
                               </div>
 
+                              {tardocSearchNotice && !tardocSearchLoading && (
+                                <div className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-800">
+                                  {tardocSearchNotice}
+                                </div>
+                              )}
                               {/* Search results */}
                               {tardocSearchLoading && (
                                 <div className="py-3 text-center text-[10px] text-slate-400">Loading...</div>
@@ -10104,8 +10164,8 @@ export default function MedicalConsultationsCard({
                                     <span />
                                   </div>
                                   {tardocSearchResults.map((svc: any) => {
-                                    const tpv = CANTON_TAX_POINT_VALUES[invoiceCanton] ?? 0.96;
-                                    const price = svc.priceCHF ?? Math.round((svc.tpMT + svc.tpTT) * tpv * 100) / 100;
+                                    const tpv = invoiceTpv;
+                                    const price = Math.round(((svc.tpMT || 0) + (svc.tpTT || 0)) * tpv * 100) / 100 || svc.priceCHF || 0;
                                     return (
                                       <div
                                         key={svc.code || svc.recordId}
@@ -10166,8 +10226,8 @@ export default function MedicalConsultationsCard({
                                 <TardocAccordionTree
                                   canton={invoiceCanton}
                                   onAddService={(svc: any) => {
-                                    const tpv = CANTON_TAX_POINT_VALUES[invoiceCanton] ?? 0.96;
-                                    const price = svc.priceCHF ?? Math.round(((svc.tpMT || 0) + (svc.tpTT || 0)) * tpv * 100) / 100;
+                                    const tpv = invoiceTpv;
+                                    const price = Math.round(((svc.tpMT || 0) + (svc.tpTT || 0)) * tpv * 100) / 100 || svc.priceCHF || 0;
                                     setInvoiceServiceLines((prev) => {
                                       // BILL-017: same TARDOC code added again -> bump quantity instead of a new line
                                       const existingIdx = prev.findIndex((l) => l.serviceId === `tardoc-${svc.code}`);
@@ -10815,7 +10875,7 @@ export default function MedicalConsultationsCard({
                                       </div>
                                       <div className="flex items-center gap-1">
                                         <span className="text-[9px] text-slate-400">TPV:</span>
-                                        <span className="font-mono text-[10px] font-medium text-slate-700">{(CANTON_TAX_POINT_VALUES[invoiceCanton] ?? 0.96).toFixed(2)}</span>
+                                        <span className="font-mono text-[10px] font-medium text-slate-700" title={`Source: ${invoiceTpvResolution.source}`}>{invoiceTpv.toFixed(2)}</span>
                                       </div>
                                       <div className="flex items-center gap-1">
                                         <span className="text-[9px] text-slate-400">Ext.F:</span>
@@ -10838,7 +10898,7 @@ export default function MedicalConsultationsCard({
                                       <div className="flex items-center gap-1">
                                         <span className="text-[9px] text-slate-400">Total:</span>
                                         <span className="font-mono text-[10px] font-semibold text-slate-800">
-                                          {(((line.tardocTpMT ?? 0) + (line.tardocTpTT ?? 0)) * (CANTON_TAX_POINT_VALUES[invoiceCanton] ?? 0.96) * quantity * (line.tardocExternalFactor ?? 1)).toFixed(2)}
+                                          {(((line.tardocTpMT ?? 0) + (line.tardocTpTT ?? 0)) * invoiceTpv * quantity * (line.tardocExternalFactor ?? 1)).toFixed(2)}
                                         </span>
                                       </div>
                                     </div>

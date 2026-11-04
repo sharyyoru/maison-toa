@@ -47,12 +47,51 @@ type FallbackInvoicePdfInput = {
   treatmentDate?: string | null;
   treatmentCanton?: string | null;
   billingType?: string | null;
+  /** Which document the caller asked for (generate-pdf `invoiceType`). */
+  documentType?: "tp" | "tg" | "reminder" | "receipt" | null;
+  reminderLevel?: number | null;
 };
+
+/**
+ * Whether the Swiss QR-bill payment slip may be printed.
+ *
+ * Tiers Payant: the insurer is the debtor and pays the clinic directly; the
+ * patient copy is for information only. Printing a payable slip on it invites
+ * the patient to pay an amount the insurer is also paying. The invoice's own
+ * billing_type is authoritative here (same rule as the Sumex path) — the
+ * request's documentType only distinguishes invoice / reminder / receipt.
+ */
+export function shouldPrintPaymentSlip(input: {
+  billingType?: string | null;
+  documentType?: string | null;
+  remaining: number;
+  iban?: string | null;
+}): boolean {
+  if (!(input.remaining > 0.004) || !input.iban) return false;
+  if (input.documentType === "receipt") return false;
+  if ((input.billingType || "").toUpperCase() === "TP") return false;
+  return true;
+}
+
+export function fallbackDocumentTitle(input: {
+  billingType?: string | null;
+  documentType?: string | null;
+  reminderLevel?: number | null;
+  remaining: number;
+}): string {
+  if (input.documentType === "receipt" || input.remaining <= 0.004) return "QUITTANCE";
+  if (input.documentType === "reminder") {
+    const level = Math.max(1, Math.min(3, Number(input.reminderLevel) || 1));
+    return level === 1 ? "1er RAPPEL" : `${level}e RAPPEL`;
+  }
+  if ((input.billingType || "").toUpperCase() === "TP") return "FACTURE TIERS PAYANT";
+  return "FACTURE";
+}
 
 const money = (value: number | null | undefined) => `${(Number(value) || 0).toFixed(2)} CHF`;
 const date = (value: string | null | undefined) => value ? new Date(value).toLocaleDateString("fr-CH") : "";
 
-export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, biller, doctor, treatmentDate, treatmentCanton, billingType }: FallbackInvoicePdfInput): Promise<Buffer> {
+export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, biller, doctor, treatmentDate, treatmentCanton, billingType, documentType, reminderLevel }: FallbackInvoicePdfInput): Promise<Buffer> {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const width = pdf.internal.pageSize.getWidth();
   const margin = 16;
@@ -89,7 +128,7 @@ export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, bil
   pdf.setTextColor(0, 0, 0);
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(18);
-  pdf.text(paid >= total - 0.01 ? "QUITTANCE" : "FACTURE", margin, 53);
+  pdf.text(fallbackDocumentTitle({ billingType, documentType, reminderLevel, remaining }), margin, 53);
   pdf.setFontSize(10);
   pdf.text(`N° ${invoice.invoice_number}`, width - margin, 49, { align: "right" });
   pdf.setFont("helvetica", "normal");
@@ -193,7 +232,22 @@ export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, bil
   // A Payrexx link is deliberately NOT encoded here any more: a URL QR is
   // meaningless at a post office counter. The online link still appears in the
   // e-mail; this slip is the offline payment route.
-  if (remaining > 0 && biller.iban) {
+  if (remaining > 0.004 && (billingType || "").toUpperCase() === "TP" && documentType !== "receipt") {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.setTextColor(90, 90, 90);
+    pdf.text(
+      pdf.splitTextToSize(
+        "Copie pour le patient — facture transmise directement à votre assurance (tiers payant). Ne pas payer ce document.",
+        width - margin * 2,
+      ),
+      margin,
+      y + 34,
+    );
+    pdf.setTextColor(0, 0, 0);
+  }
+
+  if (biller.iban && shouldPrintPaymentSlip({ billingType, documentType, remaining, iban: biller.iban })) {
     const addressMatch = (patient.street_address || "").match(/^(.+?)\s+(\d+\S*)$/);
     try {
       const ibanClean = biller.iban.replace(/\s/g, "");
@@ -221,6 +275,10 @@ export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, bil
         message: `Facture ${invoice.invoice_number}`,
         language: "FR",
       });
+
+      // The totals block ends at y + 26. If that reaches into the slip band,
+      // put the slip on its own page rather than printing over the totals.
+      if (y + 26 > A4_HEIGHT_MM - PAYMENT_PART_HEIGHT_MM - 4) pdf.addPage();
 
       // Bottom band of the A4 page: 297mm - 105mm = 192mm.
       pdf.addImage(

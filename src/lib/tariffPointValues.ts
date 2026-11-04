@@ -116,7 +116,8 @@ export function resolveTariffPointValue(
     (gln && pick((r) => r.insurer_gln === gln && !r.law_type, "insurer_gln")) ||
     (group && law && pick((r) => !r.insurer_gln && r.insurer_group === group && r.law_type === law, "insurer_group_law")) ||
     (group && pick((r) => !r.insurer_gln && r.insurer_group === group && !r.law_type, "insurer_group")) ||
-    pick((r) => !r.insurer_gln && !r.insurer_group, "canton") || {
+    (law && pick((r) => !r.insurer_gln && !r.insurer_group && r.law_type === law, "canton")) ||
+    pick((r) => !r.insurer_gln && !r.insurer_group && !r.law_type, "canton") || {
       value: fallback,
       source: "fallback" as const,
       matched: null,

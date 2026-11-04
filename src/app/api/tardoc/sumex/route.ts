@@ -13,6 +13,7 @@ import {
   type TardocServiceRecord,
 } from "@/lib/sumexTardoc";
 import { CANTON_TAX_POINT_VALUES, DEFAULT_CANTON, type SwissCanton } from "@/lib/tardoc";
+import { searchLocalTardocCodes } from "@/lib/tardocCatalog";
 import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
@@ -83,13 +84,27 @@ export async function GET(request: NextRequest) {
           );
         }
         const mainOnly = sp.get("mainOnly") === "1";
-        const result = await searchByCode(code, mainOnly, lang);
-        const enriched = enrichServices(result.services, taxPointValue);
-        return NextResponse.json({
-          success: true,
-          data: enriched,
-          meta: { count: result.count, canton, taxPointValue },
-        });
+        try {
+          const result = await searchByCode(code, mainOnly, lang);
+          const enriched = enrichServices(result.services, taxPointValue);
+          return NextResponse.json({
+            success: true,
+            data: enriched,
+            meta: { count: result.count, canton, taxPointValue },
+          });
+        } catch (err) {
+          // Sumex validator unreachable: fall back to codes already stored in
+          // the clinic's TARDOC groups, and say so — this is not the full catalog.
+          console.warn("[tardoc/sumex] Sumex unreachable, using local codes:", err instanceof Error ? err.message : err);
+          const local = await searchLocalTardocCodes(code);
+          const enriched = enrichServices(local as unknown as TardocServiceRecord[], taxPointValue);
+          return NextResponse.json({
+            success: true,
+            offline: true,
+            data: enriched,
+            meta: { count: enriched.length, canton, taxPointValue, source: "local-groups" },
+          });
+        }
       }
 
       // ----------------------------------------------------------------

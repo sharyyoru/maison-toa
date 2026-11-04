@@ -102,4 +102,16 @@ const CANTON_VD = row({ value: 0.93 });
   assert.equal(resolveTariffPointValue(rows, { canton: "VD" }, 0.93).value, 0.93);
 }
 
+// --- Canton defaults: a law-specific canton row beats the generic one, and
+//     a law-specific row never leaks onto a different law. ---
+{
+  const rows = [
+    row({ canton: "VD", value: 0.93 }),
+    row({ canton: "VD", law_type: "UVG", value: 0.89 }),
+  ];
+  assert.equal(resolveTariffPointValue(rows, { canton: "VD", lawType: "UVG" }, 0.9).value, 0.89);
+  assert.equal(resolveTariffPointValue(rows, { canton: "VD", lawType: "KVG" }, 0.9).value, 0.93);
+  assert.equal(resolveTariffPointValue(rows, { canton: "VD" }, 0.9).value, 0.93);
+}
+
 console.log("tariffPointValues: all assertions passed");
