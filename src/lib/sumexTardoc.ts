@@ -12,9 +12,26 @@
  * Interfaces: ITardocValidator, ICatalog, ISearch, ITardocInput, IUtility, IValidate
  */
 
+import {
+  catalogInfo,
+  searchTardoc,
+  searchTardocAdditional,
+  searchTardocByChapter,
+  searchTardocByServiceGroup,
+  tardocChapters,
+  tardocData,
+  validateTardocLocal,
+} from "@/lib/oaatCatalog";
+
 const SUMEX_BASE_URL =
   process.env.SUMEX_TARDOC_URL ||
   "http://34.100.230.253:8080/tardocValidatorServer100";
+
+// The Sumex1 TARDOC validator is unreachable. By default every catalogue
+// lookup and validation runs against the local copy of the official OAAT
+// catalogue (src/lib/oaatCatalog.ts). Set SUMEX_USE_SERVER=1 to go back to a
+// Sumex server — same switch as the invoice XML in sumexInvoice.ts.
+const USE_SERVER = process.env.SUMEX_USE_SERVER === "1";
 
 // Language enum matching Sumex1 API
 export type SumexLanguage = 1 | 2 | 3; // 1=DE, 2=FR, 3=IT
@@ -206,6 +223,7 @@ export async function getChapters(
   parentCode: string = "",
   language: SumexLanguage = 2,
 ): Promise<TardocChapter[]> {
+  if (!USE_SERVER) return tardocChapters(parentCode);
   const session = await getOrCreateSession(language);
   const catalogHandle = await ensureCatalog(session);
 
@@ -229,6 +247,8 @@ export async function getChapters(
 export async function getSections(
   language: SumexLanguage = 2,
 ): Promise<Array<{ code: string; name: string }>> {
+  // Sections are the single-letter top-level chapters in TARDOC 1.4.
+  if (!USE_SERVER) return tardocData().chapters.filter((c) => c.code.length === 1);
   const session = await getOrCreateSession(language);
   const catalogHandle = await ensureCatalog(session);
 
@@ -246,6 +266,7 @@ export async function getSections(
 export async function getServiceGroups(
   language: SumexLanguage = 2,
 ): Promise<Array<{ code: string; name: string }>> {
+  if (!USE_SERVER) return tardocData().serviceGroups.map(({ code, name }) => ({ code, name }));
   const session = await getOrCreateSession(language);
   const catalogHandle = await ensureCatalog(session);
 
@@ -309,6 +330,7 @@ export async function searchByCode(
   onlyMainServices: boolean = false,
   language: SumexLanguage = 2,
 ): Promise<{ count: number; services: TardocServiceRecord[] }> {
+  if (!USE_SERVER) return searchTardoc(code, onlyMainServices);
   const session = await getOrCreateSession(language);
   // Create a fresh search for each query to avoid stale state
   const searchHandle = await createSubInterface(session.validatorHandle, "Search");
@@ -347,6 +369,7 @@ export async function searchByChapter(
   onlyMainServices: boolean = false,
   language: SumexLanguage = 2,
 ): Promise<{ count: number; services: TardocServiceRecord[] }> {
+  if (!USE_SERVER) return searchTardocByChapter(chapterCode, onlyMainServices);
   const session = await getOrCreateSession(language);
   const searchHandle = await createSubInterface(session.validatorHandle, "Search");
 
@@ -384,6 +407,7 @@ export async function searchByServiceGroup(
   onlyMainServices: boolean = false,
   language: SumexLanguage = 2,
 ): Promise<{ count: number; services: TardocServiceRecord[] }> {
+  if (!USE_SERVER) return searchTardocByServiceGroup(groupCode, onlyMainServices);
   const session = await getOrCreateSession(language);
   const searchHandle = await createSubInterface(session.validatorHandle, "Search");
 
@@ -452,6 +476,7 @@ export async function searchAdditionalServices(
   baseCode: string,
   language: SumexLanguage = 2,
 ): Promise<{ count: number; services: TardocServiceRecord[] }> {
+  if (!USE_SERVER) return searchTardocAdditional(baseCode);
   const session = await getOrCreateSession(language);
   const searchHandle = await createSubInterface(session.validatorHandle, "Search");
 
@@ -495,6 +520,10 @@ export async function getSessionInfo(
   moduleVersion: string;
   language: SumexLanguage;
 }> {
+  if (!USE_SERVER) {
+    const info = catalogInfo();
+    return { dbVersion: info.tardoc, dbVersionDate: "2026-04-02", moduleVersion: "local OAAT catalogue", language };
+  }
   const session = await getOrCreateSession(language);
   return {
     dbVersion: session.dbVersion,
@@ -550,6 +579,7 @@ export async function validateServices(
   lawType: number = 1, // 1=KVG
   language: SumexLanguage = 2,
 ): Promise<ValidationResult> {
+  if (!USE_SERVER) return validateTardocLocal(services);
   const session = await getOrCreateSession(language);
 
   // Create IValidate + ITardocInput instances

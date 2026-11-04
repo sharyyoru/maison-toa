@@ -27,40 +27,43 @@
 -- payment token has been validated — see /api/invoices/get-by-token.
 -- =====================================================================
 
--- ---------------------------------------------------------------------
--- invoice-pdfs — read only.
--- ---------------------------------------------------------------------
--- Uploads are performed server-side with the service role
--- (/api/invoices/generate-pdf, medidata routes), so staff need SELECT only.
--- Keeping it read-only means a compromised staff session cannot overwrite or
--- delete issued invoices, which matters for billing auditability.
-drop policy if exists "invoice_pdfs_authenticated_read" on storage.objects;
-create policy "invoice_pdfs_authenticated_read"
-  on storage.objects
-  for select
-  to authenticated
-  using (bucket_id = 'invoice-pdfs');
-
--- ---------------------------------------------------------------------
--- cash-receipts — read + create.
--- ---------------------------------------------------------------------
--- Staff upload receipts from the patient file
+-- Membership gate. Sign-up is open, so "authenticated" alone includes
+-- self-registered strangers. If the org-membership helper from the RLS
+-- lockdown (public.is_staff_member()) exists, every policy below also
+-- requires it — this migration must never grant more than the lockdown does.
+--
+-- invoice-pdfs: read only. Uploads are done server-side with the service
+-- role (/api/invoices/generate-pdf, medidata routes); read-only means a
+-- compromised staff session cannot overwrite or delete issued invoices.
+--
+-- cash-receipts: read + create. Staff upload receipts from the patient file
 -- (MedicalConsultationsCard -> cash-receipts.upload) and view them again.
--- No UPDATE/DELETE: a receipt is evidence of a payment and should not be
--- silently replaced or removed from the browser.
-drop policy if exists "cash_receipts_authenticated_read" on storage.objects;
-create policy "cash_receipts_authenticated_read"
-  on storage.objects
-  for select
-  to authenticated
-  using (bucket_id = 'cash-receipts');
+-- No UPDATE/DELETE: a receipt is evidence of a payment.
+do $$
+declare
+  gate text := case
+    when exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                 where n.nspname = 'public' and p.proname = 'is_staff_member')
+    then ' and public.is_staff_member()'
+    else ''
+  end;
+begin
+  if gate = '' then
+    raise warning 'public.is_staff_member() not found: storage policies are scoped to authenticated users only. Close public sign-up or apply the org-membership lockdown.';
+  end if;
 
-drop policy if exists "cash_receipts_authenticated_insert" on storage.objects;
-create policy "cash_receipts_authenticated_insert"
-  on storage.objects
-  for insert
-  to authenticated
-  with check (bucket_id = 'cash-receipts');
+  execute 'drop policy if exists "invoice_pdfs_authenticated_read" on storage.objects';
+  execute format($p$create policy "invoice_pdfs_authenticated_read" on storage.objects
+    for select to authenticated using (bucket_id = 'invoice-pdfs'%s)$p$, gate);
+
+  execute 'drop policy if exists "cash_receipts_authenticated_read" on storage.objects';
+  execute format($p$create policy "cash_receipts_authenticated_read" on storage.objects
+    for select to authenticated using (bucket_id = 'cash-receipts'%s)$p$, gate);
+
+  execute 'drop policy if exists "cash_receipts_authenticated_insert" on storage.objects';
+  execute format($p$create policy "cash_receipts_authenticated_insert" on storage.objects
+    for insert to authenticated with check (bucket_id = 'cash-receipts'%s)$p$, gate);
+end $$;
 
 -- ---------------------------------------------------------------------
 -- Verify, and report anything still open to anon/public.

@@ -70,9 +70,20 @@ create unique index if not exists tariff_point_values_scope_idx
 -- ---------------------------------------------------------------------
 alter table public.tariff_point_values enable row level security;
 
-drop policy if exists tariff_point_values_authenticated_read on public.tariff_point_values;
-create policy tariff_point_values_authenticated_read
-  on public.tariff_point_values for select to authenticated using (true);
+-- Same membership gate as the storage migration: if the org-membership
+-- lockdown helper exists, only active staff may read.
+do $$
+begin
+  execute 'drop policy if exists tariff_point_values_authenticated_read on public.tariff_point_values';
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'public' and p.proname = 'is_staff_member') then
+    execute 'create policy tariff_point_values_authenticated_read on public.tariff_point_values
+             for select to authenticated using (public.is_staff_member())';
+  else
+    execute 'create policy tariff_point_values_authenticated_read on public.tariff_point_values
+             for select to authenticated using (true)';
+  end if;
+end $$;
 
 revoke all on public.tariff_point_values from anon;
 grant select on public.tariff_point_values to authenticated;

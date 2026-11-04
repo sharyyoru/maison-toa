@@ -2858,11 +2858,6 @@ export default function MedicalConsultationsCard({
       const json = await res.json();
       if (json.success) {
         setTardocSearchResults(json.data || []);
-        if (json.offline) {
-          setTardocSearchNotice(
-            "TARDOC catalogue service (Sumex) is offline — showing only codes already saved in your TARDOC groups.",
-          );
-        }
       } else {
         setTardocSearchResults([]);
         setTardocSearchNotice(`TARDOC search failed: ${json.error || res.statusText}`);
@@ -8063,7 +8058,7 @@ export default function MedicalConsultationsCard({
                                   .map((s: any) => `${s.code}: ${s.errorMessage}`)
                                   .join("\n");
                                 setConsultationError(
-                                  `Sumex TARDOC validation failed:\n${errors || valJson.error || "Unknown validation error"}`,
+                                  `TARDOC validation failed:\n${errors || valJson.error || "Unknown validation error"}`,
                                 );
                                 setConsultationSaving(false);
                                 return;
@@ -8071,7 +8066,7 @@ export default function MedicalConsultationsCard({
                             } catch (valErr) {
                               console.warn("TARDOC validation request failed:", valErr);
                               setConsultationError(
-                                "TARDOC validation failed — could not reach Sumex server. Please try again.",
+                                "TARDOC validation failed — could not reach the server. Please try again.",
                               );
                               setConsultationSaving(false);
                               return;

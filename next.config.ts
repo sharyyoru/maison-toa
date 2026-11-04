@@ -11,6 +11,11 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   serverExternalPackages: ["heic-convert", "libheif-js"],
+  // The OAAT tariff catalogues are read from disk by src/lib/oaatCatalog.ts;
+  // make sure they ship with the serverless functions.
+  outputFileTracingIncludes: {
+    "/api/**/*": ["./src/data/oaat/**/*"],
+  },
   images: {
     remotePatterns: [
       {

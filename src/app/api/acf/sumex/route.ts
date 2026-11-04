@@ -11,11 +11,13 @@ import {
   searchTma,
   getTmaChapters,
   runTmaGrouper,
+  ACF_USE_SERVER,
   type AcfValidateServiceInput,
   type TmaType,
   type TmaGrouperInput,
 } from "@/lib/sumexAcf";
 import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
+import { validateAcfLocal } from "@/lib/oaatCatalog";
 
 /**
  * API route for ACF (Ambulatory Case Flatrate) validator.
@@ -156,6 +158,20 @@ export async function POST(request: NextRequest) {
     const action = body.action || "validate005";
 
     if (action === "runGrouper") {
+      if (!ACF_USE_SERVER) {
+        // Gesture + ICD-10 -> flat rate grouping is the OAAT TarifMatcher's
+        // job; it is not part of the published catalogues. Pick the flat rate
+        // directly from the catalogue instead.
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Le groupeur des forfaits ambulatoires n'est pas disponible (serveur Sumex hors service). " +
+              "Sélectionnez le forfait directement dans le catalogue.",
+          },
+          { status: 503 },
+        );
+      }
       const input: TmaGrouperInput = {
         icdCode: body.icdCode || "",
         patientSex: body.patientSex ?? 0,
@@ -195,6 +211,10 @@ export async function POST(request: NextRequest) {
         { success: false, error: "No services provided" },
         { status: 400 },
       );
+    }
+
+    if (!ACF_USE_SERVER) {
+      return NextResponse.json({ success: true, data: validateAcfLocal(services) });
     }
 
     // 1. Initialize

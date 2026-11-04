@@ -17,9 +17,23 @@
  * Interfaces: IAcfValidator, ISearch005, ISearchTMA, IValidate005, IValidateTMA
  */
 
+import {
+  acfChaptersLocal,
+  catalogInfo,
+  searchAcfLocal,
+  searchTmaLocal,
+  searchTmaSlavesLocal,
+  tmaChaptersLocal,
+} from "@/lib/oaatCatalog";
+
 const SUMEX_ACF_BASE_URL =
   process.env.SUMEX_ACF_URL ||
   "http://34.100.230.253:8080/acfValidatorServer100";
+
+// Catalogue lookups use the local copy of the official OAAT catalogues unless
+// SUMEX_USE_SERVER=1 (see sumexTardoc.ts). The flat-rate grouper
+// (gestures + ICD-10 -> flat rate) still needs a Sumex server.
+export const ACF_USE_SERVER = process.env.SUMEX_USE_SERVER === "1";
 
 // Language enum matching Sumex1 API
 export type AcfLanguage = 1 | 2 | 3; // 1=DE, 2=FR, 3=IT
@@ -234,6 +248,7 @@ export async function searchAcf005(
   date?: string,
   language: AcfLanguage = 2,
 ): Promise<{ count: number; services: AcfServiceRecord[] }> {
+  if (!ACF_USE_SERVER) return searchAcfLocal(code, chapterCode, name);
   const session = await getOrCreateAcfSession(language);
   const searchHandle = await createSearch005(session);
 
@@ -287,6 +302,7 @@ export async function searchAcf005(
 export async function getAcfChapters(
   language: AcfLanguage = 2,
 ): Promise<Array<{ code: string; name: string; count: number }>> {
+  if (!ACF_USE_SERVER) return acfChaptersLocal();
   const { services } = await searchAcf005("*", "", "", true, undefined, language);
 
   const chapterMap = new Map<string, { name: string; count: number }>();
@@ -612,6 +628,17 @@ export async function getAcfSessionInfo(
   tariff005: AcfTariffInfo | null;
   tariffTMA: AcfTariffInfo | null;
 }> {
+  if (!ACF_USE_SERVER) {
+    const info = catalogInfo();
+    const t = (name: string, tariffType: string, dbVersion: string): AcfTariffInfo =>
+      ({ dbVersion, name, tariffType, dbDate: "", validFrom: 0, validTo: 0 });
+    return {
+      moduleVersion: "local OAAT catalogue",
+      language,
+      tariff005: t("Forfaits ambulatoires", "005", info.acf),
+      tariffTMA: t("CPTMA / LKAAT", "TMA", info.lkaat),
+    };
+  }
   const session = await getOrCreateAcfSession(language);
   return {
     moduleVersion: session.moduleVersion,
@@ -736,6 +763,7 @@ export async function searchTma(
   date?: string,
   language: AcfLanguage = 2,
 ): Promise<{ count: number; services: TmaServiceRecord[] }> {
+  if (!ACF_USE_SERVER) return searchTmaLocal(code, chapterCode, name, tmaType, onlyGrouperRelevant);
   const session = await getOrCreateAcfSession(language);
   const searchHandle = await createSearchTMA(session);
 
@@ -818,6 +846,7 @@ export async function searchTmaSlaves(
   date?: string,
   language: AcfLanguage = 2,
 ): Promise<{ count: number; services: TmaServiceRecord[] }> {
+  if (!ACF_USE_SERVER) return searchTmaSlavesLocal(masterCode);
   const session = await getOrCreateAcfSession(language);
   const searchHandle = await createSearchTMA(session);
 
@@ -870,6 +899,7 @@ export async function searchTmaSlaves(
 export async function getTmaChapters(
   language: AcfLanguage = 2,
 ): Promise<Array<{ code: string; name: string; count: number }>> {
+  if (!ACF_USE_SERVER) return tmaChaptersLocal();
   // Search all P-type gesture codes (main triggers) which are grouper-relevant
   const { services } = await searchTma("*", "", "", 0, true, undefined, language);
 
