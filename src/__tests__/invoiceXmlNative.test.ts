@@ -156,4 +156,46 @@ function baseInput(overrides: Partial<SumexInvoiceInput> = {}): SumexInvoiceInpu
   );
 }
 
+// --- The OAAT/OTMA "Fachbereich" must appear on every service line.
+//     Annex H of the tariff convention requires it with every TARDOC position,
+//     and its absence is what insurers reject as CSS 5.113.002 / Helsana
+//     eK6.2.1 — 29 of the rejections in the current backlog.
+//
+//     This generator was ported from a clinic that does not bill TARDOC, so it
+//     never emitted the attribute: send-invoice validated that the code was
+//     configured and then dropped it. Per generalInvoiceRequest_500.xsd it is
+//     `section_code` on both serviceType and serviceExType. ---
+{
+  // One TARDOC line (007 -> service_ex) and one material line (402 -> service),
+  // so both renderers are covered.
+  const svcs = [
+    { code: "AA.00.0010", serviceName: "Consultation", quantity: 1, tariffType: "007",
+      amount: 50, unitMT: 10, unitTT: 5, sessionNumber: 1, dateBegin: "2026-09-16" },
+    { code: "1234", serviceName: "Material", quantity: 1, tariffType: "402",
+      amount: 20, unit: 20, sessionNumber: 1, dateBegin: "2026-09-16" },
+  ];
+
+  const withSection = generateInvoiceXml(baseInput({
+    medicalSectionCode: "AA00", services: svcs,
+  } as unknown as Partial<SumexInvoiceInput>)).xmlContent;
+
+  const serviceTags = withSection.match(/<invoice:service(_ex)? [^>]*\/>/g) ?? [];
+  assert.equal(serviceTags.length, 2, "expected both service renderers to be exercised");
+  for (const tag of serviceTags) {
+    assert.match(
+      tag,
+      /section_code="AA00"/,
+      `every service must carry the Fachbereich, missing on: ${tag.slice(0, 120)}`,
+    );
+  }
+
+  // Optional in the XSD, so it must be omitted rather than emitted empty when
+  // no section code is configured — an empty attribute is itself a schema
+  // violation (stringType1_9 has a minimum length of 1).
+  const withoutSection = generateInvoiceXml(baseInput({
+    medicalSectionCode: "", services: svcs,
+  } as unknown as Partial<SumexInvoiceInput>)).xmlContent;
+  assert.doesNotMatch(withoutSection, /section_code=/, "must be omitted, never empty");
+}
+
 console.log("invoiceXmlNative: all assertions passed");

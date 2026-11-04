@@ -286,7 +286,7 @@ function addressXml(addr: InvoiceAddress): string {
 
 type RenderedService = { xml: string; amount: number; vatAmount: number; vatRate: number };
 
-function renderSimpleService(svc: InvoiceServiceInput, recordId: number, input: SumexInvoiceInput): RenderedService {
+function renderSimpleService(svc: InvoiceServiceInput, recordId: number, input: SumexInvoiceInput, sectionCode = ""): RenderedService {
   const unit = svc.unit ?? 0;
   const unitFactor = svc.unitFactor ?? 1;
   const extFactor = svc.externalFactor ?? 1;
@@ -308,12 +308,13 @@ function renderSimpleService(svc: InvoiceServiceInput, recordId: number, input: 
     (vatRate ? ` vat_rate="${vatRate}"` : "") +
     ` service_attributes="${svc.serviceAttributes ?? 0}"` +
     ` name="${esc(svc.serviceName || `${svc.code}`)}"` +
+    (sectionCode ? ` section_code="${esc(sectionCode)}"` : "") +
     (svc.remark ? ` remark="${esc(svc.remark)}"` : "") +
     `/>`;
   return { xml, amount, vatAmount, vatRate };
 }
 
-function renderExService(svc: InvoiceServiceInput, recordId: number): RenderedService {
+function renderExService(svc: InvoiceServiceInput, recordId: number, sectionCode = ""): RenderedService {
   const unitMT = svc.unit ?? 0;
   const unitFactorMT = svc.unitFactor ?? 1;
   const extMT = svc.externalFactor ?? 1;
@@ -341,12 +342,13 @@ function renderExService(svc: InvoiceServiceInput, recordId: number): RenderedSe
     (vatRate ? ` vat_rate="${vatRate}"` : "") +
     ` service_attributes="${svc.serviceAttributes ?? 0}"` +
     ` name="${esc(svc.serviceName || svc.code)}"` +
+    (sectionCode ? ` section_code="${esc(sectionCode)}"` : "") +
     (svc.remark ? ` remark="${esc(svc.remark)}"` : "") +
     `/>`;
   return { xml, amount, vatAmount, vatRate };
 }
 
-function renderExInputService(svc: InvoiceServiceExInput, recordId: number): RenderedService {
+function renderExInputService(svc: InvoiceServiceExInput, recordId: number, sectionCode = ""): RenderedService {
   const amountMT = svc.amountMT ?? 0;
   const amountTT = svc.amountTT ?? 0;
   const amount = svc.amountAsymmetric ?? Math.round((amountMT + amountTT) * 100) / 100;
@@ -368,6 +370,7 @@ function renderExInputService(svc: InvoiceServiceExInput, recordId: number): Ren
     (vatRate ? ` vat_rate="${vatRate}"` : "") +
     ` service_attributes="${svc.serviceAttributes ?? 0}"` +
     ` name="${esc(svc.serviceName || svc.code)}"` +
+    (sectionCode ? ` section_code="${esc(sectionCode)}"` : "") +
     (svc.remark ? ` remark="${esc(svc.remark)}"` : "") +
     `/>`;
   return { xml, amount, vatAmount, vatRate };
@@ -415,15 +418,29 @@ export function generateInvoiceXml(input: SumexInvoiceInput): NativeInvoiceXmlRe
     : unixSeconds(input.invoiceDate);
 
   // --- Services ---
+  // OAAT/OTMA "Fachbereich" (service spécialisé). Annex H of the tariff
+  // convention requires it with EVERY TARDOC position, and its absence is what
+  // insurers reject as CSS 5.113.002 / Helsana eK6.2.1 — 29 of the rejections
+  // in the current backlog.
+  //
+  // The Sumex server received this via IServiceExInput::SetPhysician and wrote
+  // it into the XML itself. This native generator was ported from a clinic that
+  // does not bill TARDOC, so it never emitted the attribute at all: send-invoice
+  // validated that the code was configured, then dropped it on the floor. Per
+  // generalInvoiceRequest_500.xsd it is `section_code` on serviceType and
+  // serviceExType.
+  const sectionCode = (input.medicalSectionCode || "").trim();
   const rendered: RenderedService[] = [];
   let recordId = 1;
   for (const svc of input.services || []) {
     const isExtended = svc.tariffType === "007" || svc.tariffType === "001";
-    rendered.push(isExtended ? renderExService(svc, recordId) : renderSimpleService(svc, recordId, input));
+    rendered.push(isExtended
+      ? renderExService(svc, recordId, sectionCode)
+      : renderSimpleService(svc, recordId, input, sectionCode));
     recordId++;
   }
   for (const svc of input.servicesEx || []) {
-    rendered.push(renderExInputService(svc, recordId));
+    rendered.push(renderExInputService(svc, recordId, sectionCode));
     recordId++;
   }
   const totalAmount = Math.round(rendered.reduce((sum, r) => sum + r.amount, 0) * 100) / 100;
