@@ -1,7 +1,13 @@
 import jsPDF from "jspdf";
-import QRCode from "qrcode";
+import {
+  renderPaymentPartPng,
+  buildQrrReference,
+  PAYMENT_PART_WIDTH_MM,
+  PAYMENT_PART_HEIGHT_MM,
+} from "./swissQrBillPaymentPart";
+
+const A4_HEIGHT_MM = 297;
 import type { Invoice, InvoiceLineItem } from "@/lib/invoiceTypes";
-import { generateSwissQrBillDataUrl, generateSwissReference, type SwissQrBillData } from "@/lib/swissQrBill";
 
 type Party = {
   name: string;
@@ -174,42 +180,75 @@ export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, bil
   pdf.text("Solde", width - 55, y + 22, { align: "right" });
   pdf.text(money(remaining), width - margin, y + 22, { align: "right" });
 
+  // ── Swiss QR-bill payment part ──────────────────────────────────────────
+  //
+  // This replaces the bare 38x38mm QR square that used to sit inline next to
+  // the IBAN. That was not a QR-bill: the Swiss Implementation Guidelines
+  // require a 210x105mm band at the foot of the page (62mm receipt + 148mm
+  // payment part, cut lines, Swiss cross, 46mm code). Counters and banks
+  // refuse anything else, which is why patients could not pay at the post
+  // office — and at 38mm the code was under the 46mm minimum, so it may not
+  // have scanned either.
+  //
+  // A Payrexx link is deliberately NOT encoded here any more: a URL QR is
+  // meaningless at a post office counter. The online link still appears in the
+  // e-mail; this slip is the offline payment route.
   if (remaining > 0 && biller.iban) {
-    let qrDataUrl: string | null = null;
-    if (invoice.payrexx_payment_link) {
-      qrDataUrl = await QRCode.toDataURL(invoice.payrexx_payment_link, { width: 300, margin: 1 });
-    } else {
-      const addressMatch = (patient.street_address || "").match(/^(.+?)\s+(\d+\S*)$/);
-      const qrData: SwissQrBillData = {
-        iban: biller.iban.replace(/\s/g, ""),
-        creditorName: biller.name,
-        creditorStreet: biller.street || "",
-        creditorBuildingNumber: biller.streetNo || "",
-        creditorPostalCode: biller.postalCode || "",
-        creditorTown: biller.town || "",
-        creditorCountry: "CH",
+    const addressMatch = (patient.street_address || "").match(/^(.+?)\s+(\d+\S*)$/);
+    try {
+      const ibanClean = biller.iban.replace(/\s/g, "");
+      const png = await renderPaymentPartPng({
+        iban: ibanClean,
         amount: remaining,
         currency: "CHF",
-        debtorName: `${patient.first_name} ${patient.last_name}`,
-        debtorStreet: addressMatch?.[1] || patient.street_address || undefined,
-        debtorBuildingNumber: addressMatch?.[2] || undefined,
-        debtorPostalCode: patient.postal_code || undefined,
-        debtorTown: patient.town || undefined,
-        debtorCountry: "CH",
-        referenceType: "QRR",
-        reference: generateSwissReference(invoice.invoice_number),
-        unstructuredMessage: `Facture ${invoice.invoice_number}`,
-      };
-      qrDataUrl = await generateSwissQrBillDataUrl(qrData);
+        // QRR is only valid with a QR-IBAN; renderPaymentPartPng drops it
+        // otherwise rather than emitting an invalid combination.
+        reference: buildQrrReference(invoice.invoice_number),
+        creditor: {
+          name: biller.name,
+          street: biller.street,
+          buildingNumber: biller.streetNo,
+          postalCode: biller.postalCode,
+          town: biller.town,
+        },
+        debtor: {
+          name: `${patient.first_name} ${patient.last_name}`.trim(),
+          street: addressMatch?.[1] || patient.street_address || null,
+          buildingNumber: addressMatch?.[2] || null,
+          postalCode: patient.postal_code || null,
+          town: patient.town || null,
+        },
+        message: `Facture ${invoice.invoice_number}`,
+        language: "FR",
+      });
+
+      // Bottom band of the A4 page: 297mm - 105mm = 192mm.
+      pdf.addImage(
+        `data:image/png;base64,${png.toString("base64")}`,
+        "PNG",
+        0,
+        A4_HEIGHT_MM - PAYMENT_PART_HEIGHT_MM,
+        PAYMENT_PART_WIDTH_MM,
+        PAYMENT_PART_HEIGHT_MM,
+      );
+    } catch (err) {
+      // Never ship a malformed slip: a wrong-looking payment part is refused
+      // at the counter just the same, but silently. Fall back to printing the
+      // IBAN so the patient can at least pay by manual transfer.
+      console.error("[fallbackInvoicePdf] QR-bill rendering failed:", err);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.text(`IBAN: ${biller.iban}`, margin, y + 38);
+      pdf.setFontSize(8);
+      pdf.setTextColor(150, 60, 60);
+      pdf.text(
+        "Bulletin de versement indisponible — paiement par virement sur l’IBAN ci-dessus.",
+        margin,
+        y + 44,
+      );
+      pdf.setTextColor(0, 0, 0);
     }
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(9);
-    pdf.text(`IBAN: ${biller.iban}`, margin, y + 38);
-    pdf.addImage(qrDataUrl, "PNG", margin, y + 43, 38, 38);
   }
 
-  pdf.setTextColor(110, 110, 110);
-  pdf.setFontSize(7);
-  pdf.text("Document de secours généré localement pendant l’indisponibilité du service de facturation.", margin, 289);
   return Buffer.from(pdf.output("arraybuffer"));
 }
