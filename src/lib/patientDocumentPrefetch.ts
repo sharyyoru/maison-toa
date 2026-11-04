@@ -112,6 +112,19 @@ export async function listLegacyDocuments(patientId: string, patientName: string
 }
 
 export function prefetchPatientDocuments(patientId: string, patientName: string) {
+  // Only the patient's own folder is prefetched. It is a single scoped storage
+  // list, so it is cheap and makes the Documents tab open instantly.
   void listPatientDocuments(patientId).catch(() => undefined);
-  void listLegacyDocuments(patientId, patientName).catch(() => undefined);
+
+  // The legacy archive is deliberately NOT prefetched. listLegacyDocuments
+  // calls /api/patient-docs/list-documents, which runs `storage.search` scans
+  // across the entire patient-docs bucket root. This ran on every patient page
+  // mount, for every member of staff, whether or not anyone opened the
+  // Documents tab — Supabase's disk I/O advisor flagged `storage.search` as the
+  // top cost on this project while the database sat at ~92% CPU.
+  //
+  // PatientDocumentsTab calls listLegacyDocuments itself when it renders and
+  // already shows a loading state, so nothing is lost beyond a brief spinner
+  // for the minority of visits that actually open the tab.
+  void patientName;
 }

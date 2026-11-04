@@ -55,25 +55,64 @@ function parseFolderName(folderName: string): {
   return { firstName: null, lastName: null };
 }
 
-// Search the root by patient name instead of paging through every patient folder.
-async function fetchMatchingFolders(firstName: string, lastName: string): Promise<string[]> {
-  const PAGE_SIZE = 1000;
-  const terms = [...new Set([firstName, lastName].map((name) => name.trim()).filter(Boolean))];
-  const results = await Promise.all(terms.map(async (search) => {
+// A root-level `list({ search })` is a `storage.search` scan over every object
+// in the bucket. This route is called by prefetchPatientDocuments on EVERY
+// patient page mount — not just when the Documents tab is opened — so with a
+// clinic of staff browsing records it ran two full-bucket scans continuously.
+// Supabase's own disk I/O advisor flagged `storage.search` callers as the top
+// cost on this project while the database sat at ~92% CPU.
+//
+// These are archived legacy folders: the set effectively never changes. Caching
+// the resolved names per search term collapses the repeated scans into one per
+// term per TTL, across every patient and every staff member sharing a server
+// instance. A new legacy folder can take up to TTL to appear, which is the
+// right trade for a read-only archive.
+const FOLDER_CACHE_TTL_MS = 10 * 60 * 1000;
+const folderCache = new Map<string, { names: string[]; at: number }>();
+const folderPending = new Map<string, Promise<string[]>>();
+
+// Hard bound on paging. The loop below was unbounded, so a common search term
+// could page through the entire bucket indefinitely.
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 10;
+
+async function searchRootFolders(search: string): Promise<string[]> {
+  const key = search.toLowerCase();
+  const hit = folderCache.get(key);
+  if (hit && Date.now() - hit.at < FOLDER_CACHE_TTL_MS) return hit.names;
+
+  // Collapse concurrent identical searches into one request. Several staff
+  // opening records at once previously issued the same scan in parallel.
+  const inFlight = folderPending.get(key);
+  if (inFlight) return inFlight;
+
+  const request = (async () => {
     const names: string[] = [];
     let offset = 0;
-    while (true) {
+    for (let page = 0; page < MAX_PAGES; page++) {
       const { data, error } = await supabaseAdmin.storage
         .from(BUCKET_NAME)
         .list("", { search, limit: PAGE_SIZE, offset });
       if (error) throw error;
-      const page = data ?? [];
-      names.push(...page.filter((entry) => entry.id == null).map((entry) => entry.name));
-      if (page.length < PAGE_SIZE) break;
-      offset += page.length;
+      const rows = data ?? [];
+      names.push(...rows.filter((entry) => entry.id == null).map((entry) => entry.name));
+      if (rows.length < PAGE_SIZE) break;
+      offset += rows.length;
     }
+    folderCache.set(key, { names, at: Date.now() });
     return names;
-  }));
+  })().finally(() => {
+    if (folderPending.get(key) === request) folderPending.delete(key);
+  });
+
+  folderPending.set(key, request);
+  return request;
+}
+
+// Search the root by patient name instead of paging through every patient folder.
+async function fetchMatchingFolders(firstName: string, lastName: string): Promise<string[]> {
+  const terms = [...new Set([firstName, lastName].map((name) => name.trim()).filter(Boolean))];
+  const results = await Promise.all(terms.map(searchRootFolders));
   return [...new Set(results.flat())];
 }
 
