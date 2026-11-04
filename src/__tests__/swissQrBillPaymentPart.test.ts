@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
+import { PDFDocument } from "pdf-lib";
 import {
   isQrIban,
   buildQrrReference,
-  renderPaymentPartPng,
+  renderPaymentPartPdf,
   PAYMENT_PART_WIDTH_MM,
   PAYMENT_PART_HEIGHT_MM,
 } from "@/lib/swissQrBillPaymentPart";
+import { buildFallbackInvoicePdf } from "@/lib/fallbackInvoicePdf";
+
+const MM = 72 / 25.4;
 
 // Patients could not pay at the post office because the invoice carried a bare
 // 38mm QR square instead of a payment part. These tests pin the things a bank
@@ -42,11 +46,10 @@ import {
 }
 
 async function main() {
-  // --- The payment part renders, and at the mandated proportions.
-  //     210x105mm => aspect ratio 2:1. The old inline code was 38x38mm, below
-  //     the 46mm minimum, which is why it may not have scanned at all. ---
+  // --- The payment part renders as one A4 overlay page, slip at the foot
+  //     (210x105mm). The old inline code was 38x38mm, below the 46mm minimum. ---
   {
-    const png = await renderPaymentPartPng({
+    const slip = await renderPaymentPartPdf({
       iban: "CH4431999123000889012",
       amount: 250.5,
       currency: "CHF",
@@ -69,26 +72,27 @@ async function main() {
       language: "FR",
     });
 
-    assert.ok(Buffer.isBuffer(png) && png.length > 5000, "expected a rendered PNG");
-    assert.equal(png.subarray(1, 4).toString(), "PNG", "must be a PNG");
+    assert.equal(slip.subarray(0, 5).toString(), "%PDF-");
+    const doc = await PDFDocument.load(slip);
+    assert.equal(doc.getPageCount(), 1, "payment part must fit on one page");
+    const { width, height } = doc.getPage(0).getSize();
+    assert.ok(Math.abs(width - PAYMENT_PART_WIDTH_MM * MM) < 0.5, `width ${width}pt`);
+    assert.ok(Math.abs(height - 297 * MM) < 0.5, `A4 height expected, got ${height}pt`);
+    assert.equal(PAYMENT_PART_HEIGHT_MM, 105);
 
-    // Dimensions from the IHDR chunk.
-    const width = png.readUInt32BE(16);
-    const height = png.readUInt32BE(20);
-    const ratio = width / height;
-    const expected = PAYMENT_PART_WIDTH_MM / PAYMENT_PART_HEIGHT_MM; // 2.0
-    assert.ok(
-      Math.abs(ratio - expected) < 0.05,
-      `payment part must be ${PAYMENT_PART_WIDTH_MM}x${PAYMENT_PART_HEIGHT_MM}mm (ratio ${expected}), got ${ratio.toFixed(3)}`,
-    );
-    // 300dpi across 210mm is ~2480px; anything much smaller will not scan in print.
-    assert.ok(width > 2000, `raster too small for print: ${width}px`);
+    // In production every glyph printed as an empty box: the SVG asked for
+    // Arial and the server has no fonts. The slip must use the PDF standard
+    // Helvetica (no system font needed) and real text, not a picture of it.
+    const raw = slip.toString("latin1");
+    assert.match(raw, /\/BaseFont \/Helvetica/, "standard Helvetica");
+    assert.doesNotMatch(raw, /Arial/, "must not depend on Arial");
+    assert.doesNotMatch(raw, /\/Subtype \/Image/, "must not be a raster image");
   }
 
   // --- A normal (non-QR) IBAN must still produce a bill, without a QRR
   //     reference. Previously any IBAN was paired with a QRR reference. ---
   {
-    const png = await renderPaymentPartPng({
+    const slip = await renderPaymentPartPdf({
       iban: "CH9300762011623852957",
       amount: 80,
       reference: buildQrrReference("42"), // supplied but must be ignored
@@ -96,7 +100,28 @@ async function main() {
       debtor: null,
       language: "FR",
     });
-    assert.ok(png.length > 5000, "non-QR IBAN must still render a valid payment part");
+    assert.equal((await PDFDocument.load(slip)).getPageCount(), 1, "non-QR IBAN must still render a valid payment part");
+  }
+
+  // --- The invoice carries the slip across the bottom of its last page,
+  //     stays small enough to e-mail, and a long invoice moves the slip to
+  //     its own page instead of printing over the totals. ---
+  {
+    const items = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `Prestation ${i}`, code: "5406", quantity: 1, unit_price: 100, total_price: 100 })) as never;
+    const input = {
+      invoice: { invoice_number: "1013156", total_amount: 3000, paid_amount: 0, invoice_date: "2026-11-04" } as never,
+      patient: { first_name: "Mélissa", last_name: "Ziegenhagen", dob: null, street_address: "Ruelle du Moulin 3", postal_code: "1525", town: "Henniez" },
+      biller: { name: "Maison TOA", street: "Voie du Chariot", streetNo: "6", postalCode: "1003", town: "Lausanne", iban: "CH9300762011623852957" },
+      billingType: "TG",
+      documentType: "tg" as const,
+    };
+    const short = await buildFallbackInvoicePdf({ ...input, lineItems: items(1) });
+    assert.equal((await PDFDocument.load(short)).getPageCount(), 1);
+    assert.ok(short.length < 150_000, `invoice too large to e-mail comfortably: ${short.length} bytes`);
+    assert.doesNotMatch(short.toString("latin1"), /Arial/);
+
+    const long = await buildFallbackInvoicePdf({ ...input, lineItems: items(14) });
+    assert.equal((await PDFDocument.load(long)).getPageCount(), 2);
   }
 }
 

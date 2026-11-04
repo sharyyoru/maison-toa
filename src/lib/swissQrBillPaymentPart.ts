@@ -18,11 +18,17 @@
  * --------------
  * The layout is NOT hand-drawn. Getting it subtly wrong produces a document
  * that looks right and is still refused at the counter, which is worse than
- * having none. `swissqrbill` implements the published guidelines; it renders
- * to SVG, `sharp` rasterises that at print resolution, and the caller places
- * the result at exactly 210x105mm.
+ * having none. `swissqrbill` implements the published guidelines and renders
+ * it with PDFKit into a 210x105mm vector PDF page; the caller embeds that page
+ * at the foot of the invoice.
+ *
+ * It used to render SVG and rasterise it with `sharp`. The SVG sets its text
+ * in font-family="Arial", and the serverless runtime has no system fonts, so
+ * in production every character came out as an empty box — the slip was
+ * unreadable. PDFKit uses the PDF standard Helvetica (metrics bundled with
+ * pdfkit), which needs no fonts on the machine.
  */
-import sharp from "sharp";
+import PDFDocument from "pdfkit";
 
 export type PaymentPartInput = {
   /** Creditor IBAN (QR-IBAN for QRR references, normal IBAN for SCOR/NON). */
@@ -57,8 +63,7 @@ export type PaymentPartInput = {
 export const PAYMENT_PART_WIDTH_MM = 210;
 export const PAYMENT_PART_HEIGHT_MM = 105;
 
-/** 300 dpi over 210mm — crisp enough that the QR scans from print. */
-const RASTER_WIDTH_PX = Math.round((PAYMENT_PART_WIDTH_MM / 25.4) * 300);
+const MM_TO_PT = 72 / 25.4;
 
 function cleanIban(iban: string): string {
   return iban.replace(/\s+/g, "").toUpperCase();
@@ -94,14 +99,18 @@ export function buildQrrReference(invoiceNumber: string): string {
 }
 
 /**
- * Returns the payment part as a PNG buffer sized for 210x105mm.
+ * Returns a one-page A4 PDF with the payment part placed by swissqrbill at the
+ * foot of the page (vector), the rest of the page transparent so it can be
+ * overlaid on an invoice page. Placing it on a full page — rather than on a
+ * 210x105mm page — is what makes the library draw the horizontal cut line
+ * above the slip, which plain-paper QR-bills require.
  * Throws when the data cannot produce a valid bill — callers should fall back
  * to printing the IBAN as text rather than emitting an invalid slip.
  */
-export async function renderPaymentPartPng(input: PaymentPartInput): Promise<Buffer> {
+export async function renderPaymentPartPdf(input: PaymentPartInput): Promise<Buffer> {
   // Imported lazily: the package is ESM-first and only needed when an invoice
   // actually carries payable balance.
-  const { SwissQRBill } = await import("swissqrbill/svg");
+  const { SwissQRBill } = await import("swissqrbill/pdf");
 
   const iban = cleanIban(input.iban);
   const useQrr = Boolean(input.reference) && isQrIban(iban);
@@ -135,19 +144,19 @@ export async function renderPaymentPartPng(input: PaymentPartInput): Promise<Buf
     ...(input.message ? { message: input.message } : {}),
   };
 
-  const svg = new SwissQRBill(data as ConstructorParameters<typeof SwissQRBill>[0], {
+  const bill = new SwissQRBill(data as ConstructorParameters<typeof SwissQRBill>[0], {
     language: input.language ?? "FR",
     outlines: true, // print the cut lines, as the guidelines require
   });
 
-  // The payment part is black line-art on white. Rasterising it as full
-  // 24-bit colour produced a ~12 MB PNG, which pushed a single invoice PDF
-  // over 12 MB — past the attachment limit of most mail servers, so invoice
-  // e-mails would have bounced. A 2-colour palette keeps every glyph and QR
-  // module exactly as crisp while cutting the file by orders of magnitude.
-  return sharp(Buffer.from(svg.toString()))
-    .resize({ width: RASTER_WIDTH_PX })
-    .greyscale()
-    .png({ palette: true, colours: 2, compressionLevel: 9, effort: 10 })
-    .toBuffer();
+  const doc = new PDFDocument({ size: "A4", margin: 0, autoFirstPage: true });
+  const chunks: Buffer[] = [];
+  const done = new Promise<Buffer>((resolve, reject) => {
+    doc.on("data", (c: Buffer) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+  });
+  bill.attachTo(doc, 0, doc.page.height - PAYMENT_PART_HEIGHT_MM * MM_TO_PT);
+  doc.end();
+  return done;
 }

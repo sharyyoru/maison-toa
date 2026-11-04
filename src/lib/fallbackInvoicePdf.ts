@@ -1,8 +1,8 @@
 import jsPDF from "jspdf";
+import { PDFDocument } from "pdf-lib";
 import {
-  renderPaymentPartPng,
+  renderPaymentPartPdf,
   buildQrrReference,
-  PAYMENT_PART_WIDTH_MM,
   PAYMENT_PART_HEIGHT_MM,
 } from "./swissQrBillPaymentPart";
 
@@ -247,15 +247,16 @@ export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, bil
     pdf.setTextColor(0, 0, 0);
   }
 
+  let slipPdf: Buffer | null = null;
   if (biller.iban && shouldPrintPaymentSlip({ billingType, documentType, remaining, iban: biller.iban })) {
     const addressMatch = (patient.street_address || "").match(/^(.+?)\s+(\d+\S*)$/);
     try {
       const ibanClean = biller.iban.replace(/\s/g, "");
-      const png = await renderPaymentPartPng({
+      slipPdf = await renderPaymentPartPdf({
         iban: ibanClean,
         amount: remaining,
         currency: "CHF",
-        // QRR is only valid with a QR-IBAN; renderPaymentPartPng drops it
+        // QRR is only valid with a QR-IBAN; renderPaymentPartPdf drops it
         // otherwise rather than emitting an invalid combination.
         reference: buildQrrReference(invoice.invoice_number),
         creditor: {
@@ -279,16 +280,6 @@ export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, bil
       // The totals block ends at y + 26. If that reaches into the slip band,
       // put the slip on its own page rather than printing over the totals.
       if (y + 26 > A4_HEIGHT_MM - PAYMENT_PART_HEIGHT_MM - 4) pdf.addPage();
-
-      // Bottom band of the A4 page: 297mm - 105mm = 192mm.
-      pdf.addImage(
-        `data:image/png;base64,${png.toString("base64")}`,
-        "PNG",
-        0,
-        A4_HEIGHT_MM - PAYMENT_PART_HEIGHT_MM,
-        PAYMENT_PART_WIDTH_MM,
-        PAYMENT_PART_HEIGHT_MM,
-      );
     } catch (err) {
       // Never ship a malformed slip: a wrong-looking payment part is refused
       // at the counter just the same, but silently. Fall back to printing the
@@ -308,5 +299,14 @@ export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, bil
     }
   }
 
-  return Buffer.from(pdf.output("arraybuffer"));
+  const invoicePdf = Buffer.from(pdf.output("arraybuffer"));
+  if (!slipPdf) return invoicePdf;
+
+  // Overlay the A4 page carrying the vector payment part on the last page.
+  const out = await PDFDocument.load(invoicePdf);
+  const [slip] = await out.embedPdf(slipPdf, [0]);
+  const pages = out.getPages();
+  const last = pages[pages.length - 1];
+  last.drawPage(slip, { x: 0, y: 0, width: last.getWidth(), height: last.getHeight() });
+  return Buffer.from(await out.save());
 }

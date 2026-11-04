@@ -10,7 +10,9 @@ const nextConfig: NextConfig = {
     // Warnings don't fail build - can be fixed incrementally
     ignoreDuringBuilds: true,
   },
-  serverExternalPackages: ["heic-convert", "libheif-js"],
+  // pdfkit reads its standard-font metrics (Helvetica.afm, …) from its own
+  // package directory at runtime; bundling it would break those paths.
+  serverExternalPackages: ["heic-convert", "libheif-js", "pdfkit"],
   // The OAAT tariff catalogues are read from disk by src/lib/oaatCatalog.ts;
   // make sure they ship with the serverless functions.
   outputFileTracingIncludes: {
