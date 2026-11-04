@@ -92,3 +92,8 @@ scripts/migrate-insurance.js
 scripts/migrate-medical-notes.js
 scripts/setup-billing-entities-v2.sql
 scripts/setup-billing-entities-v2.sql
+
+# Security tooling outputs — may contain tokens, IP addresses and patient data.
+# A raw access log is personal data; only sanitised summaries belong in git.
+.env.security
+reports/
