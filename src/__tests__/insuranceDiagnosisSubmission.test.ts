@@ -61,6 +61,11 @@ globalThis.fetch = async (input, init) => {
 };
 
 async function main() {
+  // Native XML generation is now the default (the Sumex1 server is gone), and
+  // it returns before any /AddDiagnosis call is made. This test was written to
+  // prove the saved ICD-10 code reaches Sumex, so force the server path to keep
+  // that guarantee covered. The native path is asserted separately below.
+  process.env.SUMEX_USE_SERVER = "1";
   try {
     const result = await buildInvoiceRequest({
     invoiceId: "MOCK-ICD10-001",
@@ -94,6 +99,40 @@ async function main() {
     bstrText: "",
   }], "Sumex AddDiagnosis request must contain the saved ICD-10 code");
   console.log("Insurance ICD-10 submission mock passed: saved invoice code Z00.0 was sent to Sumex AddDiagnosis.");
+
+  // Same guarantee on the path that is actually live. Insurers reject claims
+  // with "Le diagnostic est manquant pour la prestation du tarif 007"
+  // (code 4.504.003), so the diagnosis must survive native generation too.
+  const { generateInvoiceXml } = await import("@/lib/invoiceXmlNative");
+  const native = generateInvoiceXml({
+    invoiceId: "MOCK-ICD10-001",
+    invoiceDate: "2026-01-01",
+    roleType: RoleType.Physician,
+    placeType: PlaceType.Practice,
+    tiersMode: TiersMode.Payant,
+    lawType: LawType.KVG,
+    iban: "CH4431999123000889012",
+    esrType: EsrType.QR,
+    billerGln: "7601003000000",
+    billerAddress: { companyName: "Mock Clinic", street: "Rue Test 1", zip: "1000", city: "Lausanne", stateCode: "VD" },
+    providerGln: "7601003000000",
+    providerAddress: { familyName: "Mock", givenName: "Doctor", street: "Rue Test 1", zip: "1000", city: "Lausanne", stateCode: "VD" },
+    insuranceGln: "7601003999999",
+    insuranceAddress: { companyName: "Mock Insurer", street: "Rue Assurance 1", zip: "3000", city: "Bern", stateCode: "BE" },
+    patientSex: SexType.Female,
+    patientBirthdate: "1990-01-01",
+    patientAddress: { familyName: "Patient", givenName: "Mock", street: "Rue Patient 1", zip: "1000", city: "Lausanne", stateCode: "VD" },
+    treatmentCanton: "VD",
+    treatmentDateBegin: "2026-01-01",
+    treatmentDateEnd: "2026-01-01",
+    diagnoses: diagnoses.map((code) => ({ type: DiagnosisType.ICD, code })),
+  } as Parameters<typeof generateInvoiceXml>[0]);
+  assert.match(
+    native.xmlContent,
+    /<invoice:diagnosis type="ICD" code="Z00\.0"\/>/,
+    "native XML must carry the ICD-10 diagnosis",
+  );
+  console.log("Native XML path also carries the ICD-10 diagnosis (Z00.0).");
   } finally {
     globalThis.fetch = originalFetch;
   }

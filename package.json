@@ -10,7 +10,8 @@
     "whatsapp": "node server/whatsapp-server.js",
     "test": "tsx scripts/run-tests.ts",
     "test:reminder": "node_modules/.bin/tsx src/__tests__/reminderTracking.test.ts",
-    "workflow:migrate-v2": "tsx scripts/migrate-workflows-v2.ts"
+    "workflow:migrate-v2": "tsx scripts/migrate-workflows-v2.ts",
+    "verify:billing": "node scripts/verify-billing.mjs"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
