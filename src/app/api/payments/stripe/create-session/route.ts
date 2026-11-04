@@ -11,12 +11,17 @@ const supabase = createClient(
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://maison-toa-dk99.vercel.app";
 const SESSION_BUFFER_MINUTES = 30; // reuse session if it expires more than 30min from now
 
+// PUBLIC on purpose — do not add requireStaff() here.
+//
+// This is the endpoint behind the invoice payment link sent to patients
+// (/invoice/pay/[token]). Patients have no account and no session, so a staff
+// check makes online payment impossible for everyone; it did exactly that
+// between 2 Nov and 3 Nov.
+//
+// The authorisation boundary is the `payment_link_token` looked up below: it
+// is unguessable, scoped to a single invoice, expiry-checked, and the route
+// refuses invoices that are already paid. No staff member ever loads this page.
 export async function POST(req: NextRequest) {
-    try {
-      await requireStaff(req);
-    } catch (err) {
-      return authErrorResponse(err);
-    }
   try {
     const { token } = await req.json();
     if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });

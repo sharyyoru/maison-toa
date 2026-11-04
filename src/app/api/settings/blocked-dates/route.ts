@@ -8,12 +8,16 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// GET is PUBLIC on purpose — do not add requireStaff() here.
+//
+// The public booking pages (new-patient, existing-patient, doctors/[slug]) and
+// useDoctorWeekAvailability all read this to grey out clinic closures. They
+// handle the response with `if (res.ok)`, so a 401 does not raise an error —
+// it silently leaves the blocked set EMPTY and offers closed days as bookable.
+//
+// The payload is a list of dates the clinic is shut. It contains no personal
+// data. Writes (POST/DELETE) remain staff-only below.
 export async function GET() {
-    try {
-      await requireStaff((await headers()));
-    } catch (err) {
-      return authErrorResponse(err);
-    }
   try {
     const { data, error } = await supabaseAdmin
       .from("booking_blocked_dates")
