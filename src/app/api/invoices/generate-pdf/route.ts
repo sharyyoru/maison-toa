@@ -305,10 +305,13 @@ export async function POST(request: NextRequest) {
         patient: patientData,
         biller: {
           name: biller?.name || invoiceData.provider_name || "Maison TOA",
-          street: biller?.street,
-          streetNo: biller?.street_no,
-          postalCode: biller?.zip_code,
-          town: biller?.city,
+          // Doctors who bill under their own provider record often have no
+          // address stored; the invoice must still show the clinic's postal
+          // address (and the QR-bill creditor needs one to render).
+          street: biller?.street || "Voie du Chariot 6",
+          streetNo: biller?.street ? biller?.street_no : null,
+          postalCode: biller?.zip_code || "1003",
+          town: biller?.city || "Lausanne",
           iban: biller?.iban || invoiceData.provider_iban,
           phone: biller?.phone,
         },

@@ -29,8 +29,9 @@ type SendConfirmationPayload = {
 
 async function sendEmail(to: string, subject: string, html: string, cc?: string) {
   if (!isEmailConfigured()) {
-    console.log("Resend not configured, skipping email send");
-    return;
+    // Must not silently "succeed": callers record the email as sent and the
+    // patient gets nothing. Surface it so staff see the failure.
+    throw new Error("Email service is not configured (missing RESEND_API_KEY)");
   }
 
   const result = await sendEmailViaResend({

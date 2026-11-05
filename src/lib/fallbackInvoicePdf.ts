@@ -36,6 +36,7 @@ type Patient = {
   postal_code: string | null;
   town: string | null;
   gender?: string | null;
+  email?: string | null;
 };
 
 type FallbackInvoicePdfInput = {
@@ -88,6 +89,14 @@ export function fallbackDocumentTitle(input: {
   return "FACTURE";
 }
 
+/** "Dr" stored both in `title` and inside `name` printed as "Dr Dr …". */
+function doctorDisplayName(doctor: Doctor): string {
+  const name = (doctor.name || "").trim();
+  const title = (doctor.title || "").trim();
+  if (!title || name.toLowerCase().startsWith(title.toLowerCase())) return name;
+  return `${title} ${name}`;
+}
+
 const money = (value: number | null | undefined) => `${(Number(value) || 0).toFixed(2)} CHF`;
 const date = (value: string | null | undefined) => value ? new Date(value).toLocaleDateString("fr-CH") : "";
 
@@ -112,7 +121,7 @@ export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, bil
 
   // Doctor details in the header (right side)
   if (doctor?.name) {
-    const doctorLabel = [doctor.title, doctor.name].filter(Boolean).join(" ");
+    const doctorLabel = doctorDisplayName(doctor);
     pdf.setFontSize(9);
     pdf.text(doctorLabel, width - margin, 14, { align: "right" });
     const doctorMeta: string[] = [];
@@ -147,29 +156,38 @@ export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, bil
     pdf.setTextColor(0, 0, 0);
   }
 
-  // ── Patient section ──
+  // ── Patient + practitioner section ──
+  // Same two blocks the old Sumex print had: patient (name, address, birth
+  // date, sex, e-mail) on the left, practitioner on the right.
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(10);
   pdf.text("Patient", margin, 74);
   pdf.setFont("helvetica", "normal");
-  const patientNameLine = `${patient.first_name} ${patient.last_name}`;
-  pdf.text(patientNameLine, margin, 80);
-  const patientAddress = [patient.street_address, `${patient.postal_code || ""} ${patient.town || ""}`.trim()].filter(Boolean) as string[];
-  if (patientAddress.length) pdf.text(patientAddress, margin, 86);
-
-  // Patient details on the right
-  const patientRightLines: string[] = [];
-  if (patient.dob) patientRightLines.push(`Né(e) le: ${date(patient.dob)}`);
+  pdf.setFontSize(9);
+  const patientLines: string[] = [`${patient.first_name} ${patient.last_name}`.trim()];
+  if (patient.street_address) patientLines.push(patient.street_address);
+  const patientTownLine = `${patient.postal_code || ""} ${patient.town || ""}`.trim();
+  if (patientTownLine) patientLines.push(patientTownLine);
+  if (patient.dob) patientLines.push(`Né(e) le: ${date(patient.dob)}`);
   if (patient.gender) {
     const genderLabel = patient.gender.toLowerCase() === "female" ? "F" : patient.gender.toLowerCase() === "male" ? "M" : patient.gender;
-    patientRightLines.push(`Sexe: ${genderLabel}`);
+    patientLines.push(`Sexe: ${genderLabel}`);
   }
-  if (patientRightLines.length) {
+  if (patient.email) patientLines.push(patient.email);
+  pdf.text(patientLines, margin, 80);
+
+  if (doctor?.name) {
+    const practitionerLines = [doctorDisplayName(doctor)];
+    if (doctor.specialty) practitionerLines.push(doctor.specialty);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10);
+    pdf.text("Praticien", width - margin, 74, { align: "right" });
+    pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
-    pdf.text(patientRightLines, width - margin, 80, { align: "right" });
+    pdf.text(practitionerLines, width - margin, 80, { align: "right" });
   }
 
-  let y = 101;
+  let y = 108;
   pdf.setFillColor(232, 235, 239);
   pdf.rect(margin, y - 6, width - margin * 2, 8, "F");
   pdf.setFont("helvetica", "bold");

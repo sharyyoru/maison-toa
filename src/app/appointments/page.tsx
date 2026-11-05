@@ -782,7 +782,6 @@ async function sendAppointmentConfirmationEmail(
   appointment: CalendarAppointment,
   personalizedMessage?: string,
   emailType: "confirmation" | "modification" | "cancellation" = "confirmation",
-  sendWhatsappNotification = true,
 ): Promise<boolean> {
   const patientEmail = appointment.patient?.email ?? null;
   if (!patientEmail) return false;
@@ -794,15 +793,6 @@ async function sendAppointmentConfirmationEmail(
       appointment.start_time,
       appointment.tracking_params?.patient_appointment_start,
     );
-    const trackedDurationMinutes = Number(appointment.tracking_params?.appointment_duration_minutes);
-    const end = Number.isFinite(trackedDurationMinutes) && trackedDurationMinutes > 0
-      ? new Date(start.getTime() + trackedDurationMinutes * 60_000)
-      : appointment.end_time ? new Date(appointment.end_time) : null;
-
-    const dateLabel = formatSwissDate(start);
-    const timeLabel = formatTimeRangeLabel(start, end);
-    const dateTimeLabel = `${dateLabel} ${timeLabel}`;
-
     const doctorName =
       getDoctorNameFromReason(appointment.reason) ??
       appointment.provider?.name ??
@@ -844,27 +834,10 @@ async function sendAppointmentConfirmationEmail(
       return false;
     }
 
-    // Send WhatsApp notification only for the original confirmation flow.
-    const patientPhone = appointment.patient?.phone ?? null;
-    if (sendWhatsappNotification && emailType === "confirmation" && patientPhone && patientPhone.trim().length > 0) {
-      const whatsappText = `Appointment confirmation on ${dateTimeLabel} for ${serviceLabel} with ${doctorName} at ${location}`;
-
-      try {
-        await fetch("/api/whatsapp/queue", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            toPhone: patientPhone,
-            messageBody: whatsappText,
-            patientId: appointment.patient_id,
-          }),
-        });
-      } catch (error) {
-        console.error("Failed to enqueue WhatsApp appointment notification", error);
-      }
-    }
+    // Confirmations go by e-mail only — the clinic does not use WhatsApp for
+    // appointment confirmations. These used to be enqueued to whatsapp_queue,
+    // where they sat unread in the notification panel while patients waited
+    // for an e-mail that depended on this very call succeeding.
     return true;
   } catch (error) {
     console.error("Failed to prepare appointment confirmation email", error);
@@ -4912,7 +4885,6 @@ export default function CalendarPage() {
       editingAppointment,
       undefined,
       "confirmation",
-      false,
     );
 
     setResendConfirmationMessage(
