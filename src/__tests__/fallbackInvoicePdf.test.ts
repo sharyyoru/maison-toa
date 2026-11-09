@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { shouldPrintPaymentSlip, fallbackDocumentTitle } from "@/lib/fallbackInvoicePdf";
+import { shouldPrintPaymentSlip, fallbackDocumentTitle, formatSwissDate } from "@/lib/fallbackInvoicePdf";
 
 const IBAN = "CH9300762011623852957";
 
@@ -30,13 +30,21 @@ const IBAN = "CH9300762011623852957";
 
 // --- Titles. Reminders used to print as "FACTURE". ---
 {
-  assert.equal(fallbackDocumentTitle({ documentType: "reminder", reminderLevel: 1, remaining: 10 }), "1er RAPPEL");
-  assert.equal(fallbackDocumentTitle({ documentType: "reminder", reminderLevel: 2, remaining: 10 }), "2e RAPPEL");
-  assert.equal(fallbackDocumentTitle({ documentType: "reminder", reminderLevel: 3, remaining: 10 }), "3e RAPPEL");
-  assert.equal(fallbackDocumentTitle({ documentType: "receipt", remaining: 10 }), "QUITTANCE");
-  assert.equal(fallbackDocumentTitle({ documentType: "tg", remaining: 0 }), "QUITTANCE");
-  assert.equal(fallbackDocumentTitle({ billingType: "TP", documentType: "tp", remaining: 10 }), "FACTURE TIERS PAYANT");
-  assert.equal(fallbackDocumentTitle({ billingType: "TG", documentType: "tg", remaining: 10 }), "FACTURE");
+  assert.equal(fallbackDocumentTitle({ documentType: "reminder", reminderLevel: 1, remaining: 10 }), "1er rappel");
+  assert.equal(fallbackDocumentTitle({ documentType: "reminder", reminderLevel: 2, remaining: 10 }), "2e rappel");
+  assert.equal(fallbackDocumentTitle({ documentType: "reminder", reminderLevel: 3, remaining: 10 }), "3e rappel");
+  assert.equal(fallbackDocumentTitle({ documentType: "receipt", remaining: 10 }), "Quittance");
+  assert.equal(fallbackDocumentTitle({ documentType: "tg", remaining: 0 }), "Quittance");
+  assert.equal(fallbackDocumentTitle({ billingType: "TP", documentType: "tp", remaining: 10 }), "Facture tiers payant");
+  assert.equal(fallbackDocumentTitle({ billingType: "TG", documentType: "tg", remaining: 10 }), "Facture");
+}
+
+
+// --- Dates print as dd.mm.yyyy regardless of the server timezone. ---
+{
+  assert.equal(formatSwissDate("1999-11-14"), "14.11.1999");
+  assert.equal(formatSwissDate(null), "");
+  assert.equal(formatSwissDate("not a date"), "");
 }
 
 console.log("fallbackInvoicePdf: all assertions passed");

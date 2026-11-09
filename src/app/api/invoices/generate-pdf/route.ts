@@ -314,6 +314,7 @@ export async function POST(request: NextRequest) {
           town: biller?.city || "Lausanne",
           iban: biller?.iban || invoiceData.provider_iban,
           phone: biller?.phone,
+          email: biller?.email || staffData?.email,
         },
         doctor: doctorName ? {
           name: doctorName,
