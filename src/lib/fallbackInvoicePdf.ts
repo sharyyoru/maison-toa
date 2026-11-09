@@ -312,9 +312,11 @@ export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, bil
     pdf.text("Total de la facture à payer à 30 jours.", TEXT_X - 2, notesY);
     notesY += 5.5;
     pdf.setFont("helvetica", "normal");
-    const before = "SAUF pour les interventions au plus tard 1 semaine avant la";
+    // Viewers that substitute Helvetica render slightly wider than jsPDF's
+    // metrics, so pad the gap before the bold run to keep the word space visible.
+    const before = "SAUF pour les interventions au plus tard 1 semaine avant la ";
     pdf.text(before, TEXT_X - 2, notesY);
-    const emphasisX = TEXT_X - 2 + pdf.getTextWidth(`${before} `);
+    const emphasisX = TEXT_X - 2 + pdf.getTextWidth(before) + 0.6;
     pdf.setFont("helvetica", "bold");
     pdf.text("date opératoire", emphasisX, notesY);
     const periodX = emphasisX + pdf.getTextWidth("date opératoire");
