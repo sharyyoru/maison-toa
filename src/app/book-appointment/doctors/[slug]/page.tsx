@@ -598,7 +598,7 @@ function DoctorBookingContent() {
           <span className="text-sm font-medium text-slate-700">{locationLabel}</span>
         </div>
 
-        <div className="grid lg:grid-cols-[200px_1fr] gap-4 sm:gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-4 sm:gap-6 lg:gap-8">
           {/* Doctor Card - Fixed (smaller) */}
           <div className="lg:sticky lg:top-8 h-fit">
             <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden border border-slate-200 flex lg:flex-col">
