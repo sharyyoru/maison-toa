@@ -292,6 +292,14 @@ export async function POST(request: NextRequest) {
      * NOT a substitute for the Sumex layout on insurance claims; the response
      * is flagged degradedMode so callers can say so.
      */
+    const hasMedicalTariffItems = lineItems.some((item: any) =>
+      item.tariff_code === 1 || // TARMED
+      item.tariff_code === 7 || // TARDOC
+      item.catalog_name?.toLowerCase() === 'tarmed' ||
+      item.catalog_name?.toLowerCase() === 'tardoc'
+    );
+    const isInsuranceInvoice = !!invoiceData.insurer_id || invoiceData.payment_method === "Insurance" || hasMedicalTariffItems;
+
     const generateFallbackPdf = async () => {
       const biller = billingEntityData || staffData;
       const doctorName =
@@ -328,6 +336,7 @@ export async function POST(request: NextRequest) {
         treatmentCanton: billingEntityData?.canton || invoiceData.treatment_canton || null,
         billingType: invoiceData.billing_type || null,
         documentType: invoiceType,
+        insuranceInvoice: isInsuranceInvoice || (invoiceData.billing_type || "").toUpperCase() === "TP",
         reminderLevel,
       });
       const patientName = `${patientData.last_name}_${patientData.first_name}`.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -385,13 +394,6 @@ export async function POST(request: NextRequest) {
     // Treat as insurance if:
     // 1. There's an actual insurer OR payment method is Insurance
     // 2. OR invoice contains TARMED/TARDOC items (requires proper tariff handling)
-    const hasMedicalTariffItems = lineItems.some((item: any) =>
-      item.tariff_code === 1 || // TARMED
-      item.tariff_code === 7 || // TARDOC
-      item.catalog_name?.toLowerCase() === 'tarmed' ||
-      item.catalog_name?.toLowerCase() === 'tardoc'
-    );
-    const isInsuranceInvoice = !!invoiceData.insurer_id || invoiceData.payment_method === "Insurance" || hasMedicalTariffItems;
     if (isInsuranceInvoice) {
       console.log(`[GeneratePDF] Insurance invoice detected (${invoiceData.billing_type || "TP"}) — using Sumex1 Print for PDF`);
 

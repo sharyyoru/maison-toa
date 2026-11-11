@@ -119,19 +119,19 @@ export default function SelectDoctorPage() {
             <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">1</span>
             </div>
-            <div className="w-12 h-0.5 bg-slate-900"></div>
+            <div className="w-6 sm:w-12 h-0.5 bg-slate-900"></div>
             <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">2</span>
             </div>
-            <div className={`w-12 h-0.5 ${treatmentId === "none" ? "bg-slate-300" : "bg-slate-900"}`}></div>
+            <div className={`w-6 sm:w-12 h-0.5 ${treatmentId === "none" ? "bg-slate-300" : "bg-slate-900"}`}></div>
             <div className={`w-8 h-8 ${treatmentId === "none" ? "bg-slate-200" : "bg-slate-900"} rounded-full flex items-center justify-center`}>
               <span className={`text-sm font-medium ${treatmentId === "none" ? "text-slate-400 line-through" : "text-white"}`}>3</span>
             </div>
-            <div className="w-12 h-0.5 bg-slate-900"></div>
+            <div className="w-6 sm:w-12 h-0.5 bg-slate-900"></div>
             <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">4</span>
             </div>
-            <div className="w-12 h-0.5 bg-slate-300"></div>
+            <div className="w-6 sm:w-12 h-0.5 bg-slate-300"></div>
             <div className="w-8 h-8 bg-slate-300 rounded-full flex items-center justify-center">
               <span className="text-slate-500 text-sm font-medium">5</span>
             </div>

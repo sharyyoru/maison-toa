@@ -502,7 +502,7 @@ export function ElementRenderer({
                   <span className="text-sm font-medium">{idx + 1}</span>
                 </div>
                 {idx < element.props.totalSteps - 1 && (
-                  <div className="w-12 h-0.5 bg-slate-300 mx-1"></div>
+                  <div className="w-6 sm:w-12 h-0.5 bg-slate-300 mx-1"></div>
                 )}
               </div>
             ))}

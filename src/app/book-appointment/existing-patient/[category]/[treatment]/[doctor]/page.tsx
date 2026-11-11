@@ -728,19 +728,19 @@ function DoctorBookingContent() {
             <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">1</span>
             </div>
-            <div className="w-12 h-0.5 bg-slate-900"></div>
+            <div className="w-6 sm:w-12 h-0.5 bg-slate-900"></div>
             <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">2</span>
             </div>
-            <div className="w-12 h-0.5 bg-slate-900"></div>
+            <div className="w-6 sm:w-12 h-0.5 bg-slate-900"></div>
             <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">3</span>
             </div>
-            <div className="w-12 h-0.5 bg-slate-900"></div>
+            <div className="w-6 sm:w-12 h-0.5 bg-slate-900"></div>
             <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">4</span>
             </div>
-            <div className="w-12 h-0.5 bg-slate-300"></div>
+            <div className="w-6 sm:w-12 h-0.5 bg-slate-300"></div>
             <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">5</span>
             </div>
@@ -765,7 +765,7 @@ function DoctorBookingContent() {
           <span className="text-sm font-medium text-slate-700">{locationLabel}</span>
         </div>
 
-        <div className="grid lg:grid-cols-[200px_1fr] gap-4 sm:gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-4 sm:gap-6 lg:gap-8">
           <div className="lg:sticky lg:top-8 h-fit">
             <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden border border-slate-200 flex lg:flex-col">
               <div className="relative w-24 h-24 sm:w-32 sm:h-32 lg:w-full lg:h-40 bg-gradient-to-br from-slate-100 to-slate-50 flex-shrink-0">

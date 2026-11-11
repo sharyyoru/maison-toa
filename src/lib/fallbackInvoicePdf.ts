@@ -53,6 +53,8 @@ type FallbackInvoicePdfInput = {
   /** Which document the caller asked for (generate-pdf `invoiceType`). */
   documentType?: "tp" | "tg" | "reminder" | "receipt" | null;
   reminderLevel?: number | null;
+  /** TP / TG medical invoice the patient can claim from their insurer (not aesthetic care). */
+  insuranceInvoice?: boolean;
 };
 
 /**
@@ -129,7 +131,7 @@ const COL = {
 };
 const SLIP_TOP = A4_HEIGHT_MM - PAYMENT_PART_HEIGHT_MM;
 
-export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, biller, doctor, billingType, documentType, reminderLevel }: FallbackInvoicePdfInput): Promise<Buffer> {
+export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, biller, doctor, billingType, documentType, reminderLevel, insuranceInvoice }: FallbackInvoicePdfInput): Promise<Buffer> {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
   const total = Number(invoice.total_amount) || 0;
   const paid = Number(invoice.paid_amount) || 0;
@@ -293,14 +295,12 @@ export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, bil
   }
 
   // ── Payment terms ──
+  const reimbursementNote = "Le justificatif de remboursement est à envoyer à votre assurance.";
   let notesY = Math.max(totalsY + 22, 158.5);
   pdf.setFontSize(10);
   if (isReceipt) {
     pdf.setFont("helvetica", "bold");
     pdf.text("Facture acquittée — merci.", TEXT_X - 2, notesY);
-    pdf.setFont("helvetica", "normal");
-    notesY += 5.5;
-    pdf.text("Le justificatif de remboursement est à envoyer à votre assurance.", TEXT_X - 2, notesY);
   } else if (isTiersPayant) {
     pdf.setFont("helvetica", "bold");
     pdf.text("Copie pour le patient — ne pas payer ce document.", TEXT_X - 2, notesY);
@@ -310,20 +310,11 @@ export async function buildFallbackInvoicePdf({ invoice, lineItems, patient, bil
   } else {
     pdf.setFont("helvetica", "bold");
     pdf.text("Total de la facture à payer à 30 jours.", TEXT_X - 2, notesY);
+  }
+  pdf.setFont("helvetica", "normal");
+  if (insuranceInvoice) {
     notesY += 5.5;
-    pdf.setFont("helvetica", "normal");
-    // Viewers that substitute Helvetica render slightly wider than jsPDF's
-    // metrics, so pad the gap before the bold run to keep the word space visible.
-    const before = "SAUF pour les interventions au plus tard 1 semaine avant la ";
-    pdf.text(before, TEXT_X - 2, notesY);
-    const emphasisX = TEXT_X - 2 + pdf.getTextWidth(before) + 0.6;
-    pdf.setFont("helvetica", "bold");
-    pdf.text("date opératoire", emphasisX, notesY);
-    const periodX = emphasisX + pdf.getTextWidth("date opératoire");
-    pdf.setFont("helvetica", "normal");
-    pdf.text(".", periodX, notesY);
-    notesY += 5.5;
-    pdf.text("Le justificatif de remboursement est à envoyer à votre assurance.", TEXT_X - 2, notesY);
+    pdf.text(reimbursementNote, TEXT_X - 2, notesY);
   }
 
   // ── Swiss QR-bill payment part ──────────────────────────────────────────
