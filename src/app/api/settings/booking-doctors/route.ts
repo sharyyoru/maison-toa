@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getAuthorizedBookingDoctors } from "@/lib/bookingDoctorAuthorization";
 
 // GET /api/settings/booking-doctors
 // Query params:
-//   treatment_id — return only doctors assigned to this treatment (falls back to all if none assigned)
-//   category_slug — return only doctors assigned to this category (falls back to all if none assigned)
-//   all=true — always return all enabled doctors regardless of assignments
+//   treatment_id — enabled doctors assigned to the treatment, else to its category (none if unassigned)
+//   category_slug — enabled doctors assigned to this category (none if unassigned)
+//   no filter — all doctors (used by settings)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -42,21 +43,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (treatmentId && treatmentId !== "none") {
-      // Check if there are any treatment-level assignments
-      const { data: assignments } = await supabaseAdmin
-        .from("booking_treatment_doctors")
-        .select("doctor_id, order_index, booking_doctors(*)")
-        .eq("treatment_id", treatmentId)
-        .order("order_index", { ascending: true });
+      const { doctors } = await getAuthorizedBookingDoctors(supabaseAdmin, { treatmentId });
+      return NextResponse.json({ doctors });
+    }
 
-      if (assignments && assignments.length > 0) {
-        const doctors = assignments
-          .map((a: any) => a.booking_doctors)
-          .filter((d: any) => d && d.enabled);
-        return NextResponse.json({ doctors });
-      }
-      // Fall through to return all enabled doctors
-    } else if (categorySlug) {
+    if (categorySlug) {
       // Look up category by slug (with patient_type if provided to disambiguate)
       const patientType = searchParams.get("patient_type");
       let categoryQuery = supabaseAdmin
@@ -68,23 +59,11 @@ export async function GET(request: NextRequest) {
         categoryQuery = categoryQuery.eq("patient_type", patientType);
       }
 
-      const { data: category } = await categoryQuery.limit(1).single();
+      const { data: category } = await categoryQuery.limit(1).maybeSingle();
+      if (!category) return NextResponse.json({ doctors: [] });
 
-      if (category) {
-        const { data: assignments } = await supabaseAdmin
-          .from("booking_category_doctors")
-          .select("doctor_id, order_index, booking_doctors(*)")
-          .eq("category_id", category.id)
-          .order("order_index", { ascending: true });
-
-        if (assignments && assignments.length > 0) {
-          const doctors = assignments
-            .map((a: any) => a.booking_doctors)
-            .filter((d: any) => d && d.enabled);
-          return NextResponse.json({ doctors });
-        }
-      }
-      // Fall through to return all enabled doctors
+      const { doctors } = await getAuthorizedBookingDoctors(supabaseAdmin, { categoryId: category.id });
+      return NextResponse.json({ doctors });
     }
 
     // Default: return all doctors

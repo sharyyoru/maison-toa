@@ -10,6 +10,8 @@ import {
 } from "@/lib/appointmentEmails";
 import { normalizePatientLanguage } from "@/lib/languagePreference";
 import { resolveBookingDoctorCalendar } from "@/lib/bookingDoctorCalendar";
+import { getAuthorizedBookingDoctors } from "@/lib/bookingDoctorAuthorization";
+import { fetchMachineUsageIntervals, resolveTreatmentMachine } from "@/lib/machineUsage";
 import { resolveBookingSecondaryCalendar } from "@/lib/bookingSecondaryCalendar";
 import { getBookingCalendarIntervals } from "@/lib/bookingCalendarIntervals";
 import { hasCapacityConflict, intervalOverlaps, type BookingInterval } from "@/lib/exactBookingAvailability";
@@ -319,6 +321,21 @@ export async function POST(request: Request) {
       categorySlug,
       patientType,
     });
+    // Only practitioners assigned to the treatment (or its category) may be
+    // booked for it, whatever the client sends.
+    if ((treatmentId && treatmentId !== "none") || bookingContext.categoryId) {
+      const { doctors: authorizedDoctors } = await getAuthorizedBookingDoctors(supabase, {
+        treatmentId,
+        categoryId: bookingContext.categoryId,
+      });
+      if (!authorizedDoctors.some((doctor) => doctor.slug === doctorSlug)) {
+        console.warn(`[Booking] Rejected: "${doctorSlug}" is not assigned to treatment ${treatmentId || "none"}`);
+        return NextResponse.json(
+          { error: "The selected practitioner does not perform this treatment. Please choose another practitioner." },
+          { status: 400 },
+        );
+      }
+    }
     let durationMinutes = bookingContext.primaryDurationMinutes;
     let categoryName: string | null = bookingContext.categoryName;
     let treatmentServiceId: string | null = null;
@@ -541,88 +558,31 @@ export async function POST(request: Request) {
     }
 
     // ── Machine availability check ──
-    // Look up if the treatment requires a machine:
-    // 1. Direct machine_id on booking_treatments (preferred)
-    // 2. Fallback: linked_service_id → service_machines
     let resolvedMachineId: string | null = null;
-    if (treatmentId && treatmentId !== "none") {
-      const { data: treatmentRow } = await supabase
-        .from("booking_treatments")
-        .select("machine_id, linked_service_id")
-        .eq("id", treatmentId)
-        .single();
-
-      if (treatmentRow?.machine_id) {
-        // Direct assignment on booking treatment
-        resolvedMachineId = treatmentRow.machine_id;
-        const { data: machine } = await supabase
-          .from("machines")
-          .select("max_concurrent, name")
-          .eq("id", resolvedMachineId)
-          .single();
-
-        if (machine) {
-          const { data: machineAppts } = await supabase
-            .from("appointments")
-            .select("id, appointment_group_id, start_time, end_time")
-            .contains("machine_ids", [resolvedMachineId])
-            .lt("start_time", apptEnd.toISOString())
-            .gt("end_time", apptStart.toISOString())
-            .not("status", "in", "(cancelled,no_show)");
-
-          if (machineAppts) {
-            const machineIntervals: BookingInterval[] = machineAppts.map((appointment) => ({
-              start: new Date(appointment.start_time),
-              end: new Date(appointment.end_time),
-              groupId: appointment.appointment_group_id || appointment.id,
-            }));
-            if (hasCapacityConflict(apptStart, apptEnd, machineIntervals, machine.max_concurrent)) {
-              console.log(`[Booking] REJECTED: Machine ${machine.name} at capacity`);
-              return NextResponse.json(
-                { error: `The ${machine.name} is not available at this time. Please choose another slot.` },
-                { status: 409 }
-              );
-            }
-          }
-        }
-      } else if (treatmentRow?.linked_service_id) {
-        const { data: machineMapping } = await supabase
-          .from("service_machines")
-          .select("machine_id, machines(max_concurrent, name)")
-          .eq("service_id", treatmentRow.linked_service_id)
-          .limit(1)
-          .single();
-
-        if (machineMapping) {
-          resolvedMachineId = machineMapping.machine_id;
-          const machine = machineMapping.machines as any;
-          const maxConcurrent = machine?.max_concurrent ?? 1;
-
-          // Count overlapping appointments using this machine (dedup by group)
-          const { data: machineAppts } = await supabase
-            .from("appointments")
-            .select("id, appointment_group_id, start_time, end_time")
-            .contains("machine_ids", [resolvedMachineId])
-            .lt("start_time", apptEnd.toISOString())
-            .gt("end_time", apptStart.toISOString())
-            .not("status", "in", "(cancelled,no_show)");
-
-          if (machineAppts) {
-            const machineIntervals: BookingInterval[] = machineAppts.map((appointment) => ({
-              start: new Date(appointment.start_time),
-              end: new Date(appointment.end_time),
-              groupId: appointment.appointment_group_id || appointment.id,
-            }));
-            if (hasCapacityConflict(apptStart, apptEnd, machineIntervals, maxConcurrent)) {
-              console.log(`[Booking] REJECTED: Machine ${machine?.name} at capacity`);
-              return NextResponse.json(
-                { error: `The ${machine?.name || "required machine"} is not available at this time. Please choose another slot.` },
-                { status: 409 }
-              );
-            }
-          }
+    try {
+      const machine = await resolveTreatmentMachine(supabase, treatmentId);
+      if (machine) {
+        resolvedMachineId = machine.machineId;
+        const machineIntervals = await fetchMachineUsageIntervals(
+          supabase,
+          machine.machineId,
+          apptStart.toISOString(),
+          apptEnd.toISOString(),
+        );
+        if (hasCapacityConflict(apptStart, apptEnd, machineIntervals, machine.maxConcurrent)) {
+          console.log(`[Booking] REJECTED: Machine ${machine.name} at capacity`);
+          return NextResponse.json(
+            { error: `The ${machine.name} is not available at this time. Please choose another slot.` },
+            { status: 409 }
+          );
         }
       }
+    } catch (machineError) {
+      console.error("[Booking] Machine availability check failed:", machineError);
+      return NextResponse.json(
+        { error: "Failed to verify equipment availability. Please try again." },
+        { status: 500 }
+      );
     }
 
     // Check if patient exists or create new — use ilike + limit(1) to handle

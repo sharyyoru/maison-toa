@@ -182,6 +182,8 @@ export default function SelectDoctorPage() {
         {/* Doctors Grid */}
         {loading ? (
           <div className="text-center py-12 text-slate-400 text-sm">{t("common.loading")}</div>
+        ) : doctors.length === 0 ? (
+          <div className="text-center py-12 text-slate-500 text-sm">{t("booking.noPractitioners")}</div>
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">

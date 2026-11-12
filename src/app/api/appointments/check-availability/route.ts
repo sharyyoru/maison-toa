@@ -11,6 +11,9 @@ import {
   type BookingInterval,
 } from "@/lib/exactBookingAvailability";
 import { isWithinOnlineBookingRange, resolveOnlineBookingRange } from "@/lib/onlineBookingTimeRange";
+import { fetchMachineUsageIntervals, resolveTreatmentMachine } from "@/lib/machineUsage";
+import { generateExceptionalTimeSlots, type ExceptionalBookingWindow } from "@/lib/exceptionalBookingAvailability";
+import { createSwissDateTime, formatSwissYmd } from "@/lib/swissTimezone";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -129,55 +132,35 @@ export async function GET(request: NextRequest) {
     // ── Machine availability: resolve which machine (if any) this treatment
     // requires, then check its bookings for the range. ──
     async function fetchMachineData() {
-      if (!treatmentId || treatmentId === "none") return null;
+      const machine = await resolveTreatmentMachine(supabase, treatmentId);
+      if (!machine) return null;
+      const machineIntervals = await fetchMachineUsageIntervals(supabase, machine.machineId, start!, end!);
+      return { machineMax: machine.maxConcurrent, machineIntervals };
+    }
 
-      const { data: treatmentRow, error: treatmentError } = await supabase
-        .from("booking_treatments")
-        .select("id, name, machine_id, linked_service_id")
-        .eq("id", treatmentId)
-        .single();
-      if (treatmentError) {
-        console.log(`[CheckAvailability] Treatment lookup error: ${treatmentError.message}`);
-      }
-
-      let machineId: string | null = null;
-      let machineMax = 1;
-
-      if (treatmentRow?.machine_id) {
-        machineId = treatmentRow.machine_id;
-        const { data: machine } = await supabase
-          .from("machines")
-          .select("max_concurrent, name")
-          .eq("id", machineId)
-          .single();
-        if (machine) machineMax = machine.max_concurrent ?? 1;
-      } else if (treatmentRow?.linked_service_id) {
-        const { data: machineMapping } = await supabase
-          .from("service_machines")
-          .select("machine_id, machines(max_concurrent)")
-          .eq("service_id", treatmentRow.linked_service_id)
-          .limit(1)
-          .single();
-        if (machineMapping) {
-          machineId = machineMapping.machine_id;
-          machineMax = (machineMapping.machines as any)?.max_concurrent ?? 1;
-        }
-      }
-
-      if (!machineId) return null;
-
-      const { data: machineAppts, error: machineError } = await supabase
-        .from("appointments")
-        .select("id, appointment_group_id, start_time, end_time, status")
-        .contains("machine_ids", [machineId])
-        .lt("start_time", end)
-        .gt("end_time", start)
-        .not("status", "in", "(cancelled,no_show)");
-      if (machineError) {
-        console.log(`[CheckAvailability] Machine query error: ${machineError.message}`);
-        return null;
-      }
-      return { machineMax, machineAppts: machineAppts ?? [] };
+    // Exceptional windows can start off the half-hour grid (e.g. 14:45); their
+    // starts must be evaluated too, or the page offers them unchecked.
+    async function fetchExceptionalStarts(): Promise<Date[]> {
+      if (!doctorSlug) return [];
+      const { data: bookingDoctor } = await supabase
+        .from("booking_doctors")
+        .select("id")
+        .eq("slug", doctorSlug)
+        .maybeSingle();
+      if (!bookingDoctor) return [];
+      const { data: windows } = await supabase
+        .from("exceptional_booking_availability")
+        .select("exception_date, start_time, end_time")
+        .eq("booking_doctor_id", bookingDoctor.id)
+        .eq("enabled", true)
+        .gte("exception_date", formatSwissYmd(new Date(start!)))
+        .lte("exception_date", formatSwissYmd(new Date(end!)));
+      return (windows || []).flatMap((window) =>
+        generateExceptionalTimeSlots(window as ExceptionalBookingWindow).map((time) => {
+          const [hour, minute] = time.split(":").map(Number);
+          return createSwissDateTime(window.exception_date, hour, minute);
+        }),
+      );
     }
 
     async function fetchSecondaryAppointments() {
@@ -202,14 +185,16 @@ export async function GET(request: NextRequest) {
     let machineData: Awaited<ReturnType<typeof fetchMachineData>>;
     let secondaryAppointments: Array<{ start_time: string; end_time: string }>;
     let onlineBookingRange: Awaited<ReturnType<typeof resolveOnlineBookingRange>>;
+    let exceptionalStarts: Date[];
     try {
-      [appointmentsResult, machineData, secondaryAppointments, onlineBookingRange] = await Promise.all([
+      [appointmentsResult, machineData, secondaryAppointments, onlineBookingRange, exceptionalStarts] = await Promise.all([
         fetchAppointments(),
         fetchMachineData(),
         fetchSecondaryAppointments(),
         // BP-018: optional online bookable-from/until window configured on the
         // treatment and/or its machine — restricts ONLINE slots only.
         resolveOnlineBookingRange(supabase, treatmentId),
+        fetchExceptionalStarts(),
       ]);
     } catch {
       return NextResponse.json({ error: "Failed to check secondary calendar availability" }, { status: 500 });
@@ -306,14 +291,9 @@ export async function GET(request: NextRequest) {
     // ── Machine availability: mark slots as full if machine is at capacity ──
     let machineIntervals: BookingInterval[] = [];
     let machineMax = 1;
-    if (machineData && machineData.machineAppts.length > 0) {
+    if (machineData && machineData.machineIntervals.length > 0) {
       machineMax = machineData.machineMax;
-      const machineAppts = machineData.machineAppts;
-      machineIntervals = machineAppts.map((appointment) => ({
-        start: new Date(appointment.start_time),
-        end: new Date(appointment.end_time),
-        groupId: appointment.appointment_group_id || appointment.id,
-      }));
+      machineIntervals = machineData.machineIntervals;
 
       const fullSlotsSet = new Set(fullSlots);
       allSlots.forEach((slotStart) => {
@@ -340,6 +320,9 @@ export async function GET(request: NextRequest) {
       groupId: `secondary-${index}`,
     }));
     const candidateMap = new Map<number, Date>(allSlots.map((slot) => [slot.getTime(), slot]));
+    exceptionalStarts.forEach((slot) => {
+      if (slot >= rangeStart && slot < rangeEnd) candidateMap.set(slot.getTime(), slot);
+    });
     [...patientIntervals, ...blockingIntervals, ...machineIntervals].forEach((interval) => {
       addReleaseBoundary(
         candidateMap,
