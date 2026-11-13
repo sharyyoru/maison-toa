@@ -10,7 +10,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL;
+    const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL;
+    const appUrl = rawAppUrl && !/^https?:\/\//.test(rawAppUrl) ? `https://${rawAppUrl}` : rawAppUrl;
     if (!appUrl) {
       return NextResponse.json({ error: "Missing app URL" }, { status: 500 });
     }
@@ -54,7 +55,11 @@ export async function GET(request: NextRequest) {
     try {
       const res = await fetch(sendUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-api-secret": process.env.INTERNAL_API_SECRET || "",
+          authorization: `Bearer ${process.env.CRON_SECRET}`,
+        },
         body: JSON.stringify(payload || {}),
         signal: controller.signal,
       });

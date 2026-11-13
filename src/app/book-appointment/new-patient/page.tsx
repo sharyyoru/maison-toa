@@ -112,7 +112,7 @@ export default function NewPatientCategoryPage() {
                             <Link
                               key={category.id}
                               href={`/book-appointment/new-patient/${category.slug}`}
-                              className="group bg-white/80 backdrop-blur-sm rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-105"
+                              className="group min-w-0 bg-white/80 backdrop-blur-sm rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-105"
                             >
                               <div className="flex flex-col h-full">
                                 {category.image_url && (
@@ -124,18 +124,18 @@ export default function NewPatientCategoryPage() {
                                     loading="lazy"
                                   />
                                 )}
-                                <div className="flex flex-col flex-1 p-5">
-                                <h3 className="text-lg font-semibold text-slate-900 mb-2 group-hover:text-slate-700 transition-colors">
+                                <div className="flex flex-col flex-1 min-w-0 p-3 sm:p-5">
+                                <h3 lang={language} className="text-base sm:text-lg font-semibold text-slate-900 mb-2 group-hover:text-slate-700 transition-colors break-words hyphens-auto">
                                   {getLocalizedBookingName(category, language)}
                                 </h3>
                                 {description && (
-                                  <p className="text-sm text-slate-500 line-clamp-3 mb-4">
+                                  <p className="text-xs sm:text-sm text-slate-500 line-clamp-3 mb-4 break-words">
                                     {description}
                                   </p>
                                 )}
-                                <div className="flex items-center text-slate-700 font-medium group-hover:text-slate-900 transition-colors mt-auto">
-                                  <span>{t("treatment.selectTreatment")}</span>
-                                  <svg className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <div className="flex items-center text-sm sm:text-base text-slate-700 font-medium group-hover:text-slate-900 transition-colors mt-auto min-w-0">
+                                  <span className="min-w-0 break-words hyphens-auto">{t("treatment.selectTreatment")}</span>
+                                  <svg className="w-5 h-5 ml-1 sm:ml-2 shrink-0 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                   </svg>
                                 </div>

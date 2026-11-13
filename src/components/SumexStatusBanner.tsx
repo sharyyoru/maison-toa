@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 /**
  * Fetches /api/sumex/health once on mount and shows a visible warning banner
- * when the certified billing server is offline. Hidden when the server is up.
+ * when insurance transmission (MediData) is unreachable. Hidden when it is up.
  */
 export default function SumexStatusBanner() {
   const [offline, setOffline] = useState(false);
@@ -26,10 +26,9 @@ export default function SumexStatusBanner() {
 
   return (
     <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs text-amber-900 shadow-sm">
-      <strong>Billing service offline</strong> — Patient PDFs are generated
-      locally (fallback mode). Insurance submissions and TarDoc validation are
-      temporarily unavailable. Invoices queued for insurance will be submitted
-      automatically when the service returns.
+      <strong>Insurance transmission offline</strong> — MediData cannot be
+      reached right now. Invoices queued for insurance stay in the queue and are
+      sent automatically when the connection returns.
     </div>
   );
 }
