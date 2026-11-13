@@ -18,6 +18,7 @@ import {
 } from "@/lib/sumexAcf";
 import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 import { validateAcfLocal } from "@/lib/oaatCatalog";
+import { runLocalGrouper } from "@/lib/acfGrouper";
 
 /**
  * API route for ACF (Ambulatory Case Flatrate) validator.
@@ -159,18 +160,38 @@ export async function POST(request: NextRequest) {
 
     if (action === "runGrouper") {
       if (!ACF_USE_SERVER) {
-        // Gesture + ICD-10 -> flat rate grouping is the OAAT TarifMatcher's
-        // job; it is not part of the published catalogues. Pick the flat rate
-        // directly from the catalogue instead.
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              "Le groupeur des forfaits ambulatoires n'est pas disponible (serveur Sumex hors service). " +
-              "Sélectionnez le forfait directement dans le catalogue.",
-          },
-          { status: 503 },
-        );
+        // Local grouper: official OAAT Definitionshandbuch decision trees.
+        const input: TmaGrouperInput = {
+          icdCode: body.icdCode || "",
+          patientSex: body.patientSex ?? 0,
+          patientBirthdate: body.patientBirthdate || "1990-01-01",
+          law: body.law ?? 0,
+          sessionNumber: body.sessionNumber ?? 100,
+          services: body.services || [],
+        };
+        if (!input.icdCode) {
+          return NextResponse.json(
+            { success: false, error: "ICD-10 diagnostic code is required" },
+            { status: 400 },
+          );
+        }
+        if (input.services.length === 0) {
+          return NextResponse.json(
+            { success: false, error: "At least one TMA gesture code is required" },
+            { status: 400 },
+          );
+        }
+        const result = runLocalGrouper({
+          icdCode: input.icdCode,
+          patientSex: input.patientSex,
+          patientBirthdate: input.patientBirthdate,
+          services: input.services,
+        });
+        return NextResponse.json({
+          success: result.success,
+          data: result,
+          ...(result.errors.length > 0 ? { errors: result.errors } : {}),
+        });
       }
       const input: TmaGrouperInput = {
         icdCode: body.icdCode || "",

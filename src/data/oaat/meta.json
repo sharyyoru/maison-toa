@@ -15,6 +15,11 @@
       "url": "https://oaat-otma.ch/fileadmin/redaktion/dokumente/FR/Gesamt-Tarifsystem/Vertraege_und_Anhaenge/LKAAT_1.0c_Leistungskatalog_ambulante_Arzttarife_FR.xlsx",
       "sha256": "fd0f869190d7333b2f87e2879a749f6414345960a4e79c3d8acbeff9ac1fccb7",
       "bytes": 449902
+    },
+    "grouper": {
+      "url": "https://tarifbrowser.oaat-otma.ch/api/1.0",
+      "sha256": "1351fe84e070671bc30408049396b24bcf6675694f022fc3444e32d0cc0b42e0",
+      "bytes": 360288
     }
   },
   "tardoc": {
@@ -30,5 +35,10 @@
   "lkaat": {
     "version": "v1.0c_260402",
     "services": 3251
+  },
+  "grouper": {
+    "version": "ambP Definitionshandbuch 2026 (Publikation 20260510)",
+    "capitula": 19,
+    "tables": 404
   }
 }
