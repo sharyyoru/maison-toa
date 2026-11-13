@@ -92,6 +92,7 @@ const translations: Record<Language, Record<string, string>> = {
     "booking.noTreatmentsAvailable": "No treatments available in this category.",
     "booking.noCategoriesAvailable": "No categories available at the moment.",
     "booking.treatment": "Treatment",
+    "booking.noPractitioners": "This treatment cannot be booked online at the moment. Please contact us to book it.",
     "booking.slot": "slot",
     "booking.slots": "slots",
     
@@ -218,6 +219,7 @@ const translations: Record<Language, Record<string, string>> = {
     "booking.noTreatmentsAvailable": "Aucun traitement disponible dans cette catégorie.",
     "booking.noCategoriesAvailable": "Aucune catégorie disponible pour le moment.",
     "booking.treatment": "Traitement",
+    "booking.noPractitioners": "Ce traitement ne peut pas être réservé en ligne pour le moment. Veuillez nous contacter pour le réserver.",
     "booking.slot": "créneau",
     "booking.slots": "créneaux",
     

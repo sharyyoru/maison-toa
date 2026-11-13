@@ -86,10 +86,14 @@ export function getNextOpenSlots({
     const dayAvailability = getDayAvailability(date);
     if (!dayAvailability) continue;
     const blockedSlots = availabilityWindow.unavailableByDate[date] || [];
-    const gridSlots = generateTimeSlots(date).filter((time) => !blockedSlots.includes(time));
+    const confirmedSlots = availabilityWindow.exactAvailableByDate[date] || [];
+    // Only offer times the server actually checked and found free.
+    const gridSlots = generateTimeSlots(date).filter(
+      (time) => !blockedSlots.includes(time) && confirmedSlots.includes(time),
+    );
     const openSlots = mergeAvailableTimes(
       gridSlots,
-      availabilityWindow.exactAvailableByDate[date] || [],
+      confirmedSlots,
       dayAvailability,
       availabilityWindow.bookingWindow,
     ).filter((time) => !isTimeAllowed || isTimeAllowed(date, time));
