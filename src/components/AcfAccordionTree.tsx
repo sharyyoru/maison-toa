@@ -1,5 +1,6 @@
 "use client";
 
+import { tariffYearFor } from "@/lib/tariffYear";
 import { useState, useCallback, useEffect } from "react";
 import { formatChf } from "@/lib/tardoc";
 
@@ -71,9 +72,22 @@ export default function AcfAccordionTree({
   date,
 }: AcfAccordionTreeProps) {
   const dateParam = date ? `&date=${encodeURIComponent(date)}` : "";
+  // A different tariff year means a different catalogue: drop what was loaded.
+  const tariffYear = tariffYearFor(date);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [nodes, setNodes] = useState<Map<string, TmaTreeNode>>(new Map());
+  const [loadedYear, setLoadedYear] = useState(tariffYear);
+  useEffect(() => {
+    if (tariffYear === loadedYear) return;
+    setLoadedYear(tariffYear);
+    setLoaded(false);
+    setNodes(new Map());
+    setChapterCodes([]);
+    setSearchResults(null);
+    setStaged(null);
+    setGrouperResult(null);
+  }, [tariffYear, loadedYear]);
   const [chapterCodes, setChapterCodes] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[] | null>(null);

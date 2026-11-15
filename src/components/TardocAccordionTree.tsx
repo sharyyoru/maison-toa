@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { tariffYearFor } from "@/lib/tariffYear";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { CANTON_TAX_POINT_VALUES, type SwissCanton } from "@/lib/tardoc";
 
 type FlatChapter = { code: string; name: string };
@@ -70,6 +71,8 @@ function isServiceGroup(code: string): boolean {
 
 export default function TardocAccordionTree({ canton, date, onAddService }: TardocAccordionTreeProps) {
   const dateParam = date ? `&date=${encodeURIComponent(date)}` : "";
+  // A different tariff year means a different catalogue: drop what was loaded.
+  const tariffYear = tariffYearFor(date);
   // Flat chapter cache — loaded once
   const allChaptersRef = useRef<FlatChapter[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -77,6 +80,15 @@ export default function TardocAccordionTree({ canton, date, onAddService }: Tard
 
   // Tree state: map of code → TreeNode
   const [nodes, setNodes] = useState<Map<string, TreeNode>>(new Map());
+  const [loadedYear, setLoadedYear] = useState(tariffYear);
+  useEffect(() => {
+    if (tariffYear === loadedYear) return;
+    setLoadedYear(tariffYear);
+    allChaptersRef.current = [];
+    setLoaded(false);
+    setNodes(new Map());
+    setRootCodes([]);
+  }, [tariffYear, loadedYear]);
   // Root codes (level 0)
   const [rootCodes, setRootCodes] = useState<string[]>([]);
 

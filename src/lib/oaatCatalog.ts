@@ -16,6 +16,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { TardocServiceRecord, ValidationResult, ValidationServiceInput } from "@/lib/sumexTardoc";
+export { TARIFF_YEARS, tariffYearFor, type TariffYear } from "@/lib/tariffYear";
+import { TARIFF_YEARS, tariffYearFor, type DateLike, type TariffYear } from "@/lib/tariffYear";
 import { loadTarifmatcherCatalogs, mapTardoc, nodots, type MapperLog } from "@/lib/tardocMapper";
 import type {
   AcfServiceRecord,
@@ -85,26 +87,12 @@ export type LkaatService = {
 
 type LkaatData = { version: string; services: LkaatService[] };
 
-export const TARIFF_YEARS = ["2026", "2027"] as const;
-export type TariffYear = (typeof TARIFF_YEARS)[number];
-type DateLike = string | Date | null | undefined;
 
 /**
  * Tariff year whose catalogues apply to a treatment date (Swiss calendar
  * day). No date = today. Dates before 2026 use the first TARDOC catalogue,
  * dates after the newest year use the newest one.
  */
-export function tariffYearFor(date?: DateLike): TariffYear {
-  let day: string;
-  if (date instanceof Date) day = date.toLocaleDateString("sv-SE", { timeZone: "Europe/Zurich" });
-  else if (typeof date === "string" && /^\d{4}$/.test(date.trim())) day = date.trim();
-  else if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}/.test(date.trim())) {
-    const d = date.trim();
-    day = d.length > 10 && /[zZ]|[+-]\d{2}:?\d{2}$/.test(d) ? new Date(d).toLocaleDateString("sv-SE", { timeZone: "Europe/Zurich" }) : d.slice(0, 10);
-  } else day = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Zurich" });
-  const year = day.slice(0, 4);
-  return [...TARIFF_YEARS].reverse().find((y) => year >= y) ?? TARIFF_YEARS[0];
-}
 
 const DATA_DIR = join(process.cwd(), "src", "data", "oaat");
 const cache = new Map<string, unknown>();
