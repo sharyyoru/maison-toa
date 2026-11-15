@@ -18,6 +18,8 @@ export async function loadTardocCatalog(
     tp_al?: number | null;
     tp_tl?: number | null;
   }>,
+  /** Treatment date: backfills with that year's tariff (2026 / 2027). */
+  treatmentDate?: string | null,
 ): Promise<Record<string, TardocTaxPointCatalog>> {
   const codes = [...new Set(
     lineItems
@@ -28,7 +30,7 @@ export async function loadTardocCatalog(
   const catalog: Record<string, TardocTaxPointCatalog> = {};
   const missing: string[] = [];
   for (const code of codes) {
-    const pos = getTardocPosition(code);
+    const pos = getTardocPosition(code, treatmentDate);
     if (pos) catalog[code] = { tpMt: pos.tpMT, tpTt: pos.tpTT };
     else missing.push(code);
   }
