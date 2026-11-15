@@ -97,6 +97,8 @@ function bareCode(prefixed: string): { type: "tardoc" | "acf" | "tma"; code: str
 export async function autofillGroupRefs(
   rawItems: AutofillItemInput[],
   language: SumexLanguage = 2,
+  /** Treatment date (YYYY-MM-DD); picks the tariff year. */
+  date?: string | null,
 ): Promise<AutofillSummary> {
   // Sort by sort_order ascending so the prior-walk has the right "earlier" set
   const items = [...rawItems].sort((a, b) => a.sort_order - b.sort_order);
@@ -106,7 +108,7 @@ export async function autofillGroupRefs(
   async function lookupTardocExact(code: string): Promise<TardocServiceRecord | null> {
     if (tardocExactCache.has(code)) return tardocExactCache.get(code) ?? null;
     try {
-      const res = await searchByCode(code, false, language);
+      const res = await searchByCode(code, false, language, date);
       const exact = res.services.find((s) => s.code === code) ?? null;
       tardocExactCache.set(code, exact);
       return exact;
@@ -123,7 +125,7 @@ export async function autofillGroupRefs(
     if (cached) return cached;
     const m = new Map<string, string>();
     try {
-      const res = await searchAdditionalServices(baseCode, language);
+      const res = await searchAdditionalServices(baseCode, language, date);
       for (const svc of res.services) {
         // Per CHM: AdditionalServiceReferenceCode is the proper ref for this
         // additional service when used with `baseCode`.
@@ -146,7 +148,7 @@ export async function autofillGroupRefs(
   async function lookupTmaExact(code: string): Promise<TmaServiceRecord | null> {
     if (tmaExactCache.has(code)) return tmaExactCache.get(code) ?? null;
     try {
-      const res = await searchTma(code, "", "", 0, false, undefined, language as AcfLanguage);
+      const res = await searchTma(code, "", "", 0, false, date ?? undefined, language as AcfLanguage);
       const exact = res.services.find((s) => s.code === code) ?? null;
       tmaExactCache.set(code, exact);
       return exact;
@@ -163,7 +165,7 @@ export async function autofillGroupRefs(
     if (cached) return cached;
     const set = new Set<string>();
     try {
-      const res = await searchTmaSlaves(masterCode, undefined, language as AcfLanguage);
+      const res = await searchTmaSlaves(masterCode, date ?? undefined, language as AcfLanguage);
       for (const svc of res.services) set.add(svc.code);
     } catch (err) {
       console.error(

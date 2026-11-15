@@ -26,8 +26,11 @@ export async function POST(request: NextRequest) {
     }
   try {
     const body = await request.json();
-    const { groupId, items: adHocItems, canton: adHocCanton, law_type: adHocLaw, tax_point_value: adHocTpv } = body as {
+    const { groupId, items: adHocItems, canton: adHocCanton, law_type: adHocLaw, tax_point_value: adHocTpv, date: treatmentDate, patient_birthdate: patientBirthdate } = body as {
       groupId?: string;
+      /** Treatment date YYYY-MM-DD (picks the 2026 / 2027 tariff); default today. */
+      date?: string | null;
+      patient_birthdate?: string | null;
       items?: Array<{
         tardoc_code: string;
         quantity?: number;
@@ -158,6 +161,8 @@ export async function POST(request: NextRequest) {
         ref_code: item.ref_code || null,
         sort_order: item.sort_order,
       })),
+      undefined,
+      treatmentDate,
     );
     const refsByOrder = new Map(autofill.items.map((item) => [item.sort_order, item.ref_code]));
     const resolvedItems = validateableItems.map((item) => ({
@@ -177,7 +182,9 @@ export async function POST(request: NextRequest) {
     });
 
     // Build validation input
-    const today = new Date().toISOString().split("T")[0];
+    const today = /^\d{4}-\d{2}-\d{2}/.test(treatmentDate ?? "")
+      ? treatmentDate!.slice(0, 10)
+      : new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Zurich" });
     const validationInputs: ValidationServiceInput[] = sortedItems.map((item) => ({
       code: item.tardoc_code,
       referenceCode: item.ref_code || "",
@@ -191,7 +198,7 @@ export async function POST(request: NextRequest) {
       externalFactorTT: item.external_factor_tt ?? 1,
     }));
 
-    const result = await validateServices(validationInputs, canton, lawEnum);
+    const result = await validateServices(validationInputs, canton, lawEnum, undefined, patientBirthdate);
 
     // If validating a saved group, update its validation status
     if (groupId) {

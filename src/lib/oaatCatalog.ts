@@ -1,6 +1,9 @@
 /**
- * Local copy of the official OAAT-OTMA outpatient tariff catalogues
- * (TARDOC 1.4c, ambulatory flat rates 1.1c, CPTMA/LKAAT 1.0c).
+ * Local copy of the official OAAT-OTMA outpatient tariff catalogues, one set
+ * per tariff year, picked by the treatment date:
+ * - 2026: TARDOC 1.4c, ambulatory flat rates 1.1c, CPTMA/LKAAT 1.0c
+ * - 2027: TARDOC 1.5, ambulatory flat rates 1.2, CPTMA/LKAAT 1.1
+ *   (src/data/oaat/2027, plus the Tarifmatcher 1.2.1 rule catalogues).
  *
  * Replaces the catalogue lookups that went to the Sumex1 validator servers,
  * which have been unreachable since mid-October. Data is generated from the
@@ -13,6 +16,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { TardocServiceRecord, ValidationResult, ValidationServiceInput } from "@/lib/sumexTardoc";
+import { mapTardoc, type MapperLog } from "@/lib/tardocMapper";
 import type {
   AcfServiceRecord,
   AcfValidateServiceInput,
@@ -81,25 +85,51 @@ export type LkaatService = {
 
 type LkaatData = { version: string; services: LkaatService[] };
 
+export const TARIFF_YEARS = ["2026", "2027"] as const;
+export type TariffYear = (typeof TARIFF_YEARS)[number];
+type DateLike = string | Date | null | undefined;
+
+/**
+ * Tariff year whose catalogues apply to a treatment date (Swiss calendar
+ * day). No date = today. Dates before 2026 use the first TARDOC catalogue,
+ * dates after the newest year use the newest one.
+ */
+export function tariffYearFor(date?: DateLike): TariffYear {
+  let day: string;
+  if (date instanceof Date) day = date.toLocaleDateString("sv-SE", { timeZone: "Europe/Zurich" });
+  else if (typeof date === "string" && /^\d{4}$/.test(date.trim())) day = date.trim();
+  else if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}/.test(date.trim())) {
+    const d = date.trim();
+    day = d.length > 10 && /[zZ]|[+-]\d{2}:?\d{2}$/.test(d) ? new Date(d).toLocaleDateString("sv-SE", { timeZone: "Europe/Zurich" }) : d.slice(0, 10);
+  } else day = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Zurich" });
+  const year = day.slice(0, 4);
+  return [...TARIFF_YEARS].reverse().find((y) => year >= y) ?? TARIFF_YEARS[0];
+}
+
 const DATA_DIR = join(process.cwd(), "src", "data", "oaat");
 const cache = new Map<string, unknown>();
-function load<T>(file: string): T {
-  if (!cache.has(file)) cache.set(file, JSON.parse(readFileSync(join(DATA_DIR, file), "utf8")));
-  return cache.get(file) as T;
+function load<T>(file: string, year: TariffYear): T {
+  const path = year === "2026" ? join(DATA_DIR, file) : join(DATA_DIR, year, file);
+  if (!cache.has(path)) cache.set(path, JSON.parse(readFileSync(path, "utf8")));
+  return cache.get(path) as T;
 }
 
-export const tardocData = () => load<TardocData>("tardoc.json");
-export const acfData = () => load<AcfData>("acf.json");
-export const lkaatData = () => load<LkaatData>("lkaat.json");
+export const tardocData = (date?: DateLike) => load<TardocData>("tardoc.json", tariffYearFor(date));
+export const acfData = (date?: DateLike) => load<AcfData>("acf.json", tariffYearFor(date));
+export const lkaatData = (date?: DateLike) => load<LkaatData>("lkaat.json", tariffYearFor(date));
 
-let tardocIndex: Map<string, TardocPosition> | null = null;
-export function getTardocPosition(code: string): TardocPosition | null {
-  if (!tardocIndex) tardocIndex = new Map(tardocData().positions.map((p) => [p.code, p]));
-  return tardocIndex.get(code.trim().toUpperCase()) ?? null;
+const tardocIndex = new Map<TariffYear, Map<string, TardocPosition>>();
+export function getTardocPosition(code: string, date?: DateLike): TardocPosition | null {
+  const year = tariffYearFor(date);
+  if (!tardocIndex.has(year)) tardocIndex.set(year, new Map(tardocData(year).positions.map((p) => [p.code, p])));
+  return tardocIndex.get(year)!.get(code.trim().toUpperCase()) ?? null;
 }
 
-// The catalogue applies from the introduction of TARDOC.
-const VALID_FROM = "2026-01-01T00:00:00";
+const validFrom = (date?: DateLike) => `${tariffYearFor(date)}-01-01T00:00:00`;
+const validTo = (date?: DateLike) => {
+  const y = tariffYearFor(date);
+  return y === TARIFF_YEARS[TARIFF_YEARS.length - 1] ? "" : `${y}-12-31T23:59:59`;
+};
 
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -122,7 +152,7 @@ function matcher(query: string): (code: string, name: string) => boolean {
 
 // ---------------------------------------------------------------- TARDOC
 
-export function toTardocRecord(p: TardocPosition, index = 0, additionalRef = ""): TardocServiceRecord {
+export function toTardocRecord(p: TardocPosition, index = 0, additionalRef = "", date?: DateLike): TardocServiceRecord {
   return {
     recordId: index + 1,
     code: p.code,
@@ -153,50 +183,50 @@ export function toTardocRecord(p: TardocPosition, index = 0, additionalRef = "")
     treatmentType: "",
     medicalInfo: p.interpretation,
     technicalInfo: p.rules.join("\n"),
-    validFrom: VALID_FROM,
-    validTo: "",
+    validFrom: validFrom(date),
+    validTo: validTo(date),
     sexRequired: 0,
     sideRequired: p.sideRequired ? 1 : 0,
   } as TardocServiceRecord;
 }
 
-export function searchTardoc(query: string, mainOnly = false) {
+export function searchTardoc(query: string, mainOnly = false, date?: DateLike) {
   const match = matcher(query);
-  const services = tardocData().positions
+  const services = tardocData(date).positions
     .filter((p) => (!mainOnly || p.type !== "Z") && match(p.code, p.name))
-    .map((p, i) => toTardocRecord(p, i));
+    .map((p, i) => toTardocRecord(p, i, "", date));
   return { count: services.length, services };
 }
 
-export function searchTardocByChapter(chapter: string, mainOnly = false) {
+export function searchTardocByChapter(chapter: string, mainOnly = false, date?: DateLike) {
   const c = chapter.trim().toUpperCase();
-  const services = tardocData().positions
+  const services = tardocData(date).positions
     .filter((p) => (p.chapter === c || p.code.startsWith(`${c}.`) || (c.length === 1 && p.code.startsWith(c))) && (!mainOnly || p.type !== "Z"))
-    .map((p, i) => toTardocRecord(p, i));
+    .map((p, i) => toTardocRecord(p, i, "", date));
   return { count: services.length, services };
 }
 
-export function searchTardocByServiceGroup(group: string, mainOnly = false) {
-  const g = tardocData().serviceGroups.find((x) => x.code === group);
+export function searchTardocByServiceGroup(group: string, mainOnly = false, date?: DateLike) {
+  const g = tardocData(date).serviceGroups.find((x) => x.code === group);
   const codes = new Set(g?.codes ?? []);
-  const services = tardocData().positions
+  const services = tardocData(date).positions
     .filter((p) => codes.has(p.code) && (!mainOnly || p.type !== "Z"))
-    .map((p, i) => toTardocRecord(p, i));
+    .map((p, i) => toTardocRecord(p, i, "", date));
   return { count: services.length, services };
 }
 
 /** All chapters under a parent ("" = every chapter, flat — the tree builds itself). */
-export function tardocChapters(parent = "") {
+export function tardocChapters(parent = "", date?: DateLike) {
   const p = parent.trim().toUpperCase();
-  return tardocData().chapters.filter((c) => !p || (c.code !== p && c.code.startsWith(p)));
+  return tardocData(date).chapters.filter((c) => !p || (c.code !== p && c.code.startsWith(p)));
 }
 
 /** Supplements (Zuschläge) that may be billed with `baseCode`. */
-export function searchTardocAdditional(baseCode: string) {
+export function searchTardocAdditional(baseCode: string, date?: DateLike) {
   const base = baseCode.trim().toUpperCase();
-  const services = tardocData().positions
+  const services = tardocData(date).positions
     .filter((p) => p.parents.includes(base) || p.supplementTo.includes(base))
-    .map((p, i) => toTardocRecord(p, i, base));
+    .map((p, i) => toTardocRecord(p, i, base, date));
   return { count: services.length, services };
 }
 
@@ -212,11 +242,17 @@ const conflicts = (rule: string, code: string) =>
  * per-patient limits, age and sex limits, qualitative dignity. These are
  * listed in `notChecked` so the UI can say so.
  */
-export function validateTardocLocal(services: ValidationServiceInput[]): ValidationResult & {
+export function validateTardocLocal(
+  services: ValidationServiceInput[],
+  patient: { birthDate?: string | null } = {},
+): ValidationResult & {
   validator: "local";
   catalogVersion: string;
   notChecked: string[];
+  warnings?: string[];
 } {
+  const date = services.find((s) => s.date)?.date;
+  if (tariffYearFor(date) !== "2026") return validateTardocTarifmatcher(services, patient, date);
   const bySession = new Map<number, ValidationServiceInput[]>();
   for (const s of services) {
     const k = s.sessionNumber ?? 1;
@@ -227,9 +263,9 @@ export function validateTardocLocal(services: ValidationServiceInput[]): Validat
   let chargeTT = 0;
   const results = services.map((svc) => {
     const code = svc.code.trim().toUpperCase();
-    const pos = getTardocPosition(code);
+    const pos = getTardocPosition(code, date);
     const reject = (errorMessage: string) => ({ code: svc.code, accepted: false, status: 1, errorMessage });
-    if (!pos) return reject(`${code}: position inconnue dans ${tardocData().version}`);
+    if (!pos) return reject(`${code}: position inconnue dans ${tardocData(date).version}`);
 
     const session = bySession.get(svc.sessionNumber ?? 1) ?? [];
     const sessionCodes = session.map((s) => s.code.trim().toUpperCase());
@@ -241,7 +277,7 @@ export function validateTardocLocal(services: ValidationServiceInput[]): Validat
 
     for (const other of sessionCodes) {
       if (other === code) continue;
-      const otherPos = getTardocPosition(other);
+      const otherPos = getTardocPosition(other, date);
       const hit = pos.nonCumulable.find((r) => conflicts(r, other))
         || otherPos?.nonCumulable.find((r) => conflicts(r, code));
       if (hit) return reject(`${code}: non cumulable avec ${other}`);
@@ -271,14 +307,79 @@ export function validateTardocLocal(services: ValidationServiceInput[]): Validat
       ? { chargeMT: Math.round(chargeMT * 100) / 100, chargeTT: Math.round(chargeTT * 100) / 100, totalCharge: Math.round((chargeMT + chargeTT) * 100) / 100 }
       : undefined,
     validator: "local",
-    catalogVersion: tardocData().version,
+    catalogVersion: tardocData(date).version,
     notChecked: ["limites par jour / 90 jours / patient", "âge et sexe", "valeur intrinsèque qualitative (dignité)"],
+  };
+}
+
+const SIDE_LETTER = ["", "L", "R", "B"];
+
+/**
+ * 2027+: the session is run through the Tarifmatcher rules (tardocMapper).
+ * A service is accepted when it comes out unchanged; deleted or capped
+ * services are rejected with the Tarifmatcher message. Undecidable rules
+ * (per day / 90 days / patient…) are returned as warnings.
+ */
+function validateTardocTarifmatcher(
+  services: ValidationServiceInput[],
+  patient: { birthDate?: string | null },
+  date: string | undefined,
+): ReturnType<typeof validateTardocLocal> {
+  const year = tariffYearFor(date);
+  const mapped = mapTardoc(
+    {
+      services: services.map((s) => ({ code: s.code, side: SIDE_LETTER[s.side ?? 0] ?? "", number: Number(s.quantity) || 1, session: s.sessionNumber ?? 1 })),
+      date: date?.slice(0, 10),
+      birthDate: patient.birthDate ?? null,
+    },
+    year,
+  );
+  const remaining = [...mapped.tarpos];
+  const logs = [...mapped.log];
+  const takeLog = (code: string, session: number): MapperLog | undefined => {
+    const i = logs.findIndex((l) => l.level !== "INFO" && l.level !== "WARNING" && l.serviceCode === code && l.session === session);
+    return i >= 0 ? logs.splice(i, 1)[0] : undefined;
+  };
+  let chargeMT = 0;
+  let chargeTT = 0;
+  const results = services.map((svc) => {
+    const code = svc.code.trim().toUpperCase();
+    const session = svc.sessionNumber ?? 1;
+    const qty = Math.round(Number(svc.quantity) || 1);
+    const idx = remaining.findIndex((t) => t.serviceCode === code && t.session === session);
+    const tarpo = idx >= 0 ? remaining.splice(idx, 1)[0] : undefined;
+    const pos = getTardocPosition(code, date);
+    if (!pos) return { code: svc.code, accepted: false, status: 1, errorMessage: `${code}: position inconnue dans ${tardocData(date).version}` };
+    const problem = tarpo && tarpo.number === qty ? undefined : takeLog(code, session);
+    if (!tarpo || tarpo.number !== qty) {
+      const msg = problem?.message
+        ? problem.message.replace(/&le;/g, "≤")
+        : tarpo ? `quantité limitée à ${tarpo.number}` : "refusé par les règles TARDOC";
+      return { code: svc.code, accepted: false, status: 1, errorMessage: `${code}: ${msg}` };
+    }
+    const q = Number(svc.quantity) || 0;
+    chargeMT += Math.round(q * pos.tpMT * svc.tpValueMT * (svc.externalFactorMT ?? 1) * 100) / 100;
+    chargeTT += Math.round(q * pos.tpTT * svc.tpValueTT * (svc.externalFactorTT ?? 1) * 100) / 100;
+    return { code: svc.code, accepted: true, status: 0 };
+  });
+  const valid = results.every((r) => r.accepted);
+  const warnings = [...new Set(mapped.log.filter((l) => l.level === "WARNING").map((l) => `${l.tardocCode || l.serviceCode}: ${l.message.replace(/&le;/g, "≤")}`))];
+  return {
+    valid,
+    services: results,
+    summary: valid
+      ? { chargeMT: Math.round(chargeMT * 100) / 100, chargeTT: Math.round(chargeTT * 100) / 100, totalCharge: Math.round((chargeMT + chargeTT) * 100) / 100 }
+      : undefined,
+    validator: "local",
+    catalogVersion: tardocData(date).version,
+    notChecked: ["limites par jour / 90 jours / patient (voir avertissements)", "valeur intrinsèque qualitative (dignité)"],
+    warnings,
   };
 }
 
 // ------------------------------------------------------- ACF flat rates (005)
 
-function toAcfRecord(s: AcfFlatRate): AcfServiceRecord {
+function toAcfRecord(s: AcfFlatRate, date?: DateLike): AcfServiceRecord {
   return {
     code: s.code,
     name: s.name,
@@ -288,25 +389,25 @@ function toAcfRecord(s: AcfFlatRate): AcfServiceRecord {
     referenceCode: "",
     tariffType: "005",
     tp: s.tp ?? 0,
-    validFrom: VALID_FROM,
-    validTo: "",
+    validFrom: validFrom(date),
+    validTo: validTo(date),
     serviceProperties: s.tp !== null ? 1 : 0,
   };
 }
 
-export function searchAcfLocal(code = "*", chapterCode = "", name = "") {
+export function searchAcfLocal(code = "*", chapterCode = "", name = "", date?: DateLike) {
   const match = matcher(code);
   const nameMatch = name ? matcher(name) : () => true;
-  const services = acfData().services
+  const services = acfData(date).services
     .filter((s) => (!chapterCode || s.chapterCode === chapterCode) && match(s.code, s.name) && nameMatch(s.code, s.name))
-    .map(toAcfRecord);
+    .map((s) => toAcfRecord(s, date));
   return { count: services.length, services };
 }
 
-export function acfChaptersLocal() {
+export function acfChaptersLocal(date?: DateLike) {
   const counts = new Map<string, number>();
-  for (const s of acfData().services) counts.set(s.chapterCode, (counts.get(s.chapterCode) ?? 0) + 1);
-  return acfData().chapters
+  for (const s of acfData(date).services) counts.set(s.chapterCode, (counts.get(s.chapterCode) ?? 0) + 1);
+  return acfData(date).chapters
     .filter((c) => counts.has(c.code))
     .map((c) => ({ code: c.code, name: c.name, count: counts.get(c.code) ?? 0 }));
 }
@@ -316,15 +417,15 @@ export function acfChaptersLocal() {
  * quantity. Rejects unknown codes and flat rates published as "non évalué".
  * Grouping (gestures + ICD -> flat rate) is NOT done here.
  */
-export function validateAcfLocal(services: AcfValidateServiceInput[]) {
+export function validateAcfLocal(services: AcfValidateServiceInput[], date?: DateLike) {
   const addResults: Array<{ code: string; resultCode: number; success: boolean; abortInfo: string | null; calculatedAmount: number; calculatedTP: number }> = [];
   const validatedServices: AcfValidatedService[] = [];
   for (const svc of services) {
-    const rate = acfData().services.find((s) => s.code === svc.code.trim().toUpperCase());
+    const rate = acfData(date).services.find((s) => s.code === svc.code.trim().toUpperCase());
     if (!rate || rate.tp === null) {
       addResults.push({
         code: svc.code, resultCode: 1, success: false, calculatedAmount: 0, calculatedTP: 0,
-        abortInfo: !rate ? `Forfait inconnu dans ${acfData().version}` : "Forfait publié comme « non évalué » — aucun montant",
+        abortInfo: !rate ? `Forfait inconnu dans ${acfData(date).version}` : "Forfait publié comme « non évalué » — aucun montant",
       });
       continue;
     }
@@ -343,29 +444,30 @@ export function validateAcfLocal(services: AcfValidateServiceInput[]) {
     finalize: { count: validatedServices.length, totalAmount, success: true, addedServiceCount: 0, modifiedServiceCount: 0, deletedServiceCount: 0 },
     validatedServices,
     validator: "local" as const,
-    catalogVersion: acfData().version,
+    catalogVersion: acfData(date).version,
   };
 }
 
 // ------------------------------------------------------ CPTMA / LKAAT (TMA)
 
-const TMA_TYPE: Record<string, TmaType> = { P: 3, PZ: 4, E: 5, EZ: 6, N: 7 };
+// LKAAT 1.1 type "R" has no Sumex TMA type, so it only matches "any" (0).
+const TMA_TYPE: Record<string, TmaType> = { P: 3, PZ: 4, E: 5, EZ: 6, N: 7, R: 0 };
 
-function tmaChapter(code: string): { code: string; name: string } {
+function tmaChapter(code: string, date?: DateLike): { code: string; name: string } {
   const m = code.match(/^C(\d{2})\./);
   if (m) {
     const cap = m[1] === "00" ? "Prae-Cap" : `Cap${m[1]}`;
-    return { code: cap, name: acfData().chapters.find((c) => c.code === cap)?.name ?? cap };
+    return { code: cap, name: acfData(date).chapters.find((c) => c.code === cap)?.name ?? cap };
   }
   const prefix = code.slice(0, 2);
-  return { code: prefix, name: tardocData().chapters.find((c) => c.code === prefix)?.name ?? prefix };
+  return { code: prefix, name: tardocData(date).chapters.find((c) => c.code === prefix)?.name ?? prefix };
 }
 
-function toTmaRecord(s: LkaatService): TmaServiceRecord {
+function toTmaRecord(s: LkaatService, date?: DateLike): TmaServiceRecord {
   const tmaType = TMA_TYPE[s.type] ?? 0;
   const hasTP = s.type === "E" || s.type === "EZ";
   const props = (hasTP ? 1 : 0) | (s.master ? 32 : 0) | (s.lateral ? 256 : 0) | (s.groupable ? 512 : 0) | (s.timed ? 1024 : 0);
-  const ch = tmaChapter(s.code);
+  const ch = tmaChapter(s.code, date);
   return {
     code: s.code,
     name: s.name,
@@ -375,8 +477,8 @@ function toTmaRecord(s: LkaatService): TmaServiceRecord {
     referenceCode: s.master,
     tariffType: "TMA",
     tmaType,
-    validFrom: VALID_FROM,
-    validTo: "",
+    validFrom: validFrom(date),
+    validTo: validTo(date),
     serviceProperties: props,
     hasTP,
     needsRefCode: Boolean(s.master),
@@ -394,31 +496,31 @@ function tmaTypeMatches(filter: TmaType, type: string): boolean {
   return TMA_TYPE[type] === filter;
 }
 
-export function searchTmaLocal(code = "*", chapterCode = "", name = "", tmaType: TmaType = 0, grouperOnly = false) {
+export function searchTmaLocal(code = "*", chapterCode = "", name = "", tmaType: TmaType = 0, grouperOnly = false, date?: DateLike) {
   const match = matcher(code);
   const nameMatch = name ? matcher(name) : () => true;
-  const services = lkaatData().services
+  const services = lkaatData(date).services
     .filter((s) =>
       (!grouperOnly || s.groupable)
       && tmaTypeMatches(tmaType, s.type)
       && match(s.code, s.name)
       && nameMatch(s.code, s.name)
-      && (!chapterCode || tmaChapter(s.code).code === chapterCode))
-    .map(toTmaRecord);
+      && (!chapterCode || tmaChapter(s.code, date).code === chapterCode))
+    .map((s) => toTmaRecord(s, date));
   return { count: services.length, services };
 }
 
-export function searchTmaSlavesLocal(masterCode: string) {
+export function searchTmaSlavesLocal(masterCode: string, date?: DateLike) {
   const m = masterCode.trim().toUpperCase();
-  const services = lkaatData().services.filter((s) => s.master === m).map(toTmaRecord);
+  const services = lkaatData(date).services.filter((s) => s.master === m).map((s) => toTmaRecord(s, date));
   return { count: services.length, services };
 }
 
-export function tmaChaptersLocal() {
+export function tmaChaptersLocal(date?: DateLike) {
   const map = new Map<string, { name: string; count: number }>();
-  for (const s of lkaatData().services) {
+  for (const s of lkaatData(date).services) {
     if (!s.groupable) continue;
-    const ch = tmaChapter(s.code);
+    const ch = tmaChapter(s.code, date);
     const e = map.get(ch.code);
     if (e) e.count++;
     else map.set(ch.code, { name: ch.name, count: 1 });
@@ -426,11 +528,12 @@ export function tmaChaptersLocal() {
   return [...map.entries()].map(([code, v]) => ({ code, ...v })).sort((a, b) => a.code.localeCompare(b.code));
 }
 
-export function catalogInfo() {
+export function catalogInfo(date?: DateLike) {
   return {
-    tardoc: tardocData().version,
-    acf: acfData().version,
-    lkaat: lkaatData().version,
+    tardoc: tardocData(date).version,
+    acf: acfData(date).version,
+    lkaat: lkaatData(date).version,
+    tariffYear: tariffYearFor(date),
     source: "OAAT-OTMA published annexes (local copy)",
   };
 }

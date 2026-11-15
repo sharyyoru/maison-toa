@@ -49,12 +49,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Treatment date (YYYY-MM-DD): selects the tariff year (2026 / 2027 catalogue).
+    const date = searchParams.get("date") || undefined;
+
     switch (action) {
       case "searchCode": {
         const code = searchParams.get("code") || "*";
         const chapter = searchParams.get("chapter") || "";
         const name = searchParams.get("name") || "";
-        const date = searchParams.get("date") || undefined;
 
         const result = await searchAcf005(code, chapter, name, true, date);
 
@@ -68,7 +70,7 @@ export async function GET(request: NextRequest) {
       }
 
       case "chapters": {
-        const chapters = await getAcfChapters();
+        const chapters = await getAcfChapters(undefined, date);
         return NextResponse.json({
           success: true,
           data: chapters,
@@ -81,7 +83,6 @@ export async function GET(request: NextRequest) {
         const name = searchParams.get("name") || "";
         const tmaType = parseInt(searchParams.get("tmaType") || "0", 10) as TmaType;
         const grouperOnly = searchParams.get("grouperOnly") === "true";
-        const date = searchParams.get("date") || undefined;
 
         const result = await searchTma(code, chapter, name, tmaType, grouperOnly, date);
 
@@ -95,7 +96,7 @@ export async function GET(request: NextRequest) {
       }
 
       case "tmaChapters": {
-        const chapters = await getTmaChapters();
+        const chapters = await getTmaChapters(undefined, date);
         return NextResponse.json({
           success: true,
           data: chapters,
@@ -103,7 +104,7 @@ export async function GET(request: NextRequest) {
       }
 
       case "info": {
-        const info = await getAcfSessionInfo();
+        const info = await getAcfSessionInfo(undefined, date);
         return NextResponse.json({
           success: true,
           data: info,
@@ -112,7 +113,7 @@ export async function GET(request: NextRequest) {
 
       case "refresh": {
         invalidateAcfSession();
-        const info = await getAcfSessionInfo();
+        const info = await getAcfSessionInfo(undefined, date);
         return NextResponse.json({
           success: true,
           data: info,
@@ -186,6 +187,7 @@ export async function POST(request: NextRequest) {
           patientSex: input.patientSex,
           patientBirthdate: input.patientBirthdate,
           services: input.services,
+          date: body.date || body.treatmentDate || null,
         });
         return NextResponse.json({
           success: result.success,
@@ -235,7 +237,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!ACF_USE_SERVER) {
-      return NextResponse.json({ success: true, data: validateAcfLocal(services) });
+      return NextResponse.json({ success: true, data: validateAcfLocal(services, body.date || services.find((x) => x.date)?.date) });
     }
 
     // 1. Initialize

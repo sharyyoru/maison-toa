@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import { groupCase, runLocalGrouper, grouperData } from "../lib/acfGrouper";
 
+// These tests pin the 2026 (1.4c / 1.1c / 1.0c) catalogue, which is the
+// default for "today" only until 31 Dec 2026 — freeze today inside 2026.
+{
+  const RealDate = Date;
+  const pinned = new RealDate("2026-06-15T12:00:00Z").getTime();
+  globalThis.Date = class extends RealDate {
+    constructor(...args: ConstructorParameters<typeof Date> | []) {
+      if (args.length === 0) super(pinned);
+      else super(...(args as ConstructorParameters<typeof Date>));
+    }
+    static now() { return pinned; }
+  } as DateConstructor;
+}
+
+
 function test(name: string, fn: () => void) {
   try {
     fn();

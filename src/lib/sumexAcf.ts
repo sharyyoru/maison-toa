@@ -248,7 +248,7 @@ export async function searchAcf005(
   date?: string,
   language: AcfLanguage = 2,
 ): Promise<{ count: number; services: AcfServiceRecord[] }> {
-  if (!ACF_USE_SERVER) return searchAcfLocal(code, chapterCode, name);
+  if (!ACF_USE_SERVER) return searchAcfLocal(code, chapterCode, name, date);
   const session = await getOrCreateAcfSession(language);
   const searchHandle = await createSearch005(session);
 
@@ -301,8 +301,9 @@ export async function searchAcf005(
  */
 export async function getAcfChapters(
   language: AcfLanguage = 2,
+  date?: string | null,
 ): Promise<Array<{ code: string; name: string; count: number }>> {
-  if (!ACF_USE_SERVER) return acfChaptersLocal();
+  if (!ACF_USE_SERVER) return acfChaptersLocal(date);
   const { services } = await searchAcf005("*", "", "", true, undefined, language);
 
   const chapterMap = new Map<string, { name: string; count: number }>();
@@ -622,6 +623,7 @@ function mapValidatedService(raw: Record<string, unknown>): AcfValidatedService 
  */
 export async function getAcfSessionInfo(
   language: AcfLanguage = 2,
+  date?: string | null,
 ): Promise<{
   moduleVersion: string;
   language: AcfLanguage;
@@ -629,7 +631,7 @@ export async function getAcfSessionInfo(
   tariffTMA: AcfTariffInfo | null;
 }> {
   if (!ACF_USE_SERVER) {
-    const info = catalogInfo();
+    const info = catalogInfo(date);
     const t = (name: string, tariffType: string, dbVersion: string): AcfTariffInfo =>
       ({ dbVersion, name, tariffType, dbDate: "", validFrom: 0, validTo: 0 });
     return {
@@ -763,7 +765,7 @@ export async function searchTma(
   date?: string,
   language: AcfLanguage = 2,
 ): Promise<{ count: number; services: TmaServiceRecord[] }> {
-  if (!ACF_USE_SERVER) return searchTmaLocal(code, chapterCode, name, tmaType, onlyGrouperRelevant);
+  if (!ACF_USE_SERVER) return searchTmaLocal(code, chapterCode, name, tmaType, onlyGrouperRelevant, date);
   const session = await getOrCreateAcfSession(language);
   const searchHandle = await createSearchTMA(session);
 
@@ -846,7 +848,7 @@ export async function searchTmaSlaves(
   date?: string,
   language: AcfLanguage = 2,
 ): Promise<{ count: number; services: TmaServiceRecord[] }> {
-  if (!ACF_USE_SERVER) return searchTmaSlavesLocal(masterCode);
+  if (!ACF_USE_SERVER) return searchTmaSlavesLocal(masterCode, date);
   const session = await getOrCreateAcfSession(language);
   const searchHandle = await createSearchTMA(session);
 
@@ -898,8 +900,9 @@ export async function searchTmaSlaves(
  */
 export async function getTmaChapters(
   language: AcfLanguage = 2,
+  date?: string | null,
 ): Promise<Array<{ code: string; name: string; count: number }>> {
-  if (!ACF_USE_SERVER) return tmaChaptersLocal();
+  if (!ACF_USE_SERVER) return tmaChaptersLocal(date);
   // Search all P-type gesture codes (main triggers) which are grouper-relevant
   const { services } = await searchTma("*", "", "", 0, true, undefined, language);
 

@@ -2854,7 +2854,7 @@ export default function MedicalConsultationsCard({
     setTardocSearchLoading(true);
     setTardocSearchNotice(null);
     try {
-      const res = await fetch(`/api/tardoc/sumex?action=searchCode&code=${encodeURIComponent(tardocSearchQuery.trim())}&canton=${invoiceCanton}`);
+      const res = await fetch(`/api/tardoc/sumex?action=searchCode&code=${encodeURIComponent(tardocSearchQuery.trim())}&canton=${invoiceCanton}&date=${encodeURIComponent(consultationDate)}`);
       const json = await res.json();
       if (json.success) {
         setTardocSearchResults(json.data || []);
@@ -7756,7 +7756,7 @@ export default function MedicalConsultationsCard({
                               const validateRes = await fetch("/api/acf/sumex", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ services: acfServicesToValidate }),
+                                body: JSON.stringify({ services: acfServicesToValidate, date: consultationDate }),
                               });
                               const validateJson = await validateRes.json();
 
@@ -8048,6 +8048,8 @@ export default function MedicalConsultationsCard({
                                     external_factor_tt: l.external_factor_tt ?? 1,
                                   })),
                                   canton: invoiceCanton,
+                                  date: consultationDate,
+                                  patient_birthdate: patientDetails?.dob || null,
                                   law_type: invoiceLawType,
                                 }),
                               });
@@ -10220,6 +10222,7 @@ export default function MedicalConsultationsCard({
                                 </span>
                                 <TardocAccordionTree
                                   canton={invoiceCanton}
+                                  date={consultationDate}
                                   onAddService={(svc: any) => {
                                     const tpv = invoiceTpv;
                                     const price = Math.round(((svc.tpMT || 0) + (svc.tpTT || 0)) * tpv * 100) / 100 || svc.priceCHF || 0;
@@ -10258,7 +10261,7 @@ export default function MedicalConsultationsCard({
                                   type="button"
                                   onClick={async () => {
                                     try {
-                                      const res = await fetch("/api/tardoc/sumex?action=info");
+                                      const res = await fetch(`/api/tardoc/sumex?action=info&date=${encodeURIComponent(consultationDate)}`);
                                       const json = await res.json();
                                       if (json.success) setTardocDbInfo(json.data);
                                     } catch { /* ignore */ }
@@ -10272,6 +10275,7 @@ export default function MedicalConsultationsCard({
                           ) : invoiceMode === "flatrate" ? (
                             <div className="space-y-2 px-3 py-3">
                               <AcfAccordionTree
+                                date={consultationDate}
                                 patientSex={patientDetails?.gender?.toLowerCase() === "female" ? 1 : 0}
                                 patientBirthdate={patientDetails?.dob || undefined}
                                 defaultIcd10={consultationRefIcd10}
@@ -10612,6 +10616,7 @@ export default function MedicalConsultationsCard({
                                             patientBirthdate: pBirth,
                                             law: 0,
                                             services,
+                                            date: consultationDate,
                                           }),
                                         });
                                         const json = await res.json();
