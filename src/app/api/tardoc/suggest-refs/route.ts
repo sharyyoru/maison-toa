@@ -60,7 +60,9 @@ export async function POST(request: NextRequest) {
       return authErrorResponse(err);
     }
   try {
-    const body = (await request.json()) as { codes?: unknown; lang?: number };
+    const body = (await request.json()) as { codes?: unknown; lang?: number; date?: string | null };
+    // Treatment date YYYY-MM-DD: references come from that year's catalogue.
+    const date = typeof body.date === "string" ? body.date : null;
     const codes = Array.isArray(body.codes)
       ? (body.codes as unknown[]).filter((c): c is string => typeof c === "string" && c.length > 0)
       : [];
@@ -75,7 +77,7 @@ export async function POST(request: NextRequest) {
     async function lookupExact(code: string): Promise<TardocServiceRecord | null> {
       if (exactCache.has(code)) return exactCache.get(code) ?? null;
       try {
-        const res = await searchByCode(code, false, lang);
+        const res = await searchByCode(code, false, lang, date);
         const exact = res.services.find((s) => s.code === code) ?? null;
         exactCache.set(code, exact);
         return exact;
@@ -94,7 +96,7 @@ export async function POST(request: NextRequest) {
       if (cached) return cached;
       const m = new Map<string, string>();
       try {
-        const res = await searchAdditionalServices(baseCode, lang);
+        const res = await searchAdditionalServices(baseCode, lang, date);
         for (const svc of res.services) {
           // Per chm: AdditionalServiceReferenceCode is the proper reference
           // code for the additional service in this base's context.

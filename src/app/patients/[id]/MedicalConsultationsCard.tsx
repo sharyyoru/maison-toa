@@ -8001,6 +8001,7 @@ export default function MedicalConsultationsCard({
                                 body: JSON.stringify({
                                   codes: tardocOnlyLines.map((l) => l.tardoc_code),
                                   lang: 2,
+                                  date: consultationDate,
                                 }),
                               });
                               if (suggestRes.ok) {
