@@ -1,5 +1,6 @@
 "use client";
 
+import { tariffYearFor } from "@/lib/tariffYear";
 import { useState, useCallback, useEffect } from "react";
 import { formatChf } from "@/lib/tardoc";
 
@@ -35,6 +36,8 @@ type AcfAccordionTreeProps = {
   patientBirthdate?: string; // ISO date
   existingTardocCodes?: Array<{ code: string; quantity: number; side?: number }>;
   defaultIcd10?: string;
+  /** Treatment date YYYY-MM-DD; picks the 2026 / 2027 catalogue and grouper. */
+  date?: string;
 };
 
 const SIDE_LABELS: Record<number, string> = {
@@ -66,10 +69,25 @@ export default function AcfAccordionTree({
   patientBirthdate,
   existingTardocCodes,
   defaultIcd10,
+  date,
 }: AcfAccordionTreeProps) {
+  const dateParam = date ? `&date=${encodeURIComponent(date)}` : "";
+  // A different tariff year means a different catalogue: drop what was loaded.
+  const tariffYear = tariffYearFor(date);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [nodes, setNodes] = useState<Map<string, TmaTreeNode>>(new Map());
+  const [loadedYear, setLoadedYear] = useState(tariffYear);
+  useEffect(() => {
+    if (tariffYear === loadedYear) return;
+    setLoadedYear(tariffYear);
+    setLoaded(false);
+    setNodes(new Map());
+    setChapterCodes([]);
+    setSearchResults(null);
+    setStaged(null);
+    setGrouperResult(null);
+  }, [tariffYear, loadedYear]);
   const [chapterCodes, setChapterCodes] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
@@ -99,7 +117,7 @@ export default function AcfAccordionTree({
     if (loaded || loading) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/acf/sumex?action=tmaChapters");
+      const res = await fetch(`/api/acf/sumex?action=tmaChapters${dateParam}`);
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         const chapters: TmaChapter[] = json.data;
@@ -119,7 +137,7 @@ export default function AcfAccordionTree({
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [loaded, loading]);
+  }, [loaded, loading, dateParam]);
 
   // ── Toggle chapter → load TMA gesture codes for that chapter ───────────────
   const toggleNode = useCallback(async (code: string) => {
@@ -138,7 +156,7 @@ export default function AcfAccordionTree({
         return next;
       });
       try {
-        const res = await fetch(`/api/acf/sumex?action=searchTma&code=*&chapter=${encodeURIComponent(code)}&grouperOnly=true`);
+        const res = await fetch(`/api/acf/sumex?action=searchTma&code=*&chapter=${encodeURIComponent(code)}&grouperOnly=true${dateParam}`);
         const json = await res.json();
         const services = json.success ? json.data?.services || [] : [];
         setNodes((prev) => {
@@ -154,7 +172,7 @@ export default function AcfAccordionTree({
         });
       }
     }
-  }, [nodes]);
+  }, [nodes, dateParam]);
 
   // ── Search TMA gesture codes ───────────────────────────────────────────────
   const doSearch = useCallback(async () => {
@@ -166,13 +184,13 @@ export default function AcfAccordionTree({
       const codeParam = isCode ? (q.includes("*") ? q : q + "*") : "*";
       const nameParam = isCode ? "" : `*${q}*`;
       const res = await fetch(
-        `/api/acf/sumex?action=searchTma&code=${encodeURIComponent(codeParam)}&name=${encodeURIComponent(nameParam)}&grouperOnly=true`,
+        `/api/acf/sumex?action=searchTma&code=${encodeURIComponent(codeParam)}&name=${encodeURIComponent(nameParam)}&grouperOnly=true${dateParam}`,
       );
       const json = await res.json();
       setSearchResults(json.success ? json.data?.services || [] : []);
     } catch { setSearchResults([]); }
     setSearchLoading(false);
-  }, [searchQuery]);
+  }, [searchQuery, dateParam]);
 
   // ── Select a TMA gesture code → open staging panel ─────────────────────────
   const handleSelectService = useCallback((svc: any) => {
@@ -204,6 +222,7 @@ export default function AcfAccordionTree({
           patientSex: stageSex,
           patientBirthdate: stageBirthdate,
           law: 0,
+          date,
           services: [
             { code: staged.code, side: stageSide, quantity: 1 },
             ...(existingTardocCodes || []).map((t) => ({
@@ -228,7 +247,7 @@ export default function AcfAccordionTree({
       setGrouperError(e?.message || "Grouper request failed");
     }
     setGrouperLoading(false);
-  }, [staged, stageIcd, stageSide, stageSex, stageBirthdate, existingTardocCodes]);
+  }, [staged, stageIcd, stageSide, stageSex, stageBirthdate, existingTardocCodes, date]);
 
   // ── Add resulting ACF code to invoice ──────────────────────────────────────
   // Standard: add TMA gesture line (TP=0) first, then the generated ACF flat rate line

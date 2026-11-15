@@ -222,8 +222,10 @@ async function ensureSearch(session: SumexSession): Promise<number> {
 export async function getChapters(
   parentCode: string = "",
   language: SumexLanguage = 2,
+  /** Treatment date; picks the tariff year of the local catalogue. */
+  date?: string | null,
 ): Promise<TardocChapter[]> {
-  if (!USE_SERVER) return tardocChapters(parentCode);
+  if (!USE_SERVER) return tardocChapters(parentCode, date);
   const session = await getOrCreateSession(language);
   const catalogHandle = await ensureCatalog(session);
 
@@ -246,9 +248,11 @@ export async function getChapters(
 
 export async function getSections(
   language: SumexLanguage = 2,
+  /** Treatment date; picks the tariff year of the local catalogue. */
+  date?: string | null,
 ): Promise<Array<{ code: string; name: string }>> {
   // Sections are the single-letter top-level chapters in TARDOC 1.4.
-  if (!USE_SERVER) return tardocData().chapters.filter((c) => c.code.length === 1);
+  if (!USE_SERVER) return tardocData(date).chapters.filter((c) => c.code.length === 1);
   const session = await getOrCreateSession(language);
   const catalogHandle = await ensureCatalog(session);
 
@@ -265,8 +269,10 @@ export async function getSections(
 
 export async function getServiceGroups(
   language: SumexLanguage = 2,
+  /** Treatment date; picks the tariff year of the local catalogue. */
+  date?: string | null,
 ): Promise<Array<{ code: string; name: string }>> {
-  if (!USE_SERVER) return tardocData().serviceGroups.map(({ code, name }) => ({ code, name }));
+  if (!USE_SERVER) return tardocData(date).serviceGroups.map(({ code, name }) => ({ code, name }));
   const session = await getOrCreateSession(language);
   const catalogHandle = await ensureCatalog(session);
 
@@ -329,8 +335,10 @@ export async function searchByCode(
   code: string,
   onlyMainServices: boolean = false,
   language: SumexLanguage = 2,
+  /** Treatment date; picks the tariff year of the local catalogue. */
+  date?: string | null,
 ): Promise<{ count: number; services: TardocServiceRecord[] }> {
-  if (!USE_SERVER) return searchTardoc(code, onlyMainServices);
+  if (!USE_SERVER) return searchTardoc(code, onlyMainServices, date);
   const session = await getOrCreateSession(language);
   // Create a fresh search for each query to avoid stale state
   const searchHandle = await createSubInterface(session.validatorHandle, "Search");
@@ -368,8 +376,10 @@ export async function searchByChapter(
   chapterCode: string,
   onlyMainServices: boolean = false,
   language: SumexLanguage = 2,
+  /** Treatment date; picks the tariff year of the local catalogue. */
+  date?: string | null,
 ): Promise<{ count: number; services: TardocServiceRecord[] }> {
-  if (!USE_SERVER) return searchTardocByChapter(chapterCode, onlyMainServices);
+  if (!USE_SERVER) return searchTardocByChapter(chapterCode, onlyMainServices, date);
   const session = await getOrCreateSession(language);
   const searchHandle = await createSubInterface(session.validatorHandle, "Search");
 
@@ -406,8 +416,10 @@ export async function searchByServiceGroup(
   groupCode: string,
   onlyMainServices: boolean = false,
   language: SumexLanguage = 2,
+  /** Treatment date; picks the tariff year of the local catalogue. */
+  date?: string | null,
 ): Promise<{ count: number; services: TardocServiceRecord[] }> {
-  if (!USE_SERVER) return searchTardocByServiceGroup(groupCode, onlyMainServices);
+  if (!USE_SERVER) return searchTardocByServiceGroup(groupCode, onlyMainServices, date);
   const session = await getOrCreateSession(language);
   const searchHandle = await createSubInterface(session.validatorHandle, "Search");
 
@@ -475,8 +487,10 @@ export function calculatePrice(
 export async function searchAdditionalServices(
   baseCode: string,
   language: SumexLanguage = 2,
+  /** Treatment date; picks the tariff year of the local catalogue. */
+  date?: string | null,
 ): Promise<{ count: number; services: TardocServiceRecord[] }> {
-  if (!USE_SERVER) return searchTardocAdditional(baseCode);
+  if (!USE_SERVER) return searchTardocAdditional(baseCode, date);
   const session = await getOrCreateSession(language);
   const searchHandle = await createSubInterface(session.validatorHandle, "Search");
 
@@ -514,6 +528,7 @@ export async function searchAdditionalServices(
 
 export async function getSessionInfo(
   language: SumexLanguage = 2,
+  date?: string | null,
 ): Promise<{
   dbVersion: string;
   dbVersionDate: string;
@@ -521,8 +536,9 @@ export async function getSessionInfo(
   language: SumexLanguage;
 }> {
   if (!USE_SERVER) {
-    const info = catalogInfo();
-    return { dbVersion: info.tardoc, dbVersionDate: "2026-04-02", moduleVersion: "local OAAT catalogue", language };
+    const info = catalogInfo(date);
+    const dbVersionDate = info.tariffYear === "2026" ? "2026-04-02" : `${info.tariffYear}-01-01`;
+    return { dbVersion: info.tardoc, dbVersionDate, moduleVersion: "local OAAT catalogue", language };
   }
   const session = await getOrCreateSession(language);
   return {
@@ -578,8 +594,10 @@ export async function validateServices(
   canton: string = "VD",
   lawType: number = 1, // 1=KVG
   language: SumexLanguage = 2,
+  /** Patient birth date (YYYY-MM-DD) for the TARDOC age rules. */
+  birthDate?: string | null,
 ): Promise<ValidationResult> {
-  if (!USE_SERVER) return validateTardocLocal(services);
+  if (!USE_SERVER) return validateTardocLocal(services, { birthDate });
   const session = await getOrCreateSession(language);
 
   // Create IValidate + ITardocInput instances

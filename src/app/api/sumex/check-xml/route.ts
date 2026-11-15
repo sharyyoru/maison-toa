@@ -278,7 +278,7 @@ export async function POST(request: NextRequest) {
       fallbackProviderGln: provGln,
       fallbackTreatmentDate: treatmentDate,
       skipValidation,
-      tardocCatalog: await loadTardocCatalog(dbLineItems || []),
+      tardocCatalog: await loadTardocCatalog(dbLineItems || [], treatmentDate),
     };
     const sumexServices: SumexServiceInput[] = ((dbLineItems || []) as SumexLineItemRow[]).map(
       (item) => mapLineItemToSumexService(item, mapperCtx),

@@ -14,24 +14,38 @@
  * back to the exact publication.
  *
  * Usage:
- *   npx tsx scripts/import-oaat-catalogs.ts              # download from oaat-otma.ch
- *   npx tsx scripts/import-oaat-catalogs.ts --dir <path> # use local A2.xlsx, A1.xlsx, LKAAT.xlsx
+ *   npx tsx scripts/import-oaat-catalogs.ts [--year 2027]              # download from oaat-otma.ch
+ *   npx tsx scripts/import-oaat-catalogs.ts [--year 2027] --dir <path> # use local A2.xlsx, A1.xlsx, LKAAT.xlsx
  */
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import * as XLSX from "xlsx";
 
-const BASE =
-  "https://oaat-otma.ch/fileadmin/redaktion/dokumente/FR/Gesamt-Tarifsystem/Vertraege_und_Anhaenge";
-const SOURCES = {
-  A2: `${BASE}/Anhang_A2_Katalog_des_TARDOC_1.4c_FR.xlsx`,
-  A1: `${BASE}/Anhang_A1_Katalog_der_Ambulanten_Pauschalen_v1.1c_FR.xlsx`,
-  LKAAT: `${BASE}/LKAAT_1.0c_Leistungskatalog_ambulante_Arzttarife_FR.xlsx`,
+const BASE = "https://oaat-otma.ch/fileadmin/redaktion/dokumente/FR/Gesamt-Tarifsystem";
+// Each application year has its own published annexes; 2026 data stays at
+// src/data/oaat/, later years go to src/data/oaat/<year>/.
+const SOURCES_BY_YEAR = {
+  "2026": {
+    A2: `${BASE}/Vertraege_und_Anhaenge/Anhang_A2_Katalog_des_TARDOC_1.4c_FR.xlsx`,
+    A1: `${BASE}/Vertraege_und_Anhaenge/Anhang_A1_Katalog_der_Ambulanten_Pauschalen_v1.1c_FR.xlsx`,
+    LKAAT: `${BASE}/Vertraege_und_Anhaenge/LKAAT_1.0c_Leistungskatalog_ambulante_Arzttarife_FR.xlsx`,
+  },
+  "2027": {
+    A2: `${BASE}/Vertraege_und_Anhaenge_v2027/Anhang_A2_TARDOC_v2027_1.5_FR.xlsm`,
+    A1: `${BASE}/Vertraege_und_Anhaenge_v2027/Anhang_A1_Katalog_der_Ambulanten_Pauschalen_1.2_FR.xlsx`,
+    LKAAT: `${BASE}/Vertraege_und_Anhaenge_v2027/Leistungskatalog_ambulante_Arzttarife__LKAAT__1.1_FR.xlsx`,
+  },
 } as const;
-type SourceKey = keyof typeof SOURCES;
+type Year = keyof typeof SOURCES_BY_YEAR;
+type SourceKey = keyof (typeof SOURCES_BY_YEAR)["2026"];
 
-const OUT_DIR = resolve("src/data/oaat");
+const yearFlag = process.argv.indexOf("--year");
+const YEAR = (yearFlag >= 0 ? process.argv[yearFlag + 1] : "2026") as Year;
+if (!SOURCES_BY_YEAR[YEAR]) throw new Error(`Unknown --year ${YEAR} (have ${Object.keys(SOURCES_BY_YEAR).join(", ")})`);
+const SOURCES = SOURCES_BY_YEAR[YEAR];
+
+const OUT_DIR = resolve(YEAR === "2026" ? "src/data/oaat" : `src/data/oaat/${YEAR}`);
 const CODE_RE = /[A-Z]{2}\.\d{2}\.\d{4}/g;
 
 async function loadSource(key: SourceKey, dir: string | null): Promise<Buffer> {
@@ -76,6 +90,13 @@ function headerIndex(rows: unknown[][], firstLabel: string): number {
   return idx;
 }
 
+/** Column index of the header cell starting with `label` (case-insensitive); -1 when absent. */
+function colOf(header: unknown[], label: string, required = true): number {
+  const i = header.findIndex((c) => clean(c).toLowerCase().startsWith(label.toLowerCase()));
+  if (i < 0 && required) throw new Error(`Column "${label}" not found in ${JSON.stringify(header.map(clean))}`);
+  return i;
+}
+
 function expectColumns(header: unknown[], expected: string[]) {
   expected.forEach((label, i) => {
     const got = clean(header[i + 1]).toLowerCase();
@@ -101,43 +122,49 @@ function parseTardoc(buf: Buffer) {
 
   const posRows = rowsOf(wb, "Positions tarifaires");
   const h = headerIndex(posRows, "P-Num");
-  expectColumns(posRows[h], [
-    "P-Num", "Prestation", "Interpr", "PM", "PIP", "Valeur intrins", "Obligation",
-    "Type", "Parent", "Chapitre", "Positions pr", "Unit", "Prestation au sens",
-    "Temps d", "Temps de changement", "Classe d'intervention", "R",
-  ]);
+  // Columns are located by header so 1.4c (with "Obligation") and 1.5
+  // (without) both import.
+  const H = posRows[h];
+  const c = {
+    code: colOf(H, "P-Num"), name: colOf(H, "Prestation"), interp: colOf(H, "Interpr"),
+    pm: colOf(H, "PM"), pip: colOf(H, "PIP"), dignity: colOf(H, "Valeur intrins"),
+    obligation: colOf(H, "Obligation", false), type: colOf(H, "Type"), parent: colOf(H, "Parent"),
+    chapter: colOf(H, "Chapitre"), unit: colOf(H, "Unit"), serviceMin: colOf(H, "Prestation au sens"),
+    placeMin: colOf(H, "Temps d"), changeMin: colOf(H, "Temps de changement"),
+    interventionClass: colOf(H, "Classe d'intervention"), rules: colOf(H, "R"),
+  };
 
-  const positions = posRows.slice(h + 1).filter((r) => clean(r[1])).map((r) => {
-    const rules = clean(r[17]).split("\n").map((s) => s.trim()).filter(Boolean);
+  const positions = posRows.slice(h + 1).filter((r) => clean(r[c.code])).map((r) => {
+    const rules = clean(r[c.rules]).split("\n").map((s) => s.trim()).filter(Boolean);
     let maxPerSession: number | null = null;
     const nonCumulable = new Set<string>();
     const supplementTo = new Set<string>();
     let sideRequired = false;
     for (const line of rules) {
-      const m = line.match(/^<=\s*(\d+)\s*fois par séance/);
+      const m = line.match(/^(?:<=|\u2264|&le;)\s*(\d+)\s*fois par séance/);
       if (m) maxPerSession = Number(m[1]);
-      parseNonCumulable(line).forEach((c) => nonCumulable.add(c));
-      if (line.startsWith("Supplément à")) (line.match(CODE_RE) || []).forEach((c) => supplementTo.add(c));
+      parseNonCumulable(line).forEach((code) => nonCumulable.add(code));
+      if (line.startsWith("Supplément à")) (line.match(CODE_RE) || []).forEach((code) => supplementTo.add(code));
       if (/côté doit être indiqué/.test(line)) sideRequired = true;
     }
-    const interpretation = clean(r[3]);
+    const interpretation = clean(r[c.interp]);
     return {
-      code: clean(r[1]),
-      name: clean(r[2]),
+      code: clean(r[c.code]),
+      name: clean(r[c.name]),
       interpretation: interpretation === "\\-" ? "" : interpretation,
-      tpMT: num(r[4]) ?? 0,
-      tpTT: num(r[5]) ?? 0,
-      dignity: clean(r[6]),
-      obligation: clean(r[7]),
-      type: clean(r[8]),
+      tpMT: num(r[c.pm]) ?? 0,
+      tpTT: num(r[c.pip]) ?? 0,
+      dignity: clean(r[c.dignity]),
+      obligation: c.obligation >= 0 ? clean(r[c.obligation]) : "",
+      type: clean(r[c.type]),
       // A supplement (type Z) may attach to several main positions.
-      parents: clean(r[9]).match(CODE_RE) ?? [],
-      chapter: clean(r[10]),
-      functionalUnit: clean(r[12]),
-      serviceMin: num(r[13]) ?? 0,
-      placeMin: num(r[14]) ?? 0,
-      changeMin: num(r[15]) ?? 0,
-      interventionClass: clean(r[16]),
+      parents: clean(r[c.parent]).match(CODE_RE) ?? [],
+      chapter: clean(r[c.chapter]),
+      functionalUnit: clean(r[c.unit]),
+      serviceMin: num(r[c.serviceMin]) ?? 0,
+      placeMin: num(r[c.placeMin]) ?? 0,
+      changeMin: num(r[c.changeMin]) ?? 0,
+      interventionClass: clean(r[c.interventionClass]),
       rules,
       maxPerSession,
       nonCumulable: [...nonCumulable],
@@ -168,10 +195,13 @@ function parseTardoc(buf: Buffer) {
 
 function parseAcf(buf: Buffer) {
   const wb = XLSX.read(buf, { type: "buffer" });
-  const rows = rowsOf(wb, "catalogue");
+  // 1.1c: sheet "catalogue", column "Note"; 1.2: "Catalogue tarifaire", "Remarque".
+  const sheet = wb.SheetNames.find((n) => /catalogue/i.test(n));
+  if (!sheet) throw new Error(`ACF catalogue sheet not found (have: ${wb.SheetNames.join(", ")})`);
+  const rows = rowsOf(wb, sheet);
   const version = clean(rows[2]?.[1]);
   const h = headerIndex(rows, "Position tarifaire");
-  expectColumns(rows[h], ["Position tarifaire", "Désignation", "Note", "Points tarifaires", "Valeurs intrins"]);
+  expectColumns(rows[h], ["Position tarifaire", "Désignation", "", "Points tarifaires", "Valeurs intrins"]);
 
   const services: Array<{
     code: string; name: string; note: string; tp: number | null; notEvaluated: boolean;
@@ -183,8 +213,12 @@ function parseAcf(buf: Buffer) {
   for (const r of rows.slice(h + 2)) {
     const first = clean(r[1]);
     const tpRaw = clean(r[4]);
-    const tp = num(r[4]);
-    if (!first && clean(r[2]).startsWith("Note de bas de page")) break;
+    const raw = num(r[4]);
+    // Some 1.2 rows (annex B complements) hold unrounded formula results.
+    const tp = raw === null ? null : Math.round(raw * 100) / 100;
+    // Footnotes follow the catalogue: "Note de bas de page" (1.1c), "Informations" (1.2).
+    if (!first && /^(Note de bas de page|Informations)/.test(clean(r[2]))) break;
+    if (/^\[\d+\]$/.test(first)) break;
     if (!first) continue;
     if (!clean(r[2])) {
       // Chapter heading row, e.g. "Cap01: Système nerveux", "Prae-Cap".
@@ -216,7 +250,9 @@ function parseLkaat(buf: Buffer) {
   const sheet = wb.SheetNames.find((n) => n.startsWith("CPTMA"));
   if (!sheet) throw new Error(`CPTMA sheet not found (have: ${wb.SheetNames.join(", ")})`);
   const rows = rowsOf(wb, sheet);
-  const version = rows.slice(0, 5).map((r) => clean(r[1])).find((v) => /^v\d/.test(v)) ?? "";
+  // 1.0c prints "v1.0c_…", 1.1 a bare number.
+  const raw = rows.slice(0, 5).map((r) => clean(r[1])).find((v) => /^v?\d+(\.\d+)/.test(v)) ?? "";
+  const version = raw && !raw.startsWith("v") ? `v${raw}` : raw;
   const h = headerIndex(rows, "NCP");
   expectColumns(rows[h], [
     "NCP", "Master", "Type", "Latéralité", "Prestations d'action", "Prestations en temps",
@@ -247,7 +283,7 @@ async function main() {
   const dir = dirFlag >= 0 ? resolve(process.argv[dirFlag + 1]) : null;
 
   const bufs = {} as Record<SourceKey, Buffer>;
-  const meta: Record<string, unknown> = { importedAt: new Date().toISOString(), sources: {} };
+  const meta: Record<string, unknown> = { applicationYear: YEAR, importedAt: new Date().toISOString(), sources: {} };
   for (const key of Object.keys(SOURCES) as SourceKey[]) {
     bufs[key] = await loadSource(key, dir);
     (meta.sources as Record<string, unknown>)[key] = {
@@ -289,6 +325,14 @@ async function main() {
   });
 
   mkdirSync(OUT_DIR, { recursive: true });
+  // Keep provenance written by other importers (grouper, Tarifmatcher archive).
+  try {
+    const previous = JSON.parse(readFileSync(join(OUT_DIR, "meta.json"), "utf8"));
+    meta.sources = { ...previous.sources, ...(meta.sources as object) };
+    for (const [k, v] of Object.entries(previous)) if (!(k in meta)) meta[k] = v;
+  } catch {
+    // first import
+  }
   writeFileSync(join(OUT_DIR, "tardoc.json"), JSON.stringify(tardoc));
   writeFileSync(join(OUT_DIR, "acf.json"), JSON.stringify(acf));
   writeFileSync(join(OUT_DIR, "lkaat.json"), JSON.stringify(lkaat));

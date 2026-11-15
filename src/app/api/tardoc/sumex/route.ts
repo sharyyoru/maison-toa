@@ -32,6 +32,7 @@ export const runtime = "nodejs";
  *   lang:       "1"=DE, "2"=FR (default), "3"=IT
  *   canton:     Swiss canton code for price calc (default "VD")
  *   parent:     Parent code for chapters (default "" = root)
+ *   date:       Treatment date YYYY-MM-DD; picks the 2026 or 2027 catalogue (default today)
  */
 export async function GET(request: NextRequest) {
     try {
@@ -45,6 +46,8 @@ export async function GET(request: NextRequest) {
     const lang = (Number(sp.get("lang")) || 2) as SumexLanguage;
     const canton = (sp.get("canton") || DEFAULT_CANTON) as SwissCanton;
     const taxPointValue = CANTON_TAX_POINT_VALUES[canton] ?? CANTON_TAX_POINT_VALUES[DEFAULT_CANTON];
+    // Treatment date (YYYY-MM-DD): selects the tariff year (2026 / 2027 catalogue).
+    const date = sp.get("date");
 
     switch (action) {
       // ----------------------------------------------------------------
@@ -52,7 +55,7 @@ export async function GET(request: NextRequest) {
       // ----------------------------------------------------------------
       case "chapters": {
         const parent = sp.get("parent") || "";
-        const chapters = await getChapters(parent, lang);
+        const chapters = await getChapters(parent, lang, date);
         return NextResponse.json({ success: true, data: chapters });
       }
 
@@ -60,7 +63,7 @@ export async function GET(request: NextRequest) {
       // Catalog: sections
       // ----------------------------------------------------------------
       case "sections": {
-        const sections = await getSections(lang);
+        const sections = await getSections(lang, date);
         return NextResponse.json({ success: true, data: sections });
       }
 
@@ -68,7 +71,7 @@ export async function GET(request: NextRequest) {
       // Catalog: service groups
       // ----------------------------------------------------------------
       case "serviceGroups": {
-        const groups = await getServiceGroups(lang);
+        const groups = await getServiceGroups(lang, date);
         return NextResponse.json({ success: true, data: groups });
       }
 
@@ -84,7 +87,7 @@ export async function GET(request: NextRequest) {
           );
         }
         const mainOnly = sp.get("mainOnly") === "1";
-        const result = await searchByCode(code, mainOnly, lang);
+        const result = await searchByCode(code, mainOnly, lang, date);
         const enriched = enrichServices(result.services, taxPointValue);
         return NextResponse.json({
           success: true,
@@ -105,7 +108,7 @@ export async function GET(request: NextRequest) {
           );
         }
         const mainOnly = sp.get("mainOnly") === "1";
-        const result = await searchByChapter(chapter, mainOnly, lang);
+        const result = await searchByChapter(chapter, mainOnly, lang, date);
         const enriched = enrichServices(result.services, taxPointValue);
         return NextResponse.json({
           success: true,
@@ -126,7 +129,7 @@ export async function GET(request: NextRequest) {
           );
         }
         const mainOnly = sp.get("mainOnly") === "1";
-        const result = await searchByServiceGroup(group, mainOnly, lang);
+        const result = await searchByServiceGroup(group, mainOnly, lang, date);
         const enriched = enrichServices(result.services, taxPointValue);
         return NextResponse.json({
           success: true,
@@ -139,7 +142,7 @@ export async function GET(request: NextRequest) {
       // Session info (DB version, etc.)
       // ----------------------------------------------------------------
       case "info": {
-        const info = await getSessionInfo(lang);
+        const info = await getSessionInfo(lang, date);
         return NextResponse.json({ success: true, data: info });
       }
 
@@ -148,7 +151,7 @@ export async function GET(request: NextRequest) {
       // ----------------------------------------------------------------
       case "refresh": {
         invalidateSession();
-        const info = await getSessionInfo(lang);
+        const info = await getSessionInfo(lang, date);
         return NextResponse.json({ success: true, data: info, message: "Session refreshed" });
       }
 

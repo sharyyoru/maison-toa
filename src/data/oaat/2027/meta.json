@@ -1,0 +1,88 @@
+{
+  "applicationYear": "2027",
+  "importedAt": "2026-11-15T18:06:27.116Z",
+  "sources": {
+    "A2": {
+      "url": "https://oaat-otma.ch/fileadmin/redaktion/dokumente/FR/Gesamt-Tarifsystem/Vertraege_und_Anhaenge_v2027/Anhang_A2_TARDOC_v2027_1.5_FR.xlsm",
+      "sha256": "d1d0a6b8af43a6effe7eb998f4ed50ff9c1fec6798eae617d9396a8231abacce",
+      "bytes": 922270
+    },
+    "A1": {
+      "url": "https://oaat-otma.ch/fileadmin/redaktion/dokumente/FR/Gesamt-Tarifsystem/Vertraege_und_Anhaenge_v2027/Anhang_A1_Katalog_der_Ambulanten_Pauschalen_1.2_FR.xlsx",
+      "sha256": "68925685feb020b6f123ba749070ac379a0acae586583042d3d5c3a0d2a754c0",
+      "bytes": 122241
+    },
+    "LKAAT": {
+      "url": "https://oaat-otma.ch/fileadmin/redaktion/dokumente/FR/Gesamt-Tarifsystem/Vertraege_und_Anhaenge_v2027/Leistungskatalog_ambulante_Arzttarife__LKAAT__1.1_FR.xlsx",
+      "sha256": "110ee7f1e89852ff2388cba2491978af81d9dded5a0f660d9cc41ee75e62d839",
+      "bytes": 449939
+    },
+    "tarifmatcherTardoc": {
+      "file": "Archive Tardoc 2027/tardoc_TARDOC_1.5_fr.json",
+      "sha256": "de581931626465f68dab3f6c60e8bc6c0bf41e9420328a531299152ff0aee23a",
+      "bytes": 2045800,
+      "version": "V1.5",
+      "application_year": "2027",
+      "min_tarifmatcher_version": "1.2.0"
+    },
+    "tarifmatcherLkaat": {
+      "file": "Archive Tardoc 2027/lkaat_1.1.json",
+      "sha256": "b437d858b27d285f65acdc5c0a7d310bbf9b9adf221f7657803247182b1f7ea5",
+      "bytes": 282161,
+      "version": "V1.1",
+      "application_year": "2027",
+      "min_tarifmatcher_version": "1.2.0"
+    },
+    "grouper": {
+      "file": "Archive Tardoc 2027/system_ambP_12_lkaat.json",
+      "sha256": "4b9a8424734b37ee362e1f1f264d6f4a862f26a503cb4df7395651986e5d6d35",
+      "bytes": 803324,
+      "version": "V1.2_lk",
+      "application_year": "2027",
+      "min_tarifmatcher_version": "1.2.0",
+      "grouper_hash": "9957438a553d188cd75af26d7f4edd41fa21e8ef",
+      "name": "system_ambP_12_lkaat",
+      "id": "799"
+    },
+    "capAssignment": {
+      "file": "Archive Tardoc 2027/system_ambP_V12_cap_assignment.json",
+      "sha256": "2ed3d64e934c2ab2e6ca38c5127886d9ffb5db4704dbc667077593f6e16fac3d",
+      "bytes": 278766,
+      "version": "V1.2_lk",
+      "application_year": "2027",
+      "min_tarifmatcher_version": "1.2.0",
+      "grouper_hash": "5f67c14513edece440612f63544384ebcab34079",
+      "name": "Cap_assignment_system_ambP_12_lkaat",
+      "id": "801"
+    },
+    "costWeights": {
+      "file": "Archive Tardoc 2027/catalog_ambP_12.csv",
+      "sha256": "a48189e790cceed4a4b6ef0e66b3f1d344c64d4b1eab14eb957038ab87675c27",
+      "bytes": 6719
+    },
+    "tarifmatcher": {
+      "file": "Archive Tardoc 2027/tarifmatcher-1.2.1.zip",
+      "sha256": "8e7d553dba8635b2838a1b4933bb6b7f8a7de5abfd36d5047080107d1b6eab25",
+      "bytes": 4060406,
+      "version": "1.2.1"
+    }
+  },
+  "tardoc": {
+    "version": "TARDOC 1.5",
+    "positions": 1402,
+    "chapters": 245
+  },
+  "acf": {
+    "version": "v1.2",
+    "flatRates": 436,
+    "chapters": 23
+  },
+  "lkaat": {
+    "version": "v1.1",
+    "services": 3371
+  },
+  "tarifmatcher": {
+    "version": "1.2.1",
+    "minVersion": "1.2.0"
+  }
+}

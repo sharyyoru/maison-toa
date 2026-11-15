@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { tariffYearFor } from "@/lib/tariffYear";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { CANTON_TAX_POINT_VALUES, type SwissCanton } from "@/lib/tardoc";
 
 type FlatChapter = { code: string; name: string };
@@ -15,6 +16,8 @@ type TreeNode = {
 
 type TardocAccordionTreeProps = {
   canton: SwissCanton;
+  /** Treatment date YYYY-MM-DD; picks the 2026 / 2027 catalogue. */
+  date?: string;
   onAddService: (svc: any) => void;
 };
 
@@ -66,7 +69,10 @@ function isServiceGroup(code: string): boolean {
   return code.includes(".") && code.split(".").length === 2;
 }
 
-export default function TardocAccordionTree({ canton, onAddService }: TardocAccordionTreeProps) {
+export default function TardocAccordionTree({ canton, date, onAddService }: TardocAccordionTreeProps) {
+  const dateParam = date ? `&date=${encodeURIComponent(date)}` : "";
+  // A different tariff year means a different catalogue: drop what was loaded.
+  const tariffYear = tariffYearFor(date);
   // Flat chapter cache — loaded once
   const allChaptersRef = useRef<FlatChapter[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -74,6 +80,15 @@ export default function TardocAccordionTree({ canton, onAddService }: TardocAcco
 
   // Tree state: map of code → TreeNode
   const [nodes, setNodes] = useState<Map<string, TreeNode>>(new Map());
+  const [loadedYear, setLoadedYear] = useState(tariffYear);
+  useEffect(() => {
+    if (tariffYear === loadedYear) return;
+    setLoadedYear(tariffYear);
+    allChaptersRef.current = [];
+    setLoaded(false);
+    setNodes(new Map());
+    setRootCodes([]);
+  }, [tariffYear, loadedYear]);
   // Root codes (level 0)
   const [rootCodes, setRootCodes] = useState<string[]>([]);
 
@@ -83,7 +98,7 @@ export default function TardocAccordionTree({ canton, onAddService }: TardocAcco
     if (loaded || loading) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/tardoc/sumex?action=chapters&parent=");
+      const res = await fetch(`/api/tardoc/sumex?action=chapters&parent=${dateParam}`);
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         const flat: FlatChapter[] = json.data;
@@ -124,7 +139,7 @@ export default function TardocAccordionTree({ canton, onAddService }: TardocAcco
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [loaded, loading]);
+  }, [loaded, loading, dateParam]);
 
   const toggleNode = useCallback(
     async (code: string) => {
@@ -153,7 +168,7 @@ export default function TardocAccordionTree({ canton, onAddService }: TardocAcco
 
         try {
           const svcRes = await fetch(
-            `/api/tardoc/sumex?action=searchChapter&chapter=${encodeURIComponent(code)}&canton=${canton}&mainOnly=0`,
+            `/api/tardoc/sumex?action=searchChapter&chapter=${encodeURIComponent(code)}&canton=${canton}&mainOnly=0${dateParam}`,
           );
           const svcJson = await svcRes.json();
           const services = svcJson.success ? svcJson.data || [] : [];
@@ -172,7 +187,7 @@ export default function TardocAccordionTree({ canton, onAddService }: TardocAcco
         }
       }
     },
-    [nodes, canton],
+    [nodes, canton, dateParam],
   );
 
   if (!loaded) {

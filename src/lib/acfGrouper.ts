@@ -24,7 +24,8 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { acfData } from "./oaatCatalog";
+import { acfData, tariffYearFor } from "./oaatCatalog";
+import { evaluatePcs, loadPcs } from "./pcsGrouper";
 
 // ── Data ────────────────────────────────────────────────────────────────────
 
@@ -501,7 +502,10 @@ export function runLocalGrouper(input: {
   patientSex?: number;
   patientBirthdate?: string;
   services: GrouperServiceInput[];
+  /** Treatment date; 2027+ uses the official Tarifmatcher PCS. */
+  date?: string | null;
 }) {
+  if (tariffYearFor(input.date) !== "2026") return runPcsGrouper(input);
   const result = groupCase({
     services: input.services,
     icdCode: input.icdCode,
@@ -511,7 +515,7 @@ export function runLocalGrouper(input: {
 
   const acfCodes: Array<{ code: string; name: string; tp: number; chapterCode: string; chapterName: string }> = [];
   if (result.group && result.group !== "NO.ambP") {
-    const rate = acfData().services.find((s) => s.code === result.group);
+    const rate = acfData(input.date).services.find((s) => s.code === result.group);
     if (rate) {
       acfCodes.push({
         code: rate.code,
@@ -521,7 +525,7 @@ export function runLocalGrouper(input: {
         chapterName: rate.chapterName,
       });
     } else {
-      result.warnings.push(`Flat rate ${result.group} is not in the ACF 1.1c catalogue.`);
+      result.warnings.push(`Flat rate ${result.group} is not in the ACF ${acfData(input.date).version} catalogue.`);
     }
   }
 
@@ -537,5 +541,64 @@ export function runLocalGrouper(input: {
     tentative: result.tentative,
     alternatives: result.alternatives,
     missingInputs: result.missingInputs,
+  };
+}
+
+const SIDE_LETTER: Record<string, string> = { "0": "", "1": "L", "2": "R", "3": "B", L: "L", R: "R", B: "B" };
+
+function ageAt(birthdate: string | undefined, date: string): number | null {
+  if (!birthdate || !/^\d{4}-\d{2}-\d{2}/.test(birthdate)) return null;
+  const [by, bm, bd] = birthdate.slice(0, 10).split("-").map(Number);
+  const [y, m, d] = date.slice(0, 10).split("-").map(Number);
+  return y - by - (m < bm || (m === bm && d < bd) ? 1 : 0);
+}
+
+/**
+ * 2027+: official OAAT patient classification systems from the Tarifmatcher
+ * archive (system_ambP_12_lkaat + cap assignment), evaluated by pcsGrouper.
+ */
+function runPcsGrouper(input: Parameters<typeof runLocalGrouper>[0]) {
+  const year = tariffYearFor(input.date);
+  const date = input.date?.slice(0, 10) || `${year}-01-01`;
+  const grouper = loadPcs(year, "grouper");
+  const caseInput = {
+    services: input.services.map((s) => ({
+      code: s.code,
+      side: SIDE_LETTER[String(s.side ?? 0).toUpperCase()] ?? "",
+      number: Number(s.quantity) || 1,
+    })),
+    diagnoses: input.icdCode ? [input.icdCode] : [],
+    drugs: [],
+    ageYears: ageAt(input.patientBirthdate, date),
+  };
+  const result = evaluatePcs(grouper, caseInput);
+  const cap = input.icdCode ? evaluatePcs(loadPcs(year, "cap_assignment"), caseInput).group : null;
+  const errors = [...result.errors];
+  const acfCodes: Array<{ code: string; name: string; tp: number; chapterCode: string; chapterName: string }> = [];
+  if (!result.group) errors.push("No flat-rate path matched — bill the individual services (NO.ambP).");
+  else if (result.group === "NO.ambP") errors.push("Case groups into NO.ambP — bill the individual services, no flat rate.");
+  else {
+    const rate = acfData(date).services.find((s) => s.code === result.group);
+    if (rate && rate.tp !== null) {
+      acfCodes.push({ code: rate.code, name: rate.name, tp: rate.tp, chapterCode: rate.chapterCode, chapterName: rate.chapterName });
+    } else {
+      errors.push(rate ? `Flat rate ${result.group} is published as "non évalué".` : `Flat rate ${result.group} is not in the ACF ${acfData(date).version} catalogue.`);
+    }
+  }
+  return {
+    success: !!result.group,
+    groupingStatusList: result.group || "no-group",
+    numACF: acfCodes.length,
+    acfBases: [],
+    services: [],
+    acfCodes,
+    errors,
+    grouperVersion: `${grouper.name} ${grouper.version} (${grouper.application_year})`,
+    tentative: false,
+    alternatives: [] as string[],
+    missingInputs: [] as string[],
+    decisionPath: result.path,
+    chapters: result.chapters,
+    capAssignment: cap,
   };
 }

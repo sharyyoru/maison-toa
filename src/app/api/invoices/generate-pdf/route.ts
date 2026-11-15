@@ -539,7 +539,7 @@ export async function POST(request: NextRequest) {
         includeVat: true,
         // Same TARDOC catalog backfill as send-invoice so PDF amounts can
         // never differ from the insurance XML for legacy zero-tp lines.
-        tardocCatalog: await loadTardocCatalog(lineItems),
+        tardocCatalog: await loadTardocCatalog(lineItems, treatmentDate),
       };
       const sumexServices: SumexServiceInput[] = (lineItems as unknown as SumexLineItemRow[]).map(
         (item) => mapLineItemToSumexService(item, mapperCtx),
@@ -830,7 +830,7 @@ export async function POST(request: NextRequest) {
         skipValidation: true,
         lenientTariffRemap: true,
         includeVat: true,
-        tardocCatalog: await loadTardocCatalog(lineItems),
+        tardocCatalog: await loadTardocCatalog(lineItems, treatmentDate),
       };
       const sumexServices2: SumexServiceInput[] = (lineItems as unknown as SumexLineItemRow[]).map(
         (item) => mapLineItemToSumexService(item, mapperCtx2),
