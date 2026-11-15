@@ -16,7 +16,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { TardocServiceRecord, ValidationResult, ValidationServiceInput } from "@/lib/sumexTardoc";
-import { mapTardoc, type MapperLog } from "@/lib/tardocMapper";
+import { loadTarifmatcherCatalogs, mapTardoc, nodots, type MapperLog } from "@/lib/tardocMapper";
 import type {
   AcfServiceRecord,
   AcfValidateServiceInput,
@@ -320,15 +320,34 @@ const SIDE_LETTER = ["", "L", "R", "B"];
  * services are rejected with the Tarifmatcher message. Undecidable rules
  * (per day / 90 days / patient…) are returned as warnings.
  */
+const dottedCode = (c: string) => (/^[A-Z]{2}\d{6}$/.test(c) ? `${c.slice(0, 2)}.${c.slice(2, 4)}.${c.slice(4)}` : c);
+
 function validateTardocTarifmatcher(
   services: ValidationServiceInput[],
   patient: { birthDate?: string | null },
   date: string | undefined,
 ): ReturnType<typeof validateTardocLocal> {
   const year = tariffYearFor(date);
+  const cat = loadTarifmatcherCatalogs(year);
+  // Tarifmatcher takes LKAAT codes. A few TARDOC positions (e.g. RC.25.0020 /
+  // RC.25.0030) are only reachable through an LKAAT side mapping, so a direct
+  // TARDOC line is fed in as its LKAAT code: one side as-is, both sides as L + R.
+  const viaSideMapping = new Map<string, { source: string; both: boolean }>();
+  for (const e of cat.lkaat.values()) {
+    const args = e.mappingType === "side_mapping" ? e.mappingArguments : undefined;
+    if (!args) continue;
+    if (args.oneSide) viaSideMapping.set(nodots(args.oneSide), { source: e.code, both: false });
+    if (args.bothSides) viaSideMapping.set(nodots(args.bothSides), { source: e.code, both: true });
+  }
+  const sourceCode = (code: string) => viaSideMapping.get(nodots(code))?.source.toUpperCase() ?? code.trim().toUpperCase();
   const mapped = mapTardoc(
     {
-      services: services.map((s) => ({ code: s.code, side: SIDE_LETTER[s.side ?? 0] ?? "", number: Number(s.quantity) || 1, session: s.sessionNumber ?? 1 })),
+      services: services.flatMap((s) => {
+        const alias = viaSideMapping.get(nodots(s.code));
+        const base = { number: Number(s.quantity) || 1, session: s.sessionNumber ?? 1 };
+        if (alias?.both) return [{ ...base, code: alias.source, side: "L" }, { ...base, code: alias.source, side: "R" }];
+        return [{ ...base, code: alias?.source ?? s.code, side: SIDE_LETTER[s.side ?? 0] ?? "" }];
+      }),
       date: date?.slice(0, 10),
       birthDate: patient.birthDate ?? null,
     },
@@ -337,7 +356,7 @@ function validateTardocTarifmatcher(
   const remaining = [...mapped.tarpos];
   const logs = [...mapped.log];
   const takeLog = (code: string, session: number): MapperLog | undefined => {
-    const i = logs.findIndex((l) => l.level !== "INFO" && l.level !== "WARNING" && l.serviceCode === code && l.session === session);
+    const i = logs.findIndex((l) => l.level !== "INFO" && l.level !== "WARNING" && l.serviceCode.toUpperCase() === code && l.session === session);
     return i >= 0 ? logs.splice(i, 1)[0] : undefined;
   };
   let chargeMT = 0;
@@ -346,11 +365,17 @@ function validateTardocTarifmatcher(
     const code = svc.code.trim().toUpperCase();
     const session = svc.sessionNumber ?? 1;
     const qty = Math.round(Number(svc.quantity) || 1);
-    const idx = remaining.findIndex((t) => t.serviceCode === code && t.session === session);
+    const src = sourceCode(code);
+    const idx = remaining.findIndex((t) => t.serviceCode.toUpperCase() === src && nodots(t.code) === nodots(code) && t.session === session);
     const tarpo = idx >= 0 ? remaining.splice(idx, 1)[0] : undefined;
     const pos = getTardocPosition(code, date);
     if (!pos) return { code: svc.code, accepted: false, status: 1, errorMessage: `${code}: position inconnue dans ${tardocData(date).version}` };
-    const problem = tarpo && tarpo.number === qty ? undefined : takeLog(code, session);
+    const masters = cat.tardoc.get(nodots(code))?.masters ?? [];
+    const ref = svc.referenceCode?.trim();
+    if (ref && masters.length && !masters.some((m) => nodots(m) === nodots(ref))) {
+      return { code: svc.code, accepted: false, status: 1, errorMessage: `${code}: ${ref} n'est pas une prestation de référence admise (${masters.map(dottedCode).join(", ")})` };
+    }
+    const problem = tarpo && tarpo.number === qty ? undefined : takeLog(src, session);
     if (!tarpo || tarpo.number !== qty) {
       const msg = problem?.message
         ? problem.message.replace(/&le;/g, "≤")

@@ -138,4 +138,20 @@ for (const file of ["grouper", "cap_assignment"] as const) {
   assert.match(v26.catalogVersion, /1\.4c/);
 }
 
+// --- Direct TARDOC lines that Tarifmatcher only reaches via an LKAAT side mapping. ---
+{
+  const line = (code: string, side: 0 | 1 | 2 | 3, referenceCode = "") => ({ code, referenceCode, quantity: 1, sessionNumber: 1, date: "2027-02-01", side, tpValueMT: 0.96, externalFactorMT: 1, tpValueTT: 0.96, externalFactorTT: 1 });
+  for (const [code, side] of [["RC.25.0020", 1], ["RC.25.0030", 0], ["RC.35.0110", 0], ["RC.35.0120", 2]] as const) {
+    const v = validateTardocLocal([line(code, side)], { birthDate: "1980-01-01" });
+    assert.equal(v.services[0].accepted, true, `${code}: ${v.services[0].errorMessage}`);
+  }
+
+  // --- A supplement's reference must be one of its official masters. ---
+  const ok = validateTardocLocal([line("AA.00.0010", 0), line("AA.00.0020", 0, "AA.00.0010")], { birthDate: "1980-01-01" });
+  assert.equal(ok.services[1].accepted, true, ok.services[1].errorMessage);
+  const bad = validateTardocLocal([line("AA.00.0010", 0), line("AA.00.0020", 0, "KM.00.0060")], { birthDate: "1980-01-01" });
+  assert.equal(bad.services[1].accepted, false);
+  assert.match(bad.services[1].errorMessage ?? "", /KM\.00\.0060/);
+}
+
 console.log("oaat2027 tests passed");
