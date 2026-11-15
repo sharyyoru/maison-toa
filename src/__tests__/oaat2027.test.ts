@@ -146,6 +146,9 @@ for (const file of ["grouper", "cap_assignment"] as const) {
     assert.equal(v.services[0].accepted, true, `${code}: ${v.services[0].errorMessage}`);
   }
 
+  // Side B is refused (GI-17) on a both-sides position too.
+  assert.equal(validateTardocLocal([line("RC.25.0030", 3)], { birthDate: "1980-01-01" }).services[0].accepted, false);
+
   // --- A supplement's reference must be one of its official masters. ---
   const ok = validateTardocLocal([line("AA.00.0010", 0), line("AA.00.0020", 0, "AA.00.0010")], { birthDate: "1980-01-01" });
   assert.equal(ok.services[1].accepted, true, ok.services[1].errorMessage);

@@ -333,7 +333,8 @@ function validateTardocTarifmatcher(
       services: services.flatMap((s) => {
         const alias = viaSideMapping.get(nodots(s.code));
         const base = { number: Number(s.quantity) || 1, session: s.sessionNumber ?? 1 };
-        if (alias?.both) return [{ ...base, code: alias.source, side: "L" }, { ...base, code: alias.source, side: "R" }];
+        // Side B stays B so the mapper rejects it (GI-17) like any other TARDOC line.
+        if (alias?.both && s.side !== 3) return [{ ...base, code: alias.source, side: "L" }, { ...base, code: alias.source, side: "R" }];
         return [{ ...base, code: alias?.source ?? s.code, side: SIDE_LETTER[s.side ?? 0] ?? "" }];
       }),
       date: date?.slice(0, 10),
