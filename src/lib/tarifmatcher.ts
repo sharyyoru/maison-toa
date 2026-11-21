@@ -38,7 +38,7 @@ export async function runTarifmatcher(input: GrouperCase): Promise<GrouperResult
   const base = process.env.TARIFMATCHER_URL;
   if (!base) throw new Error("TARIFMATCHER_URL is not set");
 
-  const secret = process.env.TARIFMATCHER_SECRET;
+  const secret = process.env.TARIFMATCHER_SECRET?.trim();
   const response = await fetch(`${base.replace(/\/$/, "")}/group`, {
     method: "POST",
     headers: {

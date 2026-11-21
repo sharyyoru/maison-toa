@@ -51,7 +51,7 @@ One-time setup:
 PROJECT=my-gcp-project
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
   artifactregistry.googleapis.com secretmanager.googleapis.com --project $PROJECT
-openssl rand -hex 32 | gcloud secrets create tarifmatcher-secret --data-file=- --project $PROJECT
+printf %s "$(openssl rand -hex 32)" | gcloud secrets create tarifmatcher-secret --data-file=- --project $PROJECT
 # Let the Cloud Run runtime service account read it:
 PN=$(gcloud projects describe $PROJECT --format 'value(projectNumber)')
 gcloud secrets add-iam-policy-binding tarifmatcher-secret --project $PROJECT \

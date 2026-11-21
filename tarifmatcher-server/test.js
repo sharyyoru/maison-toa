@@ -2,7 +2,7 @@
  * End-to-end checks against the real jar: `node test.js` (needs java on PATH).
  * Expected values come from the official Batchgrouper itself.
  */
-process.env.TARIFMATCHER_SECRET = "test-secret";
+process.env.TARIFMATCHER_SECRET = "test-secret\n"; // as stored by `openssl rand | gcloud secrets create`
 const assert = require("node:assert/strict");
 const { server, buildInputCsv, columnsFor, yearOf, TARIFFS } = require("./server.js");
 

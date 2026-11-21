@@ -196,7 +196,8 @@ const send = (res, code, body) => {
 const server = http.createServer(async (req, res) => {
   // A shared secret keeps this from being an open grouping endpoint once it
   // is on the public internet. Unset = open, which is fine locally only.
-  const secret = process.env.TARIFMATCHER_SECRET;
+  // Trimmed: secrets created with `openssl rand ... | gcloud secrets create` end in a newline.
+  const secret = process.env.TARIFMATCHER_SECRET?.trim();
   if (secret && req.url !== "/health" && !sameSecret(req.headers["x-tarifmatcher-secret"], secret)) {
     return send(res, 401, { ok: false, error: "Unauthorized" });
   }
