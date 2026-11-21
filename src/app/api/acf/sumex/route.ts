@@ -18,7 +18,7 @@ import {
 } from "@/lib/sumexAcf";
 import { requireStaff, requireRole, authErrorResponse } from "@/lib/serverAuth";
 import { validateAcfLocal } from "@/lib/oaatCatalog";
-import { runLocalGrouper } from "@/lib/acfGrouper";
+import { groupFlatRate } from "@/lib/tarifmatcher";
 
 /**
  * API route for ACF (Ambulatory Case Flatrate) validator.
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
             { status: 400 },
           );
         }
-        const result = runLocalGrouper({
+        const result = await groupFlatRate({
           icdCode: input.icdCode,
           patientSex: input.patientSex,
           patientBirthdate: input.patientBirthdate,

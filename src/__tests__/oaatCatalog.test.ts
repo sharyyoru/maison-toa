@@ -94,7 +94,7 @@ import {
 
   const tooMany = validateTardocLocal([{ ...base, code: "AA.00.0010", quantity: 2 }]);
   assert.equal(tooMany.valid, false);
-  assert.match(tooMany.services[0].errorMessage!, /<= 1 fois par séance/);
+  assert.match(tooMany.services[0].errorMessage!, /≤ 1 fois par séance/);
 
   const orphan = validateTardocLocal([{ ...base, code: "AA.00.0020" }]);
   assert.equal(orphan.valid, false, "supplement without its main position");

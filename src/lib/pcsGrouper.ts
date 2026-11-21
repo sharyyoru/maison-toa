@@ -42,6 +42,10 @@ export type PcsCase = {
   /** First entry is the main diagnosis. */
   diagnoses?: string[];
   drugs?: PcsDrug[];
+  /** "M" or "W" (2026 PCS has sex-specific chapter rules). */
+  sex?: string | null;
+  /** Mapped TARDOC positions / drug positions (2026 "tarpos" variable). */
+  tarpos?: string[];
   ageYears?: number | null;
 };
 
@@ -77,7 +81,8 @@ type Ast =
 const TOKEN_RE = /\s*(>=|<=|!=|<>|\(|\)|,|'[^']*'|"[^"]*"|[<>=]|[A-Za-z0-9_.\/:*+-]+)/gy;
 const CMP_RE = /^(=|<|>|<=|>=|!=|<>)$/;
 
-function tokenize(src: string): string[] {
+function tokenize(raw: string): string[] {
+  const src = raw.trim();
   const tokens: string[] = [];
   TOKEN_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -110,7 +115,17 @@ export function parseLogic(src: string): Ast | null {
   }
   function unary(): Ast {
     if (kw("not")) { next(); return { t: "not", item: unary() }; }
-    if (peek() === "(") { next(); const e = expr(); expect(")"); return e; }
+    if (peek() === "(") {
+      next();
+      const e = expr();
+      expect(")");
+      // "(services in table (X)) < 2" counts like "services in table (X) < 2".
+      if (e.t === "in" && !e.op && peek() && CMP_RE.test(peek()!)) {
+        e.op = normOp(next()!);
+        e.num = Number(next());
+      }
+      return e;
+    }
     return atom();
   }
   function atom(): Ast {
@@ -158,6 +173,8 @@ type Ctx = {
   diagnoses: Item[];
   mainDiagnosis: Item[];
   drugs: Item[];
+  sex: Item[];
+  tarpos: Item[];
   ageYears: number | null;
   tables: Map<string, Set<string>>;
 };
@@ -205,6 +222,8 @@ function evaluate(ast: Ast, ctx: Ctx, item: Item | null): boolean {
         : ast.subject === "diagnoses" ? ctx.diagnoses
         : ast.subject === "main_diagnosis" ? ctx.mainDiagnosis
         : ast.subject === "drugs" ? ctx.drugs
+        : ast.subject === "sex" ? ctx.sex
+        : ast.subject === "tarpos" ? ctx.tarpos
         : [];
       const wanted = new Set<string>();
       for (const name of ast.items) {
@@ -215,7 +234,8 @@ function evaluate(ast: Ast, ctx: Ctx, item: Item | null): boolean {
       const prefixes = [...wanted].filter((c) => c.endsWith("*")).map((c) => c.slice(0, -1));
       let matches = pool.filter((p) => wanted.has(p.code) || prefixes.some((x) => p.code.startsWith(x)));
       if (ast.where) matches = matches.filter((p) => evaluate(ast.where!, ctx, p));
-      if (ast.op && ast.num !== null) return cmp(ast.op, matches.reduce((s, p) => s + p.number, 0), ast.num);
+      // The Tarifmatcher counts distinct matching code+side pairs here, not quantities.
+      if (ast.op && ast.num !== null) return cmp(ast.op, new Set(matches.map((p) => `${p.code}:${p.side}`)).size, ast.num);
       return matches.length > 0;
     }
   }
@@ -261,6 +281,8 @@ export function evaluatePcs(sys: PcsSystem, input: PcsCase): PcsResult {
     diagnoses,
     mainDiagnosis: diagnoses.slice(0, 1),
     drugs: (input.drugs || []).map((d) => ({ code: cleanCode(d.code), number: 1, side: "", dose: d.dose ?? null })),
+    sex: input.sex ? toItems([input.sex]) : [],
+    tarpos: toItems(input.tarpos || []),
     ageYears: input.ageYears ?? null,
     tables: p.tables,
   };
