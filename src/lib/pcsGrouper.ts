@@ -234,7 +234,8 @@ function evaluate(ast: Ast, ctx: Ctx, item: Item | null): boolean {
       const prefixes = [...wanted].filter((c) => c.endsWith("*")).map((c) => c.slice(0, -1));
       let matches = pool.filter((p) => wanted.has(p.code) || prefixes.some((x) => p.code.startsWith(x)));
       if (ast.where) matches = matches.filter((p) => evaluate(ast.where!, ctx, p));
-      if (ast.op && ast.num !== null) return cmp(ast.op, matches.reduce((s, p) => s + p.number, 0), ast.num);
+      // The Tarifmatcher counts distinct matching codes here, not quantities.
+      if (ast.op && ast.num !== null) return cmp(ast.op, new Set(matches.map((p) => p.code)).size, ast.num);
       return matches.length > 0;
     }
   }
