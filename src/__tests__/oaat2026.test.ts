@@ -72,15 +72,18 @@ const grp = (icdCode: string, patientSex: number, date: string) =>
   assert.equal(grp("N64.8", 1, "2026-12-31").grouperSource, "local");
 }
 
-// "services in table (X) < n" counts distinct codes, not quantities (checked against the jar).
+// "services in table (X) < n" counts distinct code+side pairs, not quantities (checked against the jar).
 {
-  const run = (date: string, icdCode: string, services: Array<{ code: string; quantity?: number }>) =>
+  const run = (date: string, icdCode: string, services: Array<{ code: string; quantity?: number; side?: number }>) =>
     runLocalGrouper({ icdCode, patientBirthdate: "1970-01-01", services, date }).groupingStatusList;
   assert.equal(run("2026-03-01", "K83.1", [{ code: "C07.AB.0070", quantity: 2 }]), "C07.60F");
   assert.equal(run("2026-03-01", "K83.1", [{ code: "C07.AB.0070" }, { code: "C07.AB.0070" }]), "C07.60F");
   assert.equal(run("2026-03-01", "K83.1", [{ code: "C07.AB.0070" }, { code: "C07.AB.0060" }]), "C07.60C");
   assert.equal(run("2026-03-01", "K83.1", [{ code: "C07.AB.0070" }, { code: "C07.AB.0060" }, { code: "C07.AB.0090" }]), "C07.60A");
+  assert.equal(run("2026-03-01", "K83.1", [{ code: "C07.AB.0070", side: 1 }, { code: "C07.AB.0070", side: 2 }]), "C07.60C");
+  assert.equal(run("2026-03-01", "K83.1", [{ code: "C07.AB.0070", side: 3 }]), "C07.60F");
   assert.equal(run("2027-03-01", "T93.2", [{ code: "C08.QD.0010", quantity: 3 }]), "C08.50D");
+  assert.equal(run("2027-03-01", "T93.2", [{ code: "C08.QD.0010", side: 1 }, { code: "C08.QD.0010", side: 2 }]), "C08.50C");
   assert.equal(run("2027-03-01", "T93.2", [{ code: "C08.QD.0010" }, { code: "C08.PC.0020" }]), "C08.50C");
   assert.equal(run("2027-03-01", "T93.2", [{ code: "C08.AD.0050" }, { code: "C08.AD.0010" }, { code: "C08.AD.0020" }]), "C08.10A");
 }
