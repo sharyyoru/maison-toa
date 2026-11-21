@@ -502,46 +502,10 @@ export function runLocalGrouper(input: {
   patientSex?: number;
   patientBirthdate?: string;
   services: GrouperServiceInput[];
-  /** Treatment date; 2027+ uses the official Tarifmatcher PCS. */
+  /** Treatment date; picks the official PCS of that tariff year (2026 / 2027). */
   date?: string | null;
 }) {
-  if (tariffYearFor(input.date) !== "2026") return runPcsGrouper(input);
-  const result = groupCase({
-    services: input.services,
-    icdCode: input.icdCode,
-    patientSex: input.patientSex,
-    patientBirthdate: input.patientBirthdate,
-  });
-
-  const acfCodes: Array<{ code: string; name: string; tp: number; chapterCode: string; chapterName: string }> = [];
-  if (result.group && result.group !== "NO.ambP") {
-    const rate = acfData(input.date).services.find((s) => s.code === result.group);
-    if (rate) {
-      acfCodes.push({
-        code: rate.code,
-        name: rate.name,
-        tp: rate.tp ?? 0,
-        chapterCode: rate.chapterCode,
-        chapterName: rate.chapterName,
-      });
-    } else {
-      result.warnings.push(`Flat rate ${result.group} is not in the ACF ${acfData(input.date).version} catalogue.`);
-    }
-  }
-
-  return {
-    success: !!result.group,
-    groupingStatusList: result.group || "no-group",
-    numACF: acfCodes.length,
-    acfBases: [],
-    services: [],
-    acfCodes,
-    errors: result.warnings,
-    grouperVersion: grouperData().version,
-    tentative: result.tentative,
-    alternatives: result.alternatives,
-    missingInputs: result.missingInputs,
-  };
+  return runPcsGrouper(input);
 }
 
 const SIDE_LETTER: Record<string, string> = { "0": "", "1": "L", "2": "R", "3": "B", L: "L", R: "R", B: "B" };
@@ -554,8 +518,9 @@ function ageAt(birthdate: string | undefined, date: string): number | null {
 }
 
 /**
- * 2027+: official OAAT patient classification systems from the Tarifmatcher
- * archive (system_ambP_12_lkaat + cap assignment), evaluated by pcsGrouper.
+ * Official OAAT patient classification systems from the Tarifmatcher archives
+ * (2026: system_ambP_11d_lkaat V1.1d, 2027: system_ambP_12_lkaat V1.2, each
+ * with its cap assignment), evaluated by pcsGrouper.
  */
 function runPcsGrouper(input: Parameters<typeof runLocalGrouper>[0]) {
   const year = tariffYearFor(input.date);
@@ -570,21 +535,12 @@ function runPcsGrouper(input: Parameters<typeof runLocalGrouper>[0]) {
     diagnoses: input.icdCode ? [input.icdCode] : [],
     drugs: [],
     ageYears: ageAt(input.patientBirthdate, date),
+    sex: input.patientSex === 1 ? "W" : input.patientSex === 0 ? "M" : null,
   };
   const result = evaluatePcs(grouper, caseInput);
   const cap = input.icdCode ? evaluatePcs(loadPcs(year, "cap_assignment"), caseInput).group : null;
-  const errors = [...result.errors];
-  const acfCodes: Array<{ code: string; name: string; tp: number; chapterCode: string; chapterName: string }> = [];
-  if (!result.group) errors.push("No flat-rate path matched — bill the individual services (NO.ambP).");
-  else if (result.group === "NO.ambP") errors.push("Case groups into NO.ambP — bill the individual services, no flat rate.");
-  else {
-    const rate = acfData(date).services.find((s) => s.code === result.group);
-    if (rate && rate.tp !== null) {
-      acfCodes.push({ code: rate.code, name: rate.name, tp: rate.tp, chapterCode: rate.chapterCode, chapterName: rate.chapterName });
-    } else {
-      errors.push(rate ? `Flat rate ${result.group} is published as "non évalué".` : `Flat rate ${result.group} is not in the ACF ${acfData(date).version} catalogue.`);
-    }
-  }
+  const { acfCodes, errors } = priceGroup(result.group, date);
+  errors.unshift(...result.errors);
   return {
     success: !!result.group,
     groupingStatusList: result.group || "no-group",
@@ -600,5 +556,27 @@ function runPcsGrouper(input: Parameters<typeof runLocalGrouper>[0]) {
     decisionPath: result.path,
     chapters: result.chapters,
     capAssignment: cap,
+    ageYears: caseInput.ageYears,
+    grouperSource: "local" as "local" | "tarifmatcher",
+    warnings: [] as string[],
   };
+}
+
+export type GrouperResponse = ReturnType<typeof runPcsGrouper>;
+
+/** Catalogue price for a group; errors explain why no flat rate is billed. */
+export function priceGroup(group: string | null, date: string) {
+  const errors: string[] = [];
+  const acfCodes: Array<{ code: string; name: string; tp: number; chapterCode: string; chapterName: string }> = [];
+  if (!group) errors.push("No flat-rate path matched — bill the individual services (NO.ambP).");
+  else if (group === "NO.ambP") errors.push("Case groups into NO.ambP — bill the individual services, no flat rate.");
+  else {
+    const rate = acfData(date).services.find((s) => s.code === group);
+    if (rate && rate.tp !== null) {
+      acfCodes.push({ code: rate.code, name: rate.name, tp: rate.tp, chapterCode: rate.chapterCode, chapterName: rate.chapterName });
+    } else {
+      errors.push(rate ? `Flat rate ${group} is published as "non évalué".` : `Flat rate ${group} is not in the ACF ${acfData(date).version} catalogue.`);
+    }
+  }
+  return { acfCodes, errors };
 }

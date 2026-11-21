@@ -1,0 +1,43 @@
+{
+  "applicationYear": "2026",
+  "importedAt": "2026-11-21T05:28:46.621Z",
+  "note": "Official OAAT Tarifmatcher archive files for 2026 (Archive Tardoc 2026). The 2026 A1/A2/LKAAT catalogues stay in src/data/oaat/.",
+  "sources": {
+    "grouper": {
+      "file": "Archive Tardoc 2026/system_ambP_11c_260402_lkaat.json",
+      "sha256": "3f1791c09e175e018885cc6f77332ec009a335f5892a4db2aa053d0de7d8ff92",
+      "bytes": 1524111,
+      "version": "V1.1d_lk",
+      "application_year": "2026",
+      "grouper_hash": "26a07f396d06a0ba7befe861cfee2ba5cd199de1",
+      "name": "system_ambP_11d_lkaat",
+      "id": 776
+    },
+    "capAssignment": {
+      "file": "Archive Tardoc 2026/system_ambP_V11c_260402_cap_assignment.json",
+      "sha256": "c6ec71df7ac0b6a0ac5636469cf7559aca5a0acfadc2a449db3caf07f4f732f7",
+      "bytes": 311066,
+      "version": "V1.1d_lk",
+      "application_year": "2026",
+      "grouper_hash": "f22762808e7c9c8120bfce2872bb9d47d467fb4d",
+      "name": "Cap_assignment_system_ambP_11d_lkaat",
+      "id": 760
+    },
+    "tarifmatcherTardoc": {
+      "file": "Archive Tardoc 2026/tardoc_TARDOC_1.4c_251128_fr.json",
+      "sha256": "2b5e3fb955795ec90ac80834e8689432e0e7688a3ccfdfc92110d3f5025528c5",
+      "bytes": 2523506
+    },
+    "tarifmatcherLkaat": {
+      "file": "Archive Tardoc 2026/lkaat_1.0c_251128.json",
+      "sha256": "a70bbd812bae921f33fcfa5af4312dfcd78874f7af0ce7b345158893e65220b1",
+      "bytes": 194408
+    },
+    "costWeights": {
+      "file": "Archive Tardoc 2026/catalog_ambP_11c.csv",
+      "sha256": "d7ccb594651a579660554c341d1393033121c8cf4c379ac51edb1cf700787efc",
+      "bytes": 4991,
+      "rows": 314
+    }
+  }
+}

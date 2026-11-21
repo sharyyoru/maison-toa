@@ -36,7 +36,8 @@ export type TmTardocEntry = {
 export type TmLkaatEntry = {
   code: string;
   type: string;
-  hasSide: boolean;
+  /** Absent in LKAAT 1.0c (2026). */
+  hasSide?: boolean;
   mappingType?: "side_mapping";
   mappingArguments?: { oneSide: string; bothSides: string };
 };
@@ -176,8 +177,10 @@ export function mapTardoc(input: MapperInput, year = "2027"): MapperResult {
     const tardoc = cat.tardoc.get(target);
     if (!tardoc) { push("LKAAT_VALIDATION_TRIGGER", ""); continue; } // flat-rate gesture, goes to the grouper
     if (side === "B") { push("TARDOC_VALIDATION_DELETE", "Side B is not allowed for codes that are mapped to TARDOC. See TARDOC GI-17."); continue; }
-    const needsSide = sideMapping ? entry.hasSide : Boolean(tardoc.hasSide);
-    if (!needsSide) side = "";
+    // LKAAT 1.0c (2026) has no hasSide flag: the Tarifmatcher keeps the side as entered.
+    const legacySides = entry.hasSide === undefined;
+    const needsSide = sideMapping && !legacySides ? Boolean(entry.hasSide) : Boolean(tardoc.hasSide);
+    if (!needsSide && !legacySides) side = "";
     const dup = `${session}|${code}|${side}`;
     if (seen.has(dup)) { push("LKAAT_VALIDATION_DUPLICATE", "Prestation en double dans la séance"); continue; }
     seen.add(dup);

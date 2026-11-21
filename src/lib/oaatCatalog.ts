@@ -218,17 +218,9 @@ export function searchTardocAdditional(baseCode: string, date?: DateLike) {
   return { count: services.length, services };
 }
 
-const conflicts = (rule: string, code: string) =>
-  rule === code || (rule.length < 10 && code.startsWith(`${rule}.`)) || (rule.length === 2 && code.startsWith(rule));
-
 /**
- * Session-level TARDOC checks taken from the catalogue's own rules:
- * code exists, "<= N fois par séance", "Non cumulable avec …",
- * supplements need one of their main positions, side must be given.
- *
- * Not checked (needs patient history or provider data): per-day / 90-day /
- * per-patient limits, age and sex limits, qualitative dignity. These are
- * listed in `notChecked` so the UI can say so.
+ * Session-level TARDOC checks with the official Tarifmatcher rules of the
+ * treatment date's tariff year (2026: TARDOC 1.4c / LKAAT 1.0c, 2027: 1.5 / 1.1).
  */
 export function validateTardocLocal(
   services: ValidationServiceInput[],
@@ -240,76 +232,18 @@ export function validateTardocLocal(
   warnings?: string[];
 } {
   const date = services.find((s) => s.date)?.date;
-  if (tariffYearFor(date) !== "2026") return validateTardocTarifmatcher(services, patient, date);
-  const bySession = new Map<number, ValidationServiceInput[]>();
-  for (const s of services) {
-    const k = s.sessionNumber ?? 1;
-    bySession.set(k, [...(bySession.get(k) ?? []), s]);
-  }
-
-  let chargeMT = 0;
-  let chargeTT = 0;
-  const results = services.map((svc) => {
-    const code = svc.code.trim().toUpperCase();
-    const pos = getTardocPosition(code, date);
-    const reject = (errorMessage: string) => ({ code: svc.code, accepted: false, status: 1, errorMessage });
-    if (!pos) return reject(`${code}: position inconnue dans ${tardocData(date).version}`);
-
-    const session = bySession.get(svc.sessionNumber ?? 1) ?? [];
-    const sessionCodes = session.map((s) => s.code.trim().toUpperCase());
-
-    if (pos.maxPerSession !== null) {
-      const qty = session.filter((s) => s.code.trim().toUpperCase() === code).reduce((n, s) => n + (Number(s.quantity) || 0), 0);
-      if (qty > pos.maxPerSession) return reject(`${code}: <= ${pos.maxPerSession} fois par séance (quantité ${qty})`);
-    }
-
-    for (const other of sessionCodes) {
-      if (other === code) continue;
-      const otherPos = getTardocPosition(other, date);
-      const hit = pos.nonCumulable.find((r) => conflicts(r, other))
-        || otherPos?.nonCumulable.find((r) => conflicts(r, code));
-      if (hit) return reject(`${code}: non cumulable avec ${other}`);
-    }
-
-    const mains = [...new Set([...pos.parents, ...pos.supplementTo])];
-    if (mains.length && !mains.some((m) => sessionCodes.includes(m))) {
-      return reject(`${code}: supplément — nécessite ${mains.join(" ou ")} dans la même séance`);
-    }
-    if (svc.referenceCode && mains.length && !mains.includes(svc.referenceCode.trim().toUpperCase())) {
-      return reject(`${code}: code de référence ${svc.referenceCode} invalide (attendu ${mains.join(" ou ")})`);
-    }
-
-    if (pos.sideRequired && !svc.side) return reject(`${code}: le côté doit être indiqué`);
-
-    const q = Number(svc.quantity) || 0;
-    chargeMT += Math.round(q * pos.tpMT * svc.tpValueMT * (svc.externalFactorMT ?? 1) * 100) / 100;
-    chargeTT += Math.round(q * pos.tpTT * svc.tpValueTT * (svc.externalFactorTT ?? 1) * 100) / 100;
-    return { code: svc.code, accepted: true, status: 0 };
-  });
-
-  const valid = results.every((r) => r.accepted);
-  return {
-    valid,
-    services: results,
-    summary: valid
-      ? { chargeMT: Math.round(chargeMT * 100) / 100, chargeTT: Math.round(chargeTT * 100) / 100, totalCharge: Math.round((chargeMT + chargeTT) * 100) / 100 }
-      : undefined,
-    validator: "local",
-    catalogVersion: tardocData(date).version,
-    notChecked: ["limites par jour / 90 jours / patient", "âge et sexe", "valeur intrinsèque qualitative (dignité)"],
-  };
+  return validateTardocTarifmatcher(services, patient, date);
 }
 
 const SIDE_LETTER = ["", "L", "R", "B"];
-
-/**
- * 2027+: the session is run through the Tarifmatcher rules (tardocMapper).
- * A service is accepted when it comes out unchanged; deleted or capped
- * services are rejected with the Tarifmatcher message. Undecidable rules
- * (per day / 90 days / patient…) are returned as warnings.
- */
 const dottedCode = (c: string) => (/^[A-Z]{2}\d{6}$/.test(c) ? `${c.slice(0, 2)}.${c.slice(2, 4)}.${c.slice(4)}` : c);
 
+/**
+ * The session is run through the official Tarifmatcher rules (tardocMapper)
+ * for its tariff year. A service is accepted when it comes out unchanged;
+ * deleted or capped services are rejected with the Tarifmatcher message.
+ * Undecidable rules (per day / 90 days / patient…) are returned as warnings.
+ */
 function validateTardocTarifmatcher(
   services: ValidationServiceInput[],
   patient: { birthDate?: string | null },
